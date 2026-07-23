@@ -147,7 +147,11 @@
     (순환 의존 감지 포함, 실행 로직은 Phase 2에서 다룸)
 - 완료 조건(DoD): 세 모델 각각에 대한 단위 테스트(정상 케이스 + 허용되지 않는
   전이/순환 의존 거부)가 통과한다.
-- 상태: TODO
+- 상태: **DONE (2026-07-23)** — `domain/project.py`(Project, ProjectStatus),
+  `domain/task.py`(Task, TaskStatus, 상태 전이 규칙), `domain/workflow.py`
+  (Workflow, 순환/미지정 의존 검증) 구현. 테스트 실행을 위해 최소
+  `pyproject.toml`(pytest `pythonpath=["src"]`)을 함께 추가하고 `pytest`를
+  설치함 (정식 테스트 환경 구성은 P1-7에서 완성).
 - 의존성: P1-1
 
 #### P1-3: Interfaces 정의 (7개)
@@ -293,3 +297,5 @@ AutomationEngine/EngineAdapter)를 확정함(ADR-0005). ARCHITECTURE.md v0.3.0�
 갱신하고, Phase 1 Task 순서를 "도메인 모델 → Interfaces 정의 → Workspace Core
 골격 → ProjectRepository 구현 → CLI → 테스트"로 재구성(P1-1~P1-10). P1-1에
 `interfaces/`, `storage/` 패키지 추가 반영. 다음 Task: P1-2 (공통 도메인 모델 정의). |
+| 2026-07-23 | P1-2 완료: Project/Task/Workflow 도메인 모델 구현, `pytest` 10개
+테스트 전부 통과. 다음 Task: P1-3 (Interfaces 정의 7개). |
