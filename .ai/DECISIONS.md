@@ -219,3 +219,105 @@
 - 결과/영향: `docs/ARCHITECTURE.md` v0.4.0 §3.8에 반영. 기존 P1-3에서 정의한
   `EngineAdapter` 인터페이스는 Phase 1 재개 시 확장 계약으로 갱신한다
   (ADR-0002 상태는 이 확장을 포함해 재확정).
+- 후속: ADR-0015에서 세션 생명주기(`create_session`/`destroy_session`)를 더해
+  실행 계약을 재확장한다.
+
+## ADR-0010: Agent Runtime 계층 도입 및 Workspace Core 재정의 (+ WorkspaceSession)
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: v0.4.0에서 Workspace Core가 Agent 등록/관리, Task 분배, Engine 선택을
+  직접 수행했다. 멀티 에이전트를 기본 구조로 심화하면서, 병렬 실행·스케줄링·
+  생명주기 관리를 Core에 두면 Core가 비대해지고 책임이 섞인다.
+- 결정:
+  1. Workspace Core의 책임을 **프로젝트/설정 로드, 서비스 초기화,
+     WorkspaceSession 관리, Agent Runtime 초기화, Workflow 시작, 종료**로 좁힌다.
+     Task 실행은 **모두 Agent Runtime에 위임**한다.
+  2. Workspace Core 아래 **Agent Runtime 계층**을 둔다: **Agent Registry**(등록/
+     조회/제거), **Agent Scheduler**(선택/병렬/우선순위), **Agent Manager**(생성/
+     생명주기/상태), **Event Bus**(발행/구독/통신).
+  3. **WorkspaceSession** 도메인을 추가한다(현재 프로젝트/Mission/활성 Workflow/
+     활성 Agent/Memory Snapshot/Engine Session 등 실행 상태).
+- 대안: Workspace Core가 Agent를 직접 제어 — 계층은 단순하나 병렬/스케줄링/
+  생명주기가 Core에 혼재 (기각).
+- 이유: 실행 관심사(등록·스케줄·생명주기·통신)를 Runtime으로 분리하면 Core는
+  세션과 조율에만 집중하고, 각 Runtime 컴포넌트를 독립적으로 확장·테스트할 수 있다.
+- 결과/영향: ADR-0006에서 Workspace Core 직속이던 Agent Manager가 Agent Runtime
+  내부로 이동한다. `docs/ARCHITECTURE.md` v0.5.0 §3.3~3.4 반영. Interfaces에
+  `AgentRegistry`, `AgentScheduler` 추가.
+
+## ADR-0011: Mission → Workflow → Task → Step 4단 계층 도입
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: 기존 Workflow→Task 2단으로는 "사용자 목표(무엇을)"와 "세부 실행 단위"를
+  함께 표현하기 어렵다.
+- 결정: **Mission(목표) → Workflow(협업 흐름) → Task(Agent 할당 작업) →
+  Step(세부 실행 단위)** 4단 계층을 기본 모델로 삼는다. 도메인에 `Mission`,
+  `Step`을 추가한다.
+- 대안: Workflow=Task 2단 유지 — 단순하나 목표/세부 실행 표현 부족 (기각).
+- 이유: 목표부터 세부 실행까지 일관된 단위로 추적·분배·검증할 수 있다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.5.0 §4, §6 반영. Workflow 도메인을 이
+  계층 안에서 재정의.
+
+## ADR-0012: Capability 중심 Agent 설계 (Memory/Automation은 Engine)
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: 역할(Role)만으로 Agent를 선택하면 엔진 능력과의 매칭이 부정확하고,
+  Memory/Automation처럼 모든 Agent가 공유하는 기능을 Agent로 두면 중복이 생긴다.
+- 결정:
+  1. Agent를 **Capability 중심**으로 설계한다(Planning/Coding/Review/
+     Documentation/Research/Vision/Voice/Git/MCP …). Scheduler는 엔진 종류가
+     아니라 **Capability로** Agent를 선택한다. 도메인에 `AgentCapability` 추가.
+  2. **Memory와 Automation은 Agent가 아니라 Core Engine(서비스)**로 유지한다.
+     Memory Engine은 Context 생성/검색/저장/Snapshot 관리를 담당하며 모든 Agent가
+     사용한다.
+- 대안: 역할만으로 선택 + Memory Agent 도입 — 단순해 보이나 매칭 부정확·공용
+  기능 중복 (기각).
+- 이유: Capability 기반이면 엔진에 비종속적으로 정확히 Agent를 선택할 수 있고,
+  공용 기능(Memory/Automation)은 서비스로 재사용된다.
+- 결과/영향: ADR-0006의 "Memory Agent"는 폐기되고 Memory는 Engine으로 확정.
+  `docs/ARCHITECTURE.md` v0.5.0 §3.6~3.7 반영.
+
+## ADR-0013: Conversation Layer를 Interaction Layer로 확장
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정). ADR-0008을 대체.
+- 날짜: 2026-07-23
+- 배경: 입력 표면이 CLI/Voice를 넘어 Dashboard/Mobile/REST API/Slack/Discord/
+  Webhook 등으로 확장될 예정이다.
+- 결정: 기존 Conversation Layer를 **Interaction Layer**로 확장하고,
+  `ConversationEngine` 인터페이스를 **`InteractionEngine`**으로 대체한다. Voice는
+  Workspace Core가 아니라 Interaction Layer에 추가되는 표면으로 유지한다.
+- 대안: Conversation Layer 명칭 유지 — 텍스트 대화에 국한된 인상 (기각).
+- 이유: 다양한 상호작용 표면을 일관되게 수용하는 계층임을 이름과 계약에 반영.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.5.0 §3.2 반영. ADR-0008은 본 ADR로 대체됨.
+
+## ADR-0014: Event Store 도입 (Event Bus와 분리)
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: Event Bus만으로는 이벤트가 소비되면 사라져 Replay/Audit/복구가 불가능하다.
+- 결정: Event Bus와 별도로 **Event Store**를 둔다. 구조는 `Event Bus → Event
+  Store → Subscribers`. 목적은 Event 기록/Replay/Audit/Debugging/Workflow 복구.
+  `EventStore` 인터페이스를 Phase 1에서 정의하고 구현은 이후 Phase.
+- 대안: Event Bus만 사용 — 단순하나 기록/복구 불가 (기각).
+- 이유: 이벤트 기반 협업의 추적성과 복구력을 확보한다 (기록 우선 원칙과 부합).
+- 결과/영향: `docs/ARCHITECTURE.md` v0.5.0 §3.5 반영. Interfaces에 `EventStore`
+  추가.
+
+## ADR-0015: EngineAdapter를 세션 생명주기 포함 계약으로 확장
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정). ADR-0009를 확장.
+- 날짜: 2026-07-23
+- 배경: 구현 엔진은 상태 있는 세션(연속 대화/작업 맥락)을 갖는다. 무상태 `run`
+  만으로는 세션 생성/정리를 표현할 수 없다.
+- 결정: `EngineAdapter` 계약에 **`create_session()`**, **`destroy_session()`**을
+  추가한다. 최종 계약: `create_session`, `run`, `cancel`, `status`,
+  `destroy_session`, `capabilities`, `supports_parallel`, `estimate_cost`.
+  구체 구현은 Phase 3(엔진 연동).
+- 대안: 무상태 `run`만 유지 — 단순하나 세션 있는 엔진 제어 불가 (기각).
+- 이유: 세션 생명주기를 계약에 포함해야 상태 있는 실행/취소/정리를 일관되게
+  다룰 수 있다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.5.0 §3.8 반영. ADR-0009의 계약을 이
+  ADR로 확장·대체.

@@ -7,8 +7,9 @@ AI Workspace는 또 하나의 코딩 AI가 아닙니다. 실제 코드 작성은
 수행하고, AI Workspace는 역할을 가진 **Agent들의 협업**으로 다음을 관리하고
 연결하는 역할을 담당합니다.
 
-- 멀티 에이전트 협업 (Multi-Agent Orchestration) — Planner / Coding / Review /
-  Research / Memory / Automation Agent
+- 멀티 에이전트 협업 (Multi-Agent Orchestration) — 능력(Capability) 기반 Agent
+  (Planning / Coding / Review / Documentation / Research / …)를 Agent Runtime이
+  조율
 - 프로젝트 관리 (Project Management)
 - Task 관리 (Task Management)
 - Workflow 관리 (협업 흐름 Orchestration)
@@ -18,9 +19,10 @@ AI Workspace는 또 하나의 코딩 AI가 아닙니다. 실제 코드 작성은
 - 다중 프로젝트 관리 (Multi Project)
 - 구현 엔진(Claude Code, Codex 등) 관리
 
-> **현재 상태**: Milestone 1 / Phase 1 진행 중입니다. Multi-Agent First로
-> 아키텍처를 전환(ADR-0006~0009)했으며, 도메인 모델과 인터페이스 계약을 구현하는
-> 중입니다. 자세한 계획은 [`docs/ROADMAP.md`](docs/ROADMAP.md)와
+> **현재 상태**: Milestone 1 / Phase 1 진행 중입니다. Multi-Agent First 구조를
+> Agent Runtime·Event Store·Interaction Layer·Mission→Workflow→Task→Step 계층까지
+> 심화(ADR-0006~0015)했으며, 도메인 모델과 인터페이스 계약을 구현하는 중입니다.
+> 자세한 계획은 [`docs/ROADMAP.md`](docs/ROADMAP.md)와
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)를 참고하세요.
 
 ## 시작 방법
@@ -53,13 +55,15 @@ ai-workspace/
 │   ├── MEMORY.md           # 프로젝트 장기 메모리, 중요한 결정, 컨텍스트
 │   └── DECISIONS.md        # Architecture Decision Record (ADR)
 ├── src/ai_workspace/        # 애플리케이션 코드
-│   ├── domain/             # Project, Task, Workflow, Agent 등 핵심 모델
-│   ├── interfaces/          # 추상 계약 (Repository, Engine, AgentManager, EventBus 등)
-│   ├── core/               # Workspace Core (Agent 오케스트레이터)
-│   ├── agents/             # Agent Manager + 역할별 Agent (이후 Phase)
+│   ├── domain/             # Project, Mission, Workflow, Task, Step,
+│   │                       #   WorkspaceSession, Agent 등 핵심 모델
+│   ├── interfaces/          # 추상 계약 14종 (Repository, Engine, AgentRuntime, EventBus/Store 등)
+│   ├── core/               # Workspace Core (최상위 오케스트레이터, WorkspaceSession)
+│   ├── runtime/            # Agent Runtime (Registry/Scheduler/Manager) (이후 Phase)
+│   ├── agents/             # 능력별 Agent (이후 Phase)
 │   ├── engines/            # Core Engines 구현 (이후 Phase)
-│   ├── events/             # Event Bus (이후 Phase)
-│   ├── conversation/        # Conversation Layer (이후 Phase)
+│   ├── events/             # Event Bus + Event Store (이후 Phase)
+│   ├── interaction/         # Interaction Layer (이후 Phase)
 │   ├── adapters/           # Engine Adapter 구현 (이후 Phase)
 │   ├── storage/            # 파일 기반 저장소 구현
 │   └── cli/                # CLI 진입점

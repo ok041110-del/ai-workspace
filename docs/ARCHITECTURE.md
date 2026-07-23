@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.4.0 |
+| 문서 버전 | v0.5.0 |
 | 작성일 | 2026-07-23 |
 | 상태 | Draft (Milestone 1 / Phase 1 — 아키텍처 재설계 완료, 구현 재개 대기) |
 
@@ -10,375 +10,350 @@
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
 (Documentation First 원칙).
 
-> **v0.4.0 변경 사항 (Multi-Agent First 전환 — ADR-0006 ~ ADR-0009)**
-> AI Workspace의 방향을 "필요 시 다중 에이전트를 사용할 수 있는 Workspace"에서
-> **"상시 멀티 에이전트(Multi-Agent First) Workspace"**로 변경했다. 멀티 에이전트는
-> 더 이상 선택 기능이 아니라 시스템의 **기본 구조**다. 주요 변경:
-> 1. **Workspace Core**를 Engine 오케스트레이터에서 **Agent 최상위
->    오케스트레이터**로 재정의했다. Task를 직접 실행하지 않고 Agent에 위임한다.
-> 2. **Agent Manager**와 **Agent 도메인**(Agent, AgentRole, AgentStatus)을 추가했다.
-> 3. **Workflow**를 단순 실행 순서에서 **협업 흐름**(Task 생성 → Agent 할당 →
->    Agent 간 협업 → 결과 통합)으로 재정의했다.
-> 4. **Conversation Layer**를 도입했다 (CLI/Dashboard/Mobile/Voice/API를 통합하는
->    입력 계층). Voice는 이 계층에 연결되는 UI로 취급한다.
-> 5. **Event Bus** 기반의 느슨한 결합 구조를 도입했다 (Agent 간 직접 호출 대신
->    Event 우선).
-> 6. **EngineAdapter**를 `run_task()` 단일 계약에서 모든 Agent가 공유하는 확장
->    실행 계약(run/cancel/status/capabilities/supports_parallel/estimate_cost)으로
->    확장했다.
-> v0.3.0에서 확정한 "Interface 우선 설계"(ADR-0005)는 그대로 유지·확장한다.
+> **v0.5.0 변경 사항 (Multi-Agent First 심화 — ADR-0010 ~ ADR-0015)**
+> v0.4.0에서 도입한 Multi-Agent First를 실행 계층까지 구체화했다.
+> 1. **Workspace Core**의 책임을 더 좁혔다. 이제 Agent 등록·Task 분배·Engine
+>    선택을 직접 하지 않고, **Agent Runtime**에 위임한다. Core는 프로젝트/설정
+>    로드, 서비스 초기화, **WorkspaceSession 관리**, Agent Runtime 초기화,
+>    Workflow 시작, 종료만 담당한다.
+> 2. **Agent Runtime 계층**을 추가했다(Agent Registry / Agent Scheduler /
+>    Agent Manager / Event Bus).
+> 3. 도메인에 **WorkspaceSession, AgentCapability, Step**을 추가하고,
+>    **Mission → Workflow → Task → Step** 4단 계층을 기본 모델로 삼았다.
+> 4. Agent를 **Capability 중심**으로 설계했다(엔진 종류와 무관하게 능력으로 선택).
+>    **Memory/Automation은 Agent가 아니라 Core Engine(서비스)**임을 명확히 했다.
+> 5. **Conversation Layer → Interaction Layer**로 확장(입력 표면 다양화).
+> 6. **Event Store**를 Event Bus와 별도로 추가(기록/Replay/Audit/복구).
+> 7. **EngineAdapter**를 세션 생명주기를 포함한 실행 계약으로 확장
+>    (create_session/run/cancel/status/destroy_session/capabilities/
+>    supports_parallel/estimate_cost).
+> ADR-0005(Interface 우선 설계)는 그대로 유지·확장한다.
 
 ---
 
 ## 1. 아키텍처 원칙
 
-1. **멀티 에이전트 우선 (Multi-Agent First)**
-   Workspace의 모든 작업은 역할(Role)을 가진 Agent들이 협업하여 수행한다.
-   단일 실행 경로는 특수 케이스이며, 기본 구조는 항상 다중 Agent 협업이다.
+1. **멀티 에이전트 우선 (Multi-Agent First)** — 모든 작업은 능력을 가진 Agent들이
+   협업하여 수행한다. 단일 실행은 특수 케이스다.
+2. **관리자와 구현자의 분리** — AI Workspace는 조율만 하고, 실제 코드 작성은 구현
+   엔진의 책임이다.
+3. **엔진 비종속성** — Agent/도메인 로직은 구현 엔진을 알지 못하며, Engine
+   Adapter를 통해서만 통신한다.
+4. **인터페이스 우선 설계 (ADR-0005 유지)** — 컴포넌트 간 협력은 구체 클래스가
+   아니라 인터페이스(계약: 입력/출력/예외/보장사항)를 통한다.
+5. **느슨한 결합 / Event 우선** — Agent는 서로 직접 호출하지 않고 Event Bus로
+   협업한다. 모든 이벤트는 Event Store에 기록되어 Replay/Audit이 가능하다.
+6. **Capability 중심 선택** — Agent는 역할뿐 아니라 **능력(Capability)**으로
+   선택된다. 엔진 종류에 종속되지 않는다.
+7. **세션 중심 실행 (Session-Centric)** — Workspace의 현재 실행 상태는
+   `WorkspaceSession` 도메인으로 명시적으로 관리된다.
+8. **승인 지점의 명시적 분리** — 아키텍처 변경 등 4가지 행위는 Approval Engine
+   게이트로 강제되며 우회 경로가 없다.
+9. **기록 우선 / 단순한 것에서 시작** — 상태/결정은 문서와 동기화하고, Voice·Event
+   Store·Interaction 확장 표면 등은 **구조에는 포함하되 구현은 뒤로 미룬다**.
 
-2. **관리자와 구현자의 분리 (Separation of Orchestration and Implementation)**
-   AI Workspace(관리자)는 "어떤 Agent가, 무엇을, 언제, 어떤 Engine으로" 할지
-   결정한다. "어떻게 코드를 작성하는가"는 전적으로 구현 엔진(Claude Code, Codex,
-   Gemini CLI 등)의 책임이다.
+## 2. 전체 구조 개요 (Architecture Diagram)
 
-3. **엔진 비종속성 (Engine Agnosticism)**
-   Agent와 도메인 로직은 특정 구현 엔진의 API/CLI 형식을 알지 못한다. 엔진과의
-   통신은 반드시 Engine Adapter를 통해서만 이루어진다 (의존성 역전).
-
-4. **인터페이스 우선 설계 (Interface-Driven Design, ADR-0005 유지)**
-   모든 컴포넌트 간 협력은 구체 클래스가 아니라 **Interfaces(추상 계약)**를 통해
-   이루어진다. 구체 구현체는 각 Phase에서 순차적으로 채워진다.
-
-5. **느슨한 결합 / Event 우선 (Loose Coupling, Event-First)**
-   Agent는 서로를 직접 호출하지 않고, **Event Bus**를 통해 이벤트를 발행/구독하여
-   협업한다. 이로써 Agent를 독립적으로 추가·교체·테스트할 수 있다.
-
-6. **승인 지점의 명시적 분리 (Explicit Approval Boundaries)**
-   아키텍처 변경, 신규 기능, 리팩토링, Phase 완료는 별도의 승인 상태를 가지는
-   명시적 게이트(Approval Engine)로 모델링한다. 우회 경로는 존재하지 않는다.
-
-7. **기록 우선 (Traceability by Design)**
-   Task/Agent 상태 변화, 승인/반려, 주요 설계 결정은 사람이 읽을 수 있는 문서
-   (`.ai/TASKS.md`, `.ai/DECISIONS.md`, `.ai/MEMORY.md`)와 항상 동기화된다.
-
-8. **단순한 것에서 시작 (Start Simple, Extend Later)**
-   Phase 1은 단일 사용자, 로컬 파일 기반 저장을 가정한다. 다중 사용자, 원격 저장,
-   동시성 제어 등은 이후 Phase에서 필요할 때 확장한다 (YAGNI). Voice/Event Bus
-   등은 **구조에는 포함하되 구현은 뒤로 미룬다.**
-
-## 2. 전체 구조 개요
-
-의존 방향은 항상 **위(사용자와 가까운 쪽)에서 아래(구현 엔진과 가까운 쪽)로만**
-향한다. Agent 간 협업만은 예외적으로 **Event Bus를 통한 수평적 느슨한 결합**으로
-이루어진다.
+의존 방향은 항상 **위(사용자)에서 아래(구현 엔진)로만** 향한다. Agent 협업만
+Event Bus/Event Store를 통한 수평 결합이다.
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  UI Surfaces                                                   │
-│  CLI · Dashboard · Mobile · Voice · API                        │
-└──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌──────────────────────────────────────────────────────────────┐
-│  Conversation Layer         (ConversationEngine 인터페이스)     │
-│  모든 입력 표면을 표준 요청으로 정규화 / 응답을 표면에 맞게 변환   │
-└──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌──────────────────────────────────────────────────────────────┐
-│  Workspace Core             (최상위 오케스트레이터)             │
-│  프로젝트/설정 로드 · 서비스 초기화 · Agent 등록/관리 ·          │
-│  Workflow 시작 · Task 분배 · Engine 선택/위임 · 종료             │
-│  ※ Task를 직접 실행하지 않고 Agent에게 위임한다                 │
-└──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌──────────────────────────────────────────────────────────────┐
-│  Agent Manager              (AgentManager 인터페이스)          │
-│  Agent 생성 · 생명주기 · 선택 · 협업 조율 · 상태 관리            │
-└──────────────────────────────────────────────────────────────┘
-             │                                      ▲
-             ▼                                      │
-┌───────────────────────────────────┐     ┌──────────────────────┐
-│  Agents                            │◀───▶│  Event Bus            │
-│  Planner · Coding · Review ·       │     │  발행/구독 기반        │
-│  Research · Memory · Automation     │     │  느슨한 결합           │
-└───────────────────────────────────┘     └──────────────────────┘
-             │  (Agent는 아래 두 축을 사용한다)
-   ┌─────────┴───────────────────────────────┐
-   ▼                                          ▼
-┌──────────────────────────────┐   ┌──────────────────────────────┐
-│  Domain Services (Core Engines)│   │  Engine Adapter              │
-│  Task · Workflow · Memory ·    │   │  run · cancel · status ·     │
-│  Approval · Automation Engine  │   │  capabilities ·              │
-│                                │   │  supports_parallel ·         │
-│                                │   │  estimate_cost               │
-└──────────────────────────────┘   └──────────────────────────────┘
-                                                │
-                                                ▼
-                              ┌──────────────────────────────────┐
-                              │  Implementation Engines (외부)     │
-                              │  Claude Code · Codex · Gemini CLI  │
-                              └──────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│  UI Surfaces                                                            │
+│  CLI · Dashboard · Mobile · Voice · REST API · Slack · Discord · Webhook │
+└────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│  Interaction Layer               (InteractionEngine 인터페이스)          │
+│  모든 입력 표면을 표준 요청으로 정규화 / 응답을 표면에 맞게 변환           │
+└────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│  Workspace Core                  (최상위 오케스트레이터)                 │
+│  프로젝트/설정 로드 · 서비스 초기화 · WorkspaceSession 관리 ·             │
+│  Agent Runtime 초기화 · Workflow 시작 · 종료                             │
+│  ※ Task를 직접 실행하지 않고 Agent Runtime에 위임한다                    │
+└────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│  Agent Runtime                                                          │
+│  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌─────────────┐ │
+│  │ Agent Registry │ │ Agent Scheduler│ │ Agent Manager  │ │  Event Bus  │ │
+│  │ 등록/조회/제거  │ │ 선택/병렬/순서 │ │ 생성/생명주기/  │ │ 발행/구독/  │ │
+│  │               │ │               │ │ 상태           │ │ 통신        │ │
+│  └───────────────┘ └───────────────┘ └───────────────┘ └──────┬──────┘ │
+│                                                                │        │
+│                                                         ┌──────▼──────┐ │
+│                                                         │ Event Store │ │
+│                                                         │ 기록/Replay/│ │
+│                                                         │ Audit/복구  │ │
+│                                                         └─────────────┘ │
+└────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│  Agents (Capability 중심)                                               │
+│  Planning · Coding · Review · Documentation · Research · Vision ·        │
+│  Voice · Git · MCP …  (능력으로 선택, 엔진 비종속)                        │
+└────────────────────────────────────────────────────────────────────────┘
+                 │  (Agent는 아래 두 축을 사용한다)
+     ┌───────────┴─────────────────────────────────┐
+     ▼                                              ▼
+┌──────────────────────────────┐        ┌──────────────────────────────────┐
+│  Core Engines (Services)      │        │  Engine Adapter                  │
+│  Task · Workflow · Memory ·   │        │  create_session · run · cancel · │
+│  Approval · Automation Engine │        │  status · destroy_session ·      │
+│  (Memory/Automation은 Agent가 │        │  capabilities · supports_parallel│
+│   아니라 서비스다)             │        │  · estimate_cost                 │
+└──────────────────────────────┘        └──────────────────────────────────┘
+                                                       │
+                                                       ▼
+                                    ┌──────────────────────────────────┐
+                                    │  Implementation Engines (외부)     │
+                                    │  Claude Code · Codex · Gemini CLI  │
+                                    └──────────────────────────────────┘
 ```
-
-**핵심 관계 요약**
-- **Agent가 시스템의 주체(actor)**다. 실제 일은 Agent가 수행하되, 직접 코드를
-  작성하지 않고 Engine Adapter를 통해 구현 엔진에 위임한다.
-- **Core Engines는 능력(capability) 서비스**다. Agent와 Workspace Core가
-  Task/Workflow/Memory/Approval/Automation 기능을 사용할 때 호출하는 도메인
-  서비스이며, 그 자체가 Agent는 아니다. (예: Memory Agent는 MemoryEngine
-  서비스를 사용해 메모리를 큐레이션하는 Agent다.)
-- **Event Bus는 Agent 협업의 기본 통로**다. Planner가 Task를 만들면
-  `TaskCreated` 이벤트가 발행되고, 이를 구독한 Coding Agent가 실행되는 식이다.
 
 ## 3. 핵심 컴포넌트
 
-각 컴포넌트마다 **책임**과 **의존 방향**을 명시한다.
+### 3.1 UI Surfaces
+- **책임**: 사용자와의 물리적 접점(CLI/Dashboard/Mobile/Voice/REST API/Slack/
+  Discord/Webhook). 입력을 Interaction Layer로 전달하고 응답을 표시한다.
+- **의존 방향**: Interaction Layer만 호출한다.
+- **Voice 취급**: Voice는 Workspace Core에 직접 연결되지 않는다. **Interaction
+  Layer에 추가되는 표면**이다.
 
-### 3.1 UI Surfaces (CLI · Dashboard · Mobile · Voice · API)
-- **책임**: 사용자와의 물리적 접점. 입력을 받아 Conversation Layer로 전달하고,
-  응답을 사용자에게 표시한다.
-- **의존 방향**: Conversation Layer만 호출한다. Workspace Core 이하를 직접
-  알지 못한다.
-- **Voice 취급**: Voice는 Workspace Core가 아니라 **Conversation Layer에
-  연결되는 하나의 UI**다. 지금은 구현하지 않으나, 다른 표면과 동일하게
-  ConversationEngine을 통해 붙는 구조로 설계한다.
-
-### 3.2 Conversation Layer (ConversationEngine 인터페이스)
-- **책임**
-  - 여러 UI 표면(텍스트/음성/API 호출 등)의 입력을 **표준 요청(canonical
-    request)**으로 정규화한다.
-  - Workspace Core의 응답을 각 표면에 맞는 형태로 변환한다.
-  - 향후 Voice/멀티모달 입력을 추가할 때, 이 계층에만 어댑터를 붙이면 되도록
-    한다.
-- **의존 방향**: UI Surfaces로부터 호출받음(→ 위) / Workspace Core를 호출(→ 아래).
-- **구현 시점**: 인터페이스는 Phase 1에서 정의하고, 구체 구현은 이후 Phase에서
-  진행한다 (지금 구현하지 않아도 되지만 구조에는 포함).
+### 3.2 Interaction Layer (InteractionEngine 인터페이스)
+- **책임**: 다양한 입력 표면을 **표준 요청**으로 정규화하고, 응답을 표면에 맞게
+  변환한다. (기존 Conversation Layer의 확장 — ADR-0013.)
+- **의존 방향**: UI Surfaces로부터 호출받음 / Workspace Core를 호출.
+- **구현 시점**: 인터페이스는 Phase 1에서 정의, 구현은 이후 Phase.
 
 ### 3.3 Workspace Core (최상위 오케스트레이터)
-Workspace Core는 **Agent를 관리하는 최상위 오케스트레이터**다. Task를 직접
-실행하지 않고 Agent에게 위임한다.
-- **책임 (포함)**
-  1. **프로젝트 로드** (`ProjectRepository` 통해)
-  2. **설정(Config) 로드**
-  3. **서비스 초기화** (등록된 Interfaces 구현체 초기화·연결)
-  4. **Agent 등록 및 관리** (`AgentManager` 통해)
-  5. **Workflow 시작** (`WorkflowEngine` 통해 협업 흐름을 착수)
-  6. **Task 분배** (생성된 Task를 직접 처리하지 않고 적절한 Agent에 분배)
-  7. **Engine 선택 및 위임** (Agent가 사용할 구현 엔진을 정책에 따라 선택)
-  8. **종료(Shutdown)**
-- **책임 (제외)**: Task 자체의 실행, Agent 내부 로직, 구현 엔진 직접 호출,
-  파일 저장 세부 구현. 이들은 각각 Agent / Engine Adapter / 구체 Repository의
-  몫이다.
-- **의존 방향**: Conversation Layer로부터 호출받음(→ 위) / `AgentManager`,
-  `WorkflowEngine`, `ProjectRepository` 등 **Interfaces에만** 의존(→ 아래).
-  어떤 구체 클래스도 직접 알지 못한다.
+- **책임 (포함, ADR-0010)**
+  1. 프로젝트 로드 (`ProjectRepository`)
+  2. 설정(Config) 로드
+  3. 서비스 초기화
+  4. **WorkspaceSession 관리** (현재 실행 상태의 생성/갱신/종료)
+  5. **Agent Runtime 초기화** (Registry/Scheduler/Manager/Event Bus 준비)
+  6. Workflow 시작 (`WorkflowEngine`)
+  7. 종료(Shutdown)
+- **책임 (제외)**: Task 실행, Agent 직접 제어, Engine 직접 호출, 파일 저장 세부.
+  Task 실행은 **모두 Agent Runtime에 위임**한다.
+- **의존 방향**: Interaction Layer로부터 호출받음 / Agent Runtime과 Interfaces에
+  의존. 구체 클래스를 직접 참조하지 않는다.
 
-### 3.4 Agent Manager (AgentManager 인터페이스)
-- **책임**
-  1. **Agent 생성** (역할별 Agent 인스턴스 생성)
-  2. **Agent 생명주기 관리** (생성 → 준비 → 실행 → 대기 → 종료)
-  3. **Agent 선택** (Task의 성격/역할/능력에 맞는 Agent 선정)
-  4. **Agent 간 협업** (Event Bus를 통한 협업 흐름 조율)
-  5. **Agent 상태 관리** (`AgentStatus` 추적)
-- **의존 방향**: Workspace Core로부터 호출받음(→ 위) / `AgentRepository`(Agent
-  영속화), `EventBus`(협업), 개별 Agent를 관리(→ 아래).
+### 3.4 Agent Runtime
+Workspace Core 아래에서 Agent의 실제 실행을 담당하는 계층. 네 컴포넌트로 구성된다.
 
-### 3.5 Agents (Planner · Coding · Review · Research · Memory · Automation)
-각 Agent는 하나의 `AgentRole`을 가지며, Event 기반으로 동작한다.
-- **Planner Agent**: 사용자의 목표를 Task로 분해하고 Workflow를 구성한다
-  (`WorkflowEngine`, `TaskEngine` 사용). 완료 시 `TaskCreated` 이벤트 발행.
-- **Coding Agent**: 실제 구현을 구현 엔진에 위임한다 (`EngineAdapter` 사용).
-  `TaskCreated`를 구독하여 실행, 완료 시 `ReviewRequested` 발행.
-- **Review Agent**: 산출물을 검토한다. `ReviewRequested`를 구독, 결과에 따라
-  `ReviewApproved` / `ReworkRequested` 발행.
-- **Research Agent**: 필요한 정보를 조사한다 (구현 엔진 또는 외부 소스 활용).
-- **Memory Agent**: `MemoryEngine`을 사용해 장기 메모리를 큐레이션한다.
-- **Automation Agent**: `AutomationEngine`을 사용해 조건/일정 기반 작업을
-  트리거한다.
-- **의존 방향**: Agent Manager가 생성/관리(→ 위) / `EngineAdapter`, Core
-  Engines, `EventBus`를 사용(→ 아래·수평). Agent끼리 **직접 호출하지 않고**
-  Event Bus를 통해서만 협업한다.
+- **3.4.1 Agent Registry** (`AgentRegistry`): Agent 등록 / 조회 / 제거.
+- **3.4.2 Agent Scheduler** (`AgentScheduler`): 실행 가능한 Agent 선택,
+  **병렬 실행 관리**, 우선순위·실행 순서 결정.
+- **3.4.3 Agent Manager** (`AgentManager`): Agent 생성 / 생명주기 관리 /
+  상태 관리.
+- **3.4.4 Event Bus** (`EventBus`): Event 발행 / 구독 / Agent 간 통신. 모든
+  이벤트는 Event Store에 함께 기록된다.
+- **의존 방향**: Workspace Core로부터 호출받음 / `AgentRegistry`,
+  `AgentScheduler`, `AgentManager`, `AgentRepository`, `EventBus`, `EventStore`,
+  개별 Agent 인터페이스에 의존.
 
-### 3.6 Event Bus
-- **책임**: 이벤트 발행(publish)과 구독(subscribe)을 제공하여 Agent 간 느슨한
-  결합을 실현한다. 예: `TaskCreated`, `ReviewRequested`, `ReviewApproved`,
-  `ReworkRequested`, `ResultIntegrated`.
-- **의존 방향**: Agent Manager와 Agent들이 사용하는 수평적 인프라. 특정 Agent에
-  의존하지 않는다.
-- **구현 시점**: 구조에는 포함하되 구현은 이후 Phase(멀티 에이전트 코어)에서
-  진행한다. Phase 1에서는 `EventBus` 인터페이스만 정의한다.
+### 3.5 Event Store (EventStore 인터페이스)
+- **책임**: Event Bus를 흐르는 이벤트를 **기록(persist)**한다. 이로써 Replay,
+  Audit, Debugging, Workflow 복구가 가능하다 (ADR-0014).
+- **구조**: `Event Bus → Event Store → Subscribers`. 구독자는 Event Store를
+  통해 과거 이벤트를 재생할 수 있다.
+- **의존 방향**: Event Bus가 기록을 위해 호출. 특정 Agent에 의존하지 않는다.
+- **구현 시점**: 인터페이스만 Phase 1, 구현은 이후 Phase.
 
-### 3.7 Domain Services / Core Engines
+### 3.6 Agents (Capability 중심)
+- **책임**: 각 Agent는 하나 이상의 **Capability**(Planning, Coding, Review,
+  Documentation, Research, Vision, Voice, Git, MCP …)를 가진다. Agent Scheduler는
+  **엔진 종류가 아니라 Capability를 기준으로** Agent를 선택한다.
+- **협업**: Agent끼리 직접 호출하지 않고 **Event 기반**으로 협업한다(§5).
+- **실행**: 실제 일은 `EngineAdapter`를 통해 구현 엔진에 위임하며, 필요 시 Core
+  Engines(Task/Workflow/Memory/Approval/Automation)를 서비스로 사용한다.
+- **의존 방향**: Agent Runtime이 생성/관리 / `EngineAdapter`, Core Engines,
+  `EventBus`를 사용.
+
+### 3.7 Core Engines (Services)
 Task · Workflow · Memory · Approval · Automation Engine. Agent와 Workspace
-Core가 사용하는 **능력 서비스**다. (ADR-0005에서 정의한 인터페이스들을 유지한다.)
-- **Workflow Engine**: 이제 단순 실행 순서가 아니라 **협업 흐름**을 다룬다
-  (§4 참고).
-- 나머지 Engine(Task/Memory/Approval/Automation)의 책임은 v0.3.0과 동일하되,
-  호출 주체가 "Workspace Core"에서 "Agent 및 Workspace Core"로 확장된다.
-- **의존 방향**: Agent/Workspace Core로부터 호출받음(→ 위) / 필요 시
-  `EngineAdapter`, 저장소 인터페이스를 사용(→ 아래).
+Core가 사용하는 **능력 서비스**다. (Agent가 아니다.)
+- **Memory Engine (ADR-0012)**: **Agent가 아니라 서비스**다. Context 생성 /
+  Memory 검색 / Memory 저장 / Snapshot 관리를 담당하며, 모든 Agent가 사용한다.
+- **Automation Engine**: 조건/일정 트리거를 담당하는 서비스. (Agent가 아니다.)
+- **Workflow Engine**: **Mission → Workflow → Task → Step** 계층(§4)의 협업
+  흐름을 계획/실행한다.
+- Task/Approval Engine의 책임은 v0.4.0과 동일.
 
-### 3.8 Engine Adapter (확장된 실행 계약)
-모든 Agent가 공통으로 사용하는 **실행 계약**이다. `run_task()` 단일 메서드에서
-아래와 같은 확장 계약으로 넓힌다 (구체 구현은 Phase 3/엔진 연동 단계).
+### 3.8 Engine Adapter (세션 생명주기 포함 실행 계약)
+모든 구현 엔진이 공통으로 구현하는 실행 계약 (ADR-0015). 구체 구현은 Phase 3.
 
 | 메서드 | 의미 |
 |---|---|
-| `run(request)` | 구현 엔진에 실행 요청. 실행 핸들/결과를 반환 |
-| `cancel(execution_id)` | 진행 중인 실행 취소 |
-| `status(execution_id)` | 실행 상태 조회 |
-| `capabilities()` | 이 엔진이 지원하는 능력 목록(예: 코드 편집, 검색) |
-| `supports_parallel()` | 병렬 실행 지원 여부 (멀티 에이전트 동시 실행 판단용) |
-| `estimate_cost(request)` | 실행 전 비용/토큰 추정 (Engine 선택 정책에 사용) |
-
-- **의존 방향**: Agent로부터 호출받음(→ 위) / 실제 구현 엔진을 호출(→ 아래).
-- **확장 이유**: 멀티 에이전트 환경에서는 여러 Agent가 동시에 엔진을 사용하므로,
-  취소·상태·병렬 지원·비용 추정 같은 운영 계약이 필수다 (ADR-0009).
+| `create_session()` | 구현 엔진과의 세션 생성 (상태 있는 실행의 시작점) |
+| `run(...)` | 세션 위에서 실행 요청. 실행 핸들/결과 반환 |
+| `cancel(...)` | 진행 중 실행 취소 |
+| `status(...)` | 실행 상태 조회 |
+| `destroy_session()` | 세션 정리/종료 |
+| `capabilities()` | 이 엔진이 지원하는 능력 목록 |
+| `supports_parallel()` | 병렬 실행 지원 여부 |
+| `estimate_cost(...)` | 실행 전 비용/토큰 추정 |
 
 ### 3.9 Implementation Engines (외부)
 Claude Code · Codex · Gemini CLI 등. AI Workspace 범위 밖의 실제 실행 주체.
 
-## 4. Workflow 재정의 — 협업 흐름
+## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
-Workflow는 더 이상 "Task 실행 순서"만을 뜻하지 않는다. 이제 다음을 포함하는
-**Agent 협업 흐름**이다.
-
-1. **Task 생성**: Planner Agent가 목표를 Task로 분해한다.
-2. **Agent 할당**: 각 Task에 적합한 역할의 Agent를 할당한다 (Agent Manager).
-3. **Agent 간 협업**: 할당된 Agent들이 Event Bus를 통해 협업한다.
-4. **결과 통합**: 각 Agent의 산출물을 통합하여 최종 결과를 만든다.
-
-### 예시 협업 흐름 (Event 기반)
+Workflow를 다음 4단 계층 안에서 재정의한다.
 
 ```
-사용자 목표
+Mission     사용자의 목표를 나타내는 최상위 단위
    │
    ▼
-Planner Agent  ──▶  [TaskCreated Event]
-                        │
-                        ▼
-                   Coding Agent  ──(EngineAdapter)──▶ Claude Code
-                        │
-                        ▼
-                   [ReviewRequested Event]
-                        │
-                        ▼
-                   Review Agent
-                        │
-             ┌──────────┴──────────┐
-             ▼                     ▼
-     [ReviewApproved]       [ReworkRequested]
-             │                     │
-             ▼                     ▼
-     결과 통합(Workflow)      Coding Agent 재실행
+Workflow    Mission을 수행하기 위한 협업 흐름 (Agent 협업)
+   │
+   ▼
+Task        Agent에게 할당되는 작업
+   │
+   ▼
+Step        Task 내부의 세부 실행 단위
 ```
 
-## 5. Interfaces (추상 계약)
+- **Mission**: "무엇을 이루고자 하는가" (사용자 목표).
+- **Workflow**: Mission을 이루기 위한 Agent 협업 흐름(Task 생성 → Agent 할당 →
+  협업 → 결과 통합).
+- **Task**: 특정 Agent에게 할당되는 실행 단위.
+- **Step**: Task를 구성하는 세부 실행 단위.
 
-Phase 1에서 아래 인터페이스를 **계약(추상 클래스/Protocol)으로만** 정의한다.
-v0.3.0의 기존 7개를 유지하고, Multi-Agent First를 위해 4개를 추가한다.
+## 5. Agent 협업 구조 (Event Driven)
 
-| Interface | 계약 책임 | 구체 구현 시점 | 상태 |
-|---|---|---|---|
-| `ProjectRepository` | 프로젝트 조회/저장 | Phase 1 (FileProjectRepository) | 기존 |
-| `WorkflowEngine` | **협업 흐름** 계획/실행 | 이후 Phase | 기존(재정의) |
-| `TaskEngine` | Task 생성/상태 전이 | 이후 Phase | 기존 |
-| `MemoryEngine` | 장기 메모리 조회/기록 | 이후 Phase | 기존 |
-| `ApprovalEngine` | 승인 대상 판별/차단 | 이후 Phase | 기존 |
-| `AutomationEngine` | 조건/일정 트리거 | 이후 Phase | 기존 |
-| `EngineAdapter` | **확장 실행 계약**(run/cancel/status/…) | Phase 3 | 기존(확장) |
-| `AgentManager` | Agent 생성/생명주기/선택/협업/상태 | 이후 Phase | **신규** |
-| `AgentRepository` | Agent 조회/저장 | 이후 Phase | **신규** |
-| `ConversationEngine` | 입력 표면 정규화(Voice/CLI/API 통합) | 이후 Phase | **신규** |
-| `EventBus` | 이벤트 발행/구독 | 이후 Phase | **신규** |
+Agent는 서로 직접 호출하지 않고 Event로 협업한다. 모든 이벤트는 Event Store에
+기록된다.
+
+```
+Planner Agent
+   │  MissionPlanned Event
+   ▼
+Coding Agent
+   │  CodeCompleted Event
+   ▼
+Review Agent
+   │  ReviewCompleted Event
+   ▼
+Documentation Agent
+   │  DocumentationCompleted Event
+   ▼
+Memory Engine Update   (Memory는 Agent가 아니라 서비스; 이벤트를 받아 갱신)
+```
 
 ## 6. 도메인 모델
-
-기존 Project / Task / Workflow 에 더해 Agent 관련 모델을 추가한다. Agent는
-Workspace의 **핵심 도메인 모델**이다.
 
 | 모델 | 설명 |
 |---|---|
 | `Project` | 프로젝트 (기존) |
-| `Task` | 작업 단위 (기존) |
-| `Workflow` | **협업 흐름** (재정의: Task 생성/Agent 할당/협업/결과 통합 포함) |
-| `Agent` | 역할과 상태를 가진 실행 주체. `agent_id`, `role`, `status` 등 |
-| `AgentRole` | 열거형: `PLANNER`, `CODING`, `REVIEW`, `RESEARCH`, `MEMORY`, `AUTOMATION` |
-| `AgentStatus` | 열거형(생명주기): 예) `IDLE`, `RUNNING`, `WAITING`, `PAUSED`, `STOPPED`, `ERROR` |
+| `Mission` | 사용자 목표를 나타내는 최상위 단위 (**신규**) |
+| `Workflow` | Mission 수행을 위한 협업 흐름 (재정의) |
+| `Task` | Agent에게 할당되는 작업 (기존) |
+| `Step` | Task 내부의 세부 실행 단위 (**신규**) |
+| `WorkspaceSession` | Workspace의 현재 실행 상태 (**신규 핵심**): 현재 프로젝트/현재 Mission/활성 Workflow/활성 Agent/Memory Snapshot/Engine Session |
+| `Agent` | 능력을 가진 실행 주체 (**신규**) |
+| `AgentRole` | Agent의 역할 유형 (**신규**) |
+| `AgentCapability` | Agent 능력 (Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP …) (**신규**) |
+| `AgentStatus` | Agent 생명주기 상태 (**신규**) |
 
-## 7. 의존성 규칙 (Dependency Rules)
+## 7. Interfaces (추상 계약)
 
-1. UI Surfaces는 **Conversation Layer만** 호출한다.
-2. Conversation Layer는 **Workspace Core만** 호출한다.
-3. Workspace Core는 §5의 **Interfaces에만** 의존한다 (구체 클래스 직접 참조
-   금지). Task를 직접 실행하지 않고 Agent Manager를 통해 Agent에 위임한다.
-4. Agent Manager는 `AgentRepository`, `EventBus`, 개별 Agent 인터페이스에
-   의존한다.
+기존 인터페이스를 유지하고, Agent Runtime·Interaction·Event Store를 위한
+인터페이스를 추가한다. `ConversationEngine`은 `InteractionEngine`으로 대체한다.
+
+| Interface | 계약 책임 | 구현 시점 | 상태 |
+|---|---|---|---|
+| `ProjectRepository` | 프로젝트 조회/저장 | Phase 1 | 기존 |
+| `WorkflowEngine` | Mission→Workflow→Task→Step 협업 흐름 | 이후 | 기존(재정의) |
+| `TaskEngine` | Task 생성/상태 전이 | 이후 | 기존 |
+| `MemoryEngine` | Context 생성/검색/저장/Snapshot | 이후 | 기존(확장) |
+| `ApprovalEngine` | 승인 대상 판별/차단 | 이후 | 기존 |
+| `AutomationEngine` | 조건/일정 트리거 | 이후 | 기존 |
+| `EngineAdapter` | 세션 생명주기 포함 실행 계약 | Phase 3 | 기존(확장) |
+| `AgentManager` | Agent 생성/생명주기/상태 | 이후 | 기존 |
+| `AgentRepository` | Agent 조회/저장 | 이후 | 기존 |
+| `AgentRegistry` | Agent 등록/조회/제거 | 이후 | **신규** |
+| `AgentScheduler` | Agent 선택/병렬/우선순위 | 이후 | **신규** |
+| `InteractionEngine` | 입력 표면 정규화 (Voice/CLI/API/Slack …) | 이후 | **신규(대체)** |
+| `EventBus` | 이벤트 발행/구독 | 이후 | 기존 |
+| `EventStore` | 이벤트 기록/Replay/Audit | 이후 | **신규** |
+
+## 8. 의존성 규칙 (Dependency Rules)
+
+1. UI Surfaces는 **Interaction Layer만** 호출한다.
+2. Interaction Layer는 **Workspace Core만** 호출한다.
+3. Workspace Core는 Agent Runtime과 Interfaces에만 의존한다. **Task를 직접
+   실행하지 않고 Agent Runtime에 위임한다.**
+4. Agent Runtime(Registry/Scheduler/Manager/Event Bus)은 서로 및 해당
+   인터페이스, `AgentRepository`, `EventStore`에 의존한다.
 5. Agent는 `EngineAdapter`, Core Engines, `EventBus`에 의존한다. **Agent끼리
    직접 호출하지 않고 Event Bus를 통해서만 협업한다.**
-6. 구현 엔진 호출은 오직 `EngineAdapter`(의 구체 구현체)를 통해서만 이루어진다.
-7. Persistence(파일 저장)는 `ProjectRepository` / `AgentRepository` 인터페이스를
-   통해서만 접근한다. 저장 형식 변경이 상위 로직에 영향을 주지 않아야 한다.
+6. 구현 엔진 호출은 오직 `EngineAdapter`(구체 구현체)를 통해서만 이루어진다.
+7. **Memory/Automation은 Agent가 아니라 Core Engine(서비스)**이다. Agent가
+   이들을 서비스로 사용한다.
+8. Persistence는 `ProjectRepository`/`AgentRepository`/`EventStore` 인터페이스를
+   통해서만 접근한다.
 
-## 8. 디렉터리 구조와 컴포넌트 매핑
+## 9. 디렉터리 구조와 컴포넌트 매핑
 
 ```
 src/ai_workspace/
-├── domain/            # Project, Task, Workflow, Agent, AgentRole, AgentStatus
-├── interfaces/         # 추상 계약 (기존 7 + AgentManager, AgentRepository,
-│                       #             ConversationEngine, EventBus)
-├── core/              # Workspace Core — 최상위 오케스트레이터 (Interfaces에만 의존)
-├── agents/            # Agent Manager + 역할별 Agent 구현체 (이후 Phase)
-│   ├── manager.py
-│   ├── planner_agent.py
-│   ├── coding_agent.py
-│   ├── review_agent.py
-│   ├── research_agent.py
-│   ├── memory_agent.py
-│   └── automation_agent.py
-├── engines/           # Core Engines 구현체 (Task/Workflow/Memory/Approval/Automation, 이후 Phase)
-├── events/            # Event Bus 구현체 + 이벤트 정의 (이후 Phase)
-├── conversation/       # Conversation Layer 구현체 (이후 Phase)
-├── adapters/          # EngineAdapter 구현체 (Phase 3: claude_code.py, codex.py, gemini_cli.py)
-├── storage/           # ProjectRepository/AgentRepository 구체 구현체 (Phase 1~: file 기반)
+├── domain/            # Project, Mission, Workflow, Task, Step,
+│                       #   WorkspaceSession, Agent, AgentRole, AgentCapability, AgentStatus
+├── interfaces/         # 추상 계약 (14종, §7)
+├── core/              # Workspace Core (WorkspaceSession 관리, Agent Runtime 초기화)
+├── runtime/           # Agent Runtime (registry.py, scheduler.py, manager.py) (이후 Phase)
+├── agents/            # 능력별 Agent 구현체 (이후 Phase)
+├── engines/           # Core Engines 구현 (Task/Workflow/Memory/Approval/Automation, 이후 Phase)
+├── events/            # Event Bus + Event Store 구현 (이후 Phase)
+├── interaction/        # Interaction Layer 구현 (이후 Phase)
+├── adapters/          # EngineAdapter 구현 (Phase 3: claude_code.py, codex.py, gemini_cli.py)
+├── storage/           # ProjectRepository/AgentRepository/EventStore 파일 구현
 └── cli/               # CLI 진입점 (UI Surface의 하나)
 ```
 
-## 9. 확장성 고려사항
+## 10. 확장성 고려사항
 
-- **신규 Agent 추가**: 새 `AgentRole`과 Agent 구현체를 추가하고 Event 구독만
-  등록하면 되며, 기존 Agent나 Workspace Core 변경은 필요 없다 (Event 우선).
-- **신규 UI 표면 추가 (예: Voice)**: Conversation Layer에 표면 어댑터만
-  추가한다. Workspace Core 이하는 변경되지 않는다.
-- **신규 구현 엔진 추가**: `EngineAdapter` 계약을 구현하는 클래스를 `adapters/`에
-  추가한다.
-- **저장소 교체**: `ProjectRepository`/`AgentRepository` 구현체 교체로 충분하다.
+- **신규 Agent/Capability 추가**: 새 Agent를 Registry에 등록하고 Event 구독만
+  더하면 되며, Scheduler는 Capability로 자동 선택한다.
+- **신규 UI 표면(Voice/Slack 등)**: Interaction Layer에 표면 어댑터만 추가한다.
+- **신규 구현 엔진**: `EngineAdapter` 계약을 구현하는 클래스를 `adapters/`에 추가.
+- **Workflow 복구/감사**: Event Store의 Replay로 과거 상태를 재구성한다.
+- **저장소 교체**: Repository/EventStore 구현체 교체로 충분하다.
 
-## 10. 기술 스택 (제안 — 확정은 각 Phase에서 ADR로)
+## 11. 기술 스택 (제안 — 각 Phase에서 ADR로 확정)
 
 | 영역 | 제안 | 이유 |
 |---|---|---|
-| 언어 | Python 3.11+ | 프로젝트 규칙(PEP 8, type hint)과 AI 생태계 친화성 |
-| 데이터 모델 | `dataclasses` (필요 시 `pydantic`) | 명시적 스키마와 검증 |
-| 인터페이스 | `abc.ABC` / `typing.Protocol` | 표준 방식으로 계약 강제 |
-| Event Bus | 인메모리 pub/sub (초기) | 단순 시작, 이후 외부 브로커로 확장 가능 |
-| 저장 (Phase 1) | 파일 기반 (Markdown/JSON) | 별도 인프라 없이 시작, 사람이 직접 읽기 용이 |
-| UI (Phase 1) | CLI | 가장 단순한 표면, 이후 Dashboard/API/Voice로 확장 |
+| 언어 | Python 3.11+ | 프로젝트 규칙(PEP 8, type hint) |
+| 데이터 모델 | `dataclasses` (필요 시 `pydantic`) | 명시적 스키마 |
+| 인터페이스 | `abc.ABC` / `typing.Protocol` | 표준 계약 강제 |
+| Event Bus/Store | 인메모리 pub/sub + append-only 파일 로그 (초기) | 단순 시작, 이후 확장 |
+| 저장 (Phase 1) | 파일 기반 (Markdown/JSON) | 별도 인프라 없이 시작 |
+| UI (Phase 1) | CLI | 가장 단순한 표면 |
 | 테스트 | `pytest` | Python 표준 관행 |
 
-## 11. 대안 및 트레이드오프
+## 12. 대안 및 트레이드오프 (v0.5.0 신규 결정)
 
-| 대안 | 장점 | 단점 | 채택 여부 |
+| 대안 | 장점 | 단점 | 채택 |
 |---|---|---|---|
-| 멀티 에이전트를 선택 기능으로 유지 | 초기 단순 | 나중에 핵심 구조 대수술 필요, 방향과 불일치 | 기각 |
-| **멀티 에이전트를 기본 구조로 채택 (Multi-Agent First)** | 방향과 일치, 확장이 자연스러움 | 초기 설계 비용 증가 | **채택** |
-| Workspace Core가 Task를 직접 실행 | 경로 단순 | Core 비대·책임 혼재, 멀티 에이전트 불가 | 기각 |
-| **Workspace Core는 Agent에 위임하는 오케스트레이터** | 책임 분리, 멀티 에이전트 자연 지원 | 위임 계층 추가 | **채택** |
-| Agent 간 직접 호출 | 구현 직관적 | 강결합, Agent 추가/교체 어려움 | 기각 |
-| **Event Bus 기반 느슨한 결합** | Agent 독립 추가/교체/테스트, 확장성 | 이벤트 흐름 추적 필요 | **채택** |
-| Voice를 Workspace Core에 직접 연결 | 경로 짧음 | 표면마다 Core 수정, 재사용 불가 | 기각 |
-| **Voice를 Conversation Layer의 UI로 취급** | 표면 추가가 어댑터 추가로 끝남 | 입력 정규화 계층 필요 | **채택** |
-| EngineAdapter를 run_task 단일 계약 유지 | 단순 | 멀티 에이전트 운영(취소/병렬/비용) 불가 | 기각 |
-| **EngineAdapter 확장 실행 계약** | 멀티 에이전트 운영에 필요한 제어 확보 | 계약이 커짐 | **채택** |
+| Workspace Core가 Agent를 직접 제어 | 계층 단순 | Core 비대·병렬/스케줄링 혼재 | 기각 |
+| **Agent Runtime 계층 분리** | Registry/Scheduler/Manager 책임 분리, 병렬·우선순위 관리 용이 | 계층 추가 | **채택** |
+| Workflow=Task 2단 | 단순 | 목표·세부 실행 표현 부족 | 기각 |
+| **Mission→Workflow→Task→Step 4단** | 목표부터 세부 실행까지 표현 | 모델 수 증가 | **채택** |
+| 역할(Role)만으로 Agent 선택 | 단순 | 엔진/능력 매칭 부정확 | 기각 |
+| **Capability 중심 선택** | 엔진 비종속, 정확한 매칭 | Capability 정의 필요 | **채택** |
+| Event Bus만 사용 | 단순 | Replay/Audit/복구 불가 | 기각 |
+| **Event Store 분리** | 기록/Replay/Audit/복구 | 저장 계층 추가 | **채택** |
+| Memory를 Agent로 | 일관돼 보임 | 모든 Agent가 쓰는 공용 서비스에 부적합 | 기각 |
+| **Memory를 Core Engine으로** | 공용 서비스로 재사용 | — | **채택** |
+| EngineAdapter 무상태 run만 | 단순 | 세션 있는 엔진 제어 불가 | 기각 |
+| **세션 생명주기 포함 계약** | 상태 있는 실행/취소/정리 가능 | 계약 확대 | **채택** |
