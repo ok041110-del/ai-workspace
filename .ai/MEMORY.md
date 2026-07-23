@@ -44,7 +44,11 @@
   계약) → 구체 구현체(Phase별)로 이어지는 구조를 채택함. Phase 1 Task 순서를
   "디렉터리 구조 → 공통 도메인 모델 → Interfaces 정의(7개) → Workspace Core
   골격 → ProjectRepository 구현 → CLI → 테스트 환경"으로 재구성함.
-- **다음 단계**: `.ai/TASKS.md`의 P1-2(공통 도메인 모델 정의)부터 순서대로 진행.
+- **P1-2(공통 도메인 모델), P1-3(Interfaces 7개 정의)**: DONE. Interfaces는
+  `abc.ABC` + docstring 계약(입력/출력/예외/보장사항)으로 정의했고, 구체
+  구현 없이 Fake(테스트 전용)로만 검증함.
+- **다음 단계**: `.ai/TASKS.md`의 P1-4(Workspace Core 기본 골격 구현)부터
+  순서대로 진행.
 
 ## 2. 프로젝트 정체성
 

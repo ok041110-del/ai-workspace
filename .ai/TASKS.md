@@ -169,7 +169,10 @@
   - `engine_adapter.py` — `EngineAdapter` (`run_task(task) -> EngineResult`)
 - 완료 조건(DoD): 각 인터페이스에 대해 최소 Mock/Stub 구현체로 계약 준수를
   확인하는 단위 테스트가 통과한다 (실제 로직 없이 계약만 검증).
-- 상태: TODO
+- 상태: **DONE (2026-07-23)** — 7개 Interface를 `abc.ABC`로 정의하고 각
+  메서드 docstring에 입력/출력/예외/보장사항을 명시함. `tests/interfaces/fakes.py`에
+  7개 Fake 구현체(테스트 전용, `src/`에는 포함하지 않음)를 작성하고 22개 계약
+  테스트로 검증함.
 - 의존성: P1-2
 
 #### P1-4: Workspace Core 기본 골격 구현
@@ -299,3 +302,8 @@ AutomationEngine/EngineAdapter)를 확정함(ADR-0005). ARCHITECTURE.md v0.3.0�
 `interfaces/`, `storage/` 패키지 추가 반영. 다음 Task: P1-2 (공통 도메인 모델 정의). |
 | 2026-07-23 | P1-2 완료: Project/Task/Workflow 도메인 모델 구현, `pytest` 10개
 테스트 전부 통과. 다음 Task: P1-3 (Interfaces 정의 7개). |
+| 2026-07-23 | P1-3 완료: 사용자 지시(계약 명시, Fake+계약 테스트 수준 검증)에 따라
+ProjectRepository/WorkflowEngine/TaskEngine/MemoryEngine/ApprovalEngine/
+AutomationEngine/EngineAdapter 7개 Interface를 계약(입력/출력/예외/보장사항 docstring
+포함)으로 정의. Fake 구현체 + 계약 테스트 22개 작성, 전체(도메인 포함) 32개 테스트
+통과. 다음 Task: P1-4 (Workspace Core 기본 골격 구현). |
