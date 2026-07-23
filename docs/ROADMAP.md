@@ -30,7 +30,7 @@ Roadmap
 
 | Milestone | 구성 Phase | 핵심 목표 | 상태 |
 |---|---|---|---|
-| M1. 기반 구축 (Foundation) | Phase 0, Phase 1 | 문서 체계와 핵심 도메인 모델(Project/Task/Workflow) 확정 | 진행 중 |
+| M1. 기반 구축 (Foundation) | Phase 0, Phase 1 | 문서 체계와 핵심 도메인 모델(Project/Task/Workflow) 확정 | 진행 중 (Phase 0 승인 완료, Phase 1 진행 중) |
 | M2. 오케스트레이션 코어 (Orchestration Core) | Phase 2, Phase 3 | Workflow/Task 실행, 승인 체계, 첫 구현 엔진(Claude Code) 연동 | 예정 |
 | M3. 자동화 및 확장 (Automation & Scale) | Phase 4, Phase 5 | 자동화 도입, 다중 프로젝트 및 장기 메모리 고도화 | 예정 |
 
@@ -50,7 +50,7 @@ Roadmap
 3. Milestone 2 착수에 필요한 아키텍처 결정(Adapter 패턴, Approval Engine 분리 등)이
    ADR로 확정되어 있다.
 
-### Phase 0 — 문서화 및 구조 설계 (현재)
+### Phase 0 — 문서화 및 구조 설계 (완료, 승인됨)
 
 - **목표**: 애플리케이션 코드를 작성하지 않고, 프로젝트의 목적/구조/규칙/계획을
   문서로 명확히 정의한다.
@@ -59,24 +59,28 @@ Roadmap
   `.ai/DECISIONS.md`, `workspace/`, `tests/` 디렉터리 구조
 - **Phase Definition of Done**: 위 문서가 모두 작성되고, 사용자가 내용을 검토·
   승인한다.
-- **승인 필요 여부**: 예 (Phase 완료 승인)
+- **승인 필요 여부**: 예 (Phase 완료 승인) — **2026-07-23 승인 완료**
 
-### Phase 1 — 핵심 도메인 모델 & CLI 골격
+### Phase 1 — 핵심 도메인 모델 & CLI 골격 (진행 중)
 
-- **목표**: AI Workspace의 핵심 도메인 개념(Project, Task, Workflow)을 코드
-  수준의 모델로 정의하고, 이를 조회/생성할 수 있는 최소한의 CLI 골격을 만든다.
-  아직 구현 엔진과의 실제 연동은 하지 않는다 (Phase 3 범위).
-- **세부 목표**
-  1. `docs/ARCHITECTURE.md`에서 제안한 디렉터리 구조(`src/ai_workspace/...`)를
-     확정한다.
-  2. Project / Task 도메인 모델과 상태(전이) 규칙을 정의한다.
-  3. 파일 기반(Markdown/JSON) 저장 방식을 확정하고 최소 구현을 만든다.
-  4. Project/Task 생성·조회를 위한 최소 CLI 명령을 제공한다.
-  5. 위 모든 기능에 대한 테스트(`tests/`)를 작성한다.
-- **Phase Definition of Done**: 도메인 모델·저장소·CLI가 모두 구현되고 테스트를
-  통과하며, `docs/ARCHITECTURE.md`가 실제 구조와 일치하도록 갱신된다.
+- **목표**: AI Workspace의 핵심 도메인 개념(Project, Task, Workflow)과 이를
+  조율하는 최소한의 실행 골격(Workspace Core, Engine Adapter 인터페이스)을
+  정의하고, 조회/생성이 가능한 CLI 골격을 만든다. 특정 구현 엔진(Claude Code
+  등)에 대한 **구체적인 Adapter 구현**은 아직 하지 않는다 (Phase 3 범위) — Phase
+  1에서는 `EngineAdapter`의 **인터페이스만** 설계한다.
+- **세부 목표** (승인된 착수 순서)
+  1. 디렉터리 구조 생성 (`src/ai_workspace/{domain,core,engines,adapters,cli}`)
+  2. Workspace Core 기본 골격 구현 (프로젝트 등록/조회의 최소 형태)
+  3. 공통 도메인 모델 정의 (Project, Task, Workflow)
+  4. Engine Adapter 인터페이스 설계 (구체 구현 없이 추상 인터페이스만)
+  5. 파일 기반 저장소 구현 (Markdown/JSON)
+  6. CLI 진입점 구성 (Project/Task 생성·조회)
+  7. 기본 테스트 환경 구축 및 테스트 작성
+- **Phase Definition of Done**: 위 7단계가 모두 구현되고 테스트를 통과하며,
+  `docs/ARCHITECTURE.md`가 실제 구조와 일치하도록 갱신된다.
 - **우선순위**: 최우선 (다른 모든 Phase의 기반)
-- **승인 필요 여부**: 예 (아키텍처 변경/신규 기능에 해당 — 착수 전 승인, 완료 시 승인)
+- **승인 필요 여부**: 예 (아키텍처 변경/신규 기능에 해당) — **2026-07-23 착수
+  승인 완료** (완료 시점에 별도로 Phase 완료 승인 필요)
 - **세부 Task**: `.ai/TASKS.md`의 "Milestone 1 > Phase 1" 섹션 참고.
 
 ---

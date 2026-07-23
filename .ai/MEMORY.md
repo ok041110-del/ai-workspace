@@ -34,12 +34,15 @@
 
 ## 1. 현재 Milestone
 
-- **현재 위치**: Milestone 1 (기반 구축) / Phase 0 (문서화 및 구조 설계)
-- **Phase 0 상태**: 문서 세트 작성 완료. 사용자 1차 피드백(MEMORY 역할 명확화,
-  ARCHITECTURE 컴포넌트 보완, ROADMAP/TASKS의 Milestone 구조화)을 반영해 재승인
-  요청 중 (`.ai/TASKS.md` P0-11).
-- **다음 단계**: Phase 0 승인 → Phase 1 착수 승인(P1-0) → 핵심 도메인 모델/CLI
-  골격 구현.
+- **현재 위치**: Milestone 1 (기반 구축) / **Phase 1 (핵심 도메인 모델 & CLI
+  골격) 진행 중**
+- **Phase 0**: 2026-07-23 사용자 승인 완료 (`.ai/TASKS.md` P0-11 DONE).
+- **Phase 1 착수**: 2026-07-23 사용자 승인 완료 (P1-0 DONE). 착수 시 사용자가
+  제시한 권장 순서를 그대로 Task 순서로 채택함: 디렉터리 구조 생성 →
+  Workspace Core 골격 → 공통 도메인 모델(Project/Task/Workflow) → Engine
+  Adapter 인터페이스 설계(구체 구현 없이 인터페이스만) → 파일 기반 저장소 →
+  CLI 진입점 → 기본 테스트 환경 구축.
+- **다음 단계**: `.ai/TASKS.md`의 P1-1(디렉터리 구조 생성)부터 순서대로 진행.
 
 ## 2. 프로젝트 정체성
 
@@ -85,10 +88,10 @@ Interface → Workspace Core → [Workflow / Task / Memory / Approval / Automati
 
 | ADR | 결론 | 상태 |
 |---|---|---|
-| ADR-0001 | 문서를 `README` / `docs/`(사람용) / `.ai/`(AI 운영용) 3계층으로 분리 | 제안 |
-| ADR-0002 | 구현 엔진은 Adapter 패턴으로 추상화 (`EngineAdapter` 인터페이스) | 제안 |
-| ADR-0003 | 승인 절차는 별도 Approval Engine 컴포넌트로 분리 (인라인 금지) | 제안 |
-| ADR-0004 | Phase 1 저장 방식은 파일 기반(Markdown/JSON)으로 시작 | 제안 |
+| ADR-0001 | 문서를 `README` / `docs/`(사람용) / `.ai/`(AI 운영용) 3계층으로 분리 | 승인됨 |
+| ADR-0002 | 구현 엔진은 Adapter 패턴으로 추상화 (`EngineAdapter` 인터페이스) | 제안 (Phase 1에서 인터페이스 설계 후 승인 예정) |
+| ADR-0003 | 승인 절차는 별도 Approval Engine 컴포넌트로 분리 (인라인 금지) | 제안 (Phase 2에서 확정 예정) |
+| ADR-0004 | Phase 1 저장 방식은 파일 기반(Markdown/JSON)으로 시작 | 제안 (Phase 1에서 구현 후 승인 예정) |
 
 기술 스택(Python, pydantic/dataclasses, 파일 기반 저장, CLI)은 아직 **제안**
 단계이며, Phase 1 착수 시 정식 승인이 필요하다.
@@ -97,9 +100,11 @@ Interface → Workspace Core → [Workflow / Task / Memory / Approval / Automati
 
 - 구현 엔진 연동 순서: Claude Code 최우선 → Codex → Gemini CLI (동일한 Adapter
   패턴으로 순차 추가).
-- Phase 1의 범위는 "도메인 모델 + 저장 + 최소 CLI"까지이며, 실제 엔진 연동은
-  Phase 3(Milestone 2)에서 다룬다. Phase 1에서 엔진 호출 로직을 앞당겨 구현하지
-  않는다.
+- Phase 1의 범위는 "Workspace Core 골격 + 도메인 모델 + Engine Adapter
+  **인터페이스**(구체 구현 제외) + 저장 + 최소 CLI + 테스트 환경"까지다. 특정
+  구현 엔진(Claude Code 등)을 실제로 호출하는 **구체적인 Adapter 구현**은
+  Phase 3(Milestone 2)에서 다룬다. Phase 1에서 실제 엔진 호출 로직을 앞당겨
+  구현하지 않는다.
 - Workspace Core는 Project Manager 역할(프로젝트 등록/다중 프로젝트 관리)과
   전체 조율 진입점 역할을 함께 수행하는 통합 컴포넌트로 확정했다 (Phase 1
   설계 시 재분리 필요성 여부만 재검토, 기본 방향은 유지).
