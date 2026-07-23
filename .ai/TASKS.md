@@ -106,15 +106,20 @@
 
 ---
 
-### Phase 1 — 핵심 도메인 모델 & CLI 골격
+### Phase 1 — 핵심 도메인 & 전체 Interfaces & Workspace Core 골격
 
-> 착수 조건: P0-11(Phase 0 완료 승인)이 승인된 이후에만 시작한다. Phase 1
-> 자체도 "신규 기능"에 해당하므로 착수 전 승인이 필요하다.
-> **2026-07-23 사용자 지시로 Task 순서와 범위를 ADR-0005 기준으로 재구성함**:
-> Workspace Core는 순수 오케스트레이터로 한정하고, Workspace Core가 구체
-> 구현이 아닌 Interfaces(추상 계약)에만 의존하도록 한다. 최종 순서: 디렉터리
-> 구조 → 공통 도메인 모델 → Interfaces 정의(7개) → Workspace Core 골격 →
-> ProjectRepository 구현 → CLI → 테스트 환경.
+> 착수 조건: P0-11(Phase 0 완료 승인)이 승인된 이후에만 시작한다.
+> **2026-07-23 Multi-Agent First 전환(ADR-0006~0009)으로 Phase 1 범위를
+> 재구성함.** Agent가 핵심 도메인이 되고, Workspace Core는 Task를 직접 실행하지
+> 않고 Agent에 위임하는 오케스트레이터가 된다. 기존에 완료한 P1-1(디렉터리),
+> P1-2(Project/Task/Workflow 도메인), P1-3(Interfaces 7종)은 유지하되, Agent
+> 도메인·신규 Interface·EngineAdapter 확장 계약을 더하는 후속 Task(P1-4, P1-5)를
+> 추가한다. 순서: 디렉터리 확장 → (기존)도메인 → (기존)Interfaces →
+> **Agent 도메인 추가 → 신규 Interface/EngineAdapter 확장** → Workspace Core
+> 골격(Agent 위임) → 저장소 → CLI → 테스트.
+>
+> **참고: Phase 1은 계약과 골격까지만 만든다.** Agent/Engine/Adapter/EventBus/
+> Conversation의 실제 처리 로직은 Milestone 2·3에서 구현한다.
 
 #### P1-0: Phase 1 착수 승인 요청
 - 목적: 도메인 모델/CLI 골격 착수 전 범위와 설계 방향을 확인받는다.
@@ -151,7 +156,9 @@
   `domain/task.py`(Task, TaskStatus, 상태 전이 규칙), `domain/workflow.py`
   (Workflow, 순환/미지정 의존 검증) 구현. 테스트 실행을 위해 최소
   `pyproject.toml`(pytest `pythonpath=["src"]`)을 함께 추가하고 `pytest`를
-  설치함 (정식 테스트 환경 구성은 P1-7에서 완성).
+  설치함.
+  ※ Multi-Agent First 전환(ADR-0006)으로 Workflow는 "협업 흐름"으로 재정의되며,
+    Agent 도메인 추가 및 Workflow 재정의는 후속 Task **P1-4**에서 진행한다.
 - 의존성: P1-1
 
 #### P1-3: Interfaces 정의 (7개)
@@ -173,111 +180,151 @@
   메서드 docstring에 입력/출력/예외/보장사항을 명시함. `tests/interfaces/fakes.py`에
   7개 Fake 구현체(테스트 전용, `src/`에는 포함하지 않음)를 작성하고 22개 계약
   테스트로 검증함.
+  ※ Multi-Agent First 전환(ADR-0006~0009)으로 신규 Interface(AgentManager,
+    AgentRepository, ConversationEngine, EventBus) 추가와 EngineAdapter 확장
+    계약(run/cancel/status/capabilities/supports_parallel/estimate_cost)은
+    후속 Task **P1-5**에서 진행한다.
 - 의존성: P1-2
 
-#### P1-4: Workspace Core 기본 골격 구현
-- 목적: 순수 오케스트레이터로서 Workspace Core의 최소 형태를 마련한다
-  (ADR-0005). Workflow/Task/Memory/Approval/Automation 처리 로직이나 구현
-  엔진 호출, 파일 저장 세부 구현은 포함하지 않는다.
-- 작업 내용: `core/`에 다음 책임만 구현한다 (모두 §3.2 Interfaces에만 의존).
-  1. 설정(Config) 로드
-  2. `ProjectRepository` 인터페이스를 통한 프로젝트 로드
-  3. 서비스 초기화 (등록된 Interfaces 구현체 연결)
-  4. Engine 등록 및 관리 (`WorkflowEngine`, `TaskEngine`, `MemoryEngine`,
-     `ApprovalEngine`, `AutomationEngine`, `EngineAdapter` 인터페이스 타입 기준)
-  5. Task 실행 요청 (등록된 `TaskEngine`에 위임만 함)
-  6. 애플리케이션 종료(Shutdown)
-- 완료 조건(DoD): Mock Interfaces 구현체를 주입해 위 6개 책임이 각각 단위
-  테스트로 검증된다. Workspace Core 코드에 구체 클래스(FileProjectRepository 등)
-  에 대한 직접 참조가 없음을 확인한다 (Interfaces에만 의존).
+#### P1-4: Agent 도메인 추가 및 Workflow 재정의
+- 목적: Multi-Agent First 구조의 핵심인 Agent를 도메인 모델로 추가하고,
+  Workflow를 협업 흐름으로 재정의한다 (ADR-0006).
+- 작업 내용:
+  - `domain/agent.py`: `Agent`(agent_id, role, status 등), `AgentRole`
+    (PLANNER/CODING/REVIEW/RESEARCH/MEMORY/AUTOMATION), `AgentStatus`
+    (IDLE/RUNNING/WAITING/PAUSED/STOPPED/ERROR 등 생명주기)
+  - `domain/workflow.py` 재정의: Task 생성/Agent 할당/협업/결과 통합을 표현할
+    수 있도록 확장 (기존 순환 의존 검증은 유지).
+- 완료 조건(DoD): Agent 모델과 재정의된 Workflow에 대한 단위 테스트가 통과한다
+  (기존 Workflow 테스트 회귀 없음).
 - 상태: TODO
-- 의존성: P1-2, P1-3
+- 의존성: P1-2
 
-#### P1-5: ProjectRepository 파일 기반 구현
-- 목적: `ProjectRepository` 인터페이스의 첫 구체 구현체를 마련해 프로젝트
-  데이터를 세션 간에 영속화한다 (ADR-0004 반영).
-- 작업 내용: `storage/file_project_repository.py`에 `ProjectRepository`를
-  구현하는 `FileProjectRepository`를 Markdown/JSON 기반으로 작성한다.
-- 완료 조건(DoD): `FileProjectRepository`가 `ProjectRepository` 계약을
-  만족함을 테스트로 확인하고, Workspace Core에 주입해도 Workspace Core
-  코드 변경이 필요 없음을 확인한다.
+#### P1-5: 신규 Interface 정의 및 EngineAdapter 확장
+- 목적: Multi-Agent First 구조에 필요한 계약을 추가·확장한다
+  (ADR-0006~0009). Phase 1에서는 계약만 정의하고 구체 구현은 이후 Phase에서
+  진행한다.
+- 작업 내용:
+  - `interfaces/agent_manager.py` — `AgentManager`(생성/생명주기/선택/협업/상태)
+  - `interfaces/agent_repository.py` — `AgentRepository`(Agent 조회/저장)
+  - `interfaces/conversation_engine.py` — `ConversationEngine`(입력 정규화;
+    Voice/CLI/API 통합, 지금 구현 안 함)
+  - `interfaces/event_bus.py` — `EventBus`(publish/subscribe; 지금 구현 안 함)
+  - `interfaces/engine_adapter.py` 확장 — `run`/`cancel`/`status`/
+    `capabilities`/`supports_parallel`/`estimate_cost` 계약으로 갱신
+    (기존 `run_task` 기반 테스트는 새 계약에 맞게 조정)
+- 완료 조건(DoD): 신규/확장 인터페이스 각각에 대해 Fake 구현체 + 계약 테스트가
+  통과한다 (실제 로직 없이 계약만 검증).
 - 상태: TODO
-- 의존성: P1-2, P1-3
+- 의존성: P1-3, P1-4
 
-#### P1-6: CLI 진입점 구성
-- 목적: 사람이 실제로 Project/Task를 다뤄볼 수 있는 최소 진입점을 제공한다.
-- 작업 내용: `cli/`에 Workspace Core(P1-4)와 FileProjectRepository(P1-5)를
-  연결해 Project 생성·조회 명령을 구현한다 (Task 관련 명령은 TaskEngine 구체
-  구현체가 없는 Phase 1에서는 등록/조회 골격까지만 제공).
-- 완료 조건(DoD): CLI로 Project 생성 → 조회가 end-to-end로 동작한다.
+#### P1-6: Workspace Core 골격 구현 (Agent 위임형)
+- 목적: Agent 최상위 오케스트레이터로서 Workspace Core의 최소 형태를 마련한다
+  (ADR-0005 유지 + ADR-0006 재정의). 실제 처리 로직은 포함하지 않는다.
+- 작업 내용: `core/`에 다음 책임만 구현한다 (모두 Interfaces에만 의존).
+  1. 프로젝트 로드 (`ProjectRepository`)
+  2. 설정(Config) 로드
+  3. 서비스 초기화
+  4. Agent 등록 및 관리 (`AgentManager`)
+  5. Workflow 시작 (`WorkflowEngine`)
+  6. Task 분배 (직접 실행하지 않고 Agent에 위임)
+  7. Engine 선택 및 위임 (`EngineAdapter` 선택 정책)
+  8. 종료(Shutdown)
+- 완료 조건(DoD): Mock Interfaces를 주입해 위 8개 책임이 단위 테스트로 검증되고,
+  Workspace Core 코드에 구체 클래스 직접 참조가 없음을 확인한다. **Task를
+  직접 실행하지 않고 Agent에 위임함**을 테스트로 확인한다.
 - 상태: TODO
 - 의존성: P1-4, P1-5
 
-#### P1-7: 기본 테스트 환경 구축 및 테스트 작성
-- 목적: Test Before Complete 원칙에 따라 Phase 1 산출물의 정확성을 검증할 수
-  있는 환경과 테스트를 마련한다.
-- 작업 내용: `pytest` 설정을 구성하고, `tests/domain/`, `tests/interfaces/`,
-  `tests/core/`, `tests/storage/`, `tests/cli/`에 각 컴포넌트별 테스트를
-  작성한다.
+#### P1-7: 파일 기반 저장소 구현 (ProjectRepository + AgentRepository)
+- 목적: Project/Agent 데이터를 세션 간에 영속화한다 (ADR-0004 반영).
+- 작업 내용: `storage/`에 `FileProjectRepository`, `FileAgentRepository`를
+  Markdown/JSON 기반으로 구현한다.
+- 완료 조건(DoD): 두 구현체가 각 인터페이스 계약을 만족함을 테스트로 확인하고,
+  Workspace Core에 주입해도 Core 코드 변경이 필요 없음을 확인한다.
+- 상태: TODO
+- 의존성: P1-5
+
+#### P1-8: CLI 진입점 구성
+- 목적: 사람이 실제로 Project를 다뤄볼 수 있는 최소 진입점을 제공한다 (UI
+  Surface의 하나).
+- 작업 내용: `cli/`에 Workspace Core와 파일 저장소를 연결해 Project 생성·조회
+  명령을 구현한다 (Agent/협업 실행은 구체 구현이 없는 Phase 1에서는 골격까지만).
+- 완료 조건(DoD): CLI로 Project 생성 → 조회가 end-to-end로 동작한다.
+- 상태: TODO
+- 의존성: P1-6, P1-7
+
+#### P1-9: 기본 테스트 환경 구축 및 테스트 작성
+- 목적: Test Before Complete 원칙에 따라 Phase 1 산출물을 검증한다.
+- 작업 내용: `pytest` 설정을 정리하고, `tests/{domain,interfaces,core,storage,
+  cli}/`에 각 컴포넌트별 테스트를 작성/보강한다.
 - 완료 조건(DoD): `pytest` 실행 시 전체 테스트가 통과한다.
 - 상태: TODO
-- 의존성: P1-2 ~ P1-6
+- 의존성: P1-4 ~ P1-8
 
-#### P1-8: `docs/ARCHITECTURE.md` 갱신
-- 목적: 문서와 실제 구현이 항상 일치하도록 유지한다 (Documentation First).
-- 작업 내용: 실제로 구현된 구조/세부 사항을 ARCHITECTURE.md에 반영한다
-  (이미 v0.3.0으로 선반영된 설계와 최종 구현이 일치하는지 검증 후 필요 시 갱신).
-- 완료 조건(DoD): 문서의 디렉터리 구조·컴포넌트 설명이 실제 코드와 일치한다.
+#### P1-10: `docs/ARCHITECTURE.md` 최종 정합성 확인
+- 목적: 문서(v0.4.0)와 실제 구현이 일치하는지 확인한다 (Documentation First).
+- 작업 내용: 구현된 구조/디렉터리/컴포넌트를 ARCHITECTURE.md와 대조하고 필요 시
+  갱신한다.
+- 완료 조건(DoD): 문서와 실제 코드가 일치한다.
 - 상태: TODO
-- 의존성: P1-1 ~ P1-7
+- 의존성: P1-4 ~ P1-9
 
-#### P1-9: ADR 상태 갱신 (ADR-0002, ADR-0004)
-- 목적: Engine Adapter 인터페이스 설계와 파일 기반 저장 결정을 정식으로
-  확정한다.
-- 작업 내용: `.ai/DECISIONS.md`의 ADR-0002, ADR-0004 상태를 "제안"에서
-  "승인됨"으로 갱신한다.
-- 완료 조건(DoD): 두 ADR의 상태가 "승인됨"으로 표시된다.
+#### P1-11: ADR 상태 갱신 (ADR-0002, ADR-0004)
+- 목적: EngineAdapter(확장 계약 포함) 설계와 파일 기반 저장 결정을 정식 확정한다.
+- 작업 내용: `.ai/DECISIONS.md`의 ADR-0002, ADR-0004 상태를 "승인됨"으로 갱신한다
+  (ADR-0002는 ADR-0009의 확장 계약을 포함해 재확정).
+- 완료 조건(DoD): 두 ADR 상태가 "승인됨"으로 표시된다.
 - 상태: TODO
-- 의존성: P1-3(ADR-0002), P1-5(ADR-0004)
+- 의존성: P1-5(ADR-0002), P1-7(ADR-0004)
 
-#### P1-10: Phase 1 완료 승인 요청
+#### P1-12: Phase 1 완료 승인 요청
 - 목적: Approval Required 원칙에 따라 Phase 1 산출물을 검토받는다.
-- 작업 내용: 도메인 모델, Interfaces, Workspace Core, ProjectRepository, CLI,
-  테스트 결과를 제시하고 승인을 요청한다.
+- 작업 내용: 도메인(Agent 포함), 전체 Interfaces, Workspace Core 골격, 저장소,
+  CLI, 테스트 결과를 제시하고 승인을 요청한다.
 - 완료 조건(DoD): 위 모든 Task가 DONE이고 테스트가 통과한 상태에서 사용자가
   승인한다.
 - 상태: TODO
-- 의존성: P1-1 ~ P1-9
+- 의존성: P1-1 ~ P1-11
 
 ---
 
-## Milestone 2 — 오케스트레이션 코어 (Orchestration Core)
+## Milestone 2 — 멀티 에이전트 코어 (Multi-Agent Core)
 
 > Milestone DoD: `docs/ROADMAP.md`의 "Milestone 2 Definition of Done" 참고.
 > 상세 Task는 Phase 착수 시점에 이 문서에 추가한다 (Task Driven Development).
 
-### Phase 2 — Workflow/Task 실행 관리
+### Phase 2 — Agent Manager & Event Bus & 기본 Agent
 - 상세 Task 정의 시점: Phase 1 완료 승인 이후
 - Phase 목표/DoD: `docs/ROADMAP.md` "Phase 2" 참고
 
-### Phase 3 — 엔진 어댑터 (Claude Code 우선)
+### Phase 3 — Core Engines 구현
 - 상세 Task 정의 시점: Phase 2 완료 승인 이후
 - Phase 목표/DoD: `docs/ROADMAP.md` "Phase 3" 참고
 
 ---
 
-## Milestone 3 — 자동화 및 확장 (Automation & Scale)
+## Milestone 3 — 실행 엔진 연동 & 대화 계층 (Engine Integration & Conversation)
 
 > Milestone DoD: `docs/ROADMAP.md`의 "Milestone 3 Definition of Done" 참고.
-> 상세 Task는 Phase 착수 시점에 이 문서에 추가한다.
 
-### Phase 4 — Automation Engine 도입
+### Phase 4 — Engine Adapter 구현 (Claude Code 우선)
 - 상세 Task 정의 시점: Phase 3 완료 승인 이후
 - Phase 목표/DoD: `docs/ROADMAP.md` "Phase 4" 참고
 
-### Phase 5 — 다중 프로젝트 & Memory Engine 고도화
+### Phase 5 — Conversation Layer 구현
 - 상세 Task 정의 시점: Phase 4 완료 승인 이후
 - Phase 목표/DoD: `docs/ROADMAP.md` "Phase 5" 참고
+
+---
+
+## Milestone 4 — 자동화 및 확장 (Automation & Scale)
+
+> Milestone DoD: `docs/ROADMAP.md`의 "Milestone 4 Definition of Done" 참고.
+
+### Phase 6 — 자동화 · 다중 프로젝트 · 메모리 고도화
+- 상세 Task 정의 시점: Phase 5 완료 승인 이후
+- Phase 목표/DoD: `docs/ROADMAP.md` "Phase 6" 참고
 
 ---
 
@@ -307,3 +354,10 @@ ProjectRepository/WorkflowEngine/TaskEngine/MemoryEngine/ApprovalEngine/
 AutomationEngine/EngineAdapter 7개 Interface를 계약(입력/출력/예외/보장사항 docstring
 포함)으로 정의. Fake 구현체 + 계약 테스트 22개 작성, 전체(도메인 포함) 32개 테스트
 통과. 다음 Task: P1-4 (Workspace Core 기본 골격 구현). |
+| 2026-07-23 | **Multi-Agent First 전환**: 사용자 지시로 프로젝트 방향을 상시 멀티
+에이전트 Workspace로 변경. 구현을 중단하고 아키텍처를 먼저 수정함. ADR-0006(Workspace
+Core를 Agent 오케스트레이터로 재정의 + Agent Manager + Agent 도메인), ADR-0007(Event
+Bus), ADR-0008(Conversation Layer), ADR-0009(EngineAdapter 확장 계약) 추가.
+ARCHITECTURE.md v0.4.0, ROADMAP v0.3.0(M1~M4/Phase 0~6) 갱신. Phase 1을 P1-1~P1-12로
+재구성(Agent 도메인 P1-4, 신규 Interface/EngineAdapter 확장 P1-5, Agent 위임형
+Workspace Core P1-6 등). 기존 P1-1~P1-3 산출물은 유지. 구현 재개 대기. |

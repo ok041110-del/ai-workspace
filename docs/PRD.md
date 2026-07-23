@@ -24,6 +24,11 @@ AI Workspace 자체는 코드를 작성하지 않는다. 실제 코드 작성, �
 즉, AI Workspace는 **"AI를 위한 프로젝트 매니저 + 오케스트레이터"**이며,
 **"또 하나의 코딩 AI"가 아니다.**
 
+> **Multi-Agent First (ADR-0006)**: AI Workspace의 모든 작업은 역할(Planner,
+> Coding, Review, Research, Memory, Automation)을 가진 **Agent들의 협업**으로
+> 수행된다. 멀티 에이전트는 선택 기능이 아니라 시스템의 **기본 구조**다.
+> 구조 세부는 `docs/ARCHITECTURE.md`를 참고한다.
+
 ## 2. 배경 및 문제 정의 (Background & Problem Statement)
 
 현재 AI 코딩 도구(Claude Code, Codex, Gemini CLI 등)는 각각 독립적으로 동작한다.
@@ -74,9 +79,14 @@ AI Workspace는 다음을 달성해야 한다.
 |---|---|
 | Project | 사용자가 관리하는 하나의 소프트웨어/작업 단위. 여러 Task로 구성된다. |
 | Task | 실행 가능한 최소 작업 단위. 명확한 시작/완료 조건을 가진다. |
-| Workflow | 여러 Task의 실행 순서, 의존관계, 조건을 정의한 것. |
+| Workflow | Task 생성 → Agent 할당 → Agent 간 협업 → 결과 통합을 포함하는 **협업 흐름** (Multi-Agent First 반영, ADR-0006). |
+| Agent | 역할(Role)을 가지고 작업을 수행하는 실행 주체. Workspace의 핵심 도메인 모델. |
+| Agent Role | Agent의 역할 유형 (Planner, Coding, Review, Research, Memory, Automation). |
+| Agent Manager | Agent의 생성/생명주기/선택/협업/상태를 관리하는 컴포넌트. |
+| Event Bus | Agent 간 직접 호출 대신 이벤트 발행/구독으로 협업하게 하는 느슨한 결합 인프라 (ADR-0007). |
+| Conversation Layer | CLI/Dashboard/Mobile/Voice/API 등 입력 표면을 표준 요청으로 통합하는 계층 (ADR-0008). |
 | Implementation Engine | 실제 코드를 작성/실행하는 외부 AI 도구 (Claude Code, Codex, Gemini CLI 등). |
-| Engine Adapter | AI Workspace가 각 구현 엔진을 동일한 방식으로 호출하기 위한 연결 계층. |
+| Engine Adapter | AI Workspace가 각 구현 엔진을 동일한 방식으로 호출하기 위한 연결 계층. run/cancel/status/capabilities 등 확장 실행 계약을 제공한다 (ADR-0009). |
 | Approval Engine | 특정 행위(아키텍처 변경, 신규 기능, 리팩토링, Phase 완료) 전에 사용자 승인을 요구하는 지점(컴포넌트). |
 | Long-term Memory | 프로젝트의 결정, 규칙, 맥락을 세션을 넘어 유지하는 저장소. |
 | Automation | 사용자 개입 없이 정해진 조건에 따라 반복 실행되는 작업. |

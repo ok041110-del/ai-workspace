@@ -1,53 +1,70 @@
 # AI Workspace
 
 Claude Code, Codex, Gemini CLI와 같은 **AI 구현 엔진(Implementation Engine)**을
-관리하는 **오케스트레이션 플랫폼**입니다.
+**멀티 에이전트(Multi-Agent First)**로 오케스트레이션하는 플랫폼입니다.
 
 AI Workspace는 또 하나의 코딩 AI가 아닙니다. 실제 코드 작성은 구현 엔진이
-수행하고, AI Workspace는 다음을 관리하고 연결하는 역할을 담당합니다.
+수행하고, AI Workspace는 역할을 가진 **Agent들의 협업**으로 다음을 관리하고
+연결하는 역할을 담당합니다.
 
+- 멀티 에이전트 협업 (Multi-Agent Orchestration) — Planner / Coding / Review /
+  Research / Memory / Automation Agent
 - 프로젝트 관리 (Project Management)
 - Task 관리 (Task Management)
-- Workflow 관리 (Workflow Orchestration)
+- Workflow 관리 (협업 흐름 Orchestration)
 - 장기 메모리 (Long-term Memory)
 - 승인 (Approval)
 - 자동화 (Automation)
 - 다중 프로젝트 관리 (Multi Project)
 - 구현 엔진(Claude Code, Codex 등) 관리
 
-> **현재 상태**: Phase 0 (문서화 및 구조 설계) 진행 중입니다. 아직 애플리케이션
-> 코드는 존재하지 않습니다. 자세한 계획은 [`docs/ROADMAP.md`](docs/ROADMAP.md)를
-> 참고하세요.
+> **현재 상태**: Milestone 1 / Phase 1 진행 중입니다. Multi-Agent First로
+> 아키텍처를 전환(ADR-0006~0009)했으며, 도메인 모델과 인터페이스 계약을 구현하는
+> 중입니다. 자세한 계획은 [`docs/ROADMAP.md`](docs/ROADMAP.md)와
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)를 참고하세요.
 
 ## 시작 방법
 
-Phase 0에서는 문서 체계만 존재하며, 실행 가능한 코드는 Phase 1부터 추가됩니다.
-현재 시점에는 아래 문서를 순서대로 읽어보는 것을 권장합니다.
+현재는 도메인 모델과 인터페이스 계약을 구현하는 단계(Phase 1)입니다. 아래
+문서를 순서대로 읽어보는 것을 권장합니다.
 
 1. [`docs/PRD.md`](docs/PRD.md) — 이 프로젝트가 왜 필요한지, 무엇을 목표로 하는지
-2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — 전체 구조와 컴포넌트
-3. [`docs/ROADMAP.md`](docs/ROADMAP.md) — Phase별 개발 계획
+2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — 전체 구조와 컴포넌트 (Multi-Agent First)
+3. [`docs/ROADMAP.md`](docs/ROADMAP.md) — Milestone/Phase별 개발 계획
 4. [`.ai/RULES.md`](.ai/RULES.md) — 이 저장소에서 작업할 때 지켜야 하는 규칙
 5. [`.ai/TASKS.md`](.ai/TASKS.md) — 현재 진행 중인 Task와 전체 진행 상태
 
-Phase 1부터는 이 섹션에 실제 설치/실행 방법이 추가될 예정입니다.
+테스트는 저장소 루트에서 `python3 -m pytest`로 실행합니다. 실제 설치/실행
+방법은 CLI 진입점이 구현되면 이 섹션에 추가됩니다.
 
 ## 디렉터리 구조
 
 ```
 ai-workspace/
 ├── README.md              # 프로젝트 소개 (본 문서)
+├── pyproject.toml         # 패키지/테스트 설정
 ├── docs/                   # 사람을 위한 제품/구조/계획 문서
 │   ├── PRD.md              # 목표, 요구사항, 기능 목록, 성공 기준
 │   ├── ARCHITECTURE.md     # 전체 구조, 컴포넌트, 데이터 흐름, 의존성 규칙
-│   └── ROADMAP.md          # Phase 계획, 마일스톤, 우선순위
-├── .ai/                     # AI 구현 엔진을 위한 운영 문서
+│   └── ROADMAP.md          # Milestone/Phase 계획, 우선순위
+├── .ai/                     # AI 운영 문서
 │   ├── RULES.md            # AI 개발 규칙, 코딩 규칙, 작업 원칙
 │   ├── TASKS.md            # 전체 Task, 진행 상태, 체크리스트
 │   ├── MEMORY.md           # 프로젝트 장기 메모리, 중요한 결정, 컨텍스트
 │   └── DECISIONS.md        # Architecture Decision Record (ADR)
-├── workspace/               # 프로젝트별 실제 작업 공간 (Phase 1 이후 구체화)
-└── tests/                   # 테스트 코드 (Phase 1 이후 구체화)
+├── src/ai_workspace/        # 애플리케이션 코드
+│   ├── domain/             # Project, Task, Workflow, Agent 등 핵심 모델
+│   ├── interfaces/          # 추상 계약 (Repository, Engine, AgentManager, EventBus 등)
+│   ├── core/               # Workspace Core (Agent 오케스트레이터)
+│   ├── agents/             # Agent Manager + 역할별 Agent (이후 Phase)
+│   ├── engines/            # Core Engines 구현 (이후 Phase)
+│   ├── events/             # Event Bus (이후 Phase)
+│   ├── conversation/        # Conversation Layer (이후 Phase)
+│   ├── adapters/           # Engine Adapter 구현 (이후 Phase)
+│   ├── storage/            # 파일 기반 저장소 구현
+│   └── cli/                # CLI 진입점
+├── workspace/               # 프로젝트별 실제 작업 공간 (이후 구체화)
+└── tests/                   # 테스트 코드
 ```
 
 ## 개발 철학

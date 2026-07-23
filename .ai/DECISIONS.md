@@ -129,3 +129,93 @@
 - 결과/영향: `docs/ARCHITECTURE.md` v0.3.0에 반영됨. Phase 1 Task 목록
   (`.ai/TASKS.md`)이 "도메인 모델 → Interfaces 정의 → Workspace Core 골격 →
   ProjectRepository 구현 → CLI → 테스트" 순서로 재구성됨.
+- 후속: ADR-0006에서 Workspace Core의 책임이 "Engine 오케스트레이터"에서
+  "Agent 최상위 오케스트레이터"로 재정의된다. 다만 "Interfaces에만 의존하는
+  순수 오케스트레이터"라는 본 ADR의 핵심 원칙은 그대로 유지된다.
+
+## ADR-0006: Multi-Agent First 아키텍처로 전환 (Workspace Core 재정의 · Agent Manager · Agent 도메인)
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: 프로젝트 방향이 "필요 시 다중 에이전트를 사용할 수 있는 Workspace"에서
+  **"상시 멀티 에이전트(Multi-Agent First) Workspace"**로 변경되었다. 멀티
+  에이전트가 선택 기능이 아니라 시스템의 기본 구조가 되어야 하므로, Engine
+  오케스트레이션만 전제한 기존 구조(v0.3.0)로는 부적합하다. 구현을 더 진행하기
+  전에 아키텍처를 먼저 이 방향에 맞게 바꾸는 것이 재작업 비용을 최소화한다.
+- 결정:
+  1. **Workspace Core를 Agent 최상위 오케스트레이터로 재정의한다.** 책임:
+     프로젝트 로드 / 설정 로드 / 서비스 초기화 / Agent 등록 및 관리 / Workflow
+     시작 / Task 분배 / Engine 선택 및 위임 / 종료. **Task를 직접 실행하지 않고
+     Agent에게 위임한다.**
+  2. Workspace Core 아래에 **Agent Manager**를 추가한다. 책임: Agent 생성 /
+     생명주기 관리 / 선택 / 협업 / 상태 관리.
+  3. **Agent 도메인을 추가한다**: `Agent`, `AgentRole`(PLANNER/CODING/REVIEW/
+     RESEARCH/MEMORY/AUTOMATION), `AgentStatus`. Agent는 Workspace의 핵심
+     도메인 모델이 된다.
+  4. **Workflow를 협업 흐름으로 재정의한다**: Task 생성 → Agent 할당 → Agent 간
+     협업 → 결과 통합.
+  5. Interfaces에 `AgentManager`, `AgentRepository`를 추가한다.
+- 대안:
+  - 멀티 에이전트를 계속 선택 기능으로 두는 방식 — 초기에는 단순하지만, 방향과
+    어긋나고 나중에 핵심 구조를 대수술해야 함 (기각).
+  - Agent 없이 Engine을 직접 다중 실행하는 방식 — 역할 분리/협업/상태 관리를
+    표현하지 못함 (기각).
+- 이유: 멀티 에이전트를 기본 구조로 삼으면 이후 기능이 자연스럽게 확장되고,
+  Workspace Core는 "누가(Agent) 무엇을 할지" 조율에만 집중해 책임이 명확해진다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.4.0 반영. Phase 재구성(로드맵 갱신).
+  기존 P1-2(도메인), P1-3(Interfaces)는 유지하되 Agent 도메인/신규 Interface를
+  더하는 후속 Task가 추가된다.
+
+## ADR-0007: Event 기반 Agent 협업 구조 (Event Bus) 도입
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: 멀티 에이전트 환경에서 Agent가 서로를 직접 호출하면 강한 결합이 생겨
+  Agent 추가/교체/테스트가 어렵고, 협업 흐름이 코드 곳곳에 흩어진다.
+- 결정: Agent 간 협업을 **Event Bus 기반의 발행/구독**으로 처리한다. 예:
+  Planner 완료 → `TaskCreated` → Coding Agent 실행 → `ReviewRequested` →
+  Review Agent 실행. `EventBus` 인터페이스를 Phase 1에서 정의하되, 구현은 이후
+  Phase(멀티 에이전트 코어)에서 진행한다.
+- 대안: Agent 간 직접 메서드 호출 — 직관적이지만 강결합·낮은 확장성 (기각).
+- 이유: 느슨한 결합으로 Agent를 독립적으로 추가·교체·테스트할 수 있고, 협업
+  흐름을 이벤트로 명시적으로 추적할 수 있다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.4.0 §3.6, §4에 반영. `events/` 패키지와
+  `EventBus` 인터페이스가 계획에 포함된다.
+
+## ADR-0008: Conversation Layer 도입 (입력 표면 통합 · Voice 대비)
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: 향후 CLI 외에 Dashboard/Mobile/Voice/API 등 다양한 입력 표면을 지원해야
+  한다. 각 표면을 Workspace Core에 직접 연결하면 표면이 늘어날 때마다 Core를
+  수정해야 한다.
+- 결정: UI 표면과 Workspace Core 사이에 **Conversation Layer**를 둔다. 모든
+  표면의 입력을 표준 요청으로 정규화하고 응답을 표면에 맞게 변환한다. Voice는
+  Workspace Core가 아니라 **Conversation Layer에 연결되는 UI**로 취급한다.
+  `ConversationEngine` 인터페이스를 Phase 1에서 정의하되 구현은 이후로 미룬다
+  (지금 구현하지 않음).
+- 대안: 표면을 Workspace Core에 직접 연결 — 경로는 짧지만 표면 추가마다 Core
+  수정 필요 (기각).
+- 이유: 입력 정규화를 한 곳에 모으면, 새 표면(특히 Voice) 추가가 어댑터 추가로
+  끝나고 Core는 변경되지 않는다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.4.0 §3.1~3.2에 반영. UI Surfaces →
+  Conversation Layer → Workspace Core 계층이 확정된다.
+
+## ADR-0009: EngineAdapter를 확장 실행 계약으로 확대
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: 기존 `EngineAdapter`는 `run_task()` 단일 메서드였다. 멀티 에이전트
+  환경에서는 여러 Agent가 동시에 엔진을 사용하므로 취소/상태/병렬/비용 같은
+  운영 제어가 필요하다.
+- 결정: `EngineAdapter`를 모든 Agent가 공유하는 확장 실행 계약으로 넓힌다:
+  `run(...)`, `cancel(...)`, `status(...)`, `capabilities(...)`,
+  `supports_parallel()`, `estimate_cost()`. 구체 구현(Claude Code/Codex/Gemini)은
+  Phase 3(엔진 연동)에서 진행한다. ADR-0002(Adapter 패턴)를 계승·확장한다.
+- 대안: `run_task()` 단일 계약 유지 — 단순하지만 멀티 에이전트 운영에 필요한
+  제어를 제공하지 못함 (기각).
+- 이유: Engine 선택 정책(비용/병렬 지원 기반)과 실행 제어(취소/상태)를 계약에
+  포함해야 멀티 에이전트 오케스트레이션이 가능하다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.4.0 §3.8에 반영. 기존 P1-3에서 정의한
+  `EngineAdapter` 인터페이스는 Phase 1 재개 시 확장 계약으로 갱신한다
+  (ADR-0002 상태는 이 확장을 포함해 재확정).
