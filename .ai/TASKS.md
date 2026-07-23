@@ -361,3 +361,8 @@ Bus), ADR-0008(Conversation Layer), ADR-0009(EngineAdapter 확장 계약) 추가
 ARCHITECTURE.md v0.4.0, ROADMAP v0.3.0(M1~M4/Phase 0~6) 갱신. Phase 1을 P1-1~P1-12로
 재구성(Agent 도메인 P1-4, 신규 Interface/EngineAdapter 확장 P1-5, Agent 위임형
 Workspace Core P1-6 등). 기존 P1-1~P1-3 산출물은 유지. 구현 재개 대기. |
+| 2026-07-23 | 사용자 지시로 `.ai/RULES.md`를 v0.2.0으로 재구성. 4개 그룹(Project
+Principles / Development Workflow / Context Loading Rules / LLM Coding Rules)으로
+정리하고 Interface First, Context Loading Rules, LLM Coding Rules(Think Before
+Coding / Simplicity First / Surgical Changes / Goal-Driven Execution)를 추가함.
+기존 언어·코딩·커밋 규칙은 공통 규칙으로 보존. |
