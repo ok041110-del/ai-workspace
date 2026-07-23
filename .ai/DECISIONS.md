@@ -92,3 +92,40 @@
   우선 철학에 부합한다.
 - 결과/영향: Phase 5에서 다중 프로젝트/장기 메모리 고도화 시 DB 전환 필요성을
   재검토하며, 그 경우 별도 ADR을 작성한다.
+
+## ADR-0005: Workspace Core를 순수 오케스트레이터로 한정하고 Interfaces 계층을 명시적으로 분리
+
+- 상태: 승인됨 (2026-07-23, Phase 1 진행 중 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: 기존 설계(v0.2.0)는 Workspace Core가 "프로젝트 등록/조회/보관"과 "다중
+  프로젝트 관리"까지 직접 포함하고, Core Engine을 구체적으로 호출하는 형태였다.
+  이 경우 Workspace Core가 점점 비대해지고, 실제 Workflow/Task/Memory/Approval/
+  Automation 처리 로직과 뒤섞일 위험이 있었다. 또한 Phase별로 구현 순서가
+  다른 컴포넌트(Engine은 Phase 2, Adapter는 Phase 3)를 Workspace Core가 조기에
+  구체적으로 알게 되면, Phase 1 시점에 존재하지 않는 구현체 때문에 설계가
+  막히는 문제가 있었다.
+- 결정:
+  1. Workspace Core의 책임을 **프로젝트 로드, 설정 로드, 서비스 초기화, Engine
+     등록 및 관리, Task 실행 요청, 애플리케이션 종료** 6가지로 한정한다.
+     Workflow/Task/Memory/Approval/Automation 처리, 구현 엔진 직접 호출, 파일
+     저장 세부 구현은 Workspace Core에 포함하지 않는다.
+  2. Workspace Core와 그 협력 대상 사이에 **Interfaces(추상 계약)** 계층을
+     명시적으로 둔다: `ProjectRepository`, `WorkflowEngine`, `TaskEngine`,
+     `MemoryEngine`, `ApprovalEngine`, `AutomationEngine`, `EngineAdapter`.
+  3. Phase 1에서는 이 7개 Interface **정의만** 하고, `ProjectRepository`의
+     구체 구현체(`FileProjectRepository`)만 함께 구현한다. 나머지 5개 Engine의
+     구체 구현체는 Phase 2, `EngineAdapter`의 구체 구현체(Claude Code/Codex/
+     Gemini CLI)는 Phase 3에서 구현한다.
+- 대안:
+  - Workspace Core가 각 Engine의 로직을 직접 포함하는 방식 — 초기 구현은
+    간단하지만 책임이 섞이고, Phase별로 순차 구현하기 어려움 (기각).
+  - Interfaces 없이 구체 클래스에 바로 의존하는 방식 — 인터페이스 계층 설계
+    비용은 없지만, 구체 구현체가 아직 없는 Phase 1 시점에 Workspace Core를
+    완성할 수 없고, 이후 구현체 교체 시 Workspace Core 수정이 불가피함 (기각).
+- 이유: Interfaces를 먼저 정의하면 Workspace Core를 Phase 1에서 완성할 수
+  있고(구체 구현체는 아직 없어도 됨), 각 Engine/Adapter를 이후 Phase에서 독립적으로
+  구현·테스트할 수 있다. 이는 ADR-0002(Adapter 패턴)의 정신을 Engine
+  전반으로 확장한 것이다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.3.0에 반영됨. Phase 1 Task 목록
+  (`.ai/TASKS.md`)이 "도메인 모델 → Interfaces 정의 → Workspace Core 골격 →
+  ProjectRepository 구현 → CLI → 테스트" 순서로 재구성됨.

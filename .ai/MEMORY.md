@@ -37,12 +37,14 @@
 - **현재 위치**: Milestone 1 (기반 구축) / **Phase 1 (핵심 도메인 모델 & CLI
   골격) 진행 중**
 - **Phase 0**: 2026-07-23 사용자 승인 완료 (`.ai/TASKS.md` P0-11 DONE).
-- **Phase 1 착수**: 2026-07-23 사용자 승인 완료 (P1-0 DONE). 착수 시 사용자가
-  제시한 권장 순서를 그대로 Task 순서로 채택함: 디렉터리 구조 생성 →
-  Workspace Core 골격 → 공통 도메인 모델(Project/Task/Workflow) → Engine
-  Adapter 인터페이스 설계(구체 구현 없이 인터페이스만) → 파일 기반 저장소 →
-  CLI 진입점 → 기본 테스트 환경 구축.
-- **다음 단계**: `.ai/TASKS.md`의 P1-1(디렉터리 구조 생성)부터 순서대로 진행.
+- **Phase 1 착수**: 2026-07-23 사용자 승인 완료 (P1-0 DONE).
+- **P1-1(디렉터리 구조 생성)**: DONE.
+- **Workspace Core 범위/Interfaces 계층 확정 (ADR-0005, 2026-07-23)**: Workspace
+  Core를 순수 오케스트레이터로 한정하고, Workspace Core → Interfaces(추상
+  계약) → 구체 구현체(Phase별)로 이어지는 구조를 채택함. Phase 1 Task 순서를
+  "디렉터리 구조 → 공통 도메인 모델 → Interfaces 정의(7개) → Workspace Core
+  골격 → ProjectRepository 구현 → CLI → 테스트 환경"으로 재구성함.
+- **다음 단계**: `.ai/TASKS.md`의 P1-2(공통 도메인 모델 정의)부터 순서대로 진행.
 
 ## 2. 프로젝트 정체성
 
@@ -59,24 +61,34 @@
 있어야 하는 구조만 압축한다.
 
 ```
-Interface → Workspace Core → [Workflow / Task / Memory / Approval / Automation Engine]
-          → Engine Adapter → Claude Code / Codex / Gemini CLI
+Workspace(CLI) → Workspace Core → Interfaces → 구체 구현체 → 구현 엔진
 ```
 
-- **Workspace Core**: 프로젝트 등록·다중 프로젝트 관리 + 전체 요청의 진입점.
-- **Core Engines**: Workflow Engine(순서/의존관계), Task Engine(Task 상태),
-  Memory Engine(장기 메모리), Approval Engine(승인 게이트), Automation
-  Engine(자동 트리거).
-- **Engine Adapter**: 구현 엔진을 공통 인터페이스로 감싸 엔진 비종속성을 확보.
-- 의존 방향은 항상 위(Interface)에서 아래(구현 엔진)로만 향한다.
+- **Workspace Core**: 순수 오케스트레이터. 프로젝트 로드·설정 로드·서비스
+  초기화·Engine 등록/관리·Task 실행 요청·종료만 담당하며, 실제 처리 로직은
+  전혀 포함하지 않는다. 오직 **Interfaces에만** 의존한다 (ADR-0005).
+- **Interfaces (추상 계약, Phase 1에서 정의)**: `ProjectRepository`,
+  `WorkflowEngine`, `TaskEngine`, `MemoryEngine`, `ApprovalEngine`,
+  `AutomationEngine`, `EngineAdapter`.
+- **구체 구현체 (Phase별)**: `FileProjectRepository`(Phase 1) → Workflow/Task/
+  Memory/Approval/Automation Engine 구현체(Phase 2) → ClaudeCodeAdapter 등
+  (Phase 3).
+- 의존 방향은 항상 위(Workspace/CLI)에서 아래(구현 엔진)로만 향하며, Workspace
+  Core는 구체 구현체를 전혀 알지 못한다.
 
 ## 4. 반드시 유지해야 하는 설계 원칙
 
 - 실제 코드 작성 금지 원칙은 **Phase 0(문서화 단계)에 한정**된다. Phase 1부터는
   승인을 받은 뒤 코드를 작성한다.
+- **Workspace Core는 순수 오케스트레이터다 (ADR-0005).** Workflow/Task/Memory/
+  Approval/Automation 처리, 구현 엔진 직접 호출, 파일 저장 세부 구현을
+  Workspace Core에 절대 넣지 않는다. Workspace Core는 오직 Interfaces에만
+  의존한다.
 - 승인이 필요한 4가지 행위: 아키텍처 변경, 신규 기능, 리팩토링, Phase 완료.
   Approval Engine이라는 단일 컴포넌트가 판별·차단한다 (우회 경로 없음).
 - 구현 엔진은 반드시 Engine Adapter를 통해서만 호출한다 (엔진 비종속성).
+- Engine Adapter(및 다른 5개 Engine)의 **구체 구현은 Phase 2/3에서** 이루어진다.
+  Phase 1에서 실제 처리 로직을 앞당겨 구현하지 않는다.
 - 계획은 Milestone → Phase → Task 계층을 따르며, Task는 한 번에 하나씩만
   진행한다.
 - 모든 문서/설명/주석/커밋 메시지는 한국어, 코드 식별자는 Python 표준(영어)을
@@ -92,6 +104,7 @@ Interface → Workspace Core → [Workflow / Task / Memory / Approval / Automati
 | ADR-0002 | 구현 엔진은 Adapter 패턴으로 추상화 (`EngineAdapter` 인터페이스) | 제안 (Phase 1에서 인터페이스 설계 후 승인 예정) |
 | ADR-0003 | 승인 절차는 별도 Approval Engine 컴포넌트로 분리 (인라인 금지) | 제안 (Phase 2에서 확정 예정) |
 | ADR-0004 | Phase 1 저장 방식은 파일 기반(Markdown/JSON)으로 시작 | 제안 (Phase 1에서 구현 후 승인 예정) |
+| ADR-0005 | Workspace Core는 순수 오케스트레이터로 한정, Interfaces 계층 분리 | 승인됨 |
 
 기술 스택(Python, pydantic/dataclasses, 파일 기반 저장, CLI)은 아직 **제안**
 단계이며, Phase 1 착수 시 정식 승인이 필요하다.
@@ -100,11 +113,13 @@ Interface → Workspace Core → [Workflow / Task / Memory / Approval / Automati
 
 - 구현 엔진 연동 순서: Claude Code 최우선 → Codex → Gemini CLI (동일한 Adapter
   패턴으로 순차 추가).
-- Phase 1의 범위는 "Workspace Core 골격 + 도메인 모델 + Engine Adapter
-  **인터페이스**(구체 구현 제외) + 저장 + 최소 CLI + 테스트 환경"까지다. 특정
-  구현 엔진(Claude Code 등)을 실제로 호출하는 **구체적인 Adapter 구현**은
-  Phase 3(Milestone 2)에서 다룬다. Phase 1에서 실제 엔진 호출 로직을 앞당겨
-  구현하지 않는다.
-- Workspace Core는 Project Manager 역할(프로젝트 등록/다중 프로젝트 관리)과
-  전체 조율 진입점 역할을 함께 수행하는 통합 컴포넌트로 확정했다 (Phase 1
-  설계 시 재분리 필요성 여부만 재검토, 기본 방향은 유지).
+- Phase 1의 범위는 "도메인 모델 + Interfaces(7개, 계약만) + Workspace Core
+  골격 + ProjectRepository 구체 구현 + 최소 CLI + 테스트 환경"까지다. 나머지
+  5개 Engine(Workflow/Task/Memory/Approval/Automation)의 **구체 구현은
+  Phase 2**, `EngineAdapter`의 **구체 구현(Claude Code 등)은 Phase 3**에서
+  다룬다. Phase 1에서 실제 처리 로직을 앞당겨 구현하지 않는다.
+- Workspace Core는 더 이상 "Project Manager 역할(프로젝트 등록/다중 프로젝트
+  관리)"을 자체적으로 포함하지 않는다 (ADR-0005로 변경). 프로젝트 로드는
+  `ProjectRepository` 인터페이스를 통해서만 이루어지며, 다중 프로젝트
+  대시보드/우선순위 조정 같은 고도화 기능은 Phase 5에서 Workspace Core를
+  확장할 때 다시 검토한다.

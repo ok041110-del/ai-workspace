@@ -63,24 +63,32 @@ Roadmap
 
 ### Phase 1 — 핵심 도메인 모델 & CLI 골격 (진행 중)
 
-- **목표**: AI Workspace의 핵심 도메인 개념(Project, Task, Workflow)과 이를
-  조율하는 최소한의 실행 골격(Workspace Core, Engine Adapter 인터페이스)을
-  정의하고, 조회/생성이 가능한 CLI 골격을 만든다. 특정 구현 엔진(Claude Code
-  등)에 대한 **구체적인 Adapter 구현**은 아직 하지 않는다 (Phase 3 범위) — Phase
-  1에서는 `EngineAdapter`의 **인터페이스만** 설계한다.
-- **세부 목표** (승인된 착수 순서)
-  1. 디렉터리 구조 생성 (`src/ai_workspace/{domain,core,engines,adapters,cli}`)
-  2. Workspace Core 기본 골격 구현 (프로젝트 등록/조회의 최소 형태)
-  3. 공통 도메인 모델 정의 (Project, Task, Workflow)
-  4. Engine Adapter 인터페이스 설계 (구체 구현 없이 추상 인터페이스만)
-  5. 파일 기반 저장소 구현 (Markdown/JSON)
-  6. CLI 진입점 구성 (Project/Task 생성·조회)
+- **목표**: AI Workspace의 핵심 도메인 개념(Project, Task, Workflow)을 정의하고,
+  Workspace Core가 구체 구현이 아닌 **Interfaces(추상 계약)**에만 의존하는
+  순수 오케스트레이터 골격을 만든다 (ADR-0005). 조회/생성이 가능한 CLI 골격도
+  함께 만든다. 특정 구현 엔진(Claude Code 등)에 대한 **구체적인 Adapter 구현**과
+  Workflow/Task/Memory/Approval/Automation의 **구체적인 처리 로직**은 아직
+  하지 않는다 (각각 Phase 3, Phase 2 범위) — Phase 1에서는 **7개 Interface
+  (ProjectRepository, WorkflowEngine, TaskEngine, MemoryEngine, ApprovalEngine,
+  AutomationEngine, EngineAdapter)를 정의**하고, 그중 `ProjectRepository`의
+  구체 구현체(파일 기반)만 함께 만든다.
+- **세부 목표** (승인된 착수 순서, ADR-0005 반영)
+  1. 디렉터리 구조 생성 (`src/ai_workspace/{domain,interfaces,core,storage,engines,adapters,cli}`)
+  2. 공통 도메인 모델 정의 (Project, Task, Workflow)
+  3. Interfaces 정의 (ProjectRepository, WorkflowEngine, TaskEngine,
+     MemoryEngine, ApprovalEngine, AutomationEngine, EngineAdapter — 계약만,
+     구체 구현 없음)
+  4. Workspace Core 기본 골격 구현 (Interfaces에만 의존: 프로젝트 로드/설정
+     로드/서비스 초기화/Engine 등록·관리/Task 실행 요청/종료)
+  5. ProjectRepository 파일 기반 구현 (Markdown/JSON)
+  6. CLI 진입점 구성 (Workspace Core를 통한 Project/Task 생성·조회)
   7. 기본 테스트 환경 구축 및 테스트 작성
 - **Phase Definition of Done**: 위 7단계가 모두 구현되고 테스트를 통과하며,
   `docs/ARCHITECTURE.md`가 실제 구조와 일치하도록 갱신된다.
 - **우선순위**: 최우선 (다른 모든 Phase의 기반)
 - **승인 필요 여부**: 예 (아키텍처 변경/신규 기능에 해당) — **2026-07-23 착수
-  승인 완료** (완료 시점에 별도로 Phase 완료 승인 필요)
+  승인 완료**, 동일 날짜에 Workspace Core 범위/Interfaces 계층 구조를 사용자
+  지시로 확정(ADR-0005) (완료 시점에 별도로 Phase 완료 승인 필요)
 - **세부 Task**: `.ai/TASKS.md`의 "Milestone 1 > Phase 1" 섹션 참고.
 
 ---
