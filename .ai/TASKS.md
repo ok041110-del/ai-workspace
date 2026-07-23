@@ -127,7 +127,8 @@
 - 작업 내용: `docs/ARCHITECTURE.md` §6에서 제안한 `domain/ core/ engines/
   adapters/ cli/` 구조를 실제로 생성한다 (로직 없이 패키지 골격만).
 - 완료 조건(DoD): 생성된 구조가 `docs/ARCHITECTURE.md`와 100% 일치한다.
-- 상태: TODO
+- 상태: **DONE (2026-07-23)** — `src/ai_workspace/{domain,core,engines,adapters,cli}/`
+  생성, 각 패키지에 빈 `__init__.py` 배치. 로직은 포함하지 않음 (다음 Task부터 구현).
 - 의존성: P1-0
 
 #### P1-2: Workspace Core 기본 골격 구현
@@ -272,3 +273,5 @@ ROADMAP·TASKS를 Milestone → Phase → Task 구조로 재구성. P0-11 재요
 Workspace Core 골격 → 공통 도메인 모델 → Engine Adapter 인터페이스 → 파일 저장소 →
 CLI → 테스트 환경)를 승인(P1-0 DONE). 해당 순서에 맞춰 Phase 1 Task(P1-1~P1-12)를
 재구성함. ADR-0001을 "승인됨"으로 갱신. |
+| 2026-07-23 | P1-1 완료: `src/ai_workspace/{domain,core,engines,adapters,cli}/` 패키지
+골격 생성 (로직 없음). 다음 Task: P1-2 (Workspace Core 기본 골격 구현). |
