@@ -172,3 +172,35 @@
 - 승인이 필요한 4가지 행위(§1.4)가 승인되면, 그 결정과 근거를 `.ai/DECISIONS.md`에
   ADR(Architecture Decision Record) 형식으로 기록한다.
 - 승인 결과(승인/반려)와 사유는 `.ai/TASKS.md`의 해당 Task 항목에도 반영한다.
+
+---
+
+## 7. Temporary LLM Policy (임시 LLM 정책)
+
+Agent가 어떤 LLM Provider/Model을 어느 Effort로 사용할지 결정하는 정책은 아직
+자동화되어 있지 않다. 2026-07-23 P1-4에서 `LLMProvider`, `LLMModel`,
+`LLMEffort` **Domain만** 초안으로 정의했으며, 실제 선택 로직(Policy Engine,
+Router 등)은 존재하지 않는다.
+
+### 현재 상태
+- 현재는 **문서 기반 정책**만 존재한다 (`docs/llm_policy.example.yaml` 참고).
+- 현재는 **사람이 정책을 따른다**. 즉, 어떤 역할에 어떤 Provider/Model/Effort를
+  쓸지는 이 문서와 예시 YAML을 참고해 사람이 직접 판단하고 적용한다.
+- `domain/llm_policy.py`에는 `LLMProvider`, `LLMModel`, `LLMEffort`와 초기
+  모델 목록(`INITIAL_MODELS`)만 존재하며, 이를 소비하는 Policy Engine이나
+  Router는 아직 구현되지 않았다.
+
+### 향후 진행 경로 (Milestone별)
+- **M2**: Rule 기반 선택을 구현한다 (조건-값 매핑 수준의 단순 규칙).
+- **M3**: Agent가 Policy를 참조한다 (Agent 실행 시 정책 문서/규칙을 조회해 사용).
+- **M4**: Policy Engine이 자동으로 선택한다 (상황에 따라 Provider/Model/Effort를
+  자동 결정).
+- **M5**: Self Optimizer가 Policy를 자동으로 최적화한다 (실행 결과 피드백을
+  바탕으로 정책 자체를 개선).
+
+### 관련 문서
+- Domain 정의: `src/ai_workspace/domain/llm_policy.py`
+- 정책 초안(YAML 예시): `docs/llm_policy.example.yaml`
+
+이 섹션은 정책이 실제로 자동화되기 전까지 "임시"임을 나타내며, M2 이후 각
+Milestone에서 해당 단계의 구현이 완료되면 이 섹션과 진행 경로를 갱신한다.

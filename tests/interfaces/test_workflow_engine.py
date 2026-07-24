@@ -6,6 +6,7 @@ from .fakes import FakeWorkflowEngine
 def test_plan_respects_dependencies() -> None:
     workflow = Workflow(
         workflow_id="w1",
+        mission_id="m1",
         task_ids=["t1", "t2", "t3"],
         dependencies={"t2": {"t1"}, "t3": {"t2"}},
     )
@@ -17,7 +18,9 @@ def test_plan_respects_dependencies() -> None:
 
 
 def test_plan_returns_every_task_exactly_once() -> None:
-    workflow = Workflow(workflow_id="w1", task_ids=["t1", "t2"], dependencies={})
+    workflow = Workflow(
+        workflow_id="w1", mission_id="m1", task_ids=["t1", "t2"], dependencies={}
+    )
     engine = FakeWorkflowEngine()
 
     order = engine.plan(workflow)

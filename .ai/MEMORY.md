@@ -39,15 +39,21 @@
 - **Phase 0**: 2026-07-23 사용자 승인 완료 (`.ai/TASKS.md` P0-11 DONE).
 - **Phase 1 착수**: 2026-07-23 사용자 승인 완료 (P1-0 DONE).
 - **완료된 Task**: P1-1(디렉터리), P1-2(Project/Task/Workflow 도메인),
-  P1-3(Interfaces 7종) — 모두 DONE. 전체 32개 테스트 통과.
-- **⚠ Multi-Agent First 심화 (2026-07-23, ADR-0010~0015)**: v0.4.0 위에
-  Agent Runtime 계층, Event Store, Interaction Layer, Mission→Workflow→Task→Step
-  계층, WorkspaceSession, Capability 중심 Agent, 세션 생명주기 EngineAdapter를
-  더해 아키텍처를 재수정함(문서만, 코드 미변경). 기존 P1-1~P1-3 산출물은 유지.
-  Phase 1 P1-4~P1-7이 도메인 확장·신규 Interface 7종·Agent Runtime 위임형
-  Workspace Core·EventStore 저장소로 갱신됨.
-- **다음 단계**: 문서 검토·승인 후 구현 재개. `.ai/TASKS.md`의 P1-4(도메인 확장:
-  Mission/Step/WorkspaceSession/Agent 계열)부터 진행.
+  P1-3(Interfaces 7종), **P1-4(도메인 확장 + LLM Policy 초안)** — 모두 DONE.
+  전체 41개 테스트 통과.
+- **아키텍처는 v0.6.0으로 확정** (ADR-0006~0019, Multi-Agent First 심화 +
+  안정화 보완: Agent Runtime, Engine Runtime, Context Manager, Event Store
+  독립 구독자, Coordination Capability 등). 자세한 내용은 §3 참고.
+- **P1-4 결과 (2026-07-23)**: `domain/mission.py`, `domain/step.py`,
+  `domain/session.py`(WorkspaceSession), `domain/agent.py`(Agent/AgentRole/
+  AgentCapability/AgentStatus), `domain/workflow.py`(mission_id 추가)를 구현.
+  **사용자 지시로 범위가 확장되어 `domain/llm_policy.py`(LLMProvider/LLMModel/
+  LLMEffort — Domain만, Policy Engine·Router 없음)를 추가**하고,
+  `.ai/RULES.md`에 "Temporary LLM Policy" 섹션(M2~M5 진행 경로)과
+  `docs/llm_policy.example.yaml` 정책 초안을 작성함. `docs/ARCHITECTURE.md`는
+  변경하지 않음(사용자 지시).
+- **다음 단계**: `.ai/TASKS.md`의 P1-5(신규 Interface 16종 정의 및 EngineAdapter
+  세션 계약 확장)부터 진행.
 
 ## 2. 프로젝트 정체성
 
@@ -179,3 +185,9 @@ Event Store)은 제안 단계이며 각 구현 Phase에서 확정한다.
 - **미완료 유지 항목**: 이미 구현된 P1-3의 `EngineAdapter`는 `run_task` 기반이므로
   P1-5에서 세션 생명주기 계약(create_session/run/…/destroy_session)으로 교체해야
   한다. `ConversationEngine`은 `InteractionEngine`으로 대체 예정(P1-5).
+- **LLM Policy는 "Temporary"다 (P1-4에서 Domain만 추가)**: `domain/llm_policy.py`
+  에 `LLMProvider`/`LLMModel`/`LLMEffort`/`INITIAL_MODELS`만 존재하며, 실제 선택
+  로직(Policy Engine, Router)은 없다. 사람이 `docs/llm_policy.example.yaml`을
+  참고해 수동으로 적용하는 단계다. 진행 경로: M2(Rule 기반 선택) → M3(Agent가
+  Policy 참조) → M4(Policy Engine 자동 선택) → M5(Self Optimizer 자동 최적화).
+  자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.

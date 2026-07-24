@@ -187,21 +187,38 @@
     계약 갱신은 후속 Task **P1-5**에서 진행한다(총 16종).
 - 의존성: P1-2
 
-#### P1-4: 도메인 확장 (Mission/Workflow 재정의/Step, WorkspaceSession, Agent 계열)
-- 목적: Multi-Agent First 심화 구조의 핵심 도메인을 추가·재정의한다
-  (ADR-0010~0012).
+#### P1-4: 도메인 확장 (Mission/Workflow 재정의/Step, WorkspaceSession, Agent 계열, LLM Policy 초안)
+- 목적: Multi-Agent First 심화 구조의 핵심 도메인을 추가·재정의하고, 향후
+  Milestone(M2~M5)에서 구현할 LLM 선택 정책의 **Domain만** 미리 정의한다
+  (ADR-0010~0012). **2026-07-23 사용자 지시로 LLM Policy Domain 초안이 P1-4
+  범위에 추가됨** (Policy Engine/Router 등 실제 동작 로직은 제외).
 - 작업 내용:
   - `domain/mission.py`, `domain/step.py`: `Mission`(목표), `Step`(Task 내부
     세부 실행 단위). `domain/workflow.py`는 Mission→Workflow→Task→Step 계층
-    안에서 재정의(기존 순환 의존 검증 유지).
+    안에서 재정의(`mission_id` 추가, 기존 순환 의존 검증 유지).
   - `domain/session.py`: `WorkspaceSession`(현재 프로젝트/Mission/활성 Workflow/
     활성 Agent/Memory Snapshot/Engine Session).
   - `domain/agent.py`: `Agent`, `AgentRole`, `AgentCapability`(**Coordination**/
     Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP …),
     `AgentStatus`(IDLE/RUNNING/WAITING/PAUSED/STOPPED/ERROR 등).
+  - `domain/llm_policy.py` (초안, Domain만): `LLMProvider`(OpenAI/Anthropic/
+    Google/xAI), `LLMModel`(provider + 확장 가능한 name 문자열, 초기 모델 목록
+    데이터 포함), `LLMEffort`(Low/Medium/High). **LLM Policy Engine, LLM Router,
+    Provider/Model 선택 로직, Adapter 변경, 실제 LLM 호출 로직은 절대 구현하지
+    않는다.**
+  - `.ai/RULES.md`에 "Temporary LLM Policy" 섹션 추가(M2~M5 진행 경로 명시) +
+    `docs/llm_policy.example.yaml` 정책 초안 작성.
 - 완료 조건(DoD): 추가/재정의된 모델에 대한 단위 테스트가 통과한다(기존 도메인
-  테스트 회귀 없음).
-- 상태: TODO
+  테스트 회귀 없음). LLM Policy는 Domain 정의와 문서만 존재하고 동작 로직이
+  없음을 확인한다.
+- 상태: **DONE (2026-07-23)** — `domain/mission.py`(Mission), `domain/step.py`
+  (Step), `domain/session.py`(WorkspaceSession), `domain/agent.py`(Agent,
+  AgentRole, AgentCapability(Coordination 포함), AgentStatus), `domain/workflow.py`
+  에 `mission_id` 추가(기존 순환/미지정 의존 검증 유지), `domain/llm_policy.py`
+  (LLMProvider, LLMModel, LLMEffort, INITIAL_MODELS — Domain 데이터만, Policy
+  Engine/Router 없음) 구현. `.ai/RULES.md`에 "Temporary LLM Policy" 섹션
+  (§7) 추가, `docs/llm_policy.example.yaml` 정책 초안 작성. 신규 테스트 9개
+  추가(전체 41개 통과). `docs/ARCHITECTURE.md`는 변경하지 않음(사용자 지시).
 - 의존성: P1-2
 
 #### P1-5: 신규 Interface 정의 및 EngineAdapter 세션 계약 확장 (총 16종)
@@ -395,3 +412,9 @@ Manager로 Memory Snapshot 역할 분리(ADR-0017), Event Store를 Event Bus 독
 Subscriber로 위치 조정(ADR-0018), Coordination Capability 추가(ADR-0019).
 ARCHITECTURE.md v0.6.0, ROADMAP v0.5.0 갱신. Interfaces 14→16종(+EngineRuntime,
 +ContextManager), MemoryEngine 계약 축소. Phase 1 P1-4~P1-6 반영. 구현 재개 대기. |
+| 2026-07-23 | **P1-4 완료**: 사용자 지시로 범위를 확장해 Mission/Step/
+WorkspaceSession/Agent 계열 도메인과 함께 **LLM Policy Domain 초안**(LLMProvider/
+LLMModel/LLMEffort, Policy Engine·Router 제외)을 구현. `.ai/RULES.md`에
+"Temporary LLM Policy" 섹션 추가, `docs/llm_policy.example.yaml` 작성. 신규
+테스트 9개, 전체 41개 통과. `docs/ARCHITECTURE.md`는 변경하지 않음. 다음 Task:
+P1-5 (신규 Interface 16종 정의 및 EngineAdapter 세션 계약 확장). |

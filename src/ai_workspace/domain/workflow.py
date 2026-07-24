@@ -10,6 +10,7 @@ class WorkflowCycleError(ValueError):
 @dataclass
 class Workflow:
     workflow_id: str
+    mission_id: str
     task_ids: list[str]
     dependencies: dict[str, set[str]] = field(default_factory=dict)
 

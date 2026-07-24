@@ -1,0 +1,31 @@
+# LLM Policy 초안 (예시)
+#
+# 이 파일은 실제로 동작하는 설정이 아니라, "어떤 역할에 어떤 Provider/Model을
+# 어느 Effort로 쓸 것인가"를 사람이 참고하기 위한 문서 초안이다.
+# 현재는 Policy Engine/Router가 없으므로 사람이 이 문서를 보고 직접 판단해
+# 적용한다 (`.ai/RULES.md`의 "Temporary LLM Policy" 참고).
+
+planning:
+  provider: openai
+  model: gpt
+  effort: high
+
+implementation:
+  provider: anthropic
+  model: opus
+  effort: high
+
+review:
+  provider: openai
+  model: gpt
+  effort: medium
+
+documentation:
+  provider: google
+  model: gemini
+  effort: low
+
+research:
+  provider: xai
+  model: grok
+  effort: medium
