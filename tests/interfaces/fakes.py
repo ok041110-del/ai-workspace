@@ -5,6 +5,7 @@ from collections.abc import Callable
 
 from ai_workspace.domain.agent import Agent, AgentCapability, AgentRole, AgentStatus
 from ai_workspace.domain.project import Project
+from ai_workspace.domain.session import WorkspaceSession
 from ai_workspace.domain.task import Task, TaskStatus
 from ai_workspace.domain.workflow import Workflow
 from ai_workspace.interfaces.agent_manager import AgentManager, InvalidAgentTransitionError
@@ -24,6 +25,7 @@ from ai_workspace.interfaces.approval_engine import (
     ApprovalRequestNotFoundError,
 )
 from ai_workspace.interfaces.automation_engine import AutomationEngine, DuplicateTriggerError
+from ai_workspace.interfaces.context_manager import ContextManager, SnapshotNotFoundError
 from ai_workspace.interfaces.engine_adapter import (
     CostEstimate,
     EngineAdapter,
@@ -406,3 +408,29 @@ class FakeEventStore(EventStore):
             if event.event_id == since_event_id:
                 return list(self._events[index + 1 :])
         return []
+
+
+class FakeContextManager(ContextManager):
+    def __init__(self) -> None:
+        self._snapshots: dict[str, dict[str, str]] = {}
+        self._id_generator = itertools.count(1)
+
+    def assemble_context(self, session: WorkspaceSession) -> dict[str, str]:
+        context: dict[str, str] = {}
+        if session.current_project_id is not None:
+            context["project_id"] = session.current_project_id
+        if session.current_mission_id is not None:
+            context["mission_id"] = session.current_mission_id
+        if session.memory_snapshot_id in self._snapshots:
+            context.update(self._snapshots[session.memory_snapshot_id])
+        return context
+
+    def create_snapshot(self, session: WorkspaceSession) -> str:
+        snapshot_id = f"snapshot-{next(self._id_generator)}"
+        self._snapshots[snapshot_id] = self.assemble_context(session)
+        return snapshot_id
+
+    def restore_snapshot(self, snapshot_id: str) -> dict[str, str]:
+        if snapshot_id not in self._snapshots:
+            raise SnapshotNotFoundError(snapshot_id)
+        return dict(self._snapshots[snapshot_id])

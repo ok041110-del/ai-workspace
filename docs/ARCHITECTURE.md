@@ -296,7 +296,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 | 기존 |
 | `WorkflowEngine` | Mission→…→Step 협업 흐름 | 이후 | 기존 |
 | `TaskEngine` | Task 생성/상태 전이 | 이후 | 기존 |
-| `MemoryEngine` | Memory 저장/검색 (Snapshot 제외) | 이후 | 기존(축소) |
+| `MemoryEngine` | Memory 저장/검색 (Snapshot 제외) | Milestone 1 (T1-15, T1-20 재확인) | 기존(축소, 변경 없음) |
 | `ApprovalEngine` | 승인 대상 판별/차단 | 이후 | 기존 |
 | `AutomationEngine` | 조건/일정 트리거 | 이후 | 기존 |
 | `EngineAdapter` | per-engine 세션 계약 (create_session/run/cancel/status/destroy_session/capabilities/supports_parallel/estimate_cost) | Milestone 1 (T1-19) 계약, Milestone 3 구현 | **완료(계약)** |
@@ -308,7 +308,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료** |
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18) | **완료** |
 | `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행 | Milestone 1 (T1-19) | **완료** |
-| `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | 이후 | **신규** |
+| `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료** |
 
 ## 8. 의존성 규칙 (Dependency Rules)
 

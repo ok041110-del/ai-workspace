@@ -40,8 +40,8 @@
   Milestone 1 소속 `T1-01`~`T1-25`로 번호만 이어졌다가, 같은 날 설계 검토를
   거쳐 `T1-18`~`T1-28`로 추가 재분해됨(ADR-0022, 대응표는 `docs/ROADMAP.md`
   하단 참고).
-- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-19` 완료,
-  `T1-20`~`T1-28` 남음(9개 Task).
+- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-20` 완료,
+  `T1-21`~`T1-28` 남음(8개 Task).
 - **완료된 Task 요약**: `T1-01`~`T1-11`(문서화 세트 작성 및 승인), `T1-12`
   (구현 착수 승인), `T1-13`(디렉터리 구조), `T1-14`(Project/Task/Workflow
   도메인), `T1-15`(Interfaces 7종), `T1-16`(Mission/Step/WorkspaceSession/
@@ -52,19 +52,23 @@
   Runtime Interfaces: `EngineRuntime` 신규 + `EngineAdapter`를 `run_task`
   단일 메서드에서 세션 기반 계약(`create_session`/`run`/`cancel`/`status`/
   `destroy_session`/`capabilities`/`supports_parallel`/`estimate_cost`)으로
-  교체) — 전체 79개 테스트 통과, `ruff`/`mypy` 클린.
-- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-20` Memory
-  Interfaces → `T1-21` Interaction Interfaces → `T1-22` Workspace Core
-  Skeleton → `T1-23` Repositories → `T1-24` CLI → `T1-25` Tests → `T1-26`
-  Documentation → `T1-27` ADR → `T1-28` Milestone 1 Review.
+  교체), `T1-20`(Memory Interfaces: `ContextManager` 신규 정의 —
+  `assemble_context`/`create_snapshot`/`restore_snapshot`; `MemoryEngine`은
+  재검토 후 변경 없음) — 전체 83개 테스트 통과, `ruff`/`mypy` 클린.
+- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-21`
+  Interaction Interfaces → `T1-22` Workspace Core Skeleton → `T1-23`
+  Repositories → `T1-24` CLI → `T1-25` Tests → `T1-26` Documentation →
+  `T1-27` ADR → `T1-28` Milestone 1 Review.
 - **아키텍처는 v0.6.3으로 갱신** (ADR-0006~0022, Multi-Agent First 심화 + 안정화
   보완 + Task-Workflow 관계 보완 + Phase→Task 거버넌스 전환 + Task 분해 원칙).
   시스템 구조 자체(컴포넌트/의존성)는 T1-18 설계 검토로 변경되지 않았음 — 자세한
   내용은 §3, `docs/ARCHITECTURE.md` §0 참고. `docs/ARCHITECTURE.md` §7의
   Interface 표는 T1-18(Agent Runtime 6종), T1-19(EngineRuntime,
-  EngineAdapter 계약)에서 정의한 Interface 상태를 "완료"로 갱신함.
-- **다음 단계**: `.ai/TASKS.md`의 `T1-20`(Memory Interfaces: ContextManager
-  신규 정의 + MemoryEngine 재확인)부터 동일한 패턴으로 진행.
+  EngineAdapter 계약), T1-20(ContextManager)에서 정의한 Interface 상태를
+  "완료"로 갱신함.
+- **다음 단계**: `.ai/TASKS.md`의 `T1-21`(Interaction Interfaces:
+  InteractionEngine 정의, 기존 ConversationEngine 명칭 대체)부터 동일한
+  패턴으로 진행.
 
 ## 2. 프로젝트 정체성
 

@@ -340,7 +340,16 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
     패턴).
 - 완료 조건(DoD): `ContextManager` Fake + 계약 테스트가 통과하고, `MemoryEngine`
   기존 계약·테스트에 회귀가 없음을 확인한다.
-- 상태: TODO
+- 상태: **DONE (2026-07-24)** — `interfaces/context_manager.py` 신규 추가:
+  `ContextManager`(`assemble_context`/`create_snapshot`/`restore_snapshot`,
+  `SnapshotNotFoundError`). `WorkspaceSession.memory_snapshot_id`가 가리키는
+  Snapshot을 Context Manager가 소유·관리하며 `MemoryEngine`은 이를 알지
+  못함을 docstring에 명시. `memory_engine.py`는 재검토 결과 계획대로
+  **코드 변경 없음**(Snapshot 관련 메서드가 원래 없어 이미 "저장/검색만"
+  계약을 만족). `tests/interfaces/fakes.py`에 `FakeContextManager` 추가,
+  `test_context_manager.py` 신규 추가(4개 테스트). 기존 `MemoryEngine`
+  테스트(`test_memory_engine.py`)는 변경 없이 그대로 통과. `ruff check
+  src tests`, `mypy src`, `pytest`(83개, 기존 79개 + 신규 4개) 모두 통과.
 - 의존성: T1-15, T1-16
 
 #### T1-21: Interaction Interfaces
@@ -593,3 +602,18 @@ fakes.py`의 `FakeEngineAdapter`/`FailingFakeEngineAdapter`를 새 계약으로
 Interface 표를 갱신함. `ruff check src tests`, `mypy src`, `pytest`(79개,
 기존 66개 + 신규 13개) 모두 통과. 다음 Task: **T1-20** (Memory Interfaces,
 동일한 패턴). |
+| 2026-07-24 | **T1-20 완료: Memory Interfaces**. Context 조립과 Memory
+저장/검색의 역할 분리를 계약으로 확정함(ADR-0017). `interfaces/
+context_manager.py`를 신규 추가해 `ContextManager`(`assemble_context`/
+`create_snapshot`/`restore_snapshot`, `SnapshotNotFoundError`)를 정의함 —
+`WorkspaceSession.memory_snapshot_id`가 가리키는 Snapshot을 Context
+Manager가 소유·관리하고 `MemoryEngine`은 이를 알지 못함을 docstring에
+명시함. `memory_engine.py`는 재검토 결과 Snapshot 관련 메서드가 애초에
+없어 "저장/검색만" 계약을 이미 만족하고 있음을 확인, **코드 변경 없음**
+(T1-17에서 Agent/LLM Domain을 재검토 후 변경 없음으로 처리한 것과 동일한
+패턴). `tests/interfaces/fakes.py`에 `FakeContextManager`를 추가하고
+`test_context_manager.py`를 신규 추가함(4개 테스트). 기존 `MemoryEngine`
+계약·테스트는 변경 없이 그대로 통과해 회귀가 없음을 확인함.
+`docs/ARCHITECTURE.md` §7 Interface 표를 갱신함. `ruff check src tests`,
+`mypy src`, `pytest`(83개, 기존 79개 + 신규 4개) 모두 통과. 다음 Task:
+**T1-21** (Interaction Interfaces, 동일한 패턴). |

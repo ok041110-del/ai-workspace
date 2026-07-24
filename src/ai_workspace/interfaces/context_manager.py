@@ -1,0 +1,53 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+
+from ai_workspace.domain.session import WorkspaceSession
+
+
+class SnapshotNotFoundError(Exception):
+    """존재하지 않는 snapshot_id를 복원하려 할 때 발생한다."""
+
+
+class ContextManager(ABC):
+    """Agent에게 제공할 Context를 조립하고 Memory Snapshot의 생명주기(생성/복원)를
+    관리하는 계약(ARCHITECTURE.md §3.8, ADR-0017). 저장/검색 자체는
+    `MemoryEngine`에 위임하며(Agent → Context Manager → Memory Engine,
+    ARCHITECTURE.md §8 규칙 7), Context Manager는 그 결과를 조합해 Context를
+    구성하고 `WorkspaceSession.memory_snapshot_id`가 가리키는 Snapshot을
+    소유·관리한다. `MemoryEngine`은 저장/검색만 담당하며 Snapshot 개념을 알지
+    못한다."""
+
+    @abstractmethod
+    def assemble_context(self, session: WorkspaceSession) -> dict[str, str]:
+        """
+        입력: session (Context를 조립할 대상 WorkspaceSession)
+        출력: Agent에게 제공할 key-value 형태의 Context
+        예외: 없음
+        보장: side-effect 없음(read-only). session.memory_snapshot_id가
+              가리키는 Snapshot이 존재하면 그 내용이 결과에 반영된다.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def create_snapshot(self, session: WorkspaceSession) -> str:
+        """
+        입력: session (현재 Context 상태를 저장할 대상 WorkspaceSession)
+        출력: 새로 생성된 Snapshot을 식별하는 snapshot_id
+        예외: 없음
+        보장: create_snapshot(session) 직후 restore_snapshot(snapshot_id)를
+              호출하면 그 시점의 assemble_context(session) 결과와 동일한
+              Context를 반환한다.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def restore_snapshot(self, snapshot_id: str) -> dict[str, str]:
+        """
+        입력: snapshot_id (create_snapshot()이 반환한 값)
+        출력: 해당 Snapshot이 저장하고 있던 Context
+        예외: 존재하지 않는 snapshot_id면 SnapshotNotFoundError
+        보장: side-effect 없음(read-only). 반환된 dict를 호출자가 수정해도
+              Context Manager 내부 상태는 변하지 않는다(방어적 복사).
+        """
+        raise NotImplementedError
