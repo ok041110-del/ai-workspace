@@ -284,7 +284,18 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
     두지 않음)을 계약에 명시한다.
 - 완료 조건(DoD): 6개 인터페이스 각각에 대해 Fake 구현체 + 계약 테스트가
   통과한다 (실제 로직 없이 계약만 검증).
-- 상태: TODO (다음 Task)
+- 상태: **DONE (2026-07-24)** — `interfaces/agent_manager.py`,
+  `agent_registry.py`, `agent_scheduler.py`, `agent_repository.py`,
+  `event_bus.py`(+`Event` dataclass), `event_store.py` 6개 파일 추가. 각각
+  Fake 구현체(`tests/interfaces/fakes.py`)와 계약 테스트
+  (`test_agent_manager.py`/`test_agent_registry.py`/`test_agent_scheduler.py`/
+  `test_agent_repository.py`/`test_event_bus.py`/`test_event_store.py`)를
+  추가했으며, `test_event_bus.py`에 EventStore가 `EventBus.subscribe()`를
+  다른 구독자와 동일한 경로로 등록됨(ADR-0018)을 검증하는 테스트를 포함함.
+  `AgentRegistry`(런타임 등록부)와 `AgentRepository`(영속 저장소)는 각각
+  `AgentNotRegisteredError`/`AgentNotFoundError`로 예외를 구분해 책임을
+  명확히 함. `ruff check src tests`, `mypy src`, `pytest`(66개, 기존 43개 +
+  신규 23개) 모두 통과.
 - 의존성: T1-15, T1-16
 
 #### T1-19: Engine Runtime Interfaces
@@ -536,3 +547,20 @@ Review, 구 T1-25). "인터페이스 정의 → 구현 → 테스트를 한 Task
 변경이 없음(No-Op). `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `.ai/DECISIONS.md`
 (ADR-0022), `.ai/MEMORY.md`, `README.md`를 함께 갱신함. 다음 Task: **T1-18**
 (Agent Runtime Interfaces). |
+| 2026-07-24 | **T1-18 완료: Agent Runtime Interfaces**. 사용자 지시로 Agent
+Runtime 계층(ARCHITECTURE.md §3.4)과 이벤트 인프라(§3.5)의 계약 6종을 정의함
+(구현은 포함하지 않음). `interfaces/agent_manager.py`(`AgentManager`,
+`InvalidAgentTransitionError`), `agent_registry.py`(`AgentRegistry`, 런타임
+등록부 — `AgentNotRegisteredError`/`DuplicateAgentRegistrationError`),
+`agent_scheduler.py`(`AgentScheduler`, Capability 기준 선택),
+`agent_repository.py`(`AgentRepository`, 영속 저장소 —
+`AgentNotFoundError`), `event_bus.py`(`EventBus`, `Event` dataclass,
+`SubscriptionNotFoundError`), `event_store.py`(`EventStore`, `EventBus`의
+독립 구독자, ADR-0018)를 추가함. `AgentRegistry`와 `AgentRepository`는 예외
+이름을 다르게 하고 docstring에 런타임/영속 범위를 명시해 책임을 구분함.
+`tests/interfaces/fakes.py`에 6개 Fake 구현체를 추가하고, 각 인터페이스별
+계약 테스트 파일(`test_agent_manager.py` 등 6개, 총 23개 테스트)을 작성함 —
+`test_event_bus.py`에는 `EventStore`가 `EventBus.subscribe()`를 다른 구독자와
+동일한 경로로 등록됨을 검증하는 테스트를 포함함. `ruff check src tests`,
+`mypy src`, `pytest`(66개, 전부 통과) 모두 통과함. 다음 Task: **T1-19**
+(Engine Runtime Interfaces, 동일한 패턴). |
