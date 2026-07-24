@@ -42,6 +42,11 @@ from ai_workspace.interfaces.engine_runtime import (
 )
 from ai_workspace.interfaces.event_bus import Event, EventBus, SubscriptionNotFoundError
 from ai_workspace.interfaces.event_store import EventStore
+from ai_workspace.interfaces.interaction_engine import (
+    InteractionEngine,
+    NormalizedRequest,
+    UnsupportedSurfaceError,
+)
 from ai_workspace.interfaces.memory_engine import MemoryEngine
 from ai_workspace.interfaces.project_repository import ProjectNotFoundError, ProjectRepository
 from ai_workspace.interfaces.task_engine import TaskEngine, TaskNotFoundError
@@ -434,3 +439,23 @@ class FakeContextManager(ContextManager):
         if snapshot_id not in self._snapshots:
             raise SnapshotNotFoundError(snapshot_id)
         return dict(self._snapshots[snapshot_id])
+
+
+class FakeInteractionEngine(InteractionEngine):
+    def __init__(self, surfaces: frozenset[str] = frozenset({"cli"})) -> None:
+        self._surfaces = surfaces
+
+    def normalize(
+        self, surface: str, raw_input: str, session_id: str | None = None
+    ) -> NormalizedRequest:
+        if surface not in self._surfaces:
+            raise UnsupportedSurfaceError(surface)
+        return NormalizedRequest(surface=surface, text=raw_input.strip(), session_id=session_id)
+
+    def format_response(self, surface: str, message: str) -> str:
+        if surface not in self._surfaces:
+            raise UnsupportedSurfaceError(surface)
+        return message
+
+    def supported_surfaces(self) -> frozenset[str]:
+        return self._surfaces

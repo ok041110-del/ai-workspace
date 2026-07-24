@@ -359,7 +359,15 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
   - `interaction_engine.py` — `InteractionEngine`(입력 정규화; 기존
     `ConversationEngine` 명칭을 대체, 지금 구현 안 함)
 - 완료 조건(DoD): `InteractionEngine` Fake + 계약 테스트가 통과한다.
-- 상태: TODO
+- 상태: **DONE (2026-07-24)** — `interfaces/interaction_engine.py` 신규
+  추가: `InteractionEngine`(`normalize`/`format_response`/
+  `supported_surfaces`, `NormalizedRequest` dataclass,
+  `UnsupportedSurfaceError`). 기존 `ConversationEngine` 명칭을 대체하며,
+  Agent Runtime/Engine Runtime/Memory 어느 것에도 의존하지 않고 UI
+  Surfaces와 Workspace Core 사이에만 위치함을 docstring에 명시.
+  `tests/interfaces/fakes.py`에 `FakeInteractionEngine` 추가,
+  `test_interaction_engine.py` 신규 추가(4개 테스트). `ruff check src
+  tests`, `mypy src`, `pytest`(87개, 기존 83개 + 신규 4개) 모두 통과.
 - 의존성: T1-15
 
 #### T1-22: Workspace Core Skeleton
@@ -617,3 +625,16 @@ Manager가 소유·관리하고 `MemoryEngine`은 이를 알지 못함을 docstr
 `docs/ARCHITECTURE.md` §7 Interface 표를 갱신함. `ruff check src tests`,
 `mypy src`, `pytest`(83개, 기존 79개 + 신규 4개) 모두 통과. 다음 Task:
 **T1-21** (Interaction Interfaces, 동일한 패턴). |
+| 2026-07-24 | **T1-21 완료: Interaction Interfaces**. 입력 표면 정규화
+계약을 확정함(ADR-0013). `interfaces/interaction_engine.py`를 신규
+추가해 `InteractionEngine`(`normalize`/`format_response`/
+`supported_surfaces`, `NormalizedRequest`, `UnsupportedSurfaceError`)을
+정의함 — 기존 `ConversationEngine` 명칭을 대체하고, Agent Runtime/Engine
+Runtime/Memory 어느 것에도 의존하지 않고 UI Surfaces와 Workspace Core
+사이에만 위치하는 독립 계층임을 docstring에 명시함.
+`tests/interfaces/fakes.py`에 `FakeInteractionEngine`을 추가하고
+`test_interaction_engine.py`를 신규 추가함(4개 테스트).
+`docs/ARCHITECTURE.md` §7 Interface 표를 갱신함. `ruff check src tests`,
+`mypy src`, `pytest`(87개, 기존 83개 + 신규 4개) 모두 통과. 이로써
+T1-18~T1-21(Agent Runtime/Engine Runtime/Memory/Interaction Interfaces)
+그룹이 모두 완료됨. 다음 Task: **T1-22** (Workspace Core Skeleton). |
