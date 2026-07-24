@@ -41,7 +41,8 @@
   거쳐 `T1-18`~`T1-28`로 추가 재분해됨(ADR-0022, 대응표는 `docs/ROADMAP.md`
   하단 참고).
 - **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-21` 완료
-  (T1-18~T1-21 Interface 그룹 전체 완료), `T1-22`~`T1-28` 남음(7개 Task).
+  (T1-18~T1-21 Interface 그룹 전체 완료), `T1-29`(SOP Skills System, 별도
+  세션에서 병렬로 완료되어 병합됨)도 완료, `T1-22`~`T1-28` 남음(7개 Task).
 - **완료된 Task 요약**: `T1-01`~`T1-11`(문서화 세트 작성 및 승인), `T1-12`
   (구현 착수 승인), `T1-13`(디렉터리 구조), `T1-14`(Project/Task/Workflow
   도메인), `T1-15`(Interfaces 7종), `T1-16`(Mission/Step/WorkspaceSession/
@@ -56,7 +57,9 @@
   `assemble_context`/`create_snapshot`/`restore_snapshot`; `MemoryEngine`은
   재검토 후 변경 없음), `T1-21`(Interaction Interfaces: `InteractionEngine`
   신규 정의 — `normalize`/`format_response`/`supported_surfaces`, 기존
-  `ConversationEngine` 명칭 대체) — 전체 87개 테스트 통과, `ruff`/`mypy` 클린.
+  `ConversationEngine` 명칭 대체), `T1-29`(SOP Skills System: `.ai/skills/`
+  에 7개 표준 작업 절차 문서 추가, 별도 세션에서 완료되어 병합됨) — 전체
+  87개 테스트 통과, `ruff`/`mypy` 클린.
 - **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-22`
   Workspace Core Skeleton → `T1-23` Repositories → `T1-24` CLI → `T1-25`
   Tests → `T1-26` Documentation → `T1-27` ADR → `T1-28` Milestone 1 Review.
@@ -68,6 +71,9 @@
   EngineAdapter 계약), T1-20(ContextManager), T1-21(InteractionEngine)에서
   정의한 Interface 상태를 "완료"로 갱신함. Milestone 1의 계약 정의 Task
   (T1-18~T1-21)가 모두 끝났으므로 다음은 구현 단계(T1-22 이후)로 넘어간다.
+  T1-29(SOP Skills)는 별도 세션의 병렬 작업이 origin에 먼저 병합되어 있어
+  `git merge`로 반영함 — `.ai/skills/`에 문서만 추가되어 코드/아키텍처
+  변경은 없음.
 - **다음 단계**: `.ai/TASKS.md`의 `T1-22`(Workspace Core Skeleton: 최상위
   오케스트레이터의 최소 골격 — 프로젝트/설정 로드, WorkspaceSession 관리,
   Agent Runtime·Engine Runtime 초기화, Workflow 시작, 종료; Task 실행은

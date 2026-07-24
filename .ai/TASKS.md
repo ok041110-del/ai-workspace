@@ -368,6 +368,10 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
   `tests/interfaces/fakes.py`에 `FakeInteractionEngine` 추가,
   `test_interaction_engine.py` 신규 추가(4개 테스트). `ruff check src
   tests`, `mypy src`, `pytest`(87개, 기존 83개 + 신규 4개) 모두 통과.
+  (병렬로 진행된 별도 세션에서도 T1-21 구현이 제안되었으나
+  `handle_request` 단일 메서드로 정규화와 응답 변환을 합쳐 Workspace
+  Core의 책임과 경계가 흐려질 수 있어 채택하지 않고, ARCHITECTURE.md
+  §3.2의 "정규화 + 변환" 2단계 책임에 그대로 대응하는 이 설계를 유지함.)
 - 의존성: T1-15
 
 #### T1-22: Workspace Core Skeleton
@@ -443,11 +447,29 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 #### T1-28: Milestone 1 Review
 - 목적: Approval Required 원칙에 따라 Milestone 1 산출물을 검토받는다.
 - 작업 내용: 도메인(Agent 포함), 전체 Interfaces, Workspace Core 골격, 저장소,
-  CLI, 테스트 결과를 제시하고 승인을 요청한다.
+  CLI, 테스트 결과를 제시하고 승인을 요청한다. **T1-29(SOP Skills System)도
+  Milestone 1 기간 중 추가된 산출물이므로 함께 검토 대상에 포함한다.**
 - 완료 조건(DoD): 위 모든 Task가 DONE이고 테스트가 통과한 상태에서 사용자가
   승인한다.
 - 상태: TODO
 - 의존성: T1-01 ~ T1-27
+
+#### T1-29: Standard Operating Procedure (SOP) Skills System
+- 목적: LLM/구현 엔진에 독립적인 표준 작업 절차(SOP)를 `.ai/skills/`에
+  문서화해, 이후 어떤 구현 엔진이 작업을 이어받아도 동일한 절차를 따르게
+  한다.
+- 작업 내용: `.ai/skills/`에 7개 SOP 가이드라인 문서를 추가한다
+  (`Repository-Analysis.md`, `Architecture-Review.md`, `Task-Planning.md`,
+  `Task-Implementation.md`, `Code-Review.md`, `Documentation.md`,
+  `Milestone-Review.md`). 공통 8개 섹션 형식과 Repository First/Interface
+  First/SOLID/YAGNI 등 이 프로젝트의 핵심 원칙을 반영한다.
+- 완료 조건(DoD): 7개 문서가 동일한 형식을 따르고, `pytest`/`ruff`/`mypy`에
+  회귀가 없다.
+- 상태: **DONE (2026-07-24)** — 별도로 진행된 세션(`google-labs-jules[bot]`,
+  PR #1)에서 작업되어 origin 브랜치에 먼저 병합됨. 원래 계획(T1-01~T1-28)에는
+  없던 Task로, 병합 시점에 T1-28(Milestone 1 Review) 뒤에 편입함. 코드
+  변경 없이 `.ai/skills/` 문서만 추가되어 기존 테스트에 영향 없음.
+- 의존성: 없음 (Milestone 1의 다른 구현 Task와 독립적인 문서 작업)
 
 ---
 
@@ -637,4 +659,21 @@ Runtime/Memory 어느 것에도 의존하지 않고 UI Surfaces와 Workspace Cor
 `docs/ARCHITECTURE.md` §7 Interface 표를 갱신함. `ruff check src tests`,
 `mypy src`, `pytest`(87개, 기존 83개 + 신규 4개) 모두 통과. 이로써
 T1-18~T1-21(Agent Runtime/Engine Runtime/Memory/Interaction Interfaces)
-그룹이 모두 완료됨. 다음 Task: **T1-22** (Workspace Core Skeleton). |
+그룹이 모두 완료됨. **병합 메모**: 별도로 진행된 다른 세션에서도 같은
+T1-21에 대해 `InteractionRequest`/`InteractionResponse`/
+`InteractionError`/`InvalidRequestError` + `handle_request` 단일 메서드
+설계를 독립적으로 구현해 origin 브랜치에 먼저 병합되어 있었음(PR #1).
+두 설계가 병합 시점에 충돌하여 검토한 결과, `handle_request` 설계는
+정규화와 Workspace Core의 응답 처리를 한 메서드로 묶어 Interaction
+Layer와 Workspace Core의 책임 경계(ARCHITECTURE.md §3.2, §8 규칙 1~2)가
+흐려질 수 있다고 판단해 채택하지 않고, 위 `normalize`/`format_response`
+설계를 최종안으로 유지함. 다음 Task: **T1-22** (Workspace Core Skeleton). |
+| 2026-07-24 | **병합: origin 브랜치의 병렬 작업 반영 (PR #1)**. `git push` 시
+origin에 이미 다른 세션에서 병합한 커밋이 있어 `git merge`로 충돌을
+해결함. T1-21 InteractionEngine은 위 병합 메모대로 이 세션의 설계
+(`normalize`/`format_response`/`supported_surfaces`)를 유지함. 원래
+계획에 없던 **T1-29(SOP Skills System)**: `.ai/skills/`에 7개 SOP
+가이드라인 문서를 추가하는 순수 문서 작업으로, 코드/아키텍처와 충돌이
+없어 그대로 수용하고 `.ai/TASKS.md`에 정식 Task로 편입함(T1-28 뒤,
+Milestone 1 Review 검토 대상에 포함). `ruff check src tests`, `mypy src`,
+`pytest`(87개, T1-21 관련 회귀 없음) 모두 통과 확인 후 병합 커밋 진행. |
