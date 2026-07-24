@@ -321,3 +321,71 @@
   다룰 수 있다.
 - 결과/영향: `docs/ARCHITECTURE.md` v0.5.0 §3.8 반영. ADR-0009의 계약을 이
   ADR로 확장·대체.
+
+## ADR-0016: Engine Runtime 계층 도입 (Agent Runtime과 Engine Adapter 사이)
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: v0.5.0에서 Agent가 Engine Adapter를 직접 호출했다. 멀티 에이전트가 여러
+  엔진을 동시에 쓰는 환경에서 엔진 선택·세션 풀·병렬 실행 로직이 각 Agent에
+  중복·산재될 위험이 있다.
+- 결정: Agent Runtime과 Engine Adapter 사이에 **Engine Runtime** 계층을 둔다.
+  책임: 엔진 선택(capabilities/estimate_cost/supports_parallel 기반), 엔진 세션
+  풀 관리(Engine Adapter의 create_session/destroy_session 활용), 병렬 실행 관리.
+  Agent는 Engine Adapter를 직접 호출하지 않고 **Engine Runtime을 거친다**.
+  `EngineRuntime` 인터페이스를 추가한다.
+- 대안: Agent가 Engine Adapter 직접 호출 — 단순하나 선택/세션/병렬 로직 중복 (기각).
+- 이유: Agent Runtime(Agent 실행 관리)과 대칭으로 Engine Runtime(엔진 실행 관리)을
+  두면 책임이 명확해지고, 엔진 관련 정책을 한 곳에서 관리·테스트할 수 있다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.6.0 §3.9 반영. 의존 순서가 Agent →
+  Engine Runtime → Engine Adapter → 구현 엔진으로 확정. Interfaces에 `EngineRuntime`
+  추가(총 16종).
+
+## ADR-0017: Context Manager 도입 (Memory Snapshot 관리 역할 분리)
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: v0.5.0의 Memory Engine이 저장/검색과 Context 생성/Snapshot 관리를 모두
+  담당해 책임이 혼재했다.
+- 결정: **Context Manager**를 도입해 역할을 분리한다. Context Manager는 Agent에게
+  제공할 **Context 조립**과 **Memory Snapshot 생명주기**(생성/복원)를 담당하고,
+  Memory Engine은 **저장/검색만** 담당한다. WorkspaceSession의 Memory Snapshot은
+  Context Manager가 소유·관리한다. Memory 접근 순서는 Agent → Context Manager →
+  Memory Engine. `ContextManager` 인터페이스를 추가한다.
+- 대안: Memory Engine이 Snapshot까지 담당 — 컴포넌트는 적으나 책임 혼재 (기각).
+- 이유: 저장(Memory Engine)과 Context/Snapshot(Context Manager)을 분리하면 Context
+  전략을 독립적으로 교체·테스트할 수 있다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.6.0 §3.8 반영. `MemoryEngine` 계약에서
+  Snapshot 책임을 제거하고 `ContextManager`로 이관.
+
+## ADR-0018: Event Store를 독립 Subscriber로 위치 조정
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정). ADR-0014를 보완.
+- 날짜: 2026-07-23
+- 배경: ADR-0014는 `Event Bus → Event Store → Subscribers` 구조로 Event Store를
+  전달 경로에 두었다. 이 경우 Event Store가 전달을 게이팅하고 단일 장애점이 될
+  수 있다.
+- 결정: Event Store를 Event Bus의 **독립 Subscriber**로 위치 조정한다. 다른
+  구독자(Agent 등)와 동등하게 Bus를 구독하여 모든 이벤트를 기록하되, 다른
+  구독자로의 전달에 끼어들지 않는다. 목적(기록/Replay/Audit/복구)은 유지한다.
+- 대안: Event Store를 전달 경로(Bus 하위)에 유지 — 기록 보장은 직관적이나 전달
+  게이팅·단일 장애점 위험 (기각).
+- 이유: 기록 관심사를 전달 경로에서 분리하면 장애가 격리되고 전달 성능/신뢰성이
+  기록에 종속되지 않는다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.6.0 §3.5, §5, §8 반영. ADR-0014의 구조를
+  본 ADR로 보완.
+
+## ADR-0019: Coordination Capability 추가
+
+- 상태: 승인됨 (2026-07-23, 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: 여러 Agent의 협업을 조정하는 역할이 암묵적이면 조정 책임이 흐릿해지고
+  선택·추적이 어렵다.
+- 결정: `AgentCapability`에 **Coordination**을 추가한다. Coordination 능력을 가진
+  Agent(Coordinator)는 협업 흐름을 조정하되, 다른 Agent를 직접 호출하지 않고
+  Event 기반 협업 규칙(ADR-0007)을 따른다.
+- 대안: 조정 역할을 암묵적으로 처리 — 별도 정의는 불필요하나 책임이 흐릿함 (기각).
+- 이유: 조정 역할을 Capability로 명시하면 Scheduler가 이를 선택 기준으로 삼고,
+  조정 책임을 추적할 수 있다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.6.0 §3.6 반영. Capability 목록에
+  Coordination 추가.

@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.4.0 |
+| 문서 버전 | v0.5.0 |
 | 작성일 | 2026-07-23 |
-| 상태 | Draft (Multi-Agent First 심화 반영) |
+| 상태 | Draft (Multi-Agent First 심화 + 안정화 보완 반영) |
 
 ## 계층 구조
 
@@ -20,18 +20,19 @@ Roadmap
 각 **Milestone 완료**와 각 **Phase 완료**는 `.ai/RULES.md`의 Approval Required
 원칙에 따라 **사용자 승인**을 받아야 다음 단계로 진행한다.
 
-> **v0.4.0 재구성 (Multi-Agent First 심화)**: ADR-0010~0015 반영. Agent Runtime
-> 계층(Registry/Scheduler/Manager/Event Bus), Event Store, Interaction Layer,
-> Mission→Workflow→Task→Step 계층, WorkspaceSession, Capability 중심 Agent,
-> 세션 생명주기 EngineAdapter를 반영해 Milestone/Phase를 재편했다.
+> **v0.5.0 (심화 + 안정화 보완)**: ADR-0010~0019 반영. Agent Runtime, Event
+> Store, Interaction Layer, Mission→Workflow→Task→Step, WorkspaceSession,
+> Capability 중심 Agent, 세션 생명주기 EngineAdapter에 더해, **Engine Runtime
+> 계층(ADR-0016), Context Manager로 Snapshot 분리(ADR-0017), Event Store 독립
+> 구독자화(ADR-0018), Coordination Capability(ADR-0019)**를 반영했다.
 
 ## Milestone / Phase 개요
 
 | Milestone | 구성 Phase | 핵심 목표 | 상태 |
 |---|---|---|---|
 | M1. 기반 구축 (Foundation) | Phase 0, Phase 1 | 문서 체계 + 핵심 도메인(Mission/Step/WorkspaceSession/Agent 포함) + 전체 Interfaces(14종) + Workspace Core 골격 | 진행 중 |
-| M2. 멀티 에이전트 코어 (Multi-Agent Core) | Phase 2, Phase 3 | Agent Runtime(Registry/Scheduler/Manager/Event Bus)·Event Store·기본 Agent, Core Engines 구현 | 예정 |
-| M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Phase 4, Phase 5 | Engine Adapter(Claude Code 우선, 세션 계약) 구현, Interaction Layer 구현 | 예정 |
+| M2. 멀티 에이전트 코어 (Multi-Agent Core) | Phase 2, Phase 3 | Agent Runtime·Event Store·기본 Agent, Core Engines & Context Manager 구현 | 예정 |
+| M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Phase 4, Phase 5 | Engine Runtime & Engine Adapter(Claude Code 우선) 구현, Interaction Layer 구현 | 예정 |
 | M4. 자동화 및 확장 (Automation & Scale) | Phase 6 | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | 예정 |
 
 ---
@@ -47,10 +48,10 @@ AgentCapability/AgentStatus), 전체 Interfaces(14종), 그리고 Agent Runtime�
 
 **Milestone Definition of Done**
 1. `docs/`, `.ai/` 문서 체계가 작성·승인되었다 (Phase 0).
-2. 확장된 도메인 모델, 전체 Interfaces(14종), 세션 생명주기 EngineAdapter 계약,
-   Agent Runtime 위임형 Workspace Core 골격(WorkspaceSession 관리 포함), 파일
-   저장소, 최소 CLI가 동작하며 테스트를 통과한다 (Phase 1).
-3. Multi-Agent First 관련 아키텍처 결정(ADR-0006~0015)이 문서로 확정되어 있다.
+2. 확장된 도메인 모델, 전체 Interfaces(16종), 세션 생명주기 EngineAdapter 계약,
+   Agent Runtime·Engine Runtime 위임형 Workspace Core 골격(WorkspaceSession 관리
+   포함), 파일 저장소, 최소 CLI가 동작하며 테스트를 통과한다 (Phase 1).
+3. Multi-Agent First 관련 아키텍처 결정(ADR-0006~0019)이 문서로 확정되어 있다.
 
 ### Phase 0 — 문서화 및 구조 설계 (완료, 승인됨)
 
@@ -59,27 +60,30 @@ AgentCapability/AgentStatus), 전체 Interfaces(14종), 그리고 Agent Runtime�
 ### Phase 1 — 핵심 도메인 & 전체 Interfaces & Workspace Core 골격 (진행 중, 재구성됨)
 
 - **목표**: Multi-Agent First 구조의 골격을 만든다. 확장 도메인(Mission/Step/
-  WorkspaceSession/Agent 계열)을 정의하고, 14개 Interface를 계약으로 정의하며,
+  WorkspaceSession/Agent 계열)을 정의하고, 16개 Interface를 계약으로 정의하며,
   Workspace Core를 "Task를 직접 실행하지 않고 **Agent Runtime에 위임하는**"
-  오케스트레이터 골격으로 구현한다. Agent Runtime/Engine/Adapter/Event Store/
-  Interaction의 **구체 구현 로직은 이후 Phase**에서 진행한다.
-- **세부 목표** (ADR-0005~0015 반영)
-  1. 디렉터리 구조 확장 (`runtime/`, `events/`, `interaction/` 추가)
+  오케스트레이터 골격으로 구현한다. Agent Runtime/Engine Runtime/Adapter/Event
+  Store/Interaction/Context Manager의 **구체 구현 로직은 이후 Phase**에서 진행한다.
+- **세부 목표** (ADR-0005~0019 반영)
+  1. 디렉터리 구조 확장 (`runtime/agent`, `runtime/engine`, `memory/`, `events/`,
+     `interaction/` 추가)
   2. 도메인 모델: Project/Task **+ Mission/Workflow(재정의)/Step +
-     WorkspaceSession + Agent/AgentRole/AgentCapability/AgentStatus**
-  3. Interfaces 정의(14종): 기존 7종 + **AgentManager, AgentRepository,
-     AgentRegistry, AgentScheduler, InteractionEngine, EventBus, EventStore**,
-     **EngineAdapter 세션 생명주기 계약**으로 갱신
-  4. Workspace Core 골격: WorkspaceSession 관리 + Agent Runtime 초기화 +
-     Workflow 시작 + 종료 (Task 실행은 Agent Runtime에 위임)
+     WorkspaceSession + Agent/AgentRole/AgentCapability(**Coordination 포함**)/
+     AgentStatus**
+  3. Interfaces 정의(16종): 기존 7종 + **AgentManager, AgentRepository,
+     AgentRegistry, AgentScheduler, InteractionEngine, EventBus, EventStore,
+     EngineRuntime, ContextManager**, **EngineAdapter 세션 생명주기 계약**으로 갱신
+  4. Workspace Core 골격: WorkspaceSession 관리 + **Agent Runtime·Engine Runtime
+     초기화** + Workflow 시작 + 종료 (Task 실행은 Agent Runtime에 위임)
   5. 파일 기반 저장소: ProjectRepository(+ AgentRepository, EventStore) 구현
   6. CLI 진입점 (UI Surface의 하나)
   7. 기본 테스트 환경 구축 및 계약/골격 테스트
 - **Phase Definition of Done**: 위 7단계가 구현·테스트 통과하며, ARCHITECTURE.md
-  (v0.5.0)와 실제 구조가 일치한다. (Agent Runtime/Engine/Adapter/Event Store/
-  Interaction의 실제 처리 로직은 Phase 1 범위가 아니다 — 계약과 골격까지만.)
-- **승인 필요 여부**: 예 — 착수 승인 완료(2026-07-23), Multi-Agent First 심화
-  재설계 승인 완료(2026-07-23). 완료 시 별도 Phase 완료 승인 필요.
+  (v0.6.0)와 실제 구조가 일치한다. (Agent Runtime/Engine Runtime/Adapter/Event
+  Store/Interaction/Context Manager의 실제 처리 로직은 Phase 1 범위가 아니다 —
+  계약과 골격까지만.)
+- **승인 필요 여부**: 예 — 착수 승인 완료(2026-07-23), 아키텍처 재설계·안정화
+  보완 승인 완료(2026-07-23). 완료 시 별도 Phase 완료 승인 필요.
 - **세부 Task**: `.ai/TASKS.md`의 "Milestone 1 > Phase 1" 참고.
 
 ---
@@ -108,12 +112,12 @@ AgentCapability/AgentStatus), 전체 Interfaces(14종), 그리고 Agent Runtime�
   `DocumentationCompleted` 이벤트 흐름으로 Agent 협업이 테스트로 검증되고,
   이벤트가 Event Store에 기록·Replay된다.
 
-### Phase 3 — Core Engines 구현
-- **목표**: Task/Workflow/Memory/Approval/Automation Engine 구현. Memory Engine은
-  Context 생성/검색/저장/Snapshot 담당. Approval Engine으로 승인 대상 4행위
-  차단(ADR-0003 확정).
+### Phase 3 — Core Engines & Context Manager 구현
+- **목표**: Task/Workflow/Approval/Automation Engine 구현. Memory 계열은 역할
+  분리에 따라 **Memory Engine(저장/검색) + Context Manager(Context 조립/Snapshot
+  생명주기)**로 구현. Approval Engine으로 승인 대상 4행위 차단(ADR-0003 확정).
 - **Phase DoD**: Mission→…→Step 협업 Workflow가 실제 Engine 위에서 동작하고,
-  승인 게이트 차단이 테스트로 확인된다.
+  Context Manager가 Snapshot을 생성/복원하며, 승인 게이트 차단이 테스트로 확인된다.
 
 ---
 
@@ -129,12 +133,14 @@ AgentCapability/AgentStatus), 전체 Interfaces(14종), 그리고 Agent Runtime�
    end-to-end(create_session→run→결과 수집→destroy_session) 수행한다 (Phase 4).
 2. Interaction Layer가 CLI/API 등 표면 입력을 표준 요청으로 정규화한다 (Phase 5).
 
-### Phase 4 — Engine Adapter 구현 (Claude Code 우선)
-- **목표**: 세션 생명주기 계약(create_session/run/cancel/status/destroy_session/
-  capabilities/supports_parallel/estimate_cost)을 만족하는 ClaudeCodeAdapter
-  구현, 이후 Codex/Gemini CLI.
-- **Phase DoD**: Coding Agent가 ClaudeCodeAdapter로 최소 1개 Task를 실제로
-  수행하고 결과를 통합한다.
+### Phase 4 — Engine Runtime & Engine Adapter 구현 (Claude Code 우선)
+- **목표**: **Engine Runtime**(엔진 선택/세션 풀/병렬) 구현과, 세션 생명주기
+  계약(create_session/run/cancel/status/destroy_session/capabilities/
+  supports_parallel/estimate_cost)을 만족하는 ClaudeCodeAdapter 구현, 이후
+  Codex/Gemini CLI.
+- **Phase DoD**: Coding Agent가 **Engine Runtime을 거쳐** ClaudeCodeAdapter로
+  최소 1개 Task를 실제 수행(create_session→run→destroy_session)하고 결과를
+  통합한다.
 
 ### Phase 5 — Interaction Layer 구현
 - **목표**: InteractionEngine 구현으로 CLI/API를 통합. Voice/Slack/Webhook 등

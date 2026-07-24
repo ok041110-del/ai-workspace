@@ -62,42 +62,50 @@
 
 ## 3. 핵심 아키텍처 (요약)
 
-자세한 내용은 `docs/ARCHITECTURE.md` (v0.5.0) 참고. 여기서는 언제든 빠르게
+자세한 내용은 `docs/ARCHITECTURE.md` (v0.6.0) 참고. 여기서는 언제든 빠르게
 떠올려야 하는 구조만 압축한다.
 
 ```
 UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
   → Interaction Layer
   → Workspace Core (최상위 오케스트레이터, WorkspaceSession 관리)
-  → Agent Runtime(Agent Registry · Scheduler · Manager · Event Bus → Event Store)
-  → Agents(Capability 중심: Planning·Coding·Review·Documentation·Research·…)  ←(Event Bus)→
-  → [Core Engines 서비스: Task·Workflow·Memory·Approval·Automation]  /  Engine Adapter
-  → 구현 엔진(Claude Code·Codex·Gemini CLI)
+  → Agent Runtime(Registry · Scheduler · Manager · Event Bus)
+       └ Event Bus의 독립 구독자: Event Store(기록/Replay/Audit)
+  → Agents(Capability 중심: Coordination·Planning·Coding·Review·Documentation·…)  ←(Event Bus)→
+  → Agent가 쓰는 3축:
+       ① Core Engines(Task·Workflow·Approval·Automation)
+       ② Context Manager → Memory Engine(저장/검색)
+       ③ Engine Runtime → Engine Adapter → 구현 엔진(Claude Code·Codex·Gemini CLI)
 ```
 
-- **Workspace Core**: 최상위 오케스트레이터. 프로젝트/설정 로드, 서비스 초기화,
-  **WorkspaceSession 관리, Agent Runtime 초기화, Workflow 시작, 종료**. Task를
-  직접 실행하지 않고 **Agent Runtime에 위임**한다 (ADR-0010).
-- **Agent Runtime**: Agent Registry(등록/조회/제거) · Agent Scheduler(Capability
-  기준 선택/병렬/우선순위) · Agent Manager(생성/생명주기/상태) · Event Bus.
-- **Event Store**: Event Bus의 이벤트를 기록. Replay/Audit/복구 (ADR-0014).
-- **Agents**: **Capability 중심**(엔진 비종속) 실행 주체. Event Bus로 협업(직접
-  호출 금지, ADR-0012). 실제 일은 Engine Adapter로 구현 엔진에 위임.
-- **Core Engines(서비스)**: Task/Workflow/Memory/Approval/Automation.
-  **Memory/Automation은 Agent가 아니라 서비스**(ADR-0012). Memory Engine은
-  Context 생성/검색/저장/Snapshot.
-- **Interaction Layer**: 모든 UI 표면 입력을 표준 요청으로 정규화(ADR-0013,
-  ConversationEngine→InteractionEngine). Voice는 이 계층에 붙는 표면.
-- **Engine Adapter**: 세션 생명주기 계약 create_session/run/cancel/status/
-  destroy_session/capabilities/supports_parallel/estimate_cost (ADR-0015). 구현 Phase 4.
+- **Workspace Core**: 프로젝트/설정 로드, 서비스 초기화, **WorkspaceSession 관리,
+  Agent Runtime·Engine Runtime 초기화, Workflow 시작, 종료**. Task는 Agent
+  Runtime에 위임 (ADR-0010).
+- **Agent Runtime**: Registry(등록/조회/제거) · Scheduler(Capability 기준 선택/
+  병렬/우선순위) · Manager(생성/생명주기/상태) · Event Bus.
+- **Event Store**: Event Bus의 **독립 구독자**로 이벤트 기록. 전달 게이팅 없음.
+  Replay/Audit/복구 (ADR-0014, ADR-0018).
+- **Agents**: **Capability 중심**(엔진 비종속). **Coordination Capability**로
+  조정 역할 명시(ADR-0019). Event Bus로만 협업. 실제 일은 Engine Runtime에 위임.
+- **Engine Runtime (ADR-0016)**: 엔진 선택/세션 풀/병렬. Agent와 Engine Adapter
+  **사이**. Agent는 Engine Adapter를 직접 부르지 않는다.
+- **Context Manager (ADR-0017)**: Context 조립 + Memory Snapshot 생명주기. 그 아래
+  **Memory Engine은 저장/검색만**. Memory 접근은 Agent→Context Manager→Memory Engine.
+- **Core Engines(서비스)**: Task/Workflow/Approval/Automation. Memory/Automation은
+  Agent가 아니라 서비스(ADR-0012).
+- **Interaction Layer**: UI 표면 입력을 표준 요청으로 정규화(ADR-0013). Voice는
+  이 계층에 붙는 표면.
+- **Engine Adapter**: per-engine 세션 생명주기 계약 create_session/run/cancel/
+  status/destroy_session/capabilities/supports_parallel/estimate_cost (ADR-0015).
 - **도메인**: Project · **Mission→Workflow→Task→Step** · **WorkspaceSession** ·
-  Agent/AgentRole/AgentCapability/AgentStatus.
-- **Interfaces (총 14종, Phase 1에서 계약 정의)**: ProjectRepository,
-  WorkflowEngine, TaskEngine, MemoryEngine, ApprovalEngine, AutomationEngine,
-  EngineAdapter + AgentManager, AgentRepository, AgentRegistry, AgentScheduler,
-  InteractionEngine, EventBus, EventStore.
+  Agent/AgentRole/AgentCapability(**Coordination 포함**)/AgentStatus.
+- **Interfaces (총 16종, Phase 1에서 계약 정의)**: ProjectRepository,
+  WorkflowEngine, TaskEngine, MemoryEngine(저장/검색), ApprovalEngine,
+  AutomationEngine, EngineAdapter + AgentManager, AgentRepository, AgentRegistry,
+  AgentScheduler, InteractionEngine, EventBus, EventStore, **EngineRuntime,
+  ContextManager**.
 - 의존 방향은 항상 위(UI)에서 아래(구현 엔진)로만 향한다. Agent 협업만 Event
-  Bus/Event Store를 통한 수평 결합이다.
+  Bus를 통한 수평 결합이며, Event Store는 Bus의 독립 구독자다.
 
 ## 4. 반드시 유지해야 하는 설계 원칙
 
@@ -144,8 +152,12 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR-0011 | **Mission→Workflow→Task→Step** 4단 계층 | 승인됨 |
 | ADR-0012 | **Capability 중심 Agent**, Memory/Automation은 Engine(서비스) | 승인됨 |
 | ADR-0013 | Conversation Layer → **Interaction Layer**(InteractionEngine) | 승인됨 |
-| ADR-0014 | **Event Store** 도입(Event Bus와 분리, Replay/Audit/복구) | 승인됨 |
+| ADR-0014 | **Event Store** 도입(Replay/Audit/복구) | 승인됨 (ADR-0018이 위치 보완) |
 | ADR-0015 | EngineAdapter **세션 생명주기 계약**(create/destroy_session 추가) | 승인됨 |
+| ADR-0016 | **Engine Runtime** 계층(Agent Runtime↔Engine Adapter 사이): 엔진 선택/세션 풀/병렬 | 승인됨 |
+| ADR-0017 | **Context Manager**로 Memory Snapshot 역할 분리(Memory Engine=저장/검색) | 승인됨 |
+| ADR-0018 | Event Store를 Event Bus **독립 Subscriber**로 위치 조정 | 승인됨 |
+| ADR-0019 | **Coordination Capability** 추가(조정 역할 명시) | 승인됨 |
 
 기술 스택(Python, dataclasses, 파일 기반 저장, CLI, 인메모리 Event Bus+파일
 Event Store)은 제안 단계이며 각 구현 Phase에서 확정한다.
@@ -153,13 +165,14 @@ Event Store)은 제안 단계이며 각 구현 Phase에서 확정한다.
 ## 6. 이후 작업에 필요한 핵심 컨텍스트
 
 - **Phase 1 범위(재구성)**: 도메인(Project/Task **+ Mission/Workflow(재정의)/
-  Step + WorkspaceSession + Agent/AgentRole/AgentCapability/AgentStatus**) +
-  Interfaces 14종(계약만) + **세션 생명주기 EngineAdapter 계약** + Agent Runtime
-  위임형 Workspace Core 골격 + 파일 저장소(Project/Agent/EventStore) + 최소 CLI +
-  테스트. 실제 처리 로직은 Phase 1 범위 밖.
+  Step + WorkspaceSession + Agent/AgentRole/AgentCapability(Coordination 포함)/
+  AgentStatus**) + Interfaces 16종(계약만) + **세션 생명주기 EngineAdapter 계약** +
+  Agent Runtime·Engine Runtime 위임형 Workspace Core 골격 + 파일 저장소(Project/
+  Agent/EventStore) + 최소 CLI + 테스트. 실제 처리 로직은 Phase 1 범위 밖.
 - **Phase별 구체 구현 순서**: Agent Runtime·Event Store·기본 Agent(Phase 2) →
-  Core Engines(Phase 3) → Engine Adapter(Claude Code 우선, Phase 4) →
-  Interaction Layer(Phase 5) → 자동화·다중 프로젝트·메모리 고도화(Phase 6).
+  Core Engines·Context Manager(Phase 3) → Engine Runtime·Engine Adapter(Claude
+  Code 우선, Phase 4) → Interaction Layer(Phase 5) → 자동화·다중 프로젝트·메모리
+  고도화(Phase 6).
 - 구현 엔진 연동 순서: Claude Code 최우선 → Codex → Gemini CLI.
 - Voice/Slack 등 표면, Event Store, Interaction은 **구조에는 포함하되 구현은 뒤로**
   미룬다 (인터페이스만 Phase 1에서 정의).

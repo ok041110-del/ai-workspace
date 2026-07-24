@@ -24,12 +24,12 @@ AI Workspace 자체는 코드를 작성하지 않는다. 실제 코드 작성, �
 즉, AI Workspace는 **"AI를 위한 프로젝트 매니저 + 오케스트레이터"**이며,
 **"또 하나의 코딩 AI"가 아니다.**
 
-> **Multi-Agent First (ADR-0006, 심화: ADR-0010~0015)**: AI Workspace의 모든
-> 작업은 능력(Capability: Planning, Coding, Review, Documentation, Research …)을
-> 가진 **Agent들의 협업**으로 수행된다. 멀티 에이전트는 선택 기능이 아니라
-> 시스템의 **기본 구조**다. Workspace Core는 Agent Runtime에 실행을 위임하고,
-> Agent들은 Event 기반으로 협업한다. 구조 세부는 `docs/ARCHITECTURE.md`(v0.5.0)를
-> 참고한다.
+> **Multi-Agent First (ADR-0006, 심화·보완: ADR-0010~0019)**: AI Workspace의 모든
+> 작업은 능력(Capability: Coordination, Planning, Coding, Review, Documentation,
+> Research …)을 가진 **Agent들의 협업**으로 수행된다. 멀티 에이전트는 선택 기능이
+> 아니라 시스템의 **기본 구조**다. Workspace Core는 Agent Runtime에 실행을
+> 위임하고, Agent는 Engine Runtime을 거쳐 구현 엔진을 사용하며 Event 기반으로
+> 협업한다. 구조 세부는 `docs/ARCHITECTURE.md`(v0.6.0)를 참고한다.
 
 ## 2. 배경 및 문제 정의 (Background & Problem Statement)
 
@@ -86,16 +86,19 @@ AI Workspace는 다음을 달성해야 한다.
 | Step | Task 내부의 세부 실행 단위 (ADR-0011). |
 | WorkspaceSession | Workspace의 현재 실행 상태(현재 프로젝트/Mission/활성 Workflow/활성 Agent/Memory Snapshot/Engine Session) (ADR-0010). |
 | Agent | 능력(Capability)을 가지고 작업을 수행하는 실행 주체. Workspace의 핵심 도메인 모델. |
-| Agent Capability | Agent의 능력 (Planning, Coding, Review, Documentation, Research, Vision, Voice, Git, MCP …). 엔진 종류와 무관하게 Agent 선택 기준이 된다 (ADR-0012). |
+| Agent Capability | Agent의 능력 (Coordination, Planning, Coding, Review, Documentation, Research, Vision, Voice, Git, MCP …). 엔진 종류와 무관하게 Agent 선택 기준이 된다 (ADR-0012, ADR-0019). |
+| Coordination Capability | 여러 Agent의 협업을 조정하는 능력. 직접 호출이 아니라 Event 기반으로 흐름을 조정한다 (ADR-0019). |
 | Agent Runtime | Agent Registry/Scheduler/Manager/Event Bus로 구성된 Agent 실행 계층 (ADR-0010). |
+| Engine Runtime | Agent Runtime과 Engine Adapter 사이에서 엔진 선택/세션 풀/병렬 실행을 관리하는 계층 (ADR-0016). |
 | Event Bus | Agent 간 직접 호출 대신 이벤트 발행/구독으로 협업하게 하는 느슨한 결합 인프라 (ADR-0007). |
-| Event Store | Event Bus의 이벤트를 기록하여 Replay/Audit/복구를 가능하게 하는 저장소 (ADR-0014). |
+| Event Store | Event Bus의 **독립 구독자**로서 모든 이벤트를 기록하여 Replay/Audit/복구를 가능하게 한다 (ADR-0014, ADR-0018). |
 | Interaction Layer | CLI/Dashboard/Mobile/Voice/REST API/Slack/Discord/Webhook 등 입력 표면을 표준 요청으로 통합하는 계층 (ADR-0013). |
 | Implementation Engine | 실제 코드를 작성/실행하는 외부 AI 도구 (Claude Code, Codex, Gemini CLI 등). |
-| Engine Adapter | 각 구현 엔진을 동일한 방식으로 호출하기 위한 연결 계층. create_session/run/cancel/status/destroy_session/capabilities 등 세션 생명주기 실행 계약을 제공한다 (ADR-0015). |
-| Core Engine | 모든 Agent가 사용하는 능력 서비스 (Task/Workflow/Memory/Approval/Automation Engine). Memory/Automation은 Agent가 아니라 서비스다 (ADR-0012). |
+| Engine Adapter | 각 구현 엔진을 동일한 방식으로 호출하기 위한 per-engine 연결 계층. create_session/run/cancel/status/destroy_session/capabilities 등 세션 생명주기 실행 계약을 제공한다 (ADR-0015). |
+| Core Engine | 모든 Agent가 사용하는 능력 서비스 (Task/Workflow/Approval/Automation Engine). Memory/Automation은 Agent가 아니라 서비스다 (ADR-0012). |
 | Approval Engine | 특정 행위(아키텍처 변경, 신규 기능, 리팩토링, Phase 완료) 전에 사용자 승인을 요구하는 지점(컴포넌트). |
-| Memory Engine | Context 생성/Memory 검색/저장/Snapshot 관리를 담당하는 Core Engine. |
+| Context Manager | Agent에게 제공할 Context를 조립하고 Memory Snapshot 생명주기를 관리하는 컴포넌트 (ADR-0017). |
+| Memory Engine | Memory 저장/검색을 담당하는 하위 서비스. Context 조립/Snapshot은 Context Manager가 담당한다 (ADR-0017). |
 | Automation | 사용자 개입 없이 정해진 조건에 따라 반복 실행되는 작업. |
 
 ## 6. 대상 사용자 (Target Users)

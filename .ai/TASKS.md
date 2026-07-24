@@ -180,11 +180,11 @@
   메서드 docstring에 입력/출력/예외/보장사항을 명시함. `tests/interfaces/fakes.py`에
   7개 Fake 구현체(테스트 전용, `src/`에는 포함하지 않음)를 작성하고 22개 계약
   테스트로 검증함.
-  ※ Multi-Agent First 심화(ADR-0010~0015)로 신규 Interface(AgentManager,
-    AgentRepository, AgentRegistry, AgentScheduler, InteractionEngine, EventBus,
-    EventStore) 추가와 EngineAdapter 세션 생명주기 계약(create_session/run/
-    cancel/status/destroy_session/capabilities/supports_parallel/estimate_cost)
-    갱신은 후속 Task **P1-5**에서 진행한다.
+  ※ Multi-Agent First 심화+안정화 보완(ADR-0010~0019)으로 신규 Interface 9종
+    (AgentManager, AgentRepository, AgentRegistry, AgentScheduler,
+    InteractionEngine, EventBus, EventStore, EngineRuntime, ContextManager)
+    추가, MemoryEngine 계약 축소(Snapshot 이관), EngineAdapter 세션 생명주기
+    계약 갱신은 후속 Task **P1-5**에서 진행한다(총 16종).
 - 의존성: P1-2
 
 #### P1-4: 도메인 확장 (Mission/Workflow 재정의/Step, WorkspaceSession, Agent 계열)
@@ -196,17 +196,17 @@
     안에서 재정의(기존 순환 의존 검증 유지).
   - `domain/session.py`: `WorkspaceSession`(현재 프로젝트/Mission/활성 Workflow/
     활성 Agent/Memory Snapshot/Engine Session).
-  - `domain/agent.py`: `Agent`, `AgentRole`, `AgentCapability`(Planning/Coding/
-    Review/Documentation/Research/Vision/Voice/Git/MCP …), `AgentStatus`
-    (IDLE/RUNNING/WAITING/PAUSED/STOPPED/ERROR 등).
+  - `domain/agent.py`: `Agent`, `AgentRole`, `AgentCapability`(**Coordination**/
+    Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP …),
+    `AgentStatus`(IDLE/RUNNING/WAITING/PAUSED/STOPPED/ERROR 등).
 - 완료 조건(DoD): 추가/재정의된 모델에 대한 단위 테스트가 통과한다(기존 도메인
   테스트 회귀 없음).
 - 상태: TODO
 - 의존성: P1-2
 
-#### P1-5: 신규 Interface 정의 및 EngineAdapter 세션 계약 확장
-- 목적: Multi-Agent First 심화 구조에 필요한 계약을 추가·확장한다
-  (ADR-0010~0015). Phase 1에서는 계약만 정의하고 구체 구현은 이후 Phase.
+#### P1-5: 신규 Interface 정의 및 EngineAdapter 세션 계약 확장 (총 16종)
+- 목적: Multi-Agent First 심화 + 안정화 보완 구조에 필요한 계약을 추가·확장한다
+  (ADR-0010~0019). Phase 1에서는 계약만 정의하고 구체 구현은 이후 Phase.
 - 작업 내용 (`interfaces/`):
   - `agent_manager.py` — `AgentManager`(생성/생명주기/상태)
   - `agent_repository.py` — `AgentRepository`(조회/저장)
@@ -215,12 +215,18 @@
   - `interaction_engine.py` — `InteractionEngine`(입력 정규화; ConversationEngine
     대체, 지금 구현 안 함)
   - `event_bus.py` — `EventBus`(publish/subscribe)
-  - `event_store.py` — `EventStore`(기록/Replay/Audit; 지금 구현 안 함)
+  - `event_store.py` — `EventStore`(Bus의 **독립 구독자**, 기록/Replay/Audit;
+    지금 구현 안 함, ADR-0018)
+  - `engine_runtime.py` — `EngineRuntime`(엔진 선택/세션 풀/병렬; ADR-0016)
+  - `context_manager.py` — `ContextManager`(Context 조립/Memory Snapshot 생명주기;
+    ADR-0017)
+  - `memory_engine.py` 조정 — Snapshot 책임 제거, **저장/검색만** 담당하도록 계약
+    축소 (Snapshot은 ContextManager로 이관)
   - `engine_adapter.py` 확장 — `create_session`/`run`/`cancel`/`status`/
     `destroy_session`/`capabilities`/`supports_parallel`/`estimate_cost`
     (기존 `run_task` 기반 계약/테스트를 새 계약으로 교체)
 - 완료 조건(DoD): 신규/확장 인터페이스 각각에 대해 Fake 구현체 + 계약 테스트가
-  통과한다 (실제 로직 없이 계약만 검증).
+  통과한다 (실제 로직 없이 계약만 검증). 총 16종 인터페이스가 정의된다.
 - 상태: TODO
 - 의존성: P1-3, P1-4
 
@@ -232,7 +238,8 @@
   2. 설정(Config) 로드
   3. 서비스 초기화
   4. WorkspaceSession 관리 (생성/갱신/종료)
-  5. Agent Runtime 초기화 (Registry/Scheduler/Manager/EventBus 준비)
+  5. Agent Runtime · Engine Runtime 초기화 (Registry/Scheduler/Manager/EventBus,
+     Engine Runtime 준비)
   6. Workflow 시작 (`WorkflowEngine`)
   7. 종료(Shutdown)
   ※ Task 실행은 Workspace Core가 하지 않고 **Agent Runtime에 위임**한다.
@@ -306,7 +313,7 @@
 - 상세 Task 정의 시점: Phase 1 완료 승인 이후
 - Phase 목표/DoD: `docs/ROADMAP.md` "Phase 2" 참고
 
-### Phase 3 — Core Engines 구현
+### Phase 3 — Core Engines & Context Manager 구현
 - 상세 Task 정의 시점: Phase 2 완료 승인 이후
 - Phase 목표/DoD: `docs/ROADMAP.md` "Phase 3" 참고
 
@@ -316,7 +323,7 @@
 
 > Milestone DoD: `docs/ROADMAP.md`의 "Milestone 3 Definition of Done" 참고.
 
-### Phase 4 — Engine Adapter 구현 (Claude Code 우선)
+### Phase 4 — Engine Runtime & Engine Adapter 구현 (Claude Code 우선)
 - 상세 Task 정의 시점: Phase 3 완료 승인 이후
 - Phase 목표/DoD: `docs/ROADMAP.md` "Phase 4" 참고
 
@@ -382,3 +389,9 @@ Event Store(ADR-0014), EngineAdapter 세션 생명주기 계약(ADR-0015) 추가
 ARCHITECTURE.md v0.5.0, ROADMAP v0.4.0 갱신. Phase 1 P1-4~P1-7을 도메인 확장
 (Mission/Step/WorkspaceSession/AgentCapability)·신규 Interface 7종·Agent Runtime
 위임형 Workspace Core·EventStore 저장소로 갱신. 구현 재개 대기. |
+| 2026-07-23 | **안정화 보완(P1-4 승인 조건)**: 사용자 권고 4건 반영(문서만).
+Engine Runtime 계층 추가(Agent Runtime↔Engine Adapter 사이, ADR-0016), Context
+Manager로 Memory Snapshot 역할 분리(ADR-0017), Event Store를 Event Bus 독립
+Subscriber로 위치 조정(ADR-0018), Coordination Capability 추가(ADR-0019).
+ARCHITECTURE.md v0.6.0, ROADMAP v0.5.0 갱신. Interfaces 14→16종(+EngineRuntime,
++ContextManager), MemoryEngine 계약 축소. Phase 1 P1-4~P1-6 반영. 구현 재개 대기. |
