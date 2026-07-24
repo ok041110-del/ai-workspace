@@ -1,8 +1,12 @@
 # TASKS — 전체 Task 및 진행 상태
 
-이 문서는 `docs/ROADMAP.md`의 **Milestone → Phase → Task** 계층을 그대로 따른다.
-`.ai/RULES.md`에 따라 **한 번에 하나의 Task만** 진행하며, Task를 완료로 표시하기
-전 반드시 테스트(해당되는 경우)를 수행한다.
+이 문서는 `docs/ROADMAP.md`의 **Milestone → Task** 계층을 그대로 따른다.
+**Phase 계층은 2026-07-24부로 폐지되었다 (ADR-0021, Migration Table은
+`docs/ROADMAP.md` 하단 참고).** `.ai/RULES.md`에 따라 **한 번에 하나의 Task만**
+진행하며, Task를 완료로 표시하기 전 반드시 테스트(해당되는 경우)를 수행한다.
+
+Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 Task는
+**하나의 구현 목표 + 하나의 Commit + 하나의 구현 사이클**이 되도록 설계한다.
 
 상태 값: `TODO` / `IN_PROGRESS` / `DONE` (필요 시 `BLOCKED` / `CANCELLED` 사용)
 
@@ -18,31 +22,32 @@
 ## Milestone 1 — 기반 구축 (Foundation)
 
 > Milestone DoD: `docs/ROADMAP.md`의 "Milestone 1 Definition of Done" 참고.
+> T1-01~T1-11은 문서화 작업(구 Phase 0), T1-12~T1-25는 구현 작업(구 Phase 1)에
+> 해당한다. 그룹 구분은 참고용 설명일 뿐 별도 승인 단계를 두지 않는다 — Milestone
+> 전체에 대한 승인은 T1-25(Milestone 1 완료 승인 요청) 하나로 일원화된다.
 
-### Phase 0 — 문서화 및 구조 설계
-
-#### P0-1: 프로젝트 비전/철학 분석 및 문서 구조 설계
+#### T1-01: 프로젝트 비전/철학 분석 및 문서 구조 설계
 - 목적: 프로젝트 비전과 개발 철학을 바탕으로 어떤 문서를, 어떤 구조로 만들지
   결정한다.
 - 작업 내용: 사용자가 제시한 비전/철학을 분석하고 `README/docs/.ai/workspace/tests`
   구조를 설계한다.
-- 완료 조건(DoD): 문서 구조가 결정되고 이후 Task(P0-2 이후)의 기준이 된다.
+- 완료 조건(DoD): 문서 구조가 결정되고 이후 Task(T1-02 이후)의 기준이 된다.
 - 상태: DONE
 
-#### P0-2: 디렉터리 구조 생성
+#### T1-02: 디렉터리 구조 생성
 - 목적: 설계한 문서 구조를 실제 디렉터리로 반영한다.
 - 작업 내용: `docs/`, `.ai/`, `workspace/`, `tests/` 디렉터리를 생성한다.
 - 완료 조건(DoD): 4개 디렉터리가 저장소에 존재한다.
 - 상태: DONE
 
-#### P0-3: `docs/PRD.md` 작성
+#### T1-03: `docs/PRD.md` 작성
 - 목적: 프로젝트의 목표와 요구사항을 명확히 정의해 이후 설계의 기준을 세운다.
 - 작업 내용: 배경, 목표, 비목표, 핵심 개념, 기능/비기능 요구사항, 성공 기준,
   리스크를 작성한다.
 - 완료 조건(DoD): 위 항목이 모두 포함된 PRD가 작성된다.
 - 상태: DONE
 
-#### P0-4: `docs/ARCHITECTURE.md` 작성
+#### T1-04: `docs/ARCHITECTURE.md` 작성
 - 목적: PRD 요구사항을 만족하는 구조를 설계해 구현 전 청사진을 마련한다.
 - 작업 내용: 컴포넌트(Workspace Core / Core Engines / Engine Adapter), 데이터
   흐름, 의존성 규칙, 디렉터리 매핑, 대안 비교를 작성한다.
@@ -50,14 +55,17 @@
   (v0.2.0)이 반영된다.
 - 상태: DONE
 
-#### P0-5: `docs/ROADMAP.md` 작성
-- 목적: Milestone/Phase 단위의 장기 계획을 수립한다.
-- 작업 내용: Milestone → Phase 계층 구조로 계획을 작성하고 각 Milestone/Phase의
-  DoD를 명시한다.
-- 완료 조건(DoD): Milestone 1~3, Phase 0~5가 모두 DoD와 함께 정의된다.
+#### T1-05: `docs/ROADMAP.md` 작성
+- 목적: Milestone 단위의 장기 계획을 수립한다.
+- 작업 내용: (작성 당시에는 Milestone → Phase 계층으로 계획을 작성했으며, 각
+  Milestone/Phase의 DoD를 명시함. 이후 T1-?? 시점에 Phase 계층은 폐지됨 —
+  Migration Table 참고.)
+- 완료 조건(DoD): 당시 기준 Milestone 1~3, Phase 0~5가 모두 DoD와 함께
+  정의된다(작성 당시 상태 그대로 보존, 이후 여러 차례 개정을 거쳐 현재 버전에
+  이름).
 - 상태: DONE
 
-#### P0-6: `.ai/RULES.md` 작성
+#### T1-06: `.ai/RULES.md` 작성
 - 목적: 개발 철학을 프로젝트 내부 규정으로 명문화해 모든 작업의 기준으로 삼는다.
 - 작업 내용: 언어 규칙, Documentation/Architecture First, Task Driven
   Development, One Task At A Time, Test Before Complete, Approval Required,
@@ -65,7 +73,7 @@
 - 완료 조건(DoD): 8개 원칙이 모두 문서화된다.
 - 상태: DONE
 
-#### P0-7: `.ai/MEMORY.md` 작성
+#### T1-07: `.ai/MEMORY.md` 작성
 - 목적: 세션이 끝나도 유지되어야 할 핵심 컨텍스트를 압축된 형태로 보존한다.
 - 작업 내용: MEMORY.md의 역할/사용 원칙을 정의하고, 현재 Milestone·프로젝트
   정체성·핵심 아키텍처·설계 원칙·주요 의사결정 요약·다음 작업 컨텍스트를 기록한다.
@@ -73,64 +81,62 @@
   명시되고, 요구된 6개 항목이 모두 포함된다.
 - 상태: DONE
 
-#### P0-8: `.ai/DECISIONS.md` 초기 ADR 작성
+#### T1-08: `.ai/DECISIONS.md` 초기 ADR 작성
 - 목적: 문서 구조, Adapter 패턴, 승인 체계, 저장 방식에 대한 결정 근거를 남긴다.
 - 작업 내용: ADR-0001~0004를 배경/결정/대안/이유/결과 형식으로 작성한다.
-- 완료 조건(DoD): 4개 ADR이 모두 "제안" 상태로 작성되고, Phase 완료 승인과 함께
-  상태를 갱신할 기준이 마련된다.
+- 완료 조건(DoD): 4개 ADR이 모두 "제안" 상태로 작성되고, 이후 승인과 함께 상태를
+  갱신할 기준이 마련된다.
 - 상태: DONE
 
-#### P0-9: `.ai/TASKS.md` 작성 (본 문서)
-- 목적: Milestone/Phase/Task 계층에 따라 실제 작업을 추적할 수 있게 한다.
-- 작업 내용: ROADMAP의 Milestone/Phase 구조를 그대로 따르는 Task 목록을 작성한다.
-- 완료 조건(DoD): Phase 0의 모든 Task와 Phase 1의 세부 Task가 목적/작업내용/DoD/
-  상태 형식으로 작성된다.
+#### T1-09: `.ai/TASKS.md` 작성 (본 문서)
+- 목적: Milestone/Task 계층에 따라 실제 작업을 추적할 수 있게 한다.
+- 작업 내용: (작성 당시에는 ROADMAP의 Milestone/Phase 구조를 따르는 Task 목록을
+  작성함. 이후 Phase 폐지에 따라 본 문서 전체가 Milestone → Task 체계로
+  재작성됨 — 2026-07-24, 진행 로그 참고.)
+- 완료 조건(DoD): 당시 기준 Phase 0의 모든 Task와 Phase 1의 세부 Task가
+  목적/작업내용/DoD/상태 형식으로 작성된다(작성 당시 상태 그대로 보존).
 - 상태: DONE
 
-#### P0-10: `README.md` 작성
+#### T1-10: `README.md` 작성
 - 목적: 프로젝트를 처음 접하는 사람이 빠르게 개요를 파악할 수 있게 한다.
 - 작업 내용: 프로젝트 소개, 시작 방법, 디렉터리 구조, 문서 링크, 개발 철학
   요약을 작성한다.
 - 완료 조건(DoD): 위 5개 항목이 모두 포함된다.
 - 상태: DONE
 
-#### P0-11: Phase 0 완료 승인 요청
-- 목적: Approval Required 원칙에 따라 Phase 0 산출물을 사용자에게 검토받는다.
+#### T1-11: 문서화 완료 승인 요청 (구 "Phase 0 완료 승인 요청")
+- 목적: Approval Required 원칙에 따라 문서화 산출물(T1-01~T1-10)을 사용자에게
+  검토받는다.
 - 작업 내용: 완성된 문서 세트를 제시하고 승인을 요청한다. 1차 피드백(MEMORY 역할
   명확화, ARCHITECTURE 컴포넌트 보완, ROADMAP Milestone화, TASKS 구조 일치)을
   반영해 재요청한다.
-- 완료 조건(DoD): 사용자가 Phase 0 산출물에 대해 명시적으로 승인한다.
+- 완료 조건(DoD): 사용자가 문서화 산출물에 대해 명시적으로 승인한다.
 - 상태: **DONE (2026-07-23 사용자 승인)**
 
-> Phase 0에서는 애플리케이션 코드를 작성하지 않는다 (사용자 지시 사항).
+> 문서화 작업(T1-01~T1-11)에서는 애플리케이션 코드를 작성하지 않는다 (사용자
+> 지시 사항).
 
 ---
 
-### Phase 1 — 핵심 도메인 & 전체 Interfaces & Workspace Core 골격
-
-> 착수 조건: P0-11(Phase 0 완료 승인)이 승인된 이후에만 시작한다.
-> **2026-07-23 Multi-Agent First 전환(ADR-0006~0009)으로 Phase 1 범위를
-> 재구성함.** Agent가 핵심 도메인이 되고, Workspace Core는 Task를 직접 실행하지
-> 않고 Agent에 위임하는 오케스트레이터가 된다. 기존에 완료한 P1-1(디렉터리),
-> P1-2(Project/Task/Workflow 도메인), P1-3(Interfaces 7종)은 유지하되, Agent
-> 도메인·신규 Interface·EngineAdapter 확장 계약을 더하는 후속 Task(P1-4, P1-5)를
-> 추가한다. 순서: 디렉터리 확장 → (기존)도메인 → (기존)Interfaces →
-> **Agent 도메인 추가 → 신규 Interface/EngineAdapter 확장** → Workspace Core
-> 골격(Agent 위임) → 저장소 → CLI → 테스트.
->
-> **참고: Phase 1은 계약과 골격까지만 만든다.** Agent/Engine/Adapter/EventBus/
-> Conversation의 실제 처리 로직은 Milestone 2·3에서 구현한다.
-
-#### P1-0: Phase 1 착수 승인 요청
+#### T1-12: 구현 착수 승인 요청 (구 "Phase 1 착수 승인 요청")
 - 목적: 도메인 모델/CLI 골격 착수 전 범위와 설계 방향을 확인받는다.
-- 작업 내용: `docs/ROADMAP.md` Phase 1 목표와 세부 Task 계획을 제시하고 승인을
+- 작업 내용: `docs/ROADMAP.md`의 구현 목표와 세부 Task 계획을 제시하고 승인을
   요청한다.
-- 완료 조건(DoD): 사용자가 Phase 1 착수를 승인한다.
-- 상태: **DONE (2026-07-23, Phase 0 승인과 함께 착수 순서 포함하여 승인, 이후
-  ADR-0005로 Workspace Core 범위/Interfaces 계층 구조를 재확정)**
-- 의존성: P0-11
+- 완료 조건(DoD): 사용자가 구현 착수를 승인한다.
+- 상태: **DONE (2026-07-23, 문서화 완료 승인과 함께 착수 순서 포함하여 승인,
+  이후 ADR-0005로 Workspace Core 범위/Interfaces 계층 구조를 재확정)**
+- 의존성: T1-11
 
-#### P1-1: `src/ai_workspace/` 디렉터리 구조 생성
+> **2026-07-23 Multi-Agent First 전환(ADR-0006~0009)으로 구현 작업 범위를
+> 재구성함.** Agent가 핵심 도메인이 되고, Workspace Core는 Task를 직접 실행하지
+> 않고 Agent에 위임하는 오케스트레이터가 된다. 순서: 디렉터리 확장 → 도메인 →
+> Interfaces → Agent 도메인 추가 → 신규 Interface/EngineAdapter 확장 →
+> Workspace Core 골격(Agent 위임) → 저장소 → CLI → 테스트.
+>
+> **참고: 이 구현 작업(T1-12~T1-25)은 계약과 골격까지만 만든다.** Agent/Engine/
+> Adapter/EventBus/Interaction의 실제 처리 로직은 Milestone 2·3에서 구현한다.
+
+#### T1-13: `src/ai_workspace/` 디렉터리 구조 생성
 - 목적: 이후 모든 코드가 따를 디렉터리 구조를 확정한다.
 - 작업 내용: `docs/ARCHITECTURE.md` §6에서 제안한 `domain/ interfaces/ core/
   storage/ engines/ adapters/ cli/` 구조를 실제로 생성한다 (로직 없이 패키지
@@ -139,9 +145,9 @@
 - 상태: **DONE (2026-07-23)** — 최초 `domain/core/engines/adapters/cli/` 생성 후,
   ADR-0005 반영을 위해 `interfaces/`, `storage/` 패키지를 추가함. 각 패키지에
   빈 `__init__.py` 배치. 로직은 포함하지 않음.
-- 의존성: P1-0
+- 의존성: T1-12
 
-#### P1-2: 공통 도메인 모델 정의 (Project, Task, Workflow)
+#### T1-14: 공통 도메인 모델 정의 (Project, Task, Workflow)
 - 목적: Workspace Core와 Interfaces가 공통으로 참조할 핵심 데이터 모델을
   먼저 정의한다.
 - 작업 내용:
@@ -149,7 +155,7 @@
   - `domain/task.py`: Task 모델과 `TODO → IN_PROGRESS → REVIEW → DONE
     (/BLOCKED/CANCELLED)` 상태 전이 규칙
   - `domain/workflow.py`: Task 목록과 의존관계를 표현하는 최소 Workflow 모델
-    (순환 의존 감지 포함, 실행 로직은 Phase 2에서 다룸)
+    (순환 의존 감지 포함, 실행 로직은 Milestone 2에서 다룸)
 - 완료 조건(DoD): 세 모델 각각에 대한 단위 테스트(정상 케이스 + 허용되지 않는
   전이/순환 의존 거부)가 통과한다.
 - 상태: **DONE (2026-07-23)** — `domain/project.py`(Project, ProjectStatus),
@@ -158,13 +164,13 @@
   `pyproject.toml`(pytest `pythonpath=["src"]`)을 함께 추가하고 `pytest`를
   설치함.
   ※ Multi-Agent First 전환(ADR-0006)으로 Workflow는 "협업 흐름"으로 재정의되며,
-    Agent 도메인 추가 및 Workflow 재정의는 후속 Task **P1-4**에서 진행한다.
-- 의존성: P1-1
+    Agent 도메인 추가 및 Workflow 재정의는 후속 Task **T1-16**에서 진행한다.
+- 의존성: T1-13
 
-#### P1-3: Interfaces 정의 (7개)
+#### T1-15: Interfaces 정의 (7개)
 - 목적: Workspace Core와 향후 구체 구현체가 공유할 추상 계약을 확정한다
-  (ADR-0002, ADR-0005 반영). Phase 1에서는 계약만 정의하고 구체 구현은 하지
-  않는다 (`ProjectRepository`의 구체 구현만 P1-5에서 별도 진행).
+  (ADR-0002, ADR-0005 반영). 계약만 정의하고 구체 구현은 하지 않는다
+  (`ProjectRepository`의 구체 구현만 T1-20에서 별도 진행).
 - 작업 내용: `interfaces/`에 아래 7개 인터페이스를 정의한다 (`abc.ABC` 또는
   `typing.Protocol` 사용).
   - `project_repository.py` — `ProjectRepository`
@@ -184,14 +190,14 @@
     (AgentManager, AgentRepository, AgentRegistry, AgentScheduler,
     InteractionEngine, EventBus, EventStore, EngineRuntime, ContextManager)
     추가, MemoryEngine 계약 축소(Snapshot 이관), EngineAdapter 세션 생명주기
-    계약 갱신은 후속 Task **P1-5**에서 진행한다(총 16종).
-- 의존성: P1-2
+    계약 갱신은 후속 Task **T1-18**에서 진행한다(총 16종).
+- 의존성: T1-14
 
-#### P1-4: 도메인 확장 (Mission/Workflow 재정의/Step, WorkspaceSession, Agent 계열, LLM Policy 초안)
+#### T1-16: 도메인 확장 (Mission/Workflow 재정의/Step, WorkspaceSession, Agent 계열, LLM Policy 초안)
 - 목적: Multi-Agent First 심화 구조의 핵심 도메인을 추가·재정의하고, 향후
-  Milestone(M2~M5)에서 구현할 LLM 선택 정책의 **Domain만** 미리 정의한다
-  (ADR-0010~0012). **2026-07-23 사용자 지시로 LLM Policy Domain 초안이 P1-4
-  범위에 추가됨** (Policy Engine/Router 등 실제 동작 로직은 제외).
+  Milestone(M2~M4)에서 구현할 LLM 선택 정책의 **Domain만** 미리 정의한다
+  (ADR-0010~0012). **2026-07-23 사용자 지시로 LLM Policy Domain 초안이 이
+  Task 범위에 추가됨** (Policy Engine/Router 등 실제 동작 로직은 제외).
 - 작업 내용:
   - `domain/mission.py`, `domain/step.py`: `Mission`(목표), `Step`(Task 내부
     세부 실행 단위). `domain/workflow.py`는 Mission→Workflow→Task→Step 계층
@@ -206,7 +212,7 @@
     데이터 포함), `LLMEffort`(Low/Medium/High). **LLM Policy Engine, LLM Router,
     Provider/Model 선택 로직, Adapter 변경, 실제 LLM 호출 로직은 절대 구현하지
     않는다.**
-  - `.ai/RULES.md`에 "Temporary LLM Policy" 섹션 추가(M2~M5 진행 경로 명시) +
+  - `.ai/RULES.md`에 "Temporary LLM Policy" 섹션 추가(M2~M4 진행 경로 명시) +
     `docs/llm_policy.example.yaml` 정책 초안 작성.
 - 완료 조건(DoD): 추가/재정의된 모델에 대한 단위 테스트가 통과한다(기존 도메인
   테스트 회귀 없음). LLM Policy는 Domain 정의와 문서만 존재하고 동작 로직이
@@ -219,10 +225,10 @@
   Engine/Router 없음) 구현. `.ai/RULES.md`에 "Temporary LLM Policy" 섹션
   (§7) 추가, `docs/llm_policy.example.yaml` 정책 초안 작성. 신규 테스트 9개
   추가(전체 41개 통과). `docs/ARCHITECTURE.md`는 변경하지 않음(사용자 지시).
-- 의존성: P1-2
+- 의존성: T1-14
 
-#### P1-5: Core/Agent/LLM Domain 마무리 및 코드 품질 도구(Ruff/MyPy) 도입
-- 목적: P1-4에서 추가한 Domain을 완성도 있게 마무리하고(Task-Workflow 관계
+#### T1-17: Core/Agent/LLM Domain 마무리 및 코드 품질 도구(Ruff/MyPy) 도입
+- 목적: T1-16에서 추가한 Domain을 완성도 있게 마무리하고(Task-Workflow 관계
   보완), 이후 모든 Task에서 상시 사용할 코드 품질 도구를 도입한다. **Domain만
   다루며 Policy Engine/Router/Adapter는 구현하지 않는다.**
 - 작업 내용:
@@ -244,11 +250,11 @@
   관련 테스트 2개 추가(전체 43개 통과). `ruff`/`mypy` 설정 추가 및 위반 1건
   수정(줄 길이) 후 전부 통과. Agent/LLM Domain은 기존 구현이 요건을 이미
   만족하여 코드 변경 없음.
-- 의존성: P1-4
+- 의존성: T1-16
 
-#### P1-6: 신규 Interface 정의 및 EngineAdapter 세션 계약 확장 (총 16종)
+#### T1-18: 신규 Interface 정의 및 EngineAdapter 세션 계약 확장 (총 16종)
 - 목적: Multi-Agent First 심화 + 안정화 보완 구조에 필요한 계약을 추가·확장한다
-  (ADR-0010~0019). Phase 1에서는 계약만 정의하고 구체 구현은 이후 Phase.
+  (ADR-0010~0019). 계약만 정의하고 구체 구현은 이후 Milestone에서 진행한다.
 - 작업 내용 (`interfaces/`):
   - `agent_manager.py` — `AgentManager`(생성/생명주기/상태)
   - `agent_repository.py` — `AgentRepository`(조회/저장)
@@ -269,10 +275,10 @@
     (기존 `run_task` 기반 계약/테스트를 새 계약으로 교체)
 - 완료 조건(DoD): 신규/확장 인터페이스 각각에 대해 Fake 구현체 + 계약 테스트가
   통과한다 (실제 로직 없이 계약만 검증). 총 16종 인터페이스가 정의된다.
-- 상태: TODO
-- 의존성: P1-3, P1-4
+- 상태: TODO (다음 Task)
+- 의존성: T1-15, T1-16
 
-#### P1-7: Workspace Core 골격 구현 (Agent Runtime 위임형)
+#### T1-19: Workspace Core 골격 구현 (Agent Runtime 위임형)
 - 목적: 최상위 오케스트레이터로서 Workspace Core의 최소 형태를 마련한다
   (ADR-0005 유지 + ADR-0010 재정의). 실제 처리 로직은 포함하지 않는다.
 - 작업 내용: `core/`에 다음 책임만 구현한다 (모두 Interfaces에만 의존).
@@ -289,9 +295,9 @@
   Core 코드에 구체 클래스 직접 참조가 없음을 확인한다. **Task를 직접 실행하지
   않고 Agent Runtime에 위임함**을 테스트로 확인한다.
 - 상태: TODO
-- 의존성: P1-4, P1-6
+- 의존성: T1-16, T1-18
 
-#### P1-8: 파일 기반 저장소 구현 (ProjectRepository + AgentRepository + EventStore)
+#### T1-20: 파일 기반 저장소 구현 (ProjectRepository + AgentRepository + EventStore)
 - 목적: Project/Agent 데이터와 이벤트 로그를 세션 간에 영속화한다 (ADR-0004,
   ADR-0014 반영).
 - 작업 내용: `storage/`에 `FileProjectRepository`, `FileAgentRepository`,
@@ -299,89 +305,78 @@
 - 완료 조건(DoD): 세 구현체가 각 인터페이스 계약을 만족함을 테스트로 확인하고,
   Workspace Core에 주입해도 Core 코드 변경이 필요 없음을 확인한다.
 - 상태: TODO
-- 의존성: P1-6
+- 의존성: T1-18
 
-#### P1-9: CLI 진입점 구성
+#### T1-21: CLI 진입점 구성
 - 목적: 사람이 실제로 Project를 다뤄볼 수 있는 최소 진입점을 제공한다 (UI
   Surface의 하나).
 - 작업 내용: `cli/`에 Workspace Core와 파일 저장소를 연결해 Project 생성·조회
-  명령을 구현한다 (Agent/협업 실행은 구체 구현이 없는 Phase 1에서는 골격까지만).
+  명령을 구현한다 (Agent/협업 실행은 구체 구현이 없는 이 시점에는 골격까지만).
 - 완료 조건(DoD): CLI로 Project 생성 → 조회가 end-to-end로 동작한다.
 - 상태: TODO
-- 의존성: P1-7, P1-8
+- 의존성: T1-19, T1-20
 
-#### P1-10: 기본 테스트 환경 구축 및 테스트 작성
-- 목적: Test Before Complete 원칙에 따라 Phase 1 산출물을 검증한다.
+#### T1-22: 기본 테스트 환경 구축 및 테스트 작성
+- 목적: Test Before Complete 원칙에 따라 Milestone 1 구현 산출물을 검증한다.
 - 작업 내용: `pytest` 설정을 정리하고, `tests/{domain,interfaces,core,storage,
   cli}/`에 각 컴포넌트별 테스트를 작성/보강한다. `ruff`/`mypy`도 함께 통과시킨다.
 - 완료 조건(DoD): `ruff`, `mypy`, `pytest` 실행 시 전체가 통과한다.
 - 상태: TODO
-- 의존성: P1-4 ~ P1-9
+- 의존성: T1-16 ~ T1-21
 
-#### P1-11: `docs/ARCHITECTURE.md` 최종 정합성 확인
-- 목적: 문서(v0.6.0)와 실제 구현이 일치하는지 확인한다 (Documentation First).
+#### T1-23: `docs/ARCHITECTURE.md` 최종 정합성 확인
+- 목적: 문서와 실제 구현이 일치하는지 확인한다 (Documentation First).
 - 작업 내용: 구현된 구조/디렉터리/컴포넌트를 ARCHITECTURE.md와 대조하고 필요 시
   갱신한다.
 - 완료 조건(DoD): 문서와 실제 코드가 일치한다.
 - 상태: TODO
-- 의존성: P1-4 ~ P1-10
+- 의존성: T1-16 ~ T1-22
 
-#### P1-12: ADR 상태 갱신 (ADR-0002, ADR-0004)
+#### T1-24: ADR 상태 갱신 (ADR-0002, ADR-0004)
 - 목적: EngineAdapter(세션 생명주기 계약 포함) 설계와 파일 기반 저장 결정을 정식
   확정한다.
 - 작업 내용: `.ai/DECISIONS.md`의 ADR-0002, ADR-0004 상태를 "승인됨"으로 갱신한다
   (ADR-0002는 ADR-0009·ADR-0015의 세션 생명주기 계약을 포함해 재확정).
 - 완료 조건(DoD): 두 ADR 상태가 "승인됨"으로 표시된다.
 - 상태: TODO
-- 의존성: P1-6(ADR-0002), P1-8(ADR-0004)
+- 의존성: T1-18(ADR-0002), T1-20(ADR-0004)
 
-#### P1-13: Phase 1 완료 승인 요청
-- 목적: Approval Required 원칙에 따라 Phase 1 산출물을 검토받는다.
+#### T1-25: Milestone 1 완료 승인 요청 (구 "Phase 1 완료 승인 요청")
+- 목적: Approval Required 원칙에 따라 Milestone 1 산출물을 검토받는다.
 - 작업 내용: 도메인(Agent 포함), 전체 Interfaces, Workspace Core 골격, 저장소,
   CLI, 테스트 결과를 제시하고 승인을 요청한다.
 - 완료 조건(DoD): 위 모든 Task가 DONE이고 테스트가 통과한 상태에서 사용자가
   승인한다.
 - 상태: TODO
-- 의존성: P1-1 ~ P1-12
+- 의존성: T1-01 ~ T1-24
 
 ---
 
 ## Milestone 2 — 멀티 에이전트 코어 (Multi-Agent Core)
 
 > Milestone DoD: `docs/ROADMAP.md`의 "Milestone 2 Definition of Done" 참고.
-> 상세 Task는 Phase 착수 시점에 이 문서에 추가한다 (Task Driven Development).
-
-### Phase 2 — Agent Runtime & Event Store & 기본 Agent
-- 상세 Task 정의 시점: Phase 1 완료 승인 이후
-- Phase 목표/DoD: `docs/ROADMAP.md` "Phase 2" 참고
-
-### Phase 3 — Core Engines & Context Manager 구현
-- 상세 Task 정의 시점: Phase 2 완료 승인 이후
-- Phase 목표/DoD: `docs/ROADMAP.md` "Phase 3" 참고
+> 세부 Task(`T2-01`부터)는 Milestone 1 완료 승인 이후, 착수 시점에 이 문서에
+> 추가한다 (Task Driven Development). 예정 작업 영역은 `docs/ROADMAP.md`의
+> "Milestone 2" 섹션 참고 (Agent Runtime & Event Store & 기본 Agent / Core
+> Engines & Context Manager 구현).
 
 ---
 
 ## Milestone 3 — 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction)
 
 > Milestone DoD: `docs/ROADMAP.md`의 "Milestone 3 Definition of Done" 참고.
-
-### Phase 4 — Engine Runtime & Engine Adapter 구현 (Claude Code 우선)
-- 상세 Task 정의 시점: Phase 3 완료 승인 이후
-- Phase 목표/DoD: `docs/ROADMAP.md` "Phase 4" 참고
-
-### Phase 5 — Interaction Layer 구현
-- 상세 Task 정의 시점: Phase 4 완료 승인 이후
-- Phase 목표/DoD: `docs/ROADMAP.md` "Phase 5" 참고
+> 세부 Task(`T3-01`부터)는 Milestone 2 완료 승인 이후, 착수 시점에 이 문서에
+> 추가한다. 예정 작업 영역은 `docs/ROADMAP.md`의 "Milestone 3" 섹션 참고
+> (Engine Runtime & Engine Adapter 구현 / Interaction Layer 구현).
 
 ---
 
 ## Milestone 4 — 자동화 및 확장 (Automation & Scale)
 
 > Milestone DoD: `docs/ROADMAP.md`의 "Milestone 4 Definition of Done" 참고.
-
-### Phase 6 — 자동화 · 다중 프로젝트 · 메모리 고도화
-- 상세 Task 정의 시점: Phase 5 완료 승인 이후
-- Phase 목표/DoD: `docs/ROADMAP.md` "Phase 6" 참고
+> 세부 Task(`T4-01`부터)는 Milestone 3 완료 승인 이후, 착수 시점에 이 문서에
+> 추가한다. 예정 작업 영역은 `docs/ROADMAP.md`의 "Milestone 4" 섹션 참고
+> (자동화·다중 프로젝트·메모리 고도화).
 
 ---
 
@@ -452,3 +447,14 @@ P1-5 (신규 Interface 16종 정의 및 EngineAdapter 세션 계약 확장). |
 전부 통과(43개 테스트). `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`,
 `.ai/DECISIONS.md`(ADR-0020) 갱신. 다음 Task: P1-6 (신규 Interface 16종 정의 및
 EngineAdapter 세션 계약 확장). |
+| 2026-07-24 | **Migration: Phase → Task 체계 전환 (ADR-0021)**. 사용자 지시로
+프로젝트 관리 체계를 `Milestone → Phase → Task` 4단 계층에서 `Milestone → Task`
+2단 계층으로 전환. 기능 구현/리팩터링/API 변경/기존 코드 변경은 전혀 하지 않음
+(순수 문서 마이그레이션). 기존 Phase 0(P0-1~P0-11) + Phase 1(P1-0~P1-13) 총 25개
+Task를 Milestone 1 소속 `T1-01`~`T1-25`로 그대로 재번호(내용·상태·이력 보존,
+Migration Table은 `docs/ROADMAP.md` 하단 참고). Milestone 2~4는 아직 세부 Task가
+없으므로 Phase 단위로 서술되어 있던 목표를 "예정 작업 영역"으로 재서술하고, 착수
+시점에 `T2-01`/`T3-01`/`T4-01`부터 정의하기로 함. `docs/ROADMAP.md`,
+`docs/ARCHITECTURE.md`, `.ai/DECISIONS.md`(ADR-0021), 본 문서, `.ai/MEMORY.md`,
+`.ai/RULES.md`, `README.md`를 함께 갱신함. 다음 Task: **T1-18** (신규 Interface
+16종 정의 및 EngineAdapter 세션 계약 확장 — 기존 계획상 "P1-6"과 동일한 작업). |

@@ -2,14 +2,18 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.2.0 |
-| 작성일 | 2026-07-23 |
+| 문서 버전 | v0.2.1 |
+| 작성일 | 2026-07-24 |
 | 적용 대상 | 이 저장소에서 작업하는 모든 AI 구현 엔진(Claude Code, Codex, Gemini CLI 등) 및 기여자 |
 
 이 문서는 AI Workspace 프로젝트에서 **반드시 지켜야 하는 개발 규칙**을 정의한다.
 아래 규칙은 사용자가 제시한 개발 철학을 프로젝트 내부 규정으로 명문화한 것이며,
 모든 Task 수행 시 최우선으로 준수해야 한다.
 
+> **v0.2.1 변경**: Phase 계층 폐지(ADR-0021)에 따라 §1.4 승인 항목의 "Phase
+> 완료"를 "Milestone 완료"로, §5.3 커밋 메시지 예시를 `[PhaseN][Pn-x]`에서
+> `[Mn][Tn-xx]`로, §7의 Task ID 참조를 갱신했다.
+>
 > **v0.2.0 변경**: 규칙 체계를 4개 그룹(Project Principles / Development Workflow /
 > Context Loading Rules / LLM Coding Rules)으로 재구성하고, `Interface First`,
 > `Context Loading Rules`, `LLM Coding Rules`를 추가했다. 기존 언어·코딩·커밋
@@ -45,7 +49,8 @@
 1. 아키텍처 변경 (Architecture Change)
 2. 새로운 기능 추가 (New Feature)
 3. 리팩토링 (Refactoring)
-4. Phase 완료 (Phase Completion)
+4. Milestone 완료 (Milestone Completion) — 2026-07-24 ADR-0021로 "Phase 완료"에서
+   변경됨. Phase 계층이 폐지되면서 승인 지점이 Milestone 단위로 일원화되었다.
 
 승인 요청 시에는 다음을 함께 제시한다.
 - 무엇을 변경/추가하려 하는지
@@ -157,7 +162,8 @@
 
 ### 5.3 커밋 메시지 규칙
 - 커밋 메시지는 한국어로 작성한다.
-- 형식 예시: `[Phase1][P1-2] Project 도메인 모델 정의`
+- 형식 예시: `[M1][T1-14] Project 도메인 모델 정의` (2026-07-24 ADR-0021로 Phase
+  계층이 폐지되어 `[PhaseN][Pn-x]` 형식에서 `[Mn][Tn-xx]` 형식으로 변경됨)
 - 하나의 커밋은 하나의 Task(또는 Task의 명확한 하위 단위)에 대응한다.
 
 ### 5.4 이유 설명 (Explain Reasoning)
@@ -178,9 +184,9 @@
 ## 7. Temporary LLM Policy (임시 LLM 정책)
 
 Agent가 어떤 LLM Provider/Model을 어느 Effort로 사용할지 결정하는 정책은 아직
-자동화되어 있지 않다. 2026-07-23 P1-4에서 `LLMProvider`, `LLMModel`,
-`LLMEffort` **Domain만** 초안으로 정의했으며, 실제 선택 로직(Policy Engine,
-Router 등)은 존재하지 않는다.
+자동화되어 있지 않다. 2026-07-23 T1-16(당시 ID: P1-4)에서 `LLMProvider`,
+`LLMModel`, `LLMEffort` **Domain만** 초안으로 정의했으며, 실제 선택 로직(Policy
+Engine, Router 등)은 존재하지 않는다.
 
 ### 현재 상태
 - 현재는 **문서 기반 정책**만 존재한다 (`docs/llm_policy.example.yaml` 참고).

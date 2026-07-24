@@ -2,14 +2,22 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.6.1 |
-| 작성일 | 2026-07-23 |
-| 상태 | Draft (Milestone 1 / Phase 1 — 구현 진행 중, P1-5 완료) |
+| 문서 버전 | v0.6.2 |
+| 작성일 | 2026-07-24 |
+| 상태 | Draft (Milestone 1 — 구현 진행 중, T1-17까지 완료 / 다음 T1-18) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
 (Documentation First 원칙).
 
+> **v0.6.2 변경 사항 (Phase 체계 폐지 → Task 기반 체계, ADR-0021)**
+> 프로젝트 관리 체계를 `Milestone → Phase → Task` 4단 계층에서
+> `Milestone → Task` 2단 계층으로 전환했다. 이는 소프트웨어 구조 변경이
+> 아니라 **개발 프로세스(거버넌스) 변경**이며, §0에 별도로 기술한다. 본
+> 문서의 컴포넌트·의존성·디렉터리 구조는 이 변경으로 영향받지 않는다. 기존에
+> "Phase 1", "Phase 4" 등으로 표기하던 시점 참조는 이제 해당 작업이 속한
+> Milestone과 Task ID로 표기한다 (예: "Phase 1" → "Milestone 1(T1-XX)").
+>
 > **v0.6.1 변경 사항 (P1-5 — Task-Workflow 관계 보완, ADR-0020)**
 > `Task` 도메인 모델에 `workflow_id`(선택 필드)를 추가해 Mission→Workflow→
 > Task→Step 계층에서 각 하위 개체가 상위 개체를 참조하는 패턴
@@ -28,6 +36,32 @@
 >    위치를 조정했다. 이벤트 전달을 게이팅하지 않고 기록만 담당한다 (ADR-0018).
 > 4. **Coordination Capability**를 추가해 조정 역할을 명시했다 (ADR-0019).
 > ADR-0005(Interface 우선), ADR-0010~0015(Multi-Agent First 심화)는 유지한다.
+
+---
+
+## 0. 개발 프로세스 (Governance — Milestone → Task, ADR-0021)
+
+AI Workspace 저장소 자체의 **개발 관리 체계**는 다음 2단 계층을 따른다 (시스템
+아키텍처와는 별개의 프로젝트 관리 개념이다).
+
+```
+Roadmap
+  └─ Milestone   (프로젝트의 큰 목표. 완료 시 사용자 승인 필요)
+       └─ Task    (실제 구현 단위. T{Milestone 번호}-{일련번호}, 예: T1-01)
+```
+
+- **Task**는 "하나의 구현 목표 + 하나의 Commit + 하나의 구현 사이클"이 되도록
+  설계한다. Task 완료 전 반드시 테스트를 수행한다 (Test Before Complete).
+- 예전에는 Milestone과 Task 사이에 **Phase**라는 중간 계층이 있었으나,
+  2026-07-24 폐지되었다 (ADR-0021). Phase 완료마다 별도로 요구되던 승인은
+  Milestone 완료 승인으로 일원화된다. 기존 Phase 0/Phase 1의 모든 Task는
+  Milestone 1의 `T1-01`~`T1-25`로 번호만 이어졌으며 내용·상태·이력은 보존된다
+  (`docs/ROADMAP.md`의 Migration Table 참고).
+- Milestone 2~4처럼 아직 세부 Task로 분해되지 않은 영역은 "예정 작업 영역"으로
+  서술하고, 착수 시점에 `T2-01`, `T3-01`, `T4-01`부터 개별 Task를 정의한다
+  (Task Driven Development — 너무 이른 시점에 세부 Task를 미리 확정하지 않는다).
+- 세부 Task 목록/상태는 `.ai/TASKS.md`, Milestone 개요는 `docs/ROADMAP.md`,
+  거버넌스 변경 근거는 `.ai/DECISIONS.md`(ADR-0021)를 참고한다.
 
 ---
 
@@ -141,7 +175,7 @@ Agent의 실행을 담당하는 계층.
   다른 구독자(Agent 등)로의 전달 경로에 끼어들지 않으며(게이팅 없음), Replay/
   Audit/Debugging/Workflow 복구를 제공한다 (ADR-0018).
 - **의존 방향**: Event Bus를 구독. 다른 구독자와 동등한 위치.
-- **구현 시점**: 인터페이스만 Phase 1, 구현은 이후 Phase.
+- **구현 시점**: 인터페이스만 Milestone 1, 구현은 이후 Milestone.
 
 ### 3.6 Agents (Capability 중심)
 - **책임**: 각 Agent는 하나 이상의 **Capability**를 가진다: **Coordination**,
@@ -242,13 +276,13 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
-| `ProjectRepository` | 프로젝트 조회/저장 | Phase 1 | 기존 |
+| `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 | 기존 |
 | `WorkflowEngine` | Mission→…→Step 협업 흐름 | 이후 | 기존 |
 | `TaskEngine` | Task 생성/상태 전이 | 이후 | 기존 |
 | `MemoryEngine` | Memory 저장/검색 (Snapshot 제외) | 이후 | 기존(축소) |
 | `ApprovalEngine` | 승인 대상 판별/차단 | 이후 | 기존 |
 | `AutomationEngine` | 조건/일정 트리거 | 이후 | 기존 |
-| `EngineAdapter` | per-engine 세션 계약 | Phase 4 | 기존 |
+| `EngineAdapter` | per-engine 세션 계약 | Milestone 3 | 기존 |
 | `AgentManager` | Agent 생성/생명주기/상태 | 이후 | 기존 |
 | `AgentRepository` | Agent 조회/저장 | 이후 | 기존 |
 | `AgentRegistry` | Agent 등록/조회/제거 | 이후 | 기존 |
@@ -286,15 +320,15 @@ src/ai_workspace/
 │                       #   WorkspaceSession, Agent, AgentRole, AgentCapability, AgentStatus
 ├── interfaces/         # 추상 계약 (16종, §7)
 ├── core/              # Workspace Core (WorkspaceSession 관리, Runtime 초기화)
-├── runtime/           # (이후 Phase)
+├── runtime/           # (Milestone 2 이후)
 │   ├── agent/         #   Agent Runtime: registry, scheduler, manager
 │   └── engine/        #   Engine Runtime: 선택/세션 풀/병렬
-├── agents/            # 능력별 Agent 구현체 (이후 Phase)
-├── engines/           # Core Engines 구현 (Task/Workflow/Approval/Automation, 이후 Phase)
-├── memory/            # Context Manager + Memory Engine 구현 (이후 Phase)
-├── events/            # Event Bus + Event Store 구현 (이후 Phase)
-├── interaction/        # Interaction Layer 구현 (이후 Phase)
-├── adapters/          # EngineAdapter 구현 (Phase 4: claude_code.py, codex.py, gemini_cli.py)
+├── agents/            # 능력별 Agent 구현체 (Milestone 2 이후)
+├── engines/           # Core Engines 구현 (Task/Workflow/Approval/Automation, Milestone 2 이후)
+├── memory/            # Context Manager + Memory Engine 구현 (Milestone 2 이후)
+├── events/            # Event Bus + Event Store 구현 (Milestone 2 이후)
+├── interaction/        # Interaction Layer 구현 (Milestone 3 이후)
+├── adapters/          # EngineAdapter 구현 (Milestone 3: claude_code.py, codex.py, gemini_cli.py)
 ├── storage/           # ProjectRepository/AgentRepository/EventStore 파일 구현
 └── cli/               # CLI 진입점 (UI Surface의 하나)
 ```
@@ -310,7 +344,7 @@ src/ai_workspace/
 - **Context 전략 변경**: Context Manager만 교체하면 되며 Memory Engine(저장/검색)은
   영향받지 않는다.
 
-## 11. 기술 스택 (제안 — 각 Phase에서 ADR로 확정)
+## 11. 기술 스택 (제안 — 각 Milestone에서 ADR로 확정)
 
 | 영역 | 제안 | 이유 |
 |---|---|---|
@@ -318,8 +352,8 @@ src/ai_workspace/
 | 데이터 모델 | `dataclasses` (필요 시 `pydantic`) | 명시적 스키마 |
 | 인터페이스 | `abc.ABC` / `typing.Protocol` | 표준 계약 강제 |
 | Event Bus/Store | 인메모리 pub/sub + append-only 파일 로그 | 단순 시작, 이후 확장 |
-| 저장 (Phase 1) | 파일 기반 (Markdown/JSON) | 별도 인프라 없이 시작 |
-| UI (Phase 1) | CLI | 가장 단순한 표면 |
+| 저장 (Milestone 1) | 파일 기반 (Markdown/JSON) | 별도 인프라 없이 시작 |
+| UI (Milestone 1) | CLI | 가장 단순한 표면 |
 | 테스트 | `pytest` | Python 표준 관행 |
 
 ## 12. 대안 및 트레이드오프 (v0.6.0 신규 결정)

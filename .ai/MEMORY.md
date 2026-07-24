@@ -34,31 +34,23 @@
 
 ## 1. 현재 Milestone
 
-- **현재 위치**: Milestone 1 (기반 구축) / **Phase 1 (핵심 도메인 모델 & CLI
-  골격) 진행 중**
-- **Phase 0**: 2026-07-23 사용자 승인 완료 (`.ai/TASKS.md` P0-11 DONE).
-- **Phase 1 착수**: 2026-07-23 사용자 승인 완료 (P1-0 DONE).
-- **완료된 Task**: P1-1(디렉터리), P1-2(Project/Task/Workflow 도메인),
-  P1-3(Interfaces 7종), P1-4(도메인 확장 + LLM Policy 초안),
-  **P1-5(Task-Workflow 관계 보완 + Ruff/MyPy 도입)** — 모두 DONE. 전체 43개
-  테스트 통과, `ruff`/`mypy` 클린.
-- **아키텍처는 v0.6.1로 갱신** (ADR-0006~0020, Multi-Agent First 심화 +
-  안정화 보완 + Task-Workflow 관계 보완). 자세한 내용은 §3 참고.
-- **P1-4 결과 (2026-07-23)**: `domain/mission.py`, `domain/step.py`,
-  `domain/session.py`(WorkspaceSession), `domain/agent.py`(Agent/AgentRole/
-  AgentCapability/AgentStatus), `domain/workflow.py`(mission_id 추가)를 구현.
-  **사용자 지시로 범위가 확장되어 `domain/llm_policy.py`(LLMProvider/LLMModel/
-  LLMEffort — Domain만, Policy Engine·Router 없음)를 추가**하고,
-  `.ai/RULES.md`에 "Temporary LLM Policy" 섹션(M2~M5 진행 경로)과
-  `docs/llm_policy.example.yaml` 정책 초안을 작성함. `docs/ARCHITECTURE.md`는
-  변경하지 않음(사용자 지시).
-- **P1-5 결과 (2026-07-23)**: `domain/task.py`에 `workflow_id: str | None = None`
-  추가로 Task-Workflow 관계 보완(ADR-0020). Agent/LLM Domain은 기존 구현이
-  요건(Provider 비의존, 확장 가능한 LLMModel 구조)을 이미 만족해 코드 변경 없음.
-  `pyproject.toml`에 `ruff`/`mypy` 설정 추가, 위반 1건 수정 후 전부 통과.
-  **기존 P1-5(Interfaces 정의)는 P1-6으로 번호 이동**, 이하 Task도 순연됨.
-- **다음 단계**: `.ai/TASKS.md`의 P1-6(신규 Interface 16종 정의 및 EngineAdapter
-  세션 계약 확장)부터 진행.
+- **관리 체계**: 2026-07-24부로 `Milestone → Phase → Task`에서 **`Milestone →
+  Task`**로 전환됨 (ADR-0021). Task ID는 `T{Milestone 번호}-{일련번호}` 형식
+  (예: `T1-18`). 과거 Phase 0/Phase 1의 모든 Task(P0-1~P0-11, P1-0~P1-13)는
+  Milestone 1 소속 `T1-01`~`T1-25`로 번호만 이어졌다(내용·이력 보존, 대응표는
+  `docs/ROADMAP.md` 하단 참고).
+- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-17` 완료,
+  `T1-18`~`T1-25` 남음.
+- **완료된 Task 요약**: `T1-01`~`T1-11`(문서화 세트 작성 및 승인), `T1-12`
+  (구현 착수 승인), `T1-13`(디렉터리 구조), `T1-14`(Project/Task/Workflow
+  도메인), `T1-15`(Interfaces 7종), `T1-16`(Mission/Step/WorkspaceSession/
+  Agent 계열 + LLM Policy 초안), `T1-17`(Task-Workflow 관계 보완 +
+  Ruff/MyPy 도입) — 전체 43개 테스트 통과, `ruff`/`mypy` 클린.
+- **아키텍처는 v0.6.2로 갱신** (ADR-0006~0021, Multi-Agent First 심화 + 안정화
+  보완 + Task-Workflow 관계 보완 + Phase→Task 거버넌스 전환). 자세한 내용은
+  §3, `docs/ARCHITECTURE.md` §0 참고.
+- **다음 단계**: `.ai/TASKS.md`의 `T1-18`(신규 Interface 16종 정의 및
+  EngineAdapter 세션 계약 확장)부터 진행.
 
 ## 2. 프로젝트 정체성
 
@@ -110,7 +102,7 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
   status/destroy_session/capabilities/supports_parallel/estimate_cost (ADR-0015).
 - **도메인**: Project · **Mission→Workflow→Task→Step** · **WorkspaceSession** ·
   Agent/AgentRole/AgentCapability(**Coordination 포함**)/AgentStatus.
-- **Interfaces (총 16종, Phase 1에서 계약 정의)**: ProjectRepository,
+- **Interfaces (총 16종, Milestone 1에서 계약 정의)**: ProjectRepository,
   WorkflowEngine, TaskEngine, MemoryEngine(저장/검색), ApprovalEngine,
   AutomationEngine, EngineAdapter + AgentManager, AgentRepository, AgentRegistry,
   AgentScheduler, InteractionEngine, EventBus, EventStore, **EngineRuntime,
@@ -120,8 +112,8 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 
 ## 4. 반드시 유지해야 하는 설계 원칙
 
-- 실제 코드 작성 금지 원칙은 **Phase 0(문서화 단계)에 한정**된다. Phase 1부터는
-  승인을 받은 뒤 코드를 작성한다.
+- 실제 코드 작성 금지 원칙은 **문서화 작업(T1-01~T1-11)에 한정**된다. 구현
+  작업(T1-12~)부터는 승인을 받은 뒤 코드를 작성한다.
 - **Multi-Agent First**: 모든 작업은 능력 있는 Agent들의 협업으로 수행한다.
   Workspace Core는 Task를 직접 실행하지 않고 **Agent Runtime에 위임**한다(ADR-0010).
 - **Workspace Core는 Interfaces에만 의존하는 오케스트레이터다 (ADR-0005 유지).**
@@ -135,12 +127,13 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
   Core에 직접 연결하지 않는다.
 - 구현 엔진은 반드시 **Engine Adapter(세션 생명주기 계약, ADR-0015)**를 통해서만
   호출한다.
-- **Phase 1은 계약과 골격까지만.** Agent Runtime/Engine/Adapter/Event Store/
+- **Milestone 1은 계약과 골격까지만.** Agent Runtime/Engine/Adapter/Event Store/
   Interaction의 실제 처리 로직은 Milestone 2·3에서 구현한다.
-- 승인이 필요한 4가지 행위: 아키텍처 변경, 신규 기능, 리팩토링, Phase 완료.
-  Approval Engine이 판별·차단한다 (우회 경로 없음).
-- 계획은 Milestone → Phase → Task 계층을 따르며, Task는 한 번에 하나씩만
-  진행한다.
+- 승인이 필요한 4가지 행위: 아키텍처 변경, 신규 기능, 리팩토링, **Milestone
+  완료**(2026-07-24 ADR-0021로 "Phase 완료"에서 변경). Approval Engine이
+  판별·차단한다 (우회 경로 없음).
+- 계획은 **Milestone → Task** 2단 계층을 따르며(ADR-0021, Phase 계층 폐지),
+  Task는 한 번에 하나씩만 진행한다.
 - 모든 문서/설명/주석/커밋 메시지는 한국어, 코드 식별자는 Python 표준(영어)을
   따른다.
 
@@ -151,9 +144,9 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR | 결론 | 상태 |
 |---|---|---|
 | ADR-0001 | 문서를 `README` / `docs/`(사람용) / `.ai/`(AI 운영용) 3계층으로 분리 | 승인됨 |
-| ADR-0002 | 구현 엔진은 Adapter 패턴으로 추상화 (`EngineAdapter`) | 제안 (P1-6에서 확장 계약 반영 후 승인 예정) |
-| ADR-0003 | 승인 절차는 별도 Approval Engine 컴포넌트로 분리 (인라인 금지) | 제안 (Core Engines 구현 Phase에서 확정) |
-| ADR-0004 | Phase 1 저장 방식은 파일 기반(Markdown/JSON)으로 시작 | 제안 (P1-7 구현 후 승인 예정) |
+| ADR-0002 | 구현 엔진은 Adapter 패턴으로 추상화 (`EngineAdapter`) | 제안 (T1-18에서 확장 계약 반영 후 승인 예정) |
+| ADR-0003 | 승인 절차는 별도 Approval Engine 컴포넌트로 분리 (인라인 금지) | 제안 (Core Engines 구현 Milestone에서 확정) |
+| ADR-0004 | Milestone 1 저장 방식은 파일 기반(Markdown/JSON)으로 시작 | 제안 (T1-20 구현 후 승인 예정) |
 | ADR-0005 | Workspace Core는 Interfaces에만 의존하는 오케스트레이터 | 승인됨 (ADR-0010이 책임 재정의) |
 | ADR-0006 | Multi-Agent First: Workspace Core=Agent 오케스트레이터, Agent Manager·Agent 도메인 | 승인됨 (ADR-0010~0012가 심화) |
 | ADR-0007 | Agent 협업은 Event Bus 기반 느슨한 결합 | 승인됨 |
@@ -170,28 +163,29 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR-0018 | Event Store를 Event Bus **독립 Subscriber**로 위치 조정 | 승인됨 |
 | ADR-0019 | **Coordination Capability** 추가(조정 역할 명시) | 승인됨 |
 | ADR-0020 | Task에 `workflow_id`(선택 필드) 추가 — Task-Workflow 관계 보완 | 승인됨 |
+| ADR-0021 | **Phase 계층 폐지**, `Milestone → Task` 2단 체계로 전환 | 승인됨 |
 
 기술 스택(Python, dataclasses, 파일 기반 저장, CLI, 인메모리 Event Bus+파일
-Event Store)은 제안 단계이며 각 구현 Phase에서 확정한다.
+Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
 
 ## 6. 이후 작업에 필요한 핵심 컨텍스트
 
-- **Phase 1 범위(재구성)**: 도메인(Project/Task **+ Mission/Workflow(재정의)/
+- **Milestone 1 범위**: 도메인(Project/Task **+ Mission/Workflow(재정의)/
   Step + WorkspaceSession + Agent/AgentRole/AgentCapability(Coordination 포함)/
   AgentStatus**) + Interfaces 16종(계약만) + **세션 생명주기 EngineAdapter 계약** +
   Agent Runtime·Engine Runtime 위임형 Workspace Core 골격 + 파일 저장소(Project/
-  Agent/EventStore) + 최소 CLI + 테스트. 실제 처리 로직은 Phase 1 범위 밖.
-- **Phase별 구체 구현 순서**: Agent Runtime·Event Store·기본 Agent(Phase 2) →
-  Core Engines·Context Manager(Phase 3) → Engine Runtime·Engine Adapter(Claude
-  Code 우선, Phase 4) → Interaction Layer(Phase 5) → 자동화·다중 프로젝트·메모리
-  고도화(Phase 6).
+  Agent/EventStore) + 최소 CLI + 테스트. 실제 처리 로직은 Milestone 1 범위 밖.
+- **Milestone별 구체 구현 순서**: Agent Runtime·Event Store·기본 Agent, Core
+  Engines·Context Manager (Milestone 2) → Engine Runtime·Engine Adapter(Claude
+  Code 우선), Interaction Layer (Milestone 3) → 자동화·다중 프로젝트·메모리
+  고도화 (Milestone 4).
 - 구현 엔진 연동 순서: Claude Code 최우선 → Codex → Gemini CLI.
 - Voice/Slack 등 표면, Event Store, Interaction은 **구조에는 포함하되 구현은 뒤로**
-  미룬다 (인터페이스만 Phase 1에서 정의).
-- **미완료 유지 항목**: 이미 구현된 P1-3의 `EngineAdapter`는 `run_task` 기반이므로
-  **P1-6**에서 세션 생명주기 계약(create_session/run/…/destroy_session)으로
-  교체해야 한다. `ConversationEngine`은 `InteractionEngine`으로 대체 예정(P1-6).
-- **LLM Policy는 "Temporary"다 (P1-4에서 Domain만 추가)**: `domain/llm_policy.py`
+  미룬다 (인터페이스만 Milestone 1에서 정의).
+- **미완료 유지 항목**: 이미 구현된 T1-15의 `EngineAdapter`는 `run_task` 기반이므로
+  **T1-18**에서 세션 생명주기 계약(create_session/run/…/destroy_session)으로
+  교체해야 한다. `ConversationEngine`은 `InteractionEngine`으로 대체 예정(T1-18).
+- **LLM Policy는 "Temporary"다 (T1-16에서 Domain만 추가)**: `domain/llm_policy.py`
   에 `LLMProvider`/`LLMModel`/`LLMEffort`/`INITIAL_MODELS`만 존재하며, 실제 선택
   로직(Policy Engine, Router)은 없다. 사람이 `docs/llm_policy.example.yaml`을
   참고해 수동으로 적용하는 단계다. 진행 경로: M2(Rule 기반 선택) → M3(Agent가
