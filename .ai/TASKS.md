@@ -359,7 +359,7 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
   - `interaction_engine.py` — `InteractionEngine`(입력 정규화; 기존
     `ConversationEngine` 명칭을 대체, 지금 구현 안 함)
 - 완료 조건(DoD): `InteractionEngine` Fake + 계약 테스트가 통과한다.
-- 상태: TODO
+- 상태: DONE
 - 의존성: T1-15
 
 #### T1-22: Workspace Core Skeleton
@@ -617,3 +617,4 @@ Manager가 소유·관리하고 `MemoryEngine`은 이를 알지 못함을 docstr
 `docs/ARCHITECTURE.md` §7 Interface 표를 갱신함. `ruff check src tests`,
 `mypy src`, `pytest`(83개, 기존 79개 + 신규 4개) 모두 통과. 다음 Task:
 **T1-21** (Interaction Interfaces, 동일한 패턴). |
+| 2026-07-24 | **T1-21 완료: Interaction Interfaces**. 입력 표면 정규화 및 상호작용 오케스트레이터의 계약을 확정함(ADR-0013). `interfaces/interaction_engine.py`를 신규 추가하여 `InteractionRequest`, `InteractionResponse`, `InteractionError`, `InvalidRequestError` 및 `InteractionEngine`을 정의함. `tests/interfaces/fakes.py`에 `FakeInteractionEngine`을 구현하고 `test_interaction_engine.py`를 신규 추가함(3개 테스트). `docs/ARCHITECTURE.md` §7 Interface 표를 갱신함. `ruff check src tests`, `mypy src`, `pytest`(86개, 기존 83개 + 신규 3개) 모두 통과. 다음 Task: **T1-22** (Workspace Core Skeleton). |
