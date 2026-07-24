@@ -304,7 +304,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentRepository` | Agent 조회/저장 | Milestone 1 (T1-18) | **완료** |
 | `AgentRegistry` | Agent 등록/조회/제거 | Milestone 1 (T1-18) | **완료** |
 | `AgentScheduler` | Capability 기준 선택/병렬/우선순위 | Milestone 1 (T1-18) | **완료** |
-| `InteractionEngine` | 입력 표면 정규화 | 이후 | 기존 |
+| `InteractionEngine` | 입력 표면 정규화 | Milestone 1 (T1-21) | **완료(계약)** |
 | `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료** |
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18) | **완료** |
 | `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행 | Milestone 1 (T1-19) | **완료** |

@@ -42,6 +42,12 @@ from ai_workspace.interfaces.engine_runtime import (
 )
 from ai_workspace.interfaces.event_bus import Event, EventBus, SubscriptionNotFoundError
 from ai_workspace.interfaces.event_store import EventStore
+from ai_workspace.interfaces.interaction_engine import (
+    InteractionEngine,
+    InteractionRequest,
+    InteractionResponse,
+    InvalidRequestError,
+)
 from ai_workspace.interfaces.memory_engine import MemoryEngine
 from ai_workspace.interfaces.project_repository import ProjectNotFoundError, ProjectRepository
 from ai_workspace.interfaces.task_engine import TaskEngine, TaskNotFoundError
@@ -434,3 +440,21 @@ class FakeContextManager(ContextManager):
         if snapshot_id not in self._snapshots:
             raise SnapshotNotFoundError(snapshot_id)
         return dict(self._snapshots[snapshot_id])
+
+
+class FakeInteractionEngine(InteractionEngine):
+    def __init__(self) -> None:
+        self._handled: list[InteractionRequest] = []
+
+    def handle_request(self, request: InteractionRequest) -> InteractionResponse:
+        if not request.user_id:
+            raise InvalidRequestError("user_id는 비어 있을 수 없습니다.")
+        if request.message == "fail":
+            raise InvalidRequestError("유효하지 않은 요청 메시지입니다.")
+        self._handled.append(request)
+        return InteractionResponse(
+            channel=request.channel,
+            message=f"수신 완료: {request.message}",
+            payload={"processed": "true"},
+            success=True,
+        )

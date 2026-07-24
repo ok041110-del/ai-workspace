@@ -40,8 +40,8 @@
   Milestone 1 소속 `T1-01`~`T1-25`로 번호만 이어졌다가, 같은 날 설계 검토를
   거쳐 `T1-18`~`T1-28`로 추가 재분해됨(ADR-0022, 대응표는 `docs/ROADMAP.md`
   하단 참고).
-- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-20` 완료,
-  `T1-21`~`T1-28` 남음(8개 Task).
+- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-21` 완료,
+  `T1-22`~`T1-28` 남음(7개 Task).
 - **완료된 Task 요약**: `T1-01`~`T1-11`(문서화 세트 작성 및 승인), `T1-12`
   (구현 착수 승인), `T1-13`(디렉터리 구조), `T1-14`(Project/Task/Workflow
   도메인), `T1-15`(Interfaces 7종), `T1-16`(Mission/Step/WorkspaceSession/
@@ -54,9 +54,10 @@
   `destroy_session`/`capabilities`/`supports_parallel`/`estimate_cost`)으로
   교체), `T1-20`(Memory Interfaces: `ContextManager` 신규 정의 —
   `assemble_context`/`create_snapshot`/`restore_snapshot`; `MemoryEngine`은
-  재검토 후 변경 없음) — 전체 83개 테스트 통과, `ruff`/`mypy` 클린.
-- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-21`
-  Interaction Interfaces → `T1-22` Workspace Core Skeleton → `T1-23`
+  재검토 후 변경 없음), `T1-21`(Interaction Interfaces: `InteractionEngine` 및
+  `InteractionRequest`, `InteractionResponse`, `InvalidRequestError` 추가, Fake 및
+  계약 테스트 작성) — 전체 86개 테스트 통과, `ruff`/`mypy` 클린.
+- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-22` Workspace Core Skeleton → `T1-23`
   Repositories → `T1-24` CLI → `T1-25` Tests → `T1-26` Documentation →
   `T1-27` ADR → `T1-28` Milestone 1 Review.
 - **아키텍처는 v0.6.3으로 갱신** (ADR-0006~0022, Multi-Agent First 심화 + 안정화
@@ -66,8 +67,7 @@
   Interface 표는 T1-18(Agent Runtime 6종), T1-19(EngineRuntime,
   EngineAdapter 계약), T1-20(ContextManager)에서 정의한 Interface 상태를
   "완료"로 갱신함.
-- **다음 단계**: `.ai/TASKS.md`의 `T1-21`(Interaction Interfaces:
-  InteractionEngine 정의, 기존 ConversationEngine 명칭 대체)부터 동일한
+- **다음 단계**: `.ai/TASKS.md`의 `T1-22`(Workspace Core Skeleton)부터 동일한
   패턴으로 진행.
 
 ## 2. 프로젝트 정체성
