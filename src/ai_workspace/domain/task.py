@@ -37,6 +37,8 @@ class Task:
     project_id: str
     title: str
     status: TaskStatus = TaskStatus.TODO
+    # Task는 Workflow에 소속되기 전에도 존재할 수 있어 선택 필드로 둔다.
+    workflow_id: str | None = None
 
     def transition_to(self, new_status: TaskStatus) -> None:
         allowed = _ALLOWED_TRANSITIONS[self.status]

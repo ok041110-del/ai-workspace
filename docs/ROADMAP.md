@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.5.0 |
+| 문서 버전 | v0.5.1 |
 | 작성일 | 2026-07-23 |
-| 상태 | Draft (Multi-Agent First 심화 + 안정화 보완 반영) |
+| 상태 | Draft (Multi-Agent First 심화 + 안정화 보완 반영, P1-5 완료) |
 
 ## 계층 구조
 
@@ -64,22 +64,26 @@ AgentCapability/AgentStatus), 전체 Interfaces(14종), 그리고 Agent Runtime�
   Workspace Core를 "Task를 직접 실행하지 않고 **Agent Runtime에 위임하는**"
   오케스트레이터 골격으로 구현한다. Agent Runtime/Engine Runtime/Adapter/Event
   Store/Interaction/Context Manager의 **구체 구현 로직은 이후 Phase**에서 진행한다.
-- **세부 목표** (ADR-0005~0019 반영)
-  1. 디렉터리 구조 확장 (`runtime/agent`, `runtime/engine`, `memory/`, `events/`,
-     `interaction/` 추가)
-  2. 도메인 모델: Project/Task **+ Mission/Workflow(재정의)/Step +
+- **세부 목표** (ADR-0005~0020 반영)
+  1. ✅ 디렉터리 구조 확장 (`domain/`, `interfaces/`, `core/`, `storage/` 등 —
+     `runtime/agent`, `runtime/engine`, `memory/`, `events/`, `interaction/`은
+     P1-6 이후 착수 시점에 추가)
+  2. ✅ 도메인 모델: Project/Task **+ Mission/Workflow(재정의)/Step +
      WorkspaceSession + Agent/AgentRole/AgentCapability(**Coordination 포함**)/
-     AgentStatus**
+     AgentStatus** — P1-5에서 `Task.workflow_id`로 Task-Workflow 관계 보완 완료
   3. Interfaces 정의(16종): 기존 7종 + **AgentManager, AgentRepository,
      AgentRegistry, AgentScheduler, InteractionEngine, EventBus, EventStore,
      EngineRuntime, ContextManager**, **EngineAdapter 세션 생명주기 계약**으로 갱신
+     (P1-6에서 진행 예정)
   4. Workspace Core 골격: WorkspaceSession 관리 + **Agent Runtime·Engine Runtime
      초기화** + Workflow 시작 + 종료 (Task 실행은 Agent Runtime에 위임)
   5. 파일 기반 저장소: ProjectRepository(+ AgentRepository, EventStore) 구현
   6. CLI 진입점 (UI Surface의 하나)
-  7. 기본 테스트 환경 구축 및 계약/골격 테스트
+  7. ✅ 기본 테스트 환경 구축 — P1-5에서 `ruff`/`mypy`를 코드 품질 도구로 추가
+     도입(`pytest`는 P1-2부터 사용 중). 컴포넌트별 테스트 보강은 각 Task 진행과
+     함께 계속됨.
 - **Phase Definition of Done**: 위 7단계가 구현·테스트 통과하며, ARCHITECTURE.md
-  (v0.6.0)와 실제 구조가 일치한다. (Agent Runtime/Engine Runtime/Adapter/Event
+  (v0.6.1)와 실제 구조가 일치한다. (Agent Runtime/Engine Runtime/Adapter/Event
   Store/Interaction/Context Manager의 실제 처리 로직은 Phase 1 범위가 아니다 —
   계약과 골격까지만.)
 - **승인 필요 여부**: 예 — 착수 승인 완료(2026-07-23), 아키텍처 재설계·안정화

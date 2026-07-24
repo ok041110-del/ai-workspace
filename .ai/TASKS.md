@@ -221,7 +221,32 @@
   추가(전체 41개 통과). `docs/ARCHITECTURE.md`는 변경하지 않음(사용자 지시).
 - 의존성: P1-2
 
-#### P1-5: 신규 Interface 정의 및 EngineAdapter 세션 계약 확장 (총 16종)
+#### P1-5: Core/Agent/LLM Domain 마무리 및 코드 품질 도구(Ruff/MyPy) 도입
+- 목적: P1-4에서 추가한 Domain을 완성도 있게 마무리하고(Task-Workflow 관계
+  보완), 이후 모든 Task에서 상시 사용할 코드 품질 도구를 도입한다. **Domain만
+  다루며 Policy Engine/Router/Adapter는 구현하지 않는다.**
+- 작업 내용:
+  - `domain/task.py`에 `workflow_id: str | None = None` 추가 — Task가 어떤
+    Workflow에 속하는지 참조할 수 있도록 함(Mission→Workflow→Task→Step 계층의
+    부모 참조 체계를 `Workflow.mission_id`, `Step.task_id`와 동일한 패턴으로
+    완성). Workflow 배정 전에도 Task가 존재할 수 있어 선택 필드로 둠(필수 필드로
+    하면 `TaskEngine.create_task(project_id, title)` 계약을 건드리게 되어
+    Interface 변경이 필요해지므로, 이번 Domain 전용 범위에서는 선택 필드가 맞음).
+  - Agent Domain 재검토: 특정 LLM Provider/Model에 의존하는 필드가 없는지
+    확인 — 기존 구현이 이미 Provider 비의존임을 확인, 코드 변경 없음.
+  - LLM Domain 재검토: `LLMModel`이 고정 Enum이 아니라 `provider + name` 조합의
+    확장 가능한 구조인지 확인 — 기존 구현이 이미 이 요건을 만족함을 확인, 코드
+    변경 없음.
+  - `pyproject.toml`에 `[tool.ruff]`, `[tool.mypy]` 설정과 `dev` 선택적
+    의존성(pytest/ruff/mypy)을 추가하고, `ruff`/`mypy` 위반을 모두 수정한다.
+- 완료 조건(DoD): `ruff check src tests`, `mypy src`, `pytest` 모두 통과한다.
+- 상태: **DONE (2026-07-23)** — `domain/task.py`에 `workflow_id` 필드 추가,
+  관련 테스트 2개 추가(전체 43개 통과). `ruff`/`mypy` 설정 추가 및 위반 1건
+  수정(줄 길이) 후 전부 통과. Agent/LLM Domain은 기존 구현이 요건을 이미
+  만족하여 코드 변경 없음.
+- 의존성: P1-4
+
+#### P1-6: 신규 Interface 정의 및 EngineAdapter 세션 계약 확장 (총 16종)
 - 목적: Multi-Agent First 심화 + 안정화 보완 구조에 필요한 계약을 추가·확장한다
   (ADR-0010~0019). Phase 1에서는 계약만 정의하고 구체 구현은 이후 Phase.
 - 작업 내용 (`interfaces/`):
@@ -247,7 +272,7 @@
 - 상태: TODO
 - 의존성: P1-3, P1-4
 
-#### P1-6: Workspace Core 골격 구현 (Agent Runtime 위임형)
+#### P1-7: Workspace Core 골격 구현 (Agent Runtime 위임형)
 - 목적: 최상위 오케스트레이터로서 Workspace Core의 최소 형태를 마련한다
   (ADR-0005 유지 + ADR-0010 재정의). 실제 처리 로직은 포함하지 않는다.
 - 작업 내용: `core/`에 다음 책임만 구현한다 (모두 Interfaces에만 의존).
@@ -264,9 +289,9 @@
   Core 코드에 구체 클래스 직접 참조가 없음을 확인한다. **Task를 직접 실행하지
   않고 Agent Runtime에 위임함**을 테스트로 확인한다.
 - 상태: TODO
-- 의존성: P1-4, P1-5
+- 의존성: P1-4, P1-6
 
-#### P1-7: 파일 기반 저장소 구현 (ProjectRepository + AgentRepository + EventStore)
+#### P1-8: 파일 기반 저장소 구현 (ProjectRepository + AgentRepository + EventStore)
 - 목적: Project/Agent 데이터와 이벤트 로그를 세션 간에 영속화한다 (ADR-0004,
   ADR-0014 반영).
 - 작업 내용: `storage/`에 `FileProjectRepository`, `FileAgentRepository`,
@@ -274,50 +299,50 @@
 - 완료 조건(DoD): 세 구현체가 각 인터페이스 계약을 만족함을 테스트로 확인하고,
   Workspace Core에 주입해도 Core 코드 변경이 필요 없음을 확인한다.
 - 상태: TODO
-- 의존성: P1-5
+- 의존성: P1-6
 
-#### P1-8: CLI 진입점 구성
+#### P1-9: CLI 진입점 구성
 - 목적: 사람이 실제로 Project를 다뤄볼 수 있는 최소 진입점을 제공한다 (UI
   Surface의 하나).
 - 작업 내용: `cli/`에 Workspace Core와 파일 저장소를 연결해 Project 생성·조회
   명령을 구현한다 (Agent/협업 실행은 구체 구현이 없는 Phase 1에서는 골격까지만).
 - 완료 조건(DoD): CLI로 Project 생성 → 조회가 end-to-end로 동작한다.
 - 상태: TODO
-- 의존성: P1-6, P1-7
+- 의존성: P1-7, P1-8
 
-#### P1-9: 기본 테스트 환경 구축 및 테스트 작성
+#### P1-10: 기본 테스트 환경 구축 및 테스트 작성
 - 목적: Test Before Complete 원칙에 따라 Phase 1 산출물을 검증한다.
 - 작업 내용: `pytest` 설정을 정리하고, `tests/{domain,interfaces,core,storage,
-  cli}/`에 각 컴포넌트별 테스트를 작성/보강한다.
-- 완료 조건(DoD): `pytest` 실행 시 전체 테스트가 통과한다.
+  cli}/`에 각 컴포넌트별 테스트를 작성/보강한다. `ruff`/`mypy`도 함께 통과시킨다.
+- 완료 조건(DoD): `ruff`, `mypy`, `pytest` 실행 시 전체가 통과한다.
 - 상태: TODO
-- 의존성: P1-4 ~ P1-8
+- 의존성: P1-4 ~ P1-9
 
-#### P1-10: `docs/ARCHITECTURE.md` 최종 정합성 확인
-- 목적: 문서(v0.4.0)와 실제 구현이 일치하는지 확인한다 (Documentation First).
+#### P1-11: `docs/ARCHITECTURE.md` 최종 정합성 확인
+- 목적: 문서(v0.6.0)와 실제 구현이 일치하는지 확인한다 (Documentation First).
 - 작업 내용: 구현된 구조/디렉터리/컴포넌트를 ARCHITECTURE.md와 대조하고 필요 시
   갱신한다.
 - 완료 조건(DoD): 문서와 실제 코드가 일치한다.
 - 상태: TODO
-- 의존성: P1-4 ~ P1-9
+- 의존성: P1-4 ~ P1-10
 
-#### P1-11: ADR 상태 갱신 (ADR-0002, ADR-0004)
+#### P1-12: ADR 상태 갱신 (ADR-0002, ADR-0004)
 - 목적: EngineAdapter(세션 생명주기 계약 포함) 설계와 파일 기반 저장 결정을 정식
   확정한다.
 - 작업 내용: `.ai/DECISIONS.md`의 ADR-0002, ADR-0004 상태를 "승인됨"으로 갱신한다
   (ADR-0002는 ADR-0009·ADR-0015의 세션 생명주기 계약을 포함해 재확정).
 - 완료 조건(DoD): 두 ADR 상태가 "승인됨"으로 표시된다.
 - 상태: TODO
-- 의존성: P1-5(ADR-0002), P1-7(ADR-0004)
+- 의존성: P1-6(ADR-0002), P1-8(ADR-0004)
 
-#### P1-12: Phase 1 완료 승인 요청
+#### P1-13: Phase 1 완료 승인 요청
 - 목적: Approval Required 원칙에 따라 Phase 1 산출물을 검토받는다.
 - 작업 내용: 도메인(Agent 포함), 전체 Interfaces, Workspace Core 골격, 저장소,
   CLI, 테스트 결과를 제시하고 승인을 요청한다.
 - 완료 조건(DoD): 위 모든 Task가 DONE이고 테스트가 통과한 상태에서 사용자가
   승인한다.
 - 상태: TODO
-- 의존성: P1-1 ~ P1-11
+- 의존성: P1-1 ~ P1-12
 
 ---
 
@@ -418,3 +443,12 @@ LLMModel/LLMEffort, Policy Engine·Router 제외)을 구현. `.ai/RULES.md`에
 "Temporary LLM Policy" 섹션 추가, `docs/llm_policy.example.yaml` 작성. 신규
 테스트 9개, 전체 41개 통과. `docs/ARCHITECTURE.md`는 변경하지 않음. 다음 Task:
 P1-5 (신규 Interface 16종 정의 및 EngineAdapter 세션 계약 확장). |
+| 2026-07-23 | **P1-5 완료**: 사용자 지시로 P1-5 범위를 "Core/Agent/LLM Domain
+마무리 + 코드 품질 도구 도입"으로 재정의(기존 P1-5 "Interfaces 정의"는 P1-6으로
+번호 이동, 이하 P1-6~P1-12를 P1-7~P1-13으로 순연). `domain/task.py`에
+`workflow_id` 필드 추가(Task-Workflow 관계 보완). Agent/LLM Domain은 기존 구현이
+요건(Provider 비의존, 확장 가능한 LLMModel 구조)을 이미 만족하여 코드 변경 없음.
+`pyproject.toml`에 ruff/mypy 설정 추가, 위반 1건 수정 후 `ruff`/`mypy`/`pytest`
+전부 통과(43개 테스트). `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`,
+`.ai/DECISIONS.md`(ADR-0020) 갱신. 다음 Task: P1-6 (신규 Interface 16종 정의 및
+EngineAdapter 세션 계약 확장). |

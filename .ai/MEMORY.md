@@ -39,11 +39,11 @@
 - **Phase 0**: 2026-07-23 사용자 승인 완료 (`.ai/TASKS.md` P0-11 DONE).
 - **Phase 1 착수**: 2026-07-23 사용자 승인 완료 (P1-0 DONE).
 - **완료된 Task**: P1-1(디렉터리), P1-2(Project/Task/Workflow 도메인),
-  P1-3(Interfaces 7종), **P1-4(도메인 확장 + LLM Policy 초안)** — 모두 DONE.
-  전체 41개 테스트 통과.
-- **아키텍처는 v0.6.0으로 확정** (ADR-0006~0019, Multi-Agent First 심화 +
-  안정화 보완: Agent Runtime, Engine Runtime, Context Manager, Event Store
-  독립 구독자, Coordination Capability 등). 자세한 내용은 §3 참고.
+  P1-3(Interfaces 7종), P1-4(도메인 확장 + LLM Policy 초안),
+  **P1-5(Task-Workflow 관계 보완 + Ruff/MyPy 도입)** — 모두 DONE. 전체 43개
+  테스트 통과, `ruff`/`mypy` 클린.
+- **아키텍처는 v0.6.1로 갱신** (ADR-0006~0020, Multi-Agent First 심화 +
+  안정화 보완 + Task-Workflow 관계 보완). 자세한 내용은 §3 참고.
 - **P1-4 결과 (2026-07-23)**: `domain/mission.py`, `domain/step.py`,
   `domain/session.py`(WorkspaceSession), `domain/agent.py`(Agent/AgentRole/
   AgentCapability/AgentStatus), `domain/workflow.py`(mission_id 추가)를 구현.
@@ -52,7 +52,12 @@
   `.ai/RULES.md`에 "Temporary LLM Policy" 섹션(M2~M5 진행 경로)과
   `docs/llm_policy.example.yaml` 정책 초안을 작성함. `docs/ARCHITECTURE.md`는
   변경하지 않음(사용자 지시).
-- **다음 단계**: `.ai/TASKS.md`의 P1-5(신규 Interface 16종 정의 및 EngineAdapter
+- **P1-5 결과 (2026-07-23)**: `domain/task.py`에 `workflow_id: str | None = None`
+  추가로 Task-Workflow 관계 보완(ADR-0020). Agent/LLM Domain은 기존 구현이
+  요건(Provider 비의존, 확장 가능한 LLMModel 구조)을 이미 만족해 코드 변경 없음.
+  `pyproject.toml`에 `ruff`/`mypy` 설정 추가, 위반 1건 수정 후 전부 통과.
+  **기존 P1-5(Interfaces 정의)는 P1-6으로 번호 이동**, 이하 Task도 순연됨.
+- **다음 단계**: `.ai/TASKS.md`의 P1-6(신규 Interface 16종 정의 및 EngineAdapter
   세션 계약 확장)부터 진행.
 
 ## 2. 프로젝트 정체성
@@ -146,7 +151,7 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR | 결론 | 상태 |
 |---|---|---|
 | ADR-0001 | 문서를 `README` / `docs/`(사람용) / `.ai/`(AI 운영용) 3계층으로 분리 | 승인됨 |
-| ADR-0002 | 구현 엔진은 Adapter 패턴으로 추상화 (`EngineAdapter`) | 제안 (P1-5에서 확장 계약 반영 후 승인 예정) |
+| ADR-0002 | 구현 엔진은 Adapter 패턴으로 추상화 (`EngineAdapter`) | 제안 (P1-6에서 확장 계약 반영 후 승인 예정) |
 | ADR-0003 | 승인 절차는 별도 Approval Engine 컴포넌트로 분리 (인라인 금지) | 제안 (Core Engines 구현 Phase에서 확정) |
 | ADR-0004 | Phase 1 저장 방식은 파일 기반(Markdown/JSON)으로 시작 | 제안 (P1-7 구현 후 승인 예정) |
 | ADR-0005 | Workspace Core는 Interfaces에만 의존하는 오케스트레이터 | 승인됨 (ADR-0010이 책임 재정의) |
@@ -164,6 +169,7 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR-0017 | **Context Manager**로 Memory Snapshot 역할 분리(Memory Engine=저장/검색) | 승인됨 |
 | ADR-0018 | Event Store를 Event Bus **독립 Subscriber**로 위치 조정 | 승인됨 |
 | ADR-0019 | **Coordination Capability** 추가(조정 역할 명시) | 승인됨 |
+| ADR-0020 | Task에 `workflow_id`(선택 필드) 추가 — Task-Workflow 관계 보완 | 승인됨 |
 
 기술 스택(Python, dataclasses, 파일 기반 저장, CLI, 인메모리 Event Bus+파일
 Event Store)은 제안 단계이며 각 구현 Phase에서 확정한다.
@@ -183,8 +189,8 @@ Event Store)은 제안 단계이며 각 구현 Phase에서 확정한다.
 - Voice/Slack 등 표면, Event Store, Interaction은 **구조에는 포함하되 구현은 뒤로**
   미룬다 (인터페이스만 Phase 1에서 정의).
 - **미완료 유지 항목**: 이미 구현된 P1-3의 `EngineAdapter`는 `run_task` 기반이므로
-  P1-5에서 세션 생명주기 계약(create_session/run/…/destroy_session)으로 교체해야
-  한다. `ConversationEngine`은 `InteractionEngine`으로 대체 예정(P1-5).
+  **P1-6**에서 세션 생명주기 계약(create_session/run/…/destroy_session)으로
+  교체해야 한다. `ConversationEngine`은 `InteractionEngine`으로 대체 예정(P1-6).
 - **LLM Policy는 "Temporary"다 (P1-4에서 Domain만 추가)**: `domain/llm_policy.py`
   에 `LLMProvider`/`LLMModel`/`LLMEffort`/`INITIAL_MODELS`만 존재하며, 실제 선택
   로직(Policy Engine, Router)은 없다. 사람이 `docs/llm_policy.example.yaml`을

@@ -12,6 +12,18 @@ def test_task_defaults_to_todo() -> None:
     assert task.status == TaskStatus.TODO
 
 
+def test_task_workflow_id_defaults_to_none() -> None:
+    task = make_task()
+    assert task.workflow_id is None
+
+
+def test_task_can_be_linked_to_a_workflow() -> None:
+    task = Task(
+        task_id="t1", project_id="p1", title="테스트 Task", workflow_id="w1"
+    )
+    assert task.workflow_id == "w1"
+
+
 def test_allowed_transition_succeeds() -> None:
     task = make_task()
     task.transition_to(TaskStatus.IN_PROGRESS)

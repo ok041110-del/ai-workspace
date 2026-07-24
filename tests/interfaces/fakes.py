@@ -96,7 +96,9 @@ class FakeApprovalEngine(ApprovalEngine):
 
     def submit(self, action_type: ApprovalActionType, description: str) -> ApprovalRequest:
         request_id = f"approval-{next(self._id_generator)}"
-        request = ApprovalRequest(request_id=request_id, action_type=action_type, description=description)
+        request = ApprovalRequest(
+            request_id=request_id, action_type=action_type, description=description
+        )
         self._requests[request_id] = request
         return request
 

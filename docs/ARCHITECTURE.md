@@ -2,14 +2,21 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.6.0 |
+| 문서 버전 | v0.6.1 |
 | 작성일 | 2026-07-23 |
-| 상태 | Draft (Milestone 1 / Phase 1 — 아키텍처 확정, 구현 재개 대기) |
+| 상태 | Draft (Milestone 1 / Phase 1 — 구현 진행 중, P1-5 완료) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
 (Documentation First 원칙).
 
+> **v0.6.1 변경 사항 (P1-5 — Task-Workflow 관계 보완, ADR-0020)**
+> `Task` 도메인 모델에 `workflow_id`(선택 필드)를 추가해 Mission→Workflow→
+> Task→Step 계층에서 각 하위 개체가 상위 개체를 참조하는 패턴
+> (`Workflow.mission_id`, `Step.task_id`와 동일)을 완성했다. Agent Domain의
+> Provider 비의존성과 LLM Domain의 확장 가능한 `LLMModel` 구조(Provider + name
+> 조합)는 P1-4 구현이 이미 만족함을 재확인했다 (코드 변경 없음).
+>
 > **v0.6.0 변경 사항 (안정화 보완 — ADR-0016 ~ ADR-0019)**
 > v0.5.0 구조에 장기 확장을 위한 네 가지 보완을 반영했다.
 > 1. **Engine Runtime 계층**을 Agent Runtime과 Engine Adapter 사이에 추가했다.
@@ -222,9 +229,9 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 |---|---|
 | `Project` | 프로젝트 |
 | `Mission` | 사용자 목표(최상위 단위) |
-| `Workflow` | Mission 수행 협업 흐름 |
-| `Task` | Agent에게 할당되는 작업 |
-| `Step` | Task 내부 세부 실행 단위 |
+| `Workflow` | Mission 수행 협업 흐름 (`mission_id`로 상위 Mission 참조) |
+| `Task` | Agent에게 할당되는 작업 (`workflow_id`로 상위 Workflow 참조, 선택 필드) |
+| `Step` | Task 내부 세부 실행 단위 (`task_id`로 상위 Task 참조) |
 | `WorkspaceSession` | 현재 실행 상태(현재 프로젝트/Mission/활성 Workflow/활성 Agent/Memory Snapshot/Engine Session) |
 | `Agent` | 능력을 가진 실행 주체 |
 | `AgentRole` | Agent 역할 유형 |

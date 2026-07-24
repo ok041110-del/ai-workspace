@@ -389,3 +389,28 @@
   조정 책임을 추적할 수 있다.
 - 결과/영향: `docs/ARCHITECTURE.md` v0.6.0 §3.6 반영. Capability 목록에
   Coordination 추가.
+
+## ADR-0020: Task-Workflow 관계 필드(`workflow_id`)를 선택 필드로 추가
+
+- 상태: 승인됨 (2026-07-23, P1-5 진행 중 사용자 지시로 확정)
+- 날짜: 2026-07-23
+- 배경: P1-4에서 `Workflow.mission_id`(필수), `Step.task_id`(필수)를 추가해
+  Mission→Workflow→Task→Step 계층에서 하위 개체가 상위 개체를 참조하는 패턴을
+  마련했지만, `Task`에는 자신이 속한 `Workflow`를 가리키는 필드가 없어 이 패턴이
+  Task 단계에서 끊겨 있었다. P1-5에서 이 관계를 재검토해 필드를 보완하기로 했다.
+- 결정: `Task`에 `workflow_id: str | None = None`을 추가한다. `Workflow.
+  mission_id`/`Step.task_id`와 달리 **선택 필드(기본값 None)**로 둔다.
+- 대안:
+  - `workflow_id`를 필수 필드로 추가 — 계층의 일관성은 완벽해지지만, 현재
+    `TaskEngine.create_task(project_id, title)` 인터페이스 계약(P1-3에서 확정)이
+    `workflow_id`를 받지 않으므로, 필수로 만들려면 Interface 계약도 함께
+    변경해야 한다. 이번 P1-5는 "Domain만 다루고 Interface는 손대지 않는다"는
+    범위 지시를 받았으므로 기각.
+  - 필드를 추가하지 않고 다음 Phase로 미룸 — 계층 참조 패턴이 Task 단계에서
+    끊긴 채로 남아 Workflow 실행/조회 로직 설계 시 혼란을 야기할 수 있어 기각.
+- 이유: 선택 필드로 두면 (1) Task가 아직 어떤 Workflow에도 배정되지 않은
+  상태(예: 백로그성 Task)를 자연스럽게 표현할 수 있고, (2) 기존 `TaskEngine`
+  Interface 계약을 변경하지 않고도 관계를 표현할 수 있다. 이후 Phase(Interface
+  확장·TaskEngine 구현)에서 필요하면 필수화 여부를 다시 검토한다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.6.1 §6 반영. `domain/task.py`,
+  `tests/domain/test_task.py` 갱신.
