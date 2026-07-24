@@ -24,7 +24,20 @@ from ai_workspace.interfaces.approval_engine import (
     ApprovalRequestNotFoundError,
 )
 from ai_workspace.interfaces.automation_engine import AutomationEngine, DuplicateTriggerError
-from ai_workspace.interfaces.engine_adapter import EngineAdapter, EngineExecutionError, EngineResult
+from ai_workspace.interfaces.engine_adapter import (
+    CostEstimate,
+    EngineAdapter,
+    EngineExecutionError,
+    EngineResult,
+    EngineSessionStatus,
+    SessionNotFoundError,
+)
+from ai_workspace.interfaces.engine_runtime import (
+    DuplicateEngineError,
+    EngineRuntime,
+    EngineTaskNotFoundError,
+    NoSuitableEngineError,
+)
 from ai_workspace.interfaces.event_bus import Event, EventBus, SubscriptionNotFoundError
 from ai_workspace.interfaces.event_store import EventStore
 from ai_workspace.interfaces.memory_engine import MemoryEngine
@@ -161,13 +174,133 @@ class FakeAutomationEngine(AutomationEngine):
 
 
 class FakeEngineAdapter(EngineAdapter):
-    def run_task(self, task: Task) -> EngineResult:
+    def __init__(
+        self, capabilities: frozenset[str] = frozenset({"code_generation"}), parallel: bool = True
+    ) -> None:
+        self._capabilities = capabilities
+        self._parallel = parallel
+        self._sessions: dict[str, EngineSessionStatus] = {}
+        self._id_generator = itertools.count(1)
+
+    def create_session(self) -> str:
+        session_id = f"session-{next(self._id_generator)}"
+        self._sessions[session_id] = EngineSessionStatus.RUNNING
+        return session_id
+
+    def run(self, session_id: str, task: Task) -> EngineResult:
+        if session_id not in self._sessions:
+            raise SessionNotFoundError(session_id)
+        self._sessions[session_id] = EngineSessionStatus.COMPLETED
         return EngineResult(success=True, output=f"{task.task_id} 완료")
+
+    def cancel(self, session_id: str) -> None:
+        if session_id not in self._sessions:
+            raise SessionNotFoundError(session_id)
+        self._sessions[session_id] = EngineSessionStatus.CANCELLED
+
+    def status(self, session_id: str) -> EngineSessionStatus:
+        if session_id not in self._sessions:
+            raise SessionNotFoundError(session_id)
+        return self._sessions[session_id]
+
+    def destroy_session(self, session_id: str) -> None:
+        if session_id not in self._sessions:
+            raise SessionNotFoundError(session_id)
+        del self._sessions[session_id]
+
+    def capabilities(self) -> frozenset[str]:
+        return self._capabilities
+
+    def supports_parallel(self) -> bool:
+        return self._parallel
+
+    def estimate_cost(self, task: Task) -> CostEstimate:
+        return CostEstimate(estimated_tokens=100, estimated_cost_usd=0.01)
 
 
 class FailingFakeEngineAdapter(EngineAdapter):
-    def run_task(self, task: Task) -> EngineResult:
+    def create_session(self) -> str:
+        return "session-failing"
+
+    def run(self, session_id: str, task: Task) -> EngineResult:
         raise EngineExecutionError("구현 엔진 프로세스를 실행할 수 없습니다.")
+
+    def cancel(self, session_id: str) -> None:
+        raise SessionNotFoundError(session_id)
+
+    def status(self, session_id: str) -> EngineSessionStatus:
+        raise SessionNotFoundError(session_id)
+
+    def destroy_session(self, session_id: str) -> None:
+        raise SessionNotFoundError(session_id)
+
+    def capabilities(self) -> frozenset[str]:
+        return frozenset()
+
+    def supports_parallel(self) -> bool:
+        return False
+
+    def estimate_cost(self, task: Task) -> CostEstimate:
+        return CostEstimate(estimated_tokens=0, estimated_cost_usd=0.0)
+
+
+class FakeEngineRuntime(EngineRuntime):
+    def __init__(self) -> None:
+        self._engines: dict[str, EngineAdapter] = {}
+        self._task_status: dict[str, EngineSessionStatus] = {}
+
+    def register_engine(self, name: str, adapter: EngineAdapter) -> None:
+        if name in self._engines:
+            raise DuplicateEngineError(name)
+        self._engines[name] = adapter
+
+    def _select(
+        self, required_capabilities: frozenset[str], require_parallel: bool = False
+    ) -> EngineAdapter:
+        for adapter in self._engines.values():
+            if not required_capabilities.issubset(adapter.capabilities()):
+                continue
+            if require_parallel and not adapter.supports_parallel():
+                continue
+            return adapter
+        raise NoSuitableEngineError(required_capabilities)
+
+    def run(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> EngineResult:
+        adapter = self._select(required_capabilities)
+        session_id = adapter.create_session()
+        result = adapter.run(session_id, task)
+        adapter.destroy_session(session_id)
+        self._task_status[task.task_id] = (
+            EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED
+        )
+        return result
+
+    def run_parallel(
+        self, tasks: list[Task], required_capabilities: frozenset[str] = frozenset()
+    ) -> list[EngineResult]:
+        adapter = self._select(required_capabilities, require_parallel=True)
+        results: list[EngineResult] = []
+        for task in tasks:
+            session_id = adapter.create_session()
+            result = adapter.run(session_id, task)
+            adapter.destroy_session(session_id)
+            self._task_status[task.task_id] = (
+                EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED
+            )
+            results.append(result)
+        return results
+
+    def cancel(self, task_id: str) -> None:
+        if task_id not in self._task_status:
+            raise EngineTaskNotFoundError(task_id)
+        self._task_status[task_id] = EngineSessionStatus.CANCELLED
+
+    def status(self, task_id: str) -> EngineSessionStatus:
+        if task_id not in self._task_status:
+            raise EngineTaskNotFoundError(task_id)
+        return self._task_status[task_id]
 
 
 class FakeAgentManager(AgentManager):

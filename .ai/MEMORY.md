@@ -40,28 +40,31 @@
   Milestone 1 소속 `T1-01`~`T1-25`로 번호만 이어졌다가, 같은 날 설계 검토를
   거쳐 `T1-18`~`T1-28`로 추가 재분해됨(ADR-0022, 대응표는 `docs/ROADMAP.md`
   하단 참고).
-- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-18` 완료,
-  `T1-19`~`T1-28` 남음(10개 Task).
+- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-19` 완료,
+  `T1-20`~`T1-28` 남음(9개 Task).
 - **완료된 Task 요약**: `T1-01`~`T1-11`(문서화 세트 작성 및 승인), `T1-12`
   (구현 착수 승인), `T1-13`(디렉터리 구조), `T1-14`(Project/Task/Workflow
   도메인), `T1-15`(Interfaces 7종), `T1-16`(Mission/Step/WorkspaceSession/
   Agent 계열 + LLM Policy 초안), `T1-17`(Task-Workflow 관계 보완 +
   Ruff/MyPy 도입), `T1-18`(Agent Runtime Interfaces 6종:
   AgentManager/AgentRegistry/AgentScheduler/AgentRepository/EventBus/
-  EventStore — 구현 없이 계약만 정의, Fake+계약 테스트 포함) — 전체 66개
-  테스트 통과, `ruff`/`mypy` 클린.
-- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-19` Engine
-  Runtime Interfaces → `T1-20` Memory Interfaces → `T1-21` Interaction
-  Interfaces → `T1-22` Workspace Core Skeleton → `T1-23` Repositories →
-  `T1-24` CLI → `T1-25` Tests → `T1-26` Documentation → `T1-27` ADR →
-  `T1-28` Milestone 1 Review.
+  EventStore — 구현 없이 계약만 정의, Fake+계약 테스트 포함), `T1-19`(Engine
+  Runtime Interfaces: `EngineRuntime` 신규 + `EngineAdapter`를 `run_task`
+  단일 메서드에서 세션 기반 계약(`create_session`/`run`/`cancel`/`status`/
+  `destroy_session`/`capabilities`/`supports_parallel`/`estimate_cost`)으로
+  교체) — 전체 79개 테스트 통과, `ruff`/`mypy` 클린.
+- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-20` Memory
+  Interfaces → `T1-21` Interaction Interfaces → `T1-22` Workspace Core
+  Skeleton → `T1-23` Repositories → `T1-24` CLI → `T1-25` Tests → `T1-26`
+  Documentation → `T1-27` ADR → `T1-28` Milestone 1 Review.
 - **아키텍처는 v0.6.3으로 갱신** (ADR-0006~0022, Multi-Agent First 심화 + 안정화
   보완 + Task-Workflow 관계 보완 + Phase→Task 거버넌스 전환 + Task 분해 원칙).
   시스템 구조 자체(컴포넌트/의존성)는 T1-18 설계 검토로 변경되지 않았음 — 자세한
   내용은 §3, `docs/ARCHITECTURE.md` §0 참고. `docs/ARCHITECTURE.md` §7의
-  Interface 표는 T1-18에서 정의한 6개 Interface 상태를 "완료"로 갱신함.
-- **다음 단계**: `.ai/TASKS.md`의 `T1-19`(Engine Runtime Interfaces:
-  EngineRuntime + EngineAdapter 세션 계약 확장)부터 동일한 패턴으로 진행.
+  Interface 표는 T1-18(Agent Runtime 6종), T1-19(EngineRuntime,
+  EngineAdapter 계약)에서 정의한 Interface 상태를 "완료"로 갱신함.
+- **다음 단계**: `.ai/TASKS.md`의 `T1-20`(Memory Interfaces: ContextManager
+  신규 정의 + MemoryEngine 재확인)부터 동일한 패턴으로 진행.
 
 ## 2. 프로젝트 정체성
 
@@ -155,7 +158,7 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR | 결론 | 상태 |
 |---|---|---|
 | ADR-0001 | 문서를 `README` / `docs/`(사람용) / `.ai/`(AI 운영용) 3계층으로 분리 | 승인됨 |
-| ADR-0002 | 구현 엔진은 Adapter 패턴으로 추상화 (`EngineAdapter`) | 제안 (T1-19에서 확장 계약 반영 후 승인 예정) |
+| ADR-0002 | 구현 엔진은 Adapter 패턴으로 추상화 (`EngineAdapter`) | 제안 (T1-19에서 세션 계약 반영 완료, 구체 구현 후 승인 예정) |
 | ADR-0003 | 승인 절차는 별도 Approval Engine 컴포넌트로 분리 (인라인 금지) | 제안 (Core Engines 구현 Milestone에서 확정) |
 | ADR-0004 | Milestone 1 저장 방식은 파일 기반(Markdown/JSON)으로 시작 | 제안 (T1-23 구현 후 승인 예정) |
 | ADR-0005 | Workspace Core는 Interfaces에만 의존하는 오케스트레이터 | 승인됨 (ADR-0010이 책임 재정의) |
@@ -194,10 +197,10 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
 - 구현 엔진 연동 순서: Claude Code 최우선 → Codex → Gemini CLI.
 - Voice/Slack 등 표면, Event Store, Interaction은 **구조에는 포함하되 구현은 뒤로**
   미룬다 (인터페이스만 Milestone 1에서 정의).
-- **미완료 유지 항목**: 이미 구현된 T1-15의 `EngineAdapter`는 `run_task` 기반이므로
-  **T1-19**(Engine Runtime Interfaces)에서 세션 생명주기 계약(create_session/
-  run/…/destroy_session)으로 교체해야 한다. `ConversationEngine`은
-  `InteractionEngine`으로 **T1-21**(Interaction Interfaces)에서 대체 예정.
+- **미완료 유지 항목**: `EngineAdapter`는 T1-19에서 `run_task` 기반 계약을
+  세션 생명주기 계약(create_session/run/…/destroy_session)으로 교체 완료함
+  (구체 구현은 여전히 Milestone 3). `ConversationEngine`은 `InteractionEngine`
+  으로 **T1-21**(Interaction Interfaces)에서 대체 예정.
 - **LLM Policy는 "Temporary"다 (T1-16에서 Domain만 추가)**: `domain/llm_policy.py`
   에 `LLMProvider`/`LLMModel`/`LLMEffort`/`INITIAL_MODELS`만 존재하며, 실제 선택
   로직(Policy Engine, Router)은 없다. 사람이 `docs/llm_policy.example.yaml`을

@@ -312,7 +312,18 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 - 완료 조건(DoD): `EngineRuntime` Fake + 계약 테스트, 확장된 `EngineAdapter`
   Fake + 계약 테스트가 통과한다 (`run_task` 기반 기존 테스트는 새 계약으로
   교체됨).
-- 상태: TODO
+- 상태: **DONE (2026-07-24)** — `interfaces/engine_adapter.py`를
+  `create_session`/`run`/`cancel`/`status`/`destroy_session`/`capabilities`/
+  `supports_parallel`/`estimate_cost` 세션 계약으로 교체(기존 `run_task` 제거,
+  `EngineSessionStatus`/`CostEstimate`/`SessionNotFoundError` 추가).
+  `interfaces/engine_runtime.py` 신규 추가 — `EngineRuntime`(엔진 선택/
+  세션 풀 관리(내부 캡슐화)/병렬 실행 `run_parallel`; `DuplicateEngineError`/
+  `NoSuitableEngineError`/`EngineTaskNotFoundError`). `tests/interfaces/
+  fakes.py`의 `FakeEngineAdapter`/`FailingFakeEngineAdapter`를 새 계약에 맞게
+  재작성하고 `FakeEngineRuntime`을 추가함. `test_engine_adapter.py`를 새
+  계약 기준으로 재작성하고 `test_engine_runtime.py`를 신규 추가(총 13개
+  테스트). `ruff check src tests`, `mypy src`, `pytest`(79개, 기존 66개 +
+  신규 13개) 모두 통과.
 - 의존성: T1-15
 
 #### T1-20: Memory Interfaces
@@ -564,3 +575,21 @@ Runtime 계층(ARCHITECTURE.md §3.4)과 이벤트 인프라(§3.5)의 계약 6�
 동일한 경로로 등록됨을 검증하는 테스트를 포함함. `ruff check src tests`,
 `mypy src`, `pytest`(66개, 전부 통과) 모두 통과함. 다음 Task: **T1-19**
 (Engine Runtime Interfaces, 동일한 패턴). |
+| 2026-07-24 | **T1-19 완료: Engine Runtime Interfaces**. Engine Runtime과
+EngineAdapter의 세션 생명주기 계약을 확정함(ADR-0016). `interfaces/
+engine_adapter.py`를 기존 `run_task` 단일 메서드 계약에서 세션 기반 계약
+(`create_session`/`run`/`cancel`/`status`/`destroy_session`/`capabilities`/
+`supports_parallel`/`estimate_cost`)으로 교체하고 `EngineSessionStatus`,
+`CostEstimate`, `SessionNotFoundError`를 추가함. `interfaces/
+engine_runtime.py`를 신규 추가해 `EngineRuntime`(엔진 선택, 세션 풀 관리는
+구현체 내부로 캡슐화, `run_parallel`을 통한 병렬 실행)을 정의함 —
+`DuplicateEngineError`/`NoSuitableEngineError`/`EngineTaskNotFoundError`.
+Agent가 EngineAdapter를 직접 호출하지 않고 EngineRuntime을 거치는 의존
+방향(ARCHITECTURE.md §8 규칙 6)을 계약에 명시함. `tests/interfaces/
+fakes.py`의 `FakeEngineAdapter`/`FailingFakeEngineAdapter`를 새 계약으로
+재작성하고 `FakeEngineRuntime`을 추가함. `test_engine_adapter.py`를 새
+계약 기준으로 재작성(기존 `run_task` 기반 테스트 대체)하고
+`test_engine_runtime.py`를 신규 추가함. `docs/ARCHITECTURE.md` §7
+Interface 표를 갱신함. `ruff check src tests`, `mypy src`, `pytest`(79개,
+기존 66개 + 신규 13개) 모두 통과. 다음 Task: **T1-20** (Memory Interfaces,
+동일한 패턴). |
