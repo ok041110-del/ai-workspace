@@ -22,9 +22,10 @@ AI Workspace는 또 하나의 코딩 AI가 아닙니다. 실제 코드 작성은
 > **현재 상태**: Milestone 1 진행 중입니다 (Task `T1-17`까지 완료, 다음
 > `T1-18`). Multi-Agent First 구조를 Agent Runtime·Engine Runtime·Context
 > Manager·Event Store·Interaction Layer·Mission→Workflow→Task→Step 계층까지
-> 확정(ADR-0006~0021)했으며, 도메인 모델과 인터페이스 계약을 구현하는 중입니다.
+> 확정(ADR-0006~0022)했으며, 도메인 모델과 인터페이스 계약을 구현하는 중입니다.
 > 프로젝트 관리 체계는 2026-07-24부로 `Milestone → Task` 2단 계층입니다
-> (기존 Phase 계층은 폐지, ADR-0021). 자세한 계획은
+> (기존 Phase 계층은 폐지, ADR-0021). Task는 아키텍처 책임 경계에 따라
+> 분해합니다(ADR-0022). 자세한 계획은
 > [`docs/ROADMAP.md`](docs/ROADMAP.md)와
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)를 참고하세요.
 

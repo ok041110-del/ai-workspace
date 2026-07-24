@@ -37,20 +37,28 @@
 - **관리 체계**: 2026-07-24부로 `Milestone → Phase → Task`에서 **`Milestone →
   Task`**로 전환됨 (ADR-0021). Task ID는 `T{Milestone 번호}-{일련번호}` 형식
   (예: `T1-18`). 과거 Phase 0/Phase 1의 모든 Task(P0-1~P0-11, P1-0~P1-13)는
-  Milestone 1 소속 `T1-01`~`T1-25`로 번호만 이어졌다(내용·이력 보존, 대응표는
-  `docs/ROADMAP.md` 하단 참고).
+  Milestone 1 소속 `T1-01`~`T1-25`로 번호만 이어졌다가, 같은 날 설계 검토를
+  거쳐 `T1-18`~`T1-28`로 추가 재분해됨(ADR-0022, 대응표는 `docs/ROADMAP.md`
+  하단 참고).
 - **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-17` 완료,
-  `T1-18`~`T1-25` 남음.
+  `T1-18`~`T1-28` 남음(11개 Task).
 - **완료된 Task 요약**: `T1-01`~`T1-11`(문서화 세트 작성 및 승인), `T1-12`
   (구현 착수 승인), `T1-13`(디렉터리 구조), `T1-14`(Project/Task/Workflow
   도메인), `T1-15`(Interfaces 7종), `T1-16`(Mission/Step/WorkspaceSession/
   Agent 계열 + LLM Policy 초안), `T1-17`(Task-Workflow 관계 보완 +
   Ruff/MyPy 도입) — 전체 43개 테스트 통과, `ruff`/`mypy` 클린.
-- **아키텍처는 v0.6.2로 갱신** (ADR-0006~0021, Multi-Agent First 심화 + 안정화
-  보완 + Task-Workflow 관계 보완 + Phase→Task 거버넌스 전환). 자세한 내용은
-  §3, `docs/ARCHITECTURE.md` §0 참고.
-- **다음 단계**: `.ai/TASKS.md`의 `T1-18`(신규 Interface 16종 정의 및
-  EngineAdapter 세션 계약 확장)부터 진행.
+- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-18` Agent
+  Runtime Interfaces → `T1-19` Engine Runtime Interfaces → `T1-20` Memory
+  Interfaces → `T1-21` Interaction Interfaces → `T1-22` Workspace Core
+  Skeleton → `T1-23` Repositories → `T1-24` CLI → `T1-25` Tests → `T1-26`
+  Documentation → `T1-27` ADR → `T1-28` Milestone 1 Review.
+- **아키텍처는 v0.6.3으로 갱신** (ADR-0006~0022, Multi-Agent First 심화 + 안정화
+  보완 + Task-Workflow 관계 보완 + Phase→Task 거버넌스 전환 + Task 분해 원칙).
+  시스템 구조 자체(컴포넌트/의존성)는 T1-18 설계 검토로 변경되지 않았음 — 자세한
+  내용은 §3, `docs/ARCHITECTURE.md` §0 참고.
+- **다음 단계**: `.ai/TASKS.md`의 `T1-18`(Agent Runtime Interfaces:
+  AgentManager/AgentRegistry/AgentScheduler/AgentRepository/EventBus/
+  EventStore)부터 진행.
 
 ## 2. 프로젝트 정체성
 
@@ -144,9 +152,9 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR | 결론 | 상태 |
 |---|---|---|
 | ADR-0001 | 문서를 `README` / `docs/`(사람용) / `.ai/`(AI 운영용) 3계층으로 분리 | 승인됨 |
-| ADR-0002 | 구현 엔진은 Adapter 패턴으로 추상화 (`EngineAdapter`) | 제안 (T1-18에서 확장 계약 반영 후 승인 예정) |
+| ADR-0002 | 구현 엔진은 Adapter 패턴으로 추상화 (`EngineAdapter`) | 제안 (T1-19에서 확장 계약 반영 후 승인 예정) |
 | ADR-0003 | 승인 절차는 별도 Approval Engine 컴포넌트로 분리 (인라인 금지) | 제안 (Core Engines 구현 Milestone에서 확정) |
-| ADR-0004 | Milestone 1 저장 방식은 파일 기반(Markdown/JSON)으로 시작 | 제안 (T1-20 구현 후 승인 예정) |
+| ADR-0004 | Milestone 1 저장 방식은 파일 기반(Markdown/JSON)으로 시작 | 제안 (T1-23 구현 후 승인 예정) |
 | ADR-0005 | Workspace Core는 Interfaces에만 의존하는 오케스트레이터 | 승인됨 (ADR-0010이 책임 재정의) |
 | ADR-0006 | Multi-Agent First: Workspace Core=Agent 오케스트레이터, Agent Manager·Agent 도메인 | 승인됨 (ADR-0010~0012가 심화) |
 | ADR-0007 | Agent 협업은 Event Bus 기반 느슨한 결합 | 승인됨 |
@@ -164,6 +172,7 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR-0019 | **Coordination Capability** 추가(조정 역할 명시) | 승인됨 |
 | ADR-0020 | Task에 `workflow_id`(선택 필드) 추가 — Task-Workflow 관계 보완 | 승인됨 |
 | ADR-0021 | **Phase 계층 폐지**, `Milestone → Task` 2단 체계로 전환 | 승인됨 |
+| ADR-0022 | **Task 분해 원칙**: 아키텍처 책임 경계로 Task 분해, 정의·구현·테스트는 한 Task 내 완결 | 승인됨 |
 
 기술 스택(Python, dataclasses, 파일 기반 저장, CLI, 인메모리 Event Bus+파일
 Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
@@ -183,8 +192,9 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
 - Voice/Slack 등 표면, Event Store, Interaction은 **구조에는 포함하되 구현은 뒤로**
   미룬다 (인터페이스만 Milestone 1에서 정의).
 - **미완료 유지 항목**: 이미 구현된 T1-15의 `EngineAdapter`는 `run_task` 기반이므로
-  **T1-18**에서 세션 생명주기 계약(create_session/run/…/destroy_session)으로
-  교체해야 한다. `ConversationEngine`은 `InteractionEngine`으로 대체 예정(T1-18).
+  **T1-19**(Engine Runtime Interfaces)에서 세션 생명주기 계약(create_session/
+  run/…/destroy_session)으로 교체해야 한다. `ConversationEngine`은
+  `InteractionEngine`으로 **T1-21**(Interaction Interfaces)에서 대체 예정.
 - **LLM Policy는 "Temporary"다 (T1-16에서 Domain만 추가)**: `domain/llm_policy.py`
   에 `LLMProvider`/`LLMModel`/`LLMEffort`/`INITIAL_MODELS`만 존재하며, 실제 선택
   로직(Policy Engine, Router)은 없다. 사람이 `docs/llm_policy.example.yaml`을

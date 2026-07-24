@@ -476,3 +476,59 @@
   §0(신설), `.ai/TASKS.md`(전면 재구성), `.ai/MEMORY.md`, `.ai/RULES.md`
   (승인 항목·커밋 메시지 예시), `README.md`에 반영됨. 적용 대상 코드는 없음
   (순수 프로젝트 관리 체계 변경).
+
+## ADR-0022: Task 분해 원칙 — "한 Task = 하나의 아키텍처 책임 경계", 정의·구현·테스트는 한 Task 안에서 완결
+
+- 상태: 승인됨 (2026-07-24, 사용자 지시로 확정 — 설계 검토 후 결정)
+- 날짜: 2026-07-24
+- 배경: ADR-0021은 Task를 "하나의 구현 목표 + 하나의 Commit + 하나의 구현
+  사이클"로 정의했다. 그런데 계획 중이던 T1-18("신규 Interface 정의 및
+  EngineAdapter 세션 계약 확장, 총 16종")을 실제로 검토해 보니, 서로 참조하지
+  않는 4개의 독립적인 아키텍처 하위 계층 — Agent Runtime(§3.4, AgentManager/
+  Registry/Scheduler/Repository/EventBus/EventStore), Engine Runtime(§3.9,
+  EngineRuntime + EngineAdapter 확장), Memory 계열(§3.8, ContextManager +
+  MemoryEngine), Interaction Layer(§3.2, InteractionEngine) — 가 하나의 Task에
+  뭉쳐 있었다. 이는 ADR-0021이 정의한 "하나의 구현 목표"라는 기준에 부합하지
+  않았다.
+- 결정:
+  1. **Task 분해 기준을 "아키텍처 책임 경계(= `docs/ARCHITECTURE.md` §3의 컴포넌트
+     절 경계)"로 명문화한다.** 서로 의존하지 않는(= 서로 import하지 않는) 컴포넌트
+     그룹은 별도 Task로 분리하고, 서로 강하게 의존하는 컴포넌트(예: EngineRuntime과
+     EngineAdapter, ContextManager와 MemoryEngine)는 같은 Task로 묶는다.
+  2. T1-18을 4개 Task로 분리한다: **T1-18 Agent Runtime Interfaces**,
+     **T1-19 Engine Runtime Interfaces**, **T1-20 Memory Interfaces**,
+     **T1-21 Interaction Interfaces**. 이에 맞춰 이후 Task를 T1-22(Workspace
+     Core Skeleton) ~ T1-28(Milestone 1 Review)로 순연한다(구 T1-19~T1-25).
+  3. **"인터페이스 정의 → 구현 → 테스트"는 계속 한 Task 안에서 완결한다.** 이를
+     Task별로 더 잘게(예: "정의만 하는 Task"와 "테스트만 하는 Task"를 분리)
+     쪼개지 않는다.
+- 대안:
+  - 현행 유지(T1-18을 하나의 Task로) — Commit 1개로 16종 계약을 한 번에 볼 수
+    있다는 장점은 있으나, diff가 서로 무관한 4개 하위 계층에 걸쳐 흩어져
+    리뷰·롤백 단위가 모호해짐 (기각).
+  - "정의 → 구현 → 테스트"까지 Task 단위로 잘게 분리 — 더 잘게 쪼갤수록 각
+    Task의 책임은 명확해지지만, Milestone 1처럼 아직 구체 구현이 없는 계약
+    전용 단계에서는 Task 수만 불필요하게 늘어나고 오히려 흐름이 끊긴다 (기각).
+  - Task 분해 기준을 "파일 개수" 등 기계적 기준으로 정함 — 아키텍처 의미와
+    무관한 분해가 되어 Commit이 여전히 "하나의 설계 의도"를 나타내지 못함
+    (기각).
+- 이유: 아키텍처 책임 경계로 Task를 나누면 (1) Commit 하나가 항상 하나의 설계
+  의도를 표현하고, (2) 리뷰어가 diff만 보고도 어떤 컴포넌트가 바뀌었는지 즉시
+  파악할 수 있으며, (3) 향후 자동화된 Task 생성 도구("Task Analyzer")가 "한
+  Task = 한 책임"이라는 동일한 규칙으로 Task를 기계적으로 생성할 수 있다. 반면
+  정의·구현·테스트를 Task 단위로 추가 분리하면 계약 전용 단계에서 Task 수 증가
+  대비 얻는 이점이 적어, 균형을 위해 이 층위의 분해는 하지 않는다.
+- 부가 발견 (설계 검토 과정에서 확인, 이번 결정과는 별개):
+  - `memory_engine.py`는 현재도 `remember`/`recall`만 가지고 있어 "Snapshot
+    책임 제거"라는 문구가 실제로는 변경할 코드가 없는 상태(No-Op)임을 확인함
+    (T1-20에 반영).
+  - `AgentRegistry`(런타임 등록부)와 `AgentRepository`(영속 저장소)는 이름이
+    유사해 혼동 우려가 있어, 각 인터페이스 docstring에 역할 차이를 명시하기로
+    함(T1-18에 반영).
+  - `AgentRuntime` 파사드 인터페이스 도입, `EngineAdapter.run()`의 입력 단위를
+    `Task`에서 `Step`으로 낮출지 여부, LLM Policy Domain과 EngineRuntime의
+    연동 시점은 지금 결정하지 않고 각각 자연스러운 시점(T1-22, Milestone 2,
+    Milestone 3~4)에 재검토하기로 함(YAGNI).
+- 결과/영향: `.ai/TASKS.md`의 T1-18~T1-28 재구성, `docs/ROADMAP.md`의 진행
+  상태·Migration Table 주석 갱신에 반영됨. 적용 대상 코드는 없음(설계 검토 및
+  계획 문서 변경).

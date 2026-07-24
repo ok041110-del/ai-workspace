@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.6.2 |
+| 문서 버전 | v0.6.3 |
 | 작성일 | 2026-07-24 |
 | 상태 | Draft (Milestone 1 — 구현 진행 중, T1-17까지 완료 / 다음 T1-18) |
 
@@ -10,6 +10,15 @@
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
 (Documentation First 원칙).
 
+> **v0.6.3 변경 사항 (T1-18 설계 검토 및 재분해, ADR-0022)**
+> 구 `T1-18`(신규 Interface 16종 정의 및 EngineAdapter 세션 계약 확장)의
+> 설계를 검토한 결과, Interface 계약 내용 자체(§3.4~3.10, ADR-0010~0019)는
+> 변경할 근거가 없어 그대로 유지하되, 서로 독립적인 4개 하위 계층을 한 Task로
+> 묶은 것은 ADR-0021의 "Task = 하나의 구현 목표" 원칙에 맞지 않아 `T1-18`~
+> `T1-21`(Agent Runtime / Engine Runtime / Memory / Interaction Interfaces)로
+> 분리하기로 함. 이하 Task는 `T1-22`~`T1-28`로 순연됨. 시스템 구조 자체는
+> 변경 없음 — §0 참고.
+>
 > **v0.6.2 변경 사항 (Phase 체계 폐지 → Task 기반 체계, ADR-0021)**
 > 프로젝트 관리 체계를 `Milestone → Phase → Task` 4단 계층에서
 > `Milestone → Task` 2단 계층으로 전환했다. 이는 소프트웨어 구조 변경이
@@ -56,12 +65,20 @@ Roadmap
   2026-07-24 폐지되었다 (ADR-0021). Phase 완료마다 별도로 요구되던 승인은
   Milestone 완료 승인으로 일원화된다. 기존 Phase 0/Phase 1의 모든 Task는
   Milestone 1의 `T1-01`~`T1-25`로 번호만 이어졌으며 내용·상태·이력은 보존된다
-  (`docs/ROADMAP.md`의 Migration Table 참고).
+  (`docs/ROADMAP.md`의 Migration Table 참고). 이후 2026-07-24 설계 검토에서
+  구 `T1-18`(단일 Task)이 서로 독립적인 4개 하위 계층을 묶고 있음이 확인되어
+  `T1-18`~`T1-21`로 추가 분해되었고, 이하 Task가 `T1-22`~`T1-28`로 순연되었다
+  (ADR-0022).
 - Milestone 2~4처럼 아직 세부 Task로 분해되지 않은 영역은 "예정 작업 영역"으로
   서술하고, 착수 시점에 `T2-01`, `T3-01`, `T4-01`부터 개별 Task를 정의한다
   (Task Driven Development — 너무 이른 시점에 세부 Task를 미리 확정하지 않는다).
+- **Task 분해 기준 (ADR-0022)**: Task는 §3의 컴포넌트 절 경계(아키텍처 책임
+  경계)를 따라 나눈다. 서로 의존하지 않는 컴포넌트 그룹은 별도 Task로 분리하고,
+  서로 강하게 의존하는 컴포넌트(예: EngineRuntime과 EngineAdapter, ContextManager와
+  MemoryEngine)는 같은 Task로 묶는다. 다만 "정의 → 구현 → 테스트"는 계속 한
+  Task 안에서 완결하며, 이 층위를 Task 단위로 추가 분리하지 않는다.
 - 세부 Task 목록/상태는 `.ai/TASKS.md`, Milestone 개요는 `docs/ROADMAP.md`,
-  거버넌스 변경 근거는 `.ai/DECISIONS.md`(ADR-0021)를 참고한다.
+  거버넌스 변경 근거는 `.ai/DECISIONS.md`(ADR-0021, ADR-0022)를 참고한다.
 
 ---
 

@@ -22,9 +22,12 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 ## Milestone 1 — 기반 구축 (Foundation)
 
 > Milestone DoD: `docs/ROADMAP.md`의 "Milestone 1 Definition of Done" 참고.
-> T1-01~T1-11은 문서화 작업(구 Phase 0), T1-12~T1-25는 구현 작업(구 Phase 1)에
+> T1-01~T1-11은 문서화 작업(구 Phase 0), T1-12~T1-28은 구현 작업(구 Phase 1)에
 > 해당한다. 그룹 구분은 참고용 설명일 뿐 별도 승인 단계를 두지 않는다 — Milestone
-> 전체에 대한 승인은 T1-25(Milestone 1 완료 승인 요청) 하나로 일원화된다.
+> 전체에 대한 승인은 T1-28(Milestone 1 Review) 하나로 일원화된다.
+> **2026-07-24**: 원래 T1-18~T1-25(8개)였던 구현 Task를 아키텍처 책임 경계에
+> 맞춰 T1-18~T1-28(11개)로 재분해함(ADR-0022). 상세 사유는 T1-18 앞의 안내문과
+> ADR-0022 참고.
 
 #### T1-01: 프로젝트 비전/철학 분석 및 문서 구조 설계
 - 목적: 프로젝트 비전과 개발 철학을 바탕으로 어떤 문서를, 어떤 구조로 만들지
@@ -133,7 +136,7 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 > Interfaces → Agent 도메인 추가 → 신규 Interface/EngineAdapter 확장 →
 > Workspace Core 골격(Agent 위임) → 저장소 → CLI → 테스트.
 >
-> **참고: 이 구현 작업(T1-12~T1-25)은 계약과 골격까지만 만든다.** Agent/Engine/
+> **참고: 이 구현 작업(T1-12~T1-28)은 계약과 골격까지만 만든다.** Agent/Engine/
 > Adapter/EventBus/Interaction의 실제 처리 로직은 Milestone 2·3에서 구현한다.
 
 #### T1-13: `src/ai_workspace/` 디렉터리 구조 생성
@@ -170,7 +173,7 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 #### T1-15: Interfaces 정의 (7개)
 - 목적: Workspace Core와 향후 구체 구현체가 공유할 추상 계약을 확정한다
   (ADR-0002, ADR-0005 반영). 계약만 정의하고 구체 구현은 하지 않는다
-  (`ProjectRepository`의 구체 구현만 T1-20에서 별도 진행).
+  (`ProjectRepository`의 구체 구현만 T1-23에서 별도 진행).
 - 작업 내용: `interfaces/`에 아래 7개 인터페이스를 정의한다 (`abc.ABC` 또는
   `typing.Protocol` 사용).
   - `project_repository.py` — `ProjectRepository`
@@ -190,7 +193,8 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
     (AgentManager, AgentRepository, AgentRegistry, AgentScheduler,
     InteractionEngine, EventBus, EventStore, EngineRuntime, ContextManager)
     추가, MemoryEngine 계약 축소(Snapshot 이관), EngineAdapter 세션 생명주기
-    계약 갱신은 후속 Task **T1-18**에서 진행한다(총 16종).
+    계약 갱신은 후속 Task **T1-18~T1-21**에서 진행한다(총 16종, ADR-0022로
+    책임 경계별 4개 Task로 분해).
 - 의존성: T1-14
 
 #### T1-16: 도메인 확장 (Mission/Workflow 재정의/Step, WorkspaceSession, Agent 계열, LLM Policy 초안)
@@ -252,33 +256,82 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
   만족하여 코드 변경 없음.
 - 의존성: T1-16
 
-#### T1-18: 신규 Interface 정의 및 EngineAdapter 세션 계약 확장 (총 16종)
-- 목적: Multi-Agent First 심화 + 안정화 보완 구조에 필요한 계약을 추가·확장한다
-  (ADR-0010~0019). 계약만 정의하고 구체 구현은 이후 Milestone에서 진행한다.
+> **2026-07-24 Task 분해 재검토**: T1-18을 "신규 Interface 정의 및 EngineAdapter
+> 세션 계약 확장(총 16종)"이라는 단일 Task로 계획했으나, 아키텍처 검토 결과
+> 서로 의존하지 않는 4개 하위 계층(Agent Runtime / Engine Runtime / Memory /
+> Interaction)을 한 Task에 묶고 있어 "Task = 하나의 구현 목표 + 하나의 Commit"
+> 원칙(ADR-0021)에 맞지 않는다고 판단함. 사용자 승인에 따라 T1-18을 4개 Task
+> (T1-18~T1-21)로 분리하고, 이후 Task 번호를 T1-22~T1-28로 순연함(ADR-0022).
+> **다만 "인터페이스 정의 → 구현 → 테스트"를 한 Task 안에서 끝내는 기존 원칙은
+> 유지**하며, 인터페이스 정의 자체만 별도로 잘게 쪼개지 않는다(과도한 세분화
+> 방지).
+
+#### T1-18: Agent Runtime Interfaces
+- 목적: Agent Runtime 계층(ARCHITECTURE.md §3.4)과 그 이벤트 인프라(§3.5)의
+  계약을 확정한다 (ADR-0010, ADR-0018, ADR-0019). 계약만 정의하고 구체 구현은
+  이후 Milestone에서 진행한다.
 - 작업 내용 (`interfaces/`):
   - `agent_manager.py` — `AgentManager`(생성/생명주기/상태)
-  - `agent_repository.py` — `AgentRepository`(조회/저장)
-  - `agent_registry.py` — `AgentRegistry`(등록/조회/제거)
+  - `agent_registry.py` — `AgentRegistry`(등록/조회/제거 — **런타임 등록부**,
+    프로세스 생존 동안만 유지됨을 docstring에 명시하여 `AgentRepository`와 구분)
   - `agent_scheduler.py` — `AgentScheduler`(Capability 기준 선택/병렬/우선순위)
-  - `interaction_engine.py` — `InteractionEngine`(입력 정규화; ConversationEngine
-    대체, 지금 구현 안 함)
+  - `agent_repository.py` — `AgentRepository`(조회/저장 — **영속 저장소**,
+    재시작 후에도 유지됨을 docstring에 명시)
   - `event_bus.py` — `EventBus`(publish/subscribe)
   - `event_store.py` — `EventStore`(Bus의 **독립 구독자**, 기록/Replay/Audit;
-    지금 구현 안 함, ADR-0018)
-  - `engine_runtime.py` — `EngineRuntime`(엔진 선택/세션 풀/병렬; ADR-0016)
-  - `context_manager.py` — `ContextManager`(Context 조립/Memory Snapshot 생명주기;
-    ADR-0017)
-  - `memory_engine.py` 조정 — Snapshot 책임 제거, **저장/검색만** 담당하도록 계약
-    축소 (Snapshot은 ContextManager로 이관)
-  - `engine_adapter.py` 확장 — `create_session`/`run`/`cancel`/`status`/
-    `destroy_session`/`capabilities`/`supports_parallel`/`estimate_cost`
-    (기존 `run_task` 기반 계약/테스트를 새 계약으로 교체)
-- 완료 조건(DoD): 신규/확장 인터페이스 각각에 대해 Fake 구현체 + 계약 테스트가
-  통과한다 (실제 로직 없이 계약만 검증). 총 16종 인터페이스가 정의된다.
+    지금 구현 안 함, ADR-0018). `EventBus.subscribe()`가 다른 구독자와 동일한
+    API로 EventStore를 등록해야 함(버스 내부에 EventStore 전용 특별 경로를
+    두지 않음)을 계약에 명시한다.
+- 완료 조건(DoD): 6개 인터페이스 각각에 대해 Fake 구현체 + 계약 테스트가
+  통과한다 (실제 로직 없이 계약만 검증).
 - 상태: TODO (다음 Task)
 - 의존성: T1-15, T1-16
 
-#### T1-19: Workspace Core 골격 구현 (Agent Runtime 위임형)
+#### T1-19: Engine Runtime Interfaces
+- 목적: Engine Runtime과 EngineAdapter의 세션 생명주기 계약을 확정한다
+  (ADR-0016). EngineRuntime의 엔진 선택 로직이 EngineAdapter의 정확한 메서드
+  시그니처(`capabilities`/`estimate_cost`/`supports_parallel`)에 직접 의존하므로
+  두 계약을 같은 Task에서 함께 정의한다.
+- 작업 내용 (`interfaces/`):
+  - `engine_runtime.py` — `EngineRuntime`(엔진 선택/세션 풀 관리/병렬 실행;
+    ADR-0016)
+  - `engine_adapter.py` 확장 — `create_session`/`run`/`cancel`/`status`/
+    `destroy_session`/`capabilities`/`supports_parallel`/`estimate_cost`
+    (기존 `run_task` 기반 계약/테스트를 새 계약으로 교체)
+- 완료 조건(DoD): `EngineRuntime` Fake + 계약 테스트, 확장된 `EngineAdapter`
+  Fake + 계약 테스트가 통과한다 (`run_task` 기반 기존 테스트는 새 계약으로
+  교체됨).
+- 상태: TODO
+- 의존성: T1-15
+
+#### T1-20: Memory Interfaces
+- 목적: Context 조립과 Memory 저장/검색의 역할 분리를 계약으로 확정한다
+  (ADR-0017). `ContextManager`가 축소된 `MemoryEngine` 계약을 전제로 설계되므로
+  같은 Task에서 함께 다룬다.
+- 작업 내용 (`interfaces/`):
+  - `context_manager.py` — `ContextManager`(Context 조립/Memory Snapshot
+    생명주기; ADR-0017)
+  - `memory_engine.py` 재확인 — 현재 구현(`remember`/`recall`)을 점검한 결과
+    **Snapshot 관련 메서드가 애초에 존재하지 않아 제거할 코드가 없음을 확인**.
+    "저장/검색만 담당"이라는 계약이 이미 만족되어 있으므로 **코드 변경 없음**
+    (T1-17에서 Agent/LLM Domain을 재검토 후 변경 없음으로 처리한 것과 동일한
+    패턴).
+- 완료 조건(DoD): `ContextManager` Fake + 계약 테스트가 통과하고, `MemoryEngine`
+  기존 계약·테스트에 회귀가 없음을 확인한다.
+- 상태: TODO
+- 의존성: T1-15, T1-16
+
+#### T1-21: Interaction Interfaces
+- 목적: 입력 표면 정규화 계약을 확정한다 (ADR-0013). Agent Runtime/Engine
+  Runtime/Memory 어느 것과도 의존관계가 없는 독립 계층이라 별도 Task로 둔다.
+- 작업 내용 (`interfaces/`):
+  - `interaction_engine.py` — `InteractionEngine`(입력 정규화; 기존
+    `ConversationEngine` 명칭을 대체, 지금 구현 안 함)
+- 완료 조건(DoD): `InteractionEngine` Fake + 계약 테스트가 통과한다.
+- 상태: TODO
+- 의존성: T1-15
+
+#### T1-22: Workspace Core Skeleton
 - 목적: 최상위 오케스트레이터로서 Workspace Core의 최소 형태를 마련한다
   (ADR-0005 유지 + ADR-0010 재정의). 실제 처리 로직은 포함하지 않는다.
 - 작업 내용: `core/`에 다음 책임만 구현한다 (모두 Interfaces에만 의존).
@@ -291,13 +344,16 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
   6. Workflow 시작 (`WorkflowEngine`)
   7. 종료(Shutdown)
   ※ Task 실행은 Workspace Core가 하지 않고 **Agent Runtime에 위임**한다.
+  ※ Registry/Scheduler/Manager/EventBus/EngineRuntime을 조립하는 코드가
+    번거로워지면 `AgentRuntime` 파사드 인터페이스 도입을 재검토한다(지금은
+    도입하지 않음 — YAGNI).
 - 완료 조건(DoD): Mock Interfaces를 주입해 위 책임이 단위 테스트로 검증되고,
   Core 코드에 구체 클래스 직접 참조가 없음을 확인한다. **Task를 직접 실행하지
   않고 Agent Runtime에 위임함**을 테스트로 확인한다.
 - 상태: TODO
-- 의존성: T1-16, T1-18
+- 의존성: T1-16, T1-18, T1-19
 
-#### T1-20: 파일 기반 저장소 구현 (ProjectRepository + AgentRepository + EventStore)
+#### T1-23: Repositories
 - 목적: Project/Agent 데이터와 이벤트 로그를 세션 간에 영속화한다 (ADR-0004,
   ADR-0014 반영).
 - 작업 내용: `storage/`에 `FileProjectRepository`, `FileAgentRepository`,
@@ -307,48 +363,52 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 - 상태: TODO
 - 의존성: T1-18
 
-#### T1-21: CLI 진입점 구성
+#### T1-24: CLI
 - 목적: 사람이 실제로 Project를 다뤄볼 수 있는 최소 진입점을 제공한다 (UI
   Surface의 하나).
 - 작업 내용: `cli/`에 Workspace Core와 파일 저장소를 연결해 Project 생성·조회
   명령을 구현한다 (Agent/협업 실행은 구체 구현이 없는 이 시점에는 골격까지만).
 - 완료 조건(DoD): CLI로 Project 생성 → 조회가 end-to-end로 동작한다.
 - 상태: TODO
-- 의존성: T1-19, T1-20
+- 의존성: T1-22, T1-23
 
-#### T1-22: 기본 테스트 환경 구축 및 테스트 작성
-- 목적: Test Before Complete 원칙에 따라 Milestone 1 구현 산출물을 검증한다.
+#### T1-25: Tests
+- 목적: Test Before Complete 원칙에 따라 Milestone 1 전체 구현 산출물을
+  마지막으로 한 번 더 점검한다. (개별 Task(T1-18~T1-24)는 각자 완료 조건에
+  자체 테스트를 이미 포함하므로, 이 Task는 신규 테스트를 처음 작성하는 단계가
+  아니라 **전체 스위트 통합 점검 및 커버리지 보강**이다.)
 - 작업 내용: `pytest` 설정을 정리하고, `tests/{domain,interfaces,core,storage,
-  cli}/`에 각 컴포넌트별 테스트를 작성/보강한다. `ruff`/`mypy`도 함께 통과시킨다.
+  cli}/` 전체를 훑어 누락된 컴포넌트별 테스트를 보강한다. `ruff`/`mypy`도 전체
+  기준으로 함께 통과시킨다.
 - 완료 조건(DoD): `ruff`, `mypy`, `pytest` 실행 시 전체가 통과한다.
 - 상태: TODO
-- 의존성: T1-16 ~ T1-21
+- 의존성: T1-16 ~ T1-24
 
-#### T1-23: `docs/ARCHITECTURE.md` 최종 정합성 확인
+#### T1-26: Documentation
 - 목적: 문서와 실제 구현이 일치하는지 확인한다 (Documentation First).
 - 작업 내용: 구현된 구조/디렉터리/컴포넌트를 ARCHITECTURE.md와 대조하고 필요 시
   갱신한다.
 - 완료 조건(DoD): 문서와 실제 코드가 일치한다.
 - 상태: TODO
-- 의존성: T1-16 ~ T1-22
+- 의존성: T1-16 ~ T1-25
 
-#### T1-24: ADR 상태 갱신 (ADR-0002, ADR-0004)
+#### T1-27: ADR
 - 목적: EngineAdapter(세션 생명주기 계약 포함) 설계와 파일 기반 저장 결정을 정식
   확정한다.
 - 작업 내용: `.ai/DECISIONS.md`의 ADR-0002, ADR-0004 상태를 "승인됨"으로 갱신한다
   (ADR-0002는 ADR-0009·ADR-0015의 세션 생명주기 계약을 포함해 재확정).
 - 완료 조건(DoD): 두 ADR 상태가 "승인됨"으로 표시된다.
 - 상태: TODO
-- 의존성: T1-18(ADR-0002), T1-20(ADR-0004)
+- 의존성: T1-19(ADR-0002), T1-23(ADR-0004)
 
-#### T1-25: Milestone 1 완료 승인 요청 (구 "Phase 1 완료 승인 요청")
+#### T1-28: Milestone 1 Review
 - 목적: Approval Required 원칙에 따라 Milestone 1 산출물을 검토받는다.
 - 작업 내용: 도메인(Agent 포함), 전체 Interfaces, Workspace Core 골격, 저장소,
   CLI, 테스트 결과를 제시하고 승인을 요청한다.
 - 완료 조건(DoD): 위 모든 Task가 DONE이고 테스트가 통과한 상태에서 사용자가
   승인한다.
 - 상태: TODO
-- 의존성: T1-01 ~ T1-24
+- 의존성: T1-01 ~ T1-27
 
 ---
 
@@ -458,3 +518,21 @@ Migration Table은 `docs/ROADMAP.md` 하단 참고). Milestone 2~4는 아직 세
 `docs/ARCHITECTURE.md`, `.ai/DECISIONS.md`(ADR-0021), 본 문서, `.ai/MEMORY.md`,
 `.ai/RULES.md`, `README.md`를 함께 갱신함. 다음 Task: **T1-18** (신규 Interface
 16종 정의 및 EngineAdapter 세션 계약 확장 — 기존 계획상 "P1-6"과 동일한 작업). |
+| 2026-07-24 | **T1-18 설계 검토 및 재분해 (ADR-0022)**. 사용자 요청으로 T1-18(신규
+Interface 16종 정의 및 EngineAdapter 세션 계약 확장)의 설계를 검토함. Interface
+계약 내용 자체는 대부분 유지(ADR-0010~0019에서 이미 충분히 근거가 검토된 결정)로
+판정했으나, 서로 의존하지 않는 4개 아키텍처 하위 계층(Agent Runtime/Engine
+Runtime/Memory/Interaction)을 하나의 Task로 묶은 것은 "Task = 하나의 구현
+목표 + 하나의 커밋"(ADR-0021) 원칙에 어긋난다고 판단해 분리를 제안함. 사용자가
+분리 방향을 승인하고 구체적인 분해 구조(T1-18~T1-28, 11개 Task)를 지시함. 이에
+따라 기존 T1-18~T1-25(8개)를 T1-18~T1-28(11개)로 재구성: T1-18(Agent Runtime
+Interfaces) / T1-19(Engine Runtime Interfaces) / T1-20(Memory Interfaces) /
+T1-21(Interaction Interfaces) / T1-22(Workspace Core Skeleton, 구 T1-19) /
+T1-23(Repositories, 구 T1-20) / T1-24(CLI, 구 T1-21) / T1-25(Tests, 구 T1-22) /
+T1-26(Documentation, 구 T1-23) / T1-27(ADR, 구 T1-24) / T1-28(Milestone 1
+Review, 구 T1-25). "인터페이스 정의 → 구현 → 테스트를 한 Task 안에서 완료"하는
+기존 원칙은 유지하고, 구현/테스트를 별도 Task로 추가 분리하지는 않음. 부가 발견:
+`memory_engine.py`는 이미 저장/검색만 담당하는 계약이라 T1-20에서 실질적인 코드
+변경이 없음(No-Op). `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `.ai/DECISIONS.md`
+(ADR-0022), `.ai/MEMORY.md`, `README.md`를 함께 갱신함. 다음 Task: **T1-18**
+(Agent Runtime Interfaces). |

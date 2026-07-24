@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.6.0 |
+| 문서 버전 | v0.6.1 |
 | 작성일 | 2026-07-24 |
-| 상태 | Draft (Phase 체계 폐지 → Task 기반 체계로 전환, ADR-0021) |
+| 상태 | Draft (Task 기반 체계, T1-18 설계 검토 후 T1-18~T1-28로 재분해, ADR-0022) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -58,18 +58,24 @@ Roadmap
 AgentCapability/AgentStatus), 전체 Interfaces(16종), 그리고 Agent Runtime에
 위임하는 Workspace Core 골격과 최소 CLI를 확보한다.
 
-**구성**: 문서화 작업(T1-01~T1-11, 구 Phase 0) + 구현 작업(T1-12~T1-25, 구
+**구성**: 문서화 작업(T1-01~T1-11, 구 Phase 0) + 구현 작업(T1-12~T1-28, 구
 Phase 1)
 
 **Milestone Definition of Done**
 1. `docs/`, `.ai/` 문서 체계가 작성·승인되었다 (T1-01~T1-11).
 2. 확장된 도메인 모델, 전체 Interfaces(16종), 세션 생명주기 EngineAdapter 계약,
    Agent Runtime·Engine Runtime 위임형 Workspace Core 골격(WorkspaceSession 관리
-   포함), 파일 저장소, 최소 CLI가 동작하며 테스트를 통과한다 (T1-12~T1-25).
-3. Multi-Agent First 관련 아키텍처 결정(ADR-0006~0021)이 문서로 확정되어 있다.
+   포함), 파일 저장소, 최소 CLI가 동작하며 테스트를 통과한다 (T1-12~T1-28).
+3. Multi-Agent First 관련 아키텍처 결정(ADR-0006~0022)이 문서로 확정되어 있다.
 
-**진행 상태**: T1-01~T1-17 완료, T1-18~T1-25 진행 예정 (다음 Task: T1-18).
+**진행 상태**: T1-01~T1-17 완료, T1-18~T1-28 진행 예정 (다음 Task: T1-18).
 세부 Task 목록/DoD/상태는 `.ai/TASKS.md`의 "Milestone 1" 섹션 참고.
+
+> **2026-07-24 Task 재분해(ADR-0022)**: 설계 검토 결과 원래 하나의 Task였던
+> "신규 Interface 정의 및 EngineAdapter 확장"(구 T1-18)이 서로 독립적인 4개
+> 아키텍처 하위 계층을 묶고 있어 "Task = 하나의 구현 목표" 원칙에 맞지 않는다고
+> 판단, T1-18~T1-21(Agent Runtime / Engine Runtime / Memory / Interaction
+> Interfaces) 4개로 분리하고 이후 Task를 T1-22~T1-28로 순연했다.
 
 ---
 
@@ -176,15 +182,30 @@ Phase 체계 폐지에 따라 기존 Phase 0/Phase 1의 모든 Task를 Milestone
 | P1-3 | T1-15 | Interfaces 정의 (7개) | DONE |
 | P1-4 | T1-16 | 도메인 확장 (Mission/Workflow 재정의/Step, WorkspaceSession, Agent 계열, LLM Policy 초안) | DONE |
 | P1-5 | T1-17 | Core/Agent/LLM Domain 마무리 및 코드 품질 도구(Ruff/MyPy) 도입 | DONE |
-| P1-6 | T1-18 | 신규 Interface 정의 및 EngineAdapter 세션 계약 확장 (총 16종) | TODO (다음 Task) |
-| P1-7 | T1-19 | Workspace Core 골격 구현 (Agent Runtime 위임형) | TODO |
-| P1-8 | T1-20 | 파일 기반 저장소 구현 (ProjectRepository + AgentRepository + EventStore) | TODO |
-| P1-9 | T1-21 | CLI 진입점 구성 | TODO |
-| P1-10 | T1-22 | 기본 테스트 환경 구축 및 테스트 작성 | TODO |
-| P1-11 | T1-23 | `docs/ARCHITECTURE.md` 최종 정합성 확인 | TODO |
-| P1-12 | T1-24 | ADR 상태 갱신 (ADR-0002, ADR-0004) | TODO |
-| P1-13 | T1-25 | Milestone 1 완료 승인 요청 (구 "Phase 1 완료 승인 요청") | TODO |
+| P1-6 | T1-18~T1-21 | (2026-07-24 ADR-0022로 4개 Task로 재분해 — 아래 표 참고) | TODO |
+| P1-7 | T1-22 | Workspace Core 골격 구현 (Agent Runtime 위임형) | TODO |
+| P1-8 | T1-23 | 파일 기반 저장소 구현 (ProjectRepository + AgentRepository + EventStore) | TODO |
+| P1-9 | T1-24 | CLI 진입점 구성 | TODO |
+| P1-10 | T1-25 | 기본 테스트 환경 구축 및 테스트 작성 | TODO |
+| P1-11 | T1-26 | `docs/ARCHITECTURE.md` 최종 정합성 확인 | TODO |
+| P1-12 | T1-27 | ADR 상태 갱신 (ADR-0002, ADR-0004) | TODO |
+| P1-13 | T1-28 | Milestone 1 완료 승인 요청 (구 "Phase 1 완료 승인 요청") | TODO |
 
 Milestone 2~4는 아직 개별 Task로 분해되지 않았으므로(과거에도 "Phase 2 상세
 Task는 착수 시점에 정의"였음), 대응표에 포함하지 않는다. 각 Milestone 착수 시점에
 `T2-01`, `T3-01`, `T4-01`부터 새로 정의한다.
+
+### 세부 재분해 (ADR-0022, 2026-07-24) — 구 T1-18(단일 Task) → T1-18~T1-21
+
+Phase→Task 이관 직후 `T1-18`은 "신규 Interface 정의 및 EngineAdapter 세션 계약
+확장(총 16종)"이라는 단일 Task였다. 설계 검토 결과 서로 의존하지 않는 4개
+아키텍처 하위 계층을 묶고 있어 "Task = 하나의 구현 목표"(ADR-0021) 원칙에
+어긋난다고 판단해 아래와 같이 재분해했다. **내용은 그대로이며 Task 경계만
+나뉘었다.**
+
+| 신규 Task | 포함 Interface | 대응 ARCHITECTURE 절 |
+|---|---|---|
+| T1-18 Agent Runtime Interfaces | AgentManager, AgentRegistry, AgentScheduler, AgentRepository, EventBus, EventStore | §3.4, §3.5 |
+| T1-19 Engine Runtime Interfaces | EngineRuntime, EngineAdapter(확장) | §3.9, §3.10 |
+| T1-20 Memory Interfaces | ContextManager, MemoryEngine(재확인, No-Op) | §3.8 |
+| T1-21 Interaction Interfaces | InteractionEngine | §3.2 |
