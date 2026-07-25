@@ -42,3 +42,20 @@ def test_restore_snapshot_returns_defensive_copy() -> None:
     context["extra"] = "mutated"
 
     assert "extra" not in manager.restore_snapshot(snapshot_id)
+
+
+def test_find_snapshots_returns_matching_snapshot_ids() -> None:
+    manager = FakeContextManager()
+    snapshot_id = manager.create_snapshot(
+        WorkspaceSession(session_id="s1", current_project_id="p1")
+    )
+    manager.create_snapshot(WorkspaceSession(session_id="s2", current_project_id="p2"))
+
+    assert manager.find_snapshots("p1") == [snapshot_id]
+
+
+def test_find_snapshots_returns_empty_list_when_no_match() -> None:
+    manager = FakeContextManager()
+    manager.create_snapshot(WorkspaceSession(session_id="s1", current_project_id="p1"))
+
+    assert manager.find_snapshots("없음") == []

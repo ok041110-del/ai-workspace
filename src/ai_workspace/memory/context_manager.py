@@ -41,3 +41,6 @@ class InMemoryContextManager(ContextManager):
         if stored is None:
             raise SnapshotNotFoundError(snapshot_id)
         return json.loads(stored)
+
+    def find_snapshots(self, query: str) -> list[str]:
+        return self._memory_engine.search(query)

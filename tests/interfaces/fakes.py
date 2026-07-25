@@ -142,6 +142,9 @@ class FakeMemoryEngine(MemoryEngine):
     def recall(self, key: str) -> str | None:
         return self._store.get(key)
 
+    def search(self, query: str) -> list[str]:
+        return [key for key, value in self._store.items() if query in value]
+
 
 class FakeApprovalEngine(ApprovalEngine):
     def __init__(self) -> None:
@@ -457,6 +460,13 @@ class FakeContextManager(ContextManager):
         if snapshot_id not in self._snapshots:
             raise SnapshotNotFoundError(snapshot_id)
         return dict(self._snapshots[snapshot_id])
+
+    def find_snapshots(self, query: str) -> list[str]:
+        return [
+            snapshot_id
+            for snapshot_id, context in self._snapshots.items()
+            if any(query in value for value in context.values())
+        ]
 
 
 class FakeInteractionEngine(InteractionEngine):

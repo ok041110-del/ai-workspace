@@ -70,3 +70,26 @@ def test_assemble_context_reflects_restored_snapshot() -> None:
     later_session = WorkspaceSession(session_id="s2", memory_snapshot_id=snapshot_id)
 
     assert manager.assemble_context(later_session) == {"project_id": "p1"}
+
+
+def test_find_snapshots_returns_matching_snapshot_ids() -> None:
+    manager = InMemoryContextManager(InMemoryMemoryEngine())
+    snapshot_id = manager.create_snapshot(
+        WorkspaceSession(session_id="s1", current_project_id="p1")
+    )
+    manager.create_snapshot(WorkspaceSession(session_id="s2", current_project_id="p2"))
+
+    assert manager.find_snapshots("p1") == [snapshot_id]
+
+
+def test_find_snapshots_delegates_to_memory_engine_search() -> None:
+    """M4-T08: 검색은 MemoryEngine.search()에 위임됨을 증명한다(§8 규칙 7
+    — Agent는 ContextManager를 통해서만 검색하고 MemoryEngine을 직접
+    호출하지 않는다)."""
+    memory_engine = InMemoryMemoryEngine()
+    manager = InMemoryContextManager(memory_engine)
+    snapshot_id = manager.create_snapshot(
+        WorkspaceSession(session_id="s1", current_project_id="p1")
+    )
+
+    assert manager.find_snapshots("p1") == memory_engine.search("p1") == [snapshot_id]

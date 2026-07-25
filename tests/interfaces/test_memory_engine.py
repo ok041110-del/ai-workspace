@@ -22,3 +22,18 @@ def test_remember_overwrites_previous_value() -> None:
     engine.remember("key", "new")
 
     assert engine.recall("key") == "new"
+
+
+def test_search_returns_keys_whose_value_contains_query() -> None:
+    engine = FakeMemoryEngine()
+    engine.remember("k1", "project p1 완료")
+    engine.remember("k2", "project p2 진행 중")
+
+    assert engine.search("p1") == ["k1"]
+
+
+def test_search_returns_empty_list_when_no_match() -> None:
+    engine = FakeMemoryEngine()
+    engine.remember("k1", "value")
+
+    assert engine.search("없음") == []

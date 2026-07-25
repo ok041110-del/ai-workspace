@@ -16,3 +16,6 @@ class InMemoryMemoryEngine(MemoryEngine):
 
     def recall(self, key: str) -> str | None:
         return self._store.get(key)
+
+    def search(self, query: str) -> list[str]:
+        return [key for key, value in self._store.items() if query in value]

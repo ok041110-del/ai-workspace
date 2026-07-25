@@ -233,6 +233,17 @@
   시나리오 E2E(trigger 등록→Workflow 연결→발동→실제
   `WorkflowEngine.plan()` 실행)로 M4 DoD 직접 증명. 전체 322개 테스트
   통과.
+- **M4-T08 완료(2026-07-26)**: `MemoryEngine.search(query) -> list[str]`
+  (value 부분 문자열 검색) + `ContextManager.find_snapshots()`(검색을
+  `MemoryEngine.search()`에 위임, §8 규칙 7 유지) 추가. 사용자 요청 2가지
+  반영: 검색 계약(부분 문자열, key는 검색 대상 아님)을 docstring에
+  명시, 장기적으로 key/value 쌍 반환 확장 가능성을 docstring에 남기되
+  지금은 최소 형태 유지. **요약은 이번 범위에서 제외**(LLM Policy/
+  Router가 아직 Temporary 단계라 실제 백엔드 없이 껍데기만 만들게 됨 —
+  M4-T07의 "조건 평가는 나중" 판단과 동일 원칙, LLM Router 준비 이후
+  Milestone으로 이관). 전체 331개 테스트 통과. **Milestone 4의 8개 Task
+  중 8개(M4-T01~T08) 모두 완료, 다음은 M4-T09(Milestone Review + v0.5.0
+  아키텍처 기준선 확정)뿐**.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

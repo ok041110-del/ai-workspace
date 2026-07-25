@@ -51,3 +51,16 @@ class ContextManager(ABC):
               Context Manager 내부 상태는 변하지 않는다(방어적 복사).
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def find_snapshots(self, query: str) -> list[str]:
+        """
+        입력: query (검색어)
+        출력: 내용에 query가 포함된 Snapshot들의 snapshot_id 목록(없으면
+              빈 리스트)
+        예외: 없음
+        보장: side-effect 없음(read-only). 저장/검색 자체는 `MemoryEngine.
+              search()`에 위임한다(§8 규칙 7 — Agent는 이 메서드를 통해서만
+              검색하며 MemoryEngine을 직접 호출하지 않는다).
+        """
+        raise NotImplementedError

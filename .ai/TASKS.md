@@ -1471,6 +1471,37 @@ Review 완료 + Interface First Review 완료 + 테스트 통과 + 문서 최신
   312개 + 신규 10개) 모두 통과.
 - 의존성: T2-03
 
+#### M4-T08: Memory Engine 고도화
+- 목적: `MemoryEngine`(T2-04)이 정확한 key 조회만 지원하던 것을 확장해
+  M4 목표("메모리 검색이 확인됨")를 충족한다.
+- 작업 내용: Analysis 단계에서 Interface 변경 여부 우선 검토 →
+  `MemoryEngine.search()`/`ContextManager.find_snapshots()` 추가.
+- 완료 조건(DoD): value에 검색어가 포함된 항목을 key로 찾아내는 검색
+  시나리오 검증, `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — **Interface 변경 필요 확인**: 기존
+  `remember(key, value)`/`recall(key)`는 정확한 key로만 조회 가능해
+  검색 자체가 불가능했음. `MemoryEngine`에 `search(query) -> list[str]`
+  (value에 query가 부분 문자열로 포함된 key 목록 반환) 순수 추가.
+  `ContextManager`에도 `find_snapshots(query) -> list[str]` 추가 —
+  `MemoryEngine.search()`에 그대로 위임(§8 규칙 7, Agent는 ContextManager
+  를 통해서만 검색하고 MemoryEngine을 직접 호출하지 않음). **사용자가
+  요청한 2가지 반영**: (1) `search()`의 검색 계약(현재는 value의 부분
+  문자열 검색, key 자체는 검색 대상 아님)을 Interface docstring에
+  명시적으로 기록. (2) 장기적으로 `list[tuple[str, str]]`(key/value
+  쌍)로 확장될 가능성을 docstring에 남기되, 지금은 최소 형태(key 목록)
+  유지(YAGNI). **"요약"은 이번 범위에서 제외** — ROADMAP의 실제
+  검증 가능한 DoD는 "검색"뿐이고, 진짜 요약은 LLM 호출이 필요한데 LLM
+  Policy/Router가 아직 Temporary 단계(RULES.md §7)라 지금 만들면 쓸
+  백엔드가 없는 껍데기가 됨 — LLM Router 준비 이후 Milestone으로 이관
+  (M4-T07의 "조건 평가는 나중" 판단과 동일한 원칙). `FakeMemoryEngine`/
+  `FakeContextManager`도 동일하게 확장. `tests/interfaces/`+`tests/
+  memory/`의 `test_memory_engine.py`/`test_context_manager.py` 4개
+  파일에 총 9개 테스트(검색 성공/실패, key 자체는 검색 안 됨,
+  ContextManager가 MemoryEngine.search()에 실제로 위임함을 증명하는
+  테스트 포함). `ruff check src tests`, `mypy src`, `pytest`(331개,
+  기존 322개 + 신규 9개) 모두 통과.
+- 의존성: T2-04
+
 ---
 
 ## 진행 로그
