@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.9.0 |
+| 문서 버전 | v0.10.0 |
 | 작성일 | 2026-07-25 |
 | 상태 | Draft (Milestone 1~3 완료, Milestone 4 진행 중 — ADR-0023으로 §3.4/§3.9 병렬 실행 책임 경계 명시) |
 
@@ -317,10 +317,11 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentCapability` | Coordination/Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP … |
 | `AgentStatus` | 생명주기 상태 |
 
-## 7. Interfaces (추상 계약, 총 16종)
+## 7. Interfaces (추상 계약, 총 17종)
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
+| `LLMPolicyEngine` | AgentRole별 LLM Provider/Model/Effort Rule 기반 결정 | Milestone 5 (M5-T01) | **완료(계약+구현)** |
 | `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 (T1-15 계약, T1-23 `FileProjectRepository` 구현) | **완료(계약+구현)** |
 | `WorkflowEngine` | Mission→…→Step 협업 흐름 | 이후 | 기존 |
 | `TaskEngine` | Task 생성/상태 전이 | 이후 | 기존 |

@@ -209,6 +209,17 @@
   `EngineApprovalPipeline` 구현 때 자연스럽게 해소됨) **코드 변경 없이
   부채 항목만 해소로 종결**. Task ID는 부여하지 않음(ADR-0021로 P0/P1
   접두어 폐지 — 조사만으로 끝난 사안이라 애초에 불필요했음).
+- **M5-T01 완료(2026-07-26)**: `LLMPolicyEngine`(M1 이후 첫 신규 최상위
+  Interface, 총 17종) + `InMemoryLLMPolicyEngine` + `storage/
+  llm_policy_loader.py`의 `load_llm_policy_rules()`. 사용자 지시로
+  PolicyLoader 계층을 분리해 Engine은 PyYAML을 전혀 모름. 프로젝트 최초
+  외부 런타임 의존성(`pyyaml`, 순수 stdlib 기조 이탈)을 사용자 승인 하에
+  추가, `mypy` strict용 `types-PyYAML`도 dev 의존성에 추가.
+  `docs/llm_policy.example.yaml`의 key를 `AgentRole.value`와 정확히
+  일치하도록 수정(이제부터 실제로 파싱되는 설정 파일). 알 수 없는
+  role/provider/effort는 `InvalidLLMPolicyRuleError`로 명확히 실패.
+  전체 341개 테스트 통과. 다음은 **M5-T02**(Agent가 LLMPolicyEngine을
+  통해 Model/Effort·Engine 선택).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -363,9 +374,15 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   세션 생명주기 계약(create_session/run/…/destroy_session)으로 교체 완료함
   (구체 구현은 여전히 Milestone 3). `ConversationEngine`은 `InteractionEngine`
   으로 **T1-21**(Interaction Interfaces)에서 대체 예정.
-- **LLM Policy는 "Temporary"다 (T1-16에서 Domain만 추가)**: `domain/llm_policy.py`
-  에 `LLMProvider`/`LLMModel`/`LLMEffort`/`INITIAL_MODELS`만 존재하며, 실제 선택
-  로직(Policy Engine, Router)은 없다. 사람이 `docs/llm_policy.example.yaml`을
-  참고해 수동으로 적용하는 단계다. 진행 경로: M2(Rule 기반 선택) → M3(Agent가
-  Policy 참조) → M4(Policy Engine 자동 선택) → M5(Self Optimizer 자동 최적화).
+- **LLM Policy는 여전히 "Temporary"이나 M5-T01로 Rule 기반 선택 단계에
+  진입함(2026-07-26)**: `interfaces/llm_policy_engine.py`의
+  `LLMPolicyEngine`(M1 이후 첫 신규 최상위 Interface, 총 17종) +
+  `engines/llm_policy_engine.py`의 `InMemoryLLMPolicyEngine`이 실제로
+  `docs/llm_policy.example.yaml`(이제 실제로 파싱됨, 키가 `AgentRole.value`
+  와 정확히 일치)을 읽어 AgentRole별 Provider/Model/Effort를 반환한다.
+  `storage/llm_policy_loader.py`가 PyYAML 파싱을 전담해 Engine은 저장
+  형식을 모른다(PolicyLoader 계층 분리, 사용자 지시). 프로젝트 최초로
+  `pyyaml`을 런타임 의존성으로 추가(순수 stdlib 기조 최초 이탈, 사용자
+  승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
+  연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.

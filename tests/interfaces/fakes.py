@@ -4,6 +4,7 @@ import itertools
 from collections.abc import Callable
 
 from ai_workspace.domain.agent import Agent, AgentCapability, AgentRole, AgentStatus
+from ai_workspace.domain.llm_policy import LLMPolicyDecision
 from ai_workspace.domain.project import Project
 from ai_workspace.domain.session import WorkspaceSession
 from ai_workspace.domain.task import Task, TaskStatus
@@ -52,6 +53,7 @@ from ai_workspace.interfaces.interaction_engine import (
     NormalizedRequest,
     UnsupportedSurfaceError,
 )
+from ai_workspace.interfaces.llm_policy_engine import LLMPolicyEngine, PolicyNotFoundError
 from ai_workspace.interfaces.memory_engine import MemoryEngine
 from ai_workspace.interfaces.project_repository import ProjectNotFoundError, ProjectRepository
 from ai_workspace.interfaces.task_engine import TaskEngine, TaskNotFoundError
@@ -487,3 +489,13 @@ class FakeInteractionEngine(InteractionEngine):
 
     def supported_surfaces(self) -> frozenset[str]:
         return self._surfaces
+
+
+class FakeLLMPolicyEngine(LLMPolicyEngine):
+    def __init__(self, rules: dict[AgentRole, LLMPolicyDecision] | None = None) -> None:
+        self._rules = dict(rules) if rules is not None else {}
+
+    def select(self, role: AgentRole) -> LLMPolicyDecision:
+        if role not in self._rules:
+            raise PolicyNotFoundError(role)
+        return self._rules[role]

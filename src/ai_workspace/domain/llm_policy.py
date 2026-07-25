@@ -23,6 +23,12 @@ class LLMModel:
     name: str
 
 
+@dataclass(frozen=True)
+class LLMPolicyDecision:
+    model: LLMModel
+    effort: LLMEffort
+
+
 INITIAL_MODELS: tuple[LLMModel, ...] = (
     LLMModel(LLMProvider.ANTHROPIC, "opus"),
     LLMModel(LLMProvider.ANTHROPIC, "sonnet"),

@@ -263,7 +263,7 @@ Review" 7절 참고).
 
 | Task | 내용 | 근거/출처 |
 |---|---|---|
-| M5-T01 | Rule 기반 `LLMPolicyEngine` 구현 | RULES §7 M2 단계 소급 |
+| M5-T01 | Rule 기반 `LLMPolicyEngine` 구현 — **완료**: `pyyaml` 최초 외부 의존성 추가, PolicyLoader 계층 분리 | RULES §7 M2 단계 소급 |
 | M5-T02 | Agent Runtime/Engine Runtime이 `LLMPolicyEngine`을 통해 Model/Effort·Engine을 선택하도록 연결 | RULES §7 M3 단계 소급 |
 | M5-T03 | `DevelopmentContext` 도입 + 기존 Coding/Review Agent 강화 | 사용자 지시 — M5 핵심 목표 |
 | M5-T04 | `ShellAgent` 신규(실제 쉘 명령 실행 능력) | 사용자 지시 — M5 핵심 목표 |

@@ -1687,7 +1687,48 @@ Event ID 생성 방식 불일치(M2 이월 부채 #3)를 정리하려 `src/ai_wo
 에만 쓰이고 Event ID 생성에는 전혀 관여하지 않는다. 코드 변경 없이 이
 부채 항목을 해소로 종결한다(아래 5절 각주 참고).
 
-상태: 전체 TODO(사전 정리는 완료).
+상태: M5-T01 DONE, 나머지 TODO(사전 정리는 완료).
+
+#### M5-T01: Rule 기반 LLMPolicyEngine 구현
+- 목적: `.ai/RULES.md` §7이 정의한 LLM Policy 로드맵의 M2 단계(Rule
+  기반 선택)를 소급 구현해, T1-16 이후 멈춰 있던 LLM Policy Domain에
+  실제 선택 로직을 붙인다.
+- 작업 내용: `LLMPolicyEngine` Interface 신규, `InMemoryLLMPolicyEngine`
+  구현, `docs/llm_policy.example.yaml` 기반 Rule 로딩, 단위 테스트.
+- 완료 조건(DoD): AgentRole별 Provider/Model/Effort를 Rule 기반으로
+  조회 가능, `pytest`/`ruff`/`mypy` 통과. Engine 실행이나 실제 Adapter
+  선택은 포함하지 않음(M5-T02 범위).
+- 상태: **DONE (2026-07-26)** — **M1 이후 첫 신규 최상위 Interface**
+  (`LLMPolicyEngine`, 총 17종) — M4 Review에서 확인한 "M2~M4 내내 새
+  Interface 미추가" 기록이 M5부터 갱신됨(자연스러운 확장, Interface
+  First 위반 아님 — LLM Policy는 RULES §7에서 처음부터 예정된 계약).
+  `domain/llm_policy.py`에 `LLMPolicyDecision(model, effort)` frozen
+  dataclass 추가. `interfaces/llm_policy_engine.py`에
+  `LLMPolicyEngine.select(role: AgentRole) -> LLMPolicyDecision` +
+  `PolicyNotFoundError`. `engines/llm_policy_engine.py`에
+  `InMemoryLLMPolicyEngine(rules: dict[AgentRole, LLMPolicyDecision])`
+  — 규칙을 어디서 읽었는지 전혀 알지 못함(순수 조회만).
+  **사용자 요청으로 PolicyLoader 계층 분리**: `storage/
+  llm_policy_loader.py`의 `load_llm_policy_rules(path)`가 PyYAML
+  파싱을 전담하고 `LLMPolicyEngine`/`InMemoryLLMPolicyEngine`은 YAML을
+  전혀 알지 못함 — 저장 형식이 나중에 바뀌어도 Engine은 영향받지 않음.
+  **신규 외부 의존성**: 프로젝트 최초로 `pyyaml`을 `pyproject.toml`
+  `dependencies`에 추가(순수 stdlib 기조 최초 이탈, 사용자 승인).
+  `mypy` strict 통과를 위해 `types-PyYAML`도 `dev` 의존성에 추가.
+  `docs/llm_policy.example.yaml`의 최상위 key를 `AgentRole.value`와
+  정확히 일치하도록 수정(`planning`→`planner`, `implementation`→
+  `coding`, `review`→`reviewer`, 나머지는 이미 일치) — 지금까지는
+  "실제로 동작하지 않는 문서 초안"이었으나 이제부터는 실제로 파싱되는
+  설정 파일이 됨. `coordinator`는 의도적으로 규칙 없음(`select()` 호출
+  시 `PolicyNotFoundError`). 알 수 없는 role/provider/effort 값은
+  조용히 넘어가지 않고 `InvalidLLMPolicyRuleError`로 명확히 실패하도록
+  구현(오타 방지). `tests/interfaces/`+`tests/engines/`의
+  `test_llm_policy_engine.py`(각 2~3개) + `tests/storage/
+  test_llm_policy_loader.py`(5개, 저장소의 실제 example YAML 파일을
+  직접 로드해 항상 유효한 형식으로 유지되는지 회귀 방지 테스트 포함).
+  `ruff check src tests`, `mypy src`, `pytest`(341개, 기존 331개 +
+  신규 10개) 모두 통과.
+- 의존성: T1-16
 
 ---
 
