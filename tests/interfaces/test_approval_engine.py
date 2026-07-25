@@ -21,7 +21,7 @@ def test_submit_starts_as_pending() -> None:
 
 def test_decide_approved_reflected_in_is_approved() -> None:
     engine = FakeApprovalEngine()
-    request = engine.submit(ApprovalActionType.PHASE_COMPLETION, "Phase 1 완료")
+    request = engine.submit(ApprovalActionType.MILESTONE_COMPLETION, "Milestone 1 완료")
 
     engine.decide(request.request_id, approved=True)
 

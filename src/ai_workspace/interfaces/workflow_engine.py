@@ -10,7 +10,8 @@ class WorkflowExecutionError(Exception):
 
 
 class WorkflowEngine(ABC):
-    """Task 실행 순서/의존관계 조율 계약. 구체 구현체는 Phase 2에서 작성한다."""
+    """Task 실행 순서/의존관계 조율 계약. 구체 구현체는 Milestone 2(T2-03)에서
+    작성한다."""
 
     @abstractmethod
     def plan(self, workflow: Workflow) -> list[str]:

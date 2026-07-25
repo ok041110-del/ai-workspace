@@ -8,7 +8,8 @@ class DuplicateTriggerError(Exception):
 
 
 class AutomationEngine(ABC):
-    """조건/일정 기반 자동 트리거 등록 계약. 구체 구현체는 Phase 2에서 작성한다."""
+    """조건/일정 기반 자동 트리거 등록 계약. 구체 구현체는 Milestone 2(T2-03)에서
+    작성한다."""
 
     @abstractmethod
     def register_trigger(self, trigger_id: str, description: str) -> None:

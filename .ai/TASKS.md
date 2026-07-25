@@ -544,7 +544,20 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 - 완료 조건(DoD): 4개 구현체가 각 Interface 계약을 만족하고, `ApprovalEngine`
   이 승인 대상 4대 행위(아키텍처 변경/신규 기능/리팩토링/Milestone 완료,
   ADR-0003)를 판별·차단함이 테스트로 확인된다.
-- 상태: TODO
+- 상태: **DONE (2026-07-25)** — `engines/`에 `InMemoryTaskEngine`/
+  `WorkflowEngine`/`ApprovalEngine`/`AutomationEngine` 구현(전부
+  `tests/interfaces/fakes.py`의 대응 Fake 로직 승격, 신규 설계 없음).
+  **부가 수정**: `interfaces/approval_engine.py`의 `ApprovalActionType.
+  PHASE_COMPLETION`이 ADR-0021(Phase→Milestone 용어 전환) 이후에도
+  갱신되지 않았음을 발견해 `MILESTONE_COMPLETION`으로 정정(사용처 2곳 —
+  인터페이스 정의, 기존 테스트 1곳 — 모두 갱신). `task_engine.py`/
+  `workflow_engine.py`/`automation_engine.py`의 "Phase 2에서 작성한다"
+  docstring도 "Milestone 2(T2-03)에서 작성한다"로 정정(`memory_engine.py`
+  는 T2-04 범위라 이번엔 손대지 않음). `tests/engines/`에 17개 신규
+  테스트 — `ApprovalActionType` 4개 값 전부를 순회하며 submit→PENDING→
+  decide→APPROVED를 검증하는 테스트로 DoD의 "4대 행위 판별·차단"을 직접
+  증명. `ruff check src tests`, `mypy src`, `pytest`(176개, 기존 159개 +
+  신규 17개) 모두 통과.
 - 의존성: T1-15
 
 #### T2-04: Memory 계열 구현
@@ -1009,3 +1022,16 @@ max_count/미매칭 시 빈 리스트), `tests/events/test_event_bus.py` 6개
 해제 예외, 구독 전 발행분 소급 전달 안 됨) 신규 테스트. `ruff check src
 tests`, `mypy src`, `pytest`(159개, 기존 150개 + 신규 9개) 모두 통과.
 다음 Task: **T2-03** (Core Engines 구현). |
+| 2026-07-25 | **T2-03 완료: Core Engines**(§2.4 Stage Checkpoint 4개
+경계 모두 발동, 전부 "동일" 판정으로 Sonnet/Low 유지). `engines/`에
+`InMemoryTaskEngine`/`InMemoryWorkflowEngine`/`InMemoryApprovalEngine`/
+`InMemoryAutomationEngine` 구현(전부 기존 Fake 로직 승격). **부가 발견 및
+수정**: `ApprovalActionType.PHASE_COMPLETION`이 ADR-0021 이후 갱신되지
+않고 남아있던 것을 발견해 `MILESTONE_COMPLETION`으로 정정(인터페이스
+정의 + 기존 테스트 1곳). `task_engine.py`/`workflow_engine.py`/
+`automation_engine.py`의 "Phase 2에서 작성한다" docstring도 함께 정정.
+`tests/engines/`에 17개 신규 테스트 — `ApprovalActionType` 4개 값 전부에
+대해 submit→PENDING→decide→APPROVED를 검증하는 테스트로 DoD("4대 행위
+판별·차단")를 직접 증명. `ruff check src tests`, `mypy src`,
+`pytest`(176개, 기존 159개 + 신규 17개) 모두 통과. 다음 Task: **T2-04**
+(Memory 계열 구현). |

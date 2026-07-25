@@ -9,7 +9,7 @@ class ApprovalActionType(Enum):
     ARCHITECTURE_CHANGE = "architecture_change"
     NEW_FEATURE = "new_feature"
     REFACTORING = "refactoring"
-    PHASE_COMPLETION = "phase_completion"
+    MILESTONE_COMPLETION = "milestone_completion"
 
 
 class ApprovalDecision(Enum):
@@ -35,8 +35,9 @@ class ApprovalAlreadyDecidedError(Exception):
 
 
 class ApprovalEngine(ABC):
-    """승인 대상 행위(아키텍처 변경/신규 기능/리팩토링/Phase 완료) 판별·차단 계약.
-    구체 구현체는 Phase 2에서 작성한다."""
+    """승인 대상 행위(아키텍처 변경/신규 기능/리팩토링/Milestone 완료) 판별·차단
+    계약(RULES.md §1.4, ADR-0021). 구체 구현체는 Milestone 2(T2-03)에서
+    작성한다."""
 
     @abstractmethod
     def submit(self, action_type: ApprovalActionType, description: str) -> ApprovalRequest:
