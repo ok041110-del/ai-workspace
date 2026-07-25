@@ -40,11 +40,12 @@
   Milestone 1 소속 `T1-01`~`T1-25`로 번호만 이어졌다가, 같은 날 설계 검토를
   거쳐 `T1-18`~`T1-28`로 추가 재분해됨(ADR-0022, 대응표는 `docs/ROADMAP.md`
   하단 참고).
-- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-26` 완료
+- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-27` 완료
   (T1-18~T1-21 Interface 그룹, T1-22 Workspace Core Skeleton, T1-23
-  Repositories, T1-24 CLI, T1-25 Tests, T1-26 Documentation 전체 완료),
-  `T1-29`(SOP Skills System, 별도 세션에서 병렬로 완료되어 병합됨)도 완료,
-  `T1-27`~`T1-28` 남음(2개 Task).
+  Repositories, T1-24 CLI, T1-25 Tests, T1-26 Documentation, T1-27 ADR
+  전체 완료), `T1-29`(SOP Skills System, 별도 세션에서 병렬로 완료되어
+  병합됨)도 완료. **`T1-28`(Milestone 1 Review) 1개만 남음** — 사용자
+  승인을 받으면 Milestone 1이 종료된다.
 - **완료된 Task 요약**: `T1-01`~`T1-11`(문서화 세트 작성 및 승인), `T1-12`
   (구현 착수 승인), `T1-13`(디렉터리 구조), `T1-14`(Project/Task/Workflow
   도메인), `T1-15`(Interfaces 7종), `T1-16`(Mission/Step/WorkspaceSession/
@@ -86,9 +87,13 @@
   `ProjectRepository`/`AgentRepository`/`EventStore`를 "완료(계약+구현)"로
   세분화), §9 디렉터리 구조(`core`/`storage`/`cli` 완료 표시) 3곳만 실제
   구현과 대조해 수정. 시스템 구조 자체는 이미 일치해 변경 없음) — 전체
-  139개 테스트 통과(회귀 없음), `ruff`/`mypy` 클린.
-- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-27` ADR
-  → `T1-28` Milestone 1 Review.
+  139개 테스트 통과(회귀 없음), `ruff`/`mypy` 클린), `T1-27`(ADR:
+  `.ai/DECISIONS.md`의 ADR-0002(EngineAdapter 세션 생명주기 계약,
+  ADR-0009·ADR-0015 반영해 재확정)/ADR-0004(파일 기반 저장 — 실제로는
+  JSON만 채택되었음을 확인)를 "제안"→"승인됨"으로 확정. 소스 코드 변경
+  없음) — 전체 139개 테스트 통과(회귀 없음), `ruff`/`mypy` 클린.
+- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-28`
+  Milestone 1 Review (마지막 1개).
 - **아키텍처는 v0.6.3으로 갱신** (ADR-0006~0022, Multi-Agent First 심화 + 안정화
   보완 + Task-Workflow 관계 보완 + Phase→Task 거버넌스 전환 + Task 분해 원칙).
   시스템 구조 자체(컴포넌트/의존성)는 T1-18 설계 검토로 변경되지 않았음 — 자세한
@@ -100,8 +105,10 @@
   T1-29(SOP Skills)는 별도 세션의 병렬 작업이 origin에 먼저 병합되어 있어
   `git merge`로 반영함 — `.ai/skills/`에 문서만 추가되어 코드/아키텍처
   변경은 없음.
-- **다음 단계**: `.ai/TASKS.md`의 `T1-27`(ADR: `.ai/DECISIONS.md`의
-  ADR-0002·ADR-0004 상태를 "제안"에서 "승인됨"으로 갱신)부터 진행.
+- **다음 단계**: `.ai/TASKS.md`의 `T1-28`(Milestone 1 Review) — 도메인(Agent
+  포함), 전체 Interfaces, Workspace Core 골격, 저장소, CLI, 테스트 결과를
+  제시하고 Milestone 1 완료를 사용자에게 승인 요청한다(RULES.md §1.4
+  Approval Required). T1-29(SOP Skills System)도 검토 대상에 포함.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

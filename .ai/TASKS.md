@@ -441,7 +441,7 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 - 작업 내용: `.ai/DECISIONS.md`의 ADR-0002, ADR-0004 상태를 "승인됨"으로 갱신한다
   (ADR-0002는 ADR-0009·ADR-0015의 세션 생명주기 계약을 포함해 재확정).
 - 완료 조건(DoD): 두 ADR 상태가 "승인됨"으로 표시된다.
-- 상태: TODO
+- 상태: DONE
 - 의존성: T1-19(ADR-0002), T1-23(ADR-0004)
 
 #### T1-28: Milestone 1 Review
@@ -801,3 +801,15 @@ Low 유지로 "동일" 판정). `docs/ARCHITECTURE.md`를 v0.6.3→v0.7.0으로 
 변경하지 않음. `ruff check src tests`, `mypy src`, `pytest`(139개, 회귀
 없음) 모두 통과. 다음 Task: **T1-27** (ADR: ADR-0002, ADR-0004 상태를
 "승인됨"으로 갱신). |
+| 2026-07-25 | **T1-27 완료: ADR**(§2.4 Stage Checkpoint 4개 경계 모두
+발동, 전부 "동일" 판정으로 Sonnet/Low 유지). `.ai/DECISIONS.md`의
+ADR-0002/ADR-0004를 "제안"에서 "승인됨"으로 확정. ADR-0002는 ADR-0009가
+예고한 대로 "결정" 항목을 옛 `run_task()` 단일 메서드 예시에서 T1-19에서
+실제 확정된 최종 계약(`create_session`/`run`/`cancel`/`status`/
+`destroy_session`/`capabilities`/`supports_parallel`/`estimate_cost`)으로
+갱신함. ADR-0004는 "결정" 원문(과거 결정 텍스트)은 그대로 두고 "결과/영향"에
+T1-23에서 실제로는 **JSON만** 채택되었다는 사실(Markdown 미사용, 이유:
+Enum/frozenset 등 구조화된 값을 다루기에 JSON이 더 적합)을 추가함. 소스
+코드는 전혀 변경하지 않음. `ruff check src tests`, `mypy src`,
+`pytest`(139개, 회귀 없음) 모두 통과. 다음 Task: **T1-28** (Milestone 1
+Review — 최종 승인 요청). |

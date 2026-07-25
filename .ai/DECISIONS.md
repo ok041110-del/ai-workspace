@@ -46,13 +46,19 @@
 
 ## ADR-0002: 구현 엔진을 Adapter 패턴으로 추상화
 
-- 상태: 제안 (Phase 1 착수 시 재확인 및 확정 예정)
-- 날짜: 2026-07-23
+- 상태: 승인됨 (2026-07-25, T1-27에서 ADR-0009·ADR-0015의 세션 생명주기
+  계약 확장을 포함해 재확정)
+- 날짜: 2026-07-23 (확정: 2026-07-25)
 - 배경: Claude Code, Codex, Gemini CLI는 호출 방식과 능력이 서로 다르다. 이를
   Orchestration Layer가 직접 알게 하면 엔진 추가/교체 시마다 핵심 로직을 수정해야
   한다.
-- 결정: 모든 구현 엔진은 공통 `EngineAdapter` 인터페이스(예: `run_task`)를
-  구현하고, Orchestration Layer는 이 인터페이스에만 의존한다.
+- 결정: 모든 구현 엔진은 공통 `EngineAdapter` 인터페이스를 구현하고,
+  Orchestration Layer(Engine Runtime)는 이 인터페이스에만 의존한다. 최초
+  제안된 `run_task()` 단일 메서드는 ADR-0009(확장 실행 계약)와 ADR-0015
+  (세션 생명주기)를 거쳐 다음 최종 계약으로 확정되었다: `create_session()`,
+  `run(...)`, `cancel(...)`, `status(...)`, `destroy_session()`,
+  `capabilities()`, `supports_parallel()`, `estimate_cost(...)`(T1-19에서
+  `src/ai_workspace/interfaces/engine_adapter.py`로 구현).
 - 대안:
   - 엔진별로 별도 파이프라인을 만드는 방식 — 초기 구현은 빠르지만 엔진이
     늘어날수록 중복과 불일치가 커짐 (기각).
@@ -60,8 +66,9 @@
     타입 안전성과 테스트 용이성이 떨어짐 (기각).
 - 이유: Open-Closed Principle을 따라, 신규 엔진 추가가 기존 코드 변경 없이
   Adapter 하나를 새로 작성하는 것만으로 가능하도록 하기 위함.
-- 결과/영향: Phase 3에서 `EngineAdapter` 인터페이스를 먼저 확정하고, Claude Code
-  어댑터를 1차 구현체로 삼는다.
+- 결과/영향: Milestone 3에서 `EngineAdapter` 계약의 구체 구현체(Claude Code
+  어댑터를 1차 구현체로)를 작성한다. 계약 자체는 T1-19에서 이미 확정·구현
+  완료됨(Fake 기반 계약 테스트 포함).
 
 ## ADR-0003: 승인 절차를 별도 Approval Engine 컴포넌트로 분리
 
@@ -82,8 +89,8 @@
 
 ## ADR-0004: Phase 1 저장 방식은 파일 기반(Markdown/JSON)으로 시작
 
-- 상태: 제안 (Phase 1 착수 시 재확인 및 확정 예정)
-- 날짜: 2026-07-23
+- 상태: 승인됨 (2026-07-25, T1-27에서 확정)
+- 날짜: 2026-07-23 (확정: 2026-07-25)
 - 배경: 데이터베이스 도입은 초기 단계에서 불필요한 복잡도를 추가할 수 있다
   (YAGNI). 동시에 문서 우선 철학상, 저장된 데이터도 사람이 직접 읽을 수 있으면
   유리하다.
@@ -94,8 +101,11 @@
     사용자, 소규모 데이터)에는 과함 (기각, Phase 5에서 재검토 예정).
 - 이유: 초기 단계의 단순성과 "사람이 직접 확인 가능한 저장 형식"이라는 문서
   우선 철학에 부합한다.
-- 결과/영향: Phase 5에서 다중 프로젝트/장기 메모리 고도화 시 DB 전환 필요성을
-  재검토하며, 그 경우 별도 ADR을 작성한다.
+- 결과/영향: T1-23에서 `FileProjectRepository`/`FileAgentRepository`/
+  `FileEventStore`로 구현되며 실제로는 **JSON만** 채택되었다(Markdown은
+  쓰이지 않음 — Enum/frozenset 등 구조화된 도메인 값을 다루기에 JSON이 더
+  적합했기 때문). Milestone 4에서 다중 프로젝트/장기 메모리 고도화 시 DB
+  전환 필요성을 재검토하며, 그 경우 별도 ADR을 작성한다.
 
 ## ADR-0005: Workspace Core를 순수 오케스트레이터로 한정하고 Interfaces 계층을 명시적으로 분리
 
