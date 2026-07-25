@@ -766,9 +766,48 @@ Task화한다.
 ## Milestone 3 — 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction)
 
 > Milestone DoD: `docs/ROADMAP.md`의 "Milestone 3 Definition of Done" 참고.
-> 세부 Task(`T3-01`부터)는 Milestone 2 완료 승인 이후, 착수 시점에 이 문서에
-> 추가한다. 예정 작업 영역은 `docs/ROADMAP.md`의 "Milestone 3" 섹션 참고
-> (Engine Runtime & Engine Adapter 구현 / Interaction Layer 구현).
+> Task 목록은 별도로 준비된 계획을 기준으로 순차 추가한다(사용자 제공).
+> **M3 목표는 M2 Retrospective에서 이월된 기술 부채 청산이 아니라 실제
+> Engine Runtime/Engine Adapter 구현이다** — Deferred by Design 부채(#1
+> AgentManager/Registry, #2 CLI 통합, #5 병렬성 검증)는 자연스럽게 해결
+> 가능한 경우에만 개별 Task로 포함한다.
+
+#### M3-T01: Engine Runtime 프로덕션 구현
+- 목적: Engine Runtime이 `EngineAdapter`를 이용해 실제 Engine 실행을
+  관리할 수 있는 기반을 구축한다. Runtime 자체의 책임만 다루며, 실제
+  Claude Code 연동은 이후 Task에서 구현한다.
+- 작업 내용: Engine 실행 요청/상태 관리, 실행 생명주기(Start/Running/
+  Completed/Failed/Cancelled), 실행 취소(Cancel), Timeout 처리 구조,
+  Engine Event 발행, Runtime 테스트.
+- 완료 조건(DoD): `MockEngineAdapter`를 통한 실행 가능, 상태 전이 검증,
+  Cancel 동작 검증, Timeout 처리 구조 확인, Event 발행 검증, `pytest`/
+  `ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-25)** — `runtime/engine/managed_engine_runtime.py`
+  에 `ManagedEngineRuntime` 신규 구현. **설계 판단**: T2-05의
+  `InMemoryEngineRuntime`(Multi-Engine 등록·Capability 선택 위주의 "최소
+  구현")은 "M2에서 완료된 기능은 수정하지 않는다"는 지시에 따라 전혀
+  건드리지 않고, 새 파일에 새 클래스로 구현함 — 목적이 근본적으로 다르기
+  때문(이번 Task는 Multi Engine·Engine Registry를 명시적으로 제외 범위로
+  두고, 대신 단일 Adapter의 생명주기·Timeout·Cancel·Event를 깊게 다룸).
+  기존 `EngineRuntime`/`EngineAdapter` 인터페이스(T1-19)는 그대로
+  사용하고 새 Interface는 추가하지 않음. 생명주기는 기존
+  `EngineSessionStatus`(RUNNING/COMPLETED/FAILED/CANCELLED)를 재사용 —
+  "Start"는 별도 상태가 아니라 RUNNING 전이로 해석해 새 Enum을 만들지
+  않음. Timeout·Cancel은 `adapter.run()`을 백그라운드 스레드로 실행하고
+  `Thread.join(timeout)`으로 감시하는 최소 구조로 구현(기존 동기
+  Interface는 변경하지 않음 — Python은 실행 중인 스레드를 강제 종료할 수
+  없으므로 "구조"만 제공하고 실제 강제 중단은 하지 않음, 문서화된
+  한계). `EventBus`(T2-02)를 주입받아 `engine_task_started`/
+  `completed`/`failed`/`timeout`/`cancelled` Event를 발행. `run_parallel`
+  은 진짜 병렬 실행 없이 순차적으로 `run()`을 반복 호출(병렬 실행은
+  제외 범위). `tests/runtime/engine/test_managed_engine_runtime.py`에
+  14개 신규 테스트 — 정상 실행/중복 등록/미등록/Capability 불일치/상태
+  전이/`EngineExecutionError` 전파(기존 `FailingFakeEngineAdapter`
+  재사용)/Cancel(사후 + 실행 중 동시 호출, 로컬 `SlowEngineAdapter`로
+  스레드 경합 재현)/Timeout 구조/Event 발행/`run_parallel` 순서 보존.
+  타이밍 기반 테스트는 5회 연속 실행으로 안정성 확인. `ruff check src
+  tests`, `mypy src`, `pytest`(219개, 기존 205개 + 신규 14개) 모두 통과.
+- 의존성: T1-19, T2-05(설계 참고용, 코드 의존 없음)
 
 ---
 
@@ -1258,3 +1297,15 @@ Runtime/Adapter 구현이 목표이되, #1/#2/#5는 자연스럽게 포함 가�
 문구 반영(사용자 제안). **Milestone 2(멀티 에이전트 코어) 종료.** 다음은
 Milestone 3(실행 엔진 연동 & 상호작용) 착수 — 세부 Task는 착수 시점에
 `T3-01`부터 정의. |
+| 2026-07-25 | **M3-T01 완료: Engine Runtime 프로덕션 구현**(§2.4 Stage
+Checkpoint 4개 경계 모두 발동. Analysis에서 Sonnet/Medium→**Sonnet/High**
+상향 — 스레드 기반 Timeout/Cancel이라는 새 메커니즘 도입이라 판단, 이후
+3개 경계는 "동일" 유지). `ManagedEngineRuntime`을 새 파일로 구현하고
+T2-05의 `InMemoryEngineRuntime`은 전혀 수정하지 않음(상세 설계 근거는
+위 M3-T01 항목 참고). DX-02 설계 철학 적용: 새 Interface 미생성(기존
+`EngineRuntime`/`EngineAdapter`/`EventBus` 재사용), 새 Enum 미생성(기존
+`EngineSessionStatus` 재사용), Multi Engine·병렬 실행 등 제외 범위는
+정말로 구현하지 않고 TODO로도 남기지 않음(다음 Task 범위이므로). `ruff
+check src tests`, `mypy src`, `pytest`(219개, 기존 205개 + 신규 14개)
+모두 통과, 타이밍 테스트 5회 연속 안정성 확인. 다음 Task: **M3-T02**
+(실제 Claude Code Adapter 연동 — 별도 준비된 계획 참고). |

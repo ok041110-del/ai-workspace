@@ -156,6 +156,9 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
    end-to-end(create_session→run→결과 수집→destroy_session) 수행한다.
 2. Interaction Layer가 CLI/API 등 표면 입력을 표준 요청으로 정규화한다.
 
+**진행 상태**: M3-T01(Engine Runtime 프로덕션 구현) 완료. 이후 Task 목록은
+별도로 준비됨(`.ai/TASKS.md` 참고).
+
 **예정 작업 영역** (Milestone 2 완료 후 착수 시점에 `T3-01`부터 개별 Task로 정의)
 - Engine Runtime & Engine Adapter 구현(Claude Code 우선): **Engine Runtime**
   (엔진 선택/세션 풀/병렬) 구현과, 세션 생명주기 계약(create_session/run/

@@ -126,11 +126,23 @@
   M3 이상 확장 범위 또는 의도적 이월"임을 명시적으로 선언.
   **설계 철학(DX-02)**이 T2-07에서 첫 공식 적용됨 — 기존 테스트 점검 후
   실제 빈틈만 채우는 방식으로 새 파일 0개 생성.
-- **다음 단계**: Milestone 3(실행 엔진 연동 & 상호작용) 착수. **M3 목표는
-  부채 청산이 아니라 실제 Engine Runtime/Engine Adapter 구현**이다(사용자
-  강조) — 다만 Deferred by Design 부채(#1/#2/#5)는 M3 진행 중 자연스럽게
-  해결 가능하면 별도 Task로 포함할 수 있다. 세부 Task는 착수 시점에
-  `T3-01`부터 정의(Task Driven Development).
+- **Milestone 3 진행 중 — M3-T01 완료(2026-07-25)**: Engine Runtime
+  프로덕션 구현. `runtime/engine/managed_engine_runtime.py`의
+  `ManagedEngineRuntime` 신규 — T2-05의 `InMemoryEngineRuntime`(Multi
+  Engine 등록·Capability 선택 위주)은 전혀 수정하지 않고 새 파일/클래스로
+  구현(목적이 다름: 이번엔 단일 Adapter의 생명주기·Timeout·Cancel·Event를
+  깊게 다룸, Multi Engine·Engine Registry는 제외 범위). 기존
+  `EngineRuntime`/`EngineAdapter`/`EventBus`/`EngineSessionStatus`를
+  그대로 재사용하고 새 Interface·Enum은 만들지 않음. Timeout/Cancel은
+  `adapter.run()`을 백그라운드 스레드로 실행 후 `Thread.join(timeout)`으로
+  감시하는 최소 구조(Python은 실행 중 스레드를 강제 종료할 수 없어 "구조"
+  까지만 제공, 문서화된 한계). 전체 219개 테스트 통과. **Task 목록은
+  사용자가 별도로 준비(ChatGPT 작성) — 다음은 M3-T02(실제 Claude Code
+  Adapter 연동, 별도 준비된 계획 참고)**.
+- **M3 목표는 부채 청산이 아니라 실제 Engine Runtime/Engine Adapter
+  구현**이다(사용자 강조, M2 Retrospective 참고) — Deferred by Design
+  부채(#1 AgentManager/Registry, #2 CLI 통합, #5 병렬성 검증)는 자연스럽게
+  해결 가능한 경우에만 개별 Task로 포함한다.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
