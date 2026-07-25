@@ -126,89 +126,34 @@
   M3 이상 확장 범위 또는 의도적 이월"임을 명시적으로 선언.
   **설계 철학(DX-02)**이 T2-07에서 첫 공식 적용됨 — 기존 테스트 점검 후
   실제 빈틈만 채우는 방식으로 새 파일 0개 생성.
-- **Milestone 3 진행 중 — M3-T01 완료(2026-07-25)**: Engine Runtime
-  프로덕션 구현. `runtime/engine/managed_engine_runtime.py`의
-  `ManagedEngineRuntime` 신규 — T2-05의 `InMemoryEngineRuntime`(Multi
-  Engine 등록·Capability 선택 위주)은 전혀 수정하지 않고 새 파일/클래스로
-  구현(목적이 다름: 이번엔 단일 Adapter의 생명주기·Timeout·Cancel·Event를
-  깊게 다룸, Multi Engine·Engine Registry는 제외 범위). 기존
-  `EngineRuntime`/`EngineAdapter`/`EventBus`/`EngineSessionStatus`를
-  그대로 재사용하고 새 Interface·Enum은 만들지 않음. Timeout/Cancel은
-  `adapter.run()`을 백그라운드 스레드로 실행 후 `Thread.join(timeout)`으로
-  감시하는 최소 구조(Python은 실행 중 스레드를 강제 종료할 수 없어 "구조"
-  까지만 제공, 문서화된 한계). 전체 219개 테스트 통과. **M3 전체 개요
-  (M3-T01~T08, "Engine Adapter & Execution", 사용자 제공/ChatGPT 작성)
-  가 `docs/ROADMAP.md`에 반영됨**: T02 Claude Code Adapter → T03 Process
-  Management → T04 Session & Workspace Integration → T05 Approval
-  Pipeline → T06 Runtime Recovery → T07 End-to-End Integration → T08
-  Milestone Review. **M3-T02 완료**: `adapters/claude_code_engine_
-  adapter.py`의 `ClaudeCodeEngineAdapter` — 로컬 `claude --help` +
-  사용자 승인 하 실제 CLI 호출 1회로 `--output-format json` 스키마
-  (`is_error`/`result`/`session_id`/`total_cost_usd`)를 검증 후 구현.
-  `create_session()`이 `uuid4()`를 Claude Code의 `--session-id`에 매핑.
-  `--permission-mode manual`은 생성자에서 차단(헤드리스 무한 대기 방지).
-  `cancel()`이 실제 OS 프로세스를 종료하지 못하는 한계를 M3-T03
-  (Process Management)로 명시적으로 이관. 테스트 16개는 전부
-  `subprocess.run` mock 처리(실제 프로세스 호출 없음). **M3-T03 완료**:
-  `adapters/process_runner.py`의 `ProcessRunner` 신규(`subprocess.Popen`
-  기반) — `ClaudeCodeEngineAdapter`가 이를 사용하도록 리팩터링해 M3-T02의
-  한계를 해소(`cancel()`이 이제 실제 프로세스를 종료함). 버그 발견·수정:
-  `ClaudeCodeEngineAdapter.cancel()`이 `EngineAdapter` 계약("완료된 세션
-  상태 유지")을 위반하고 있었음. **자체 정정**: `ManagedEngineRuntime.
-  cancel()`(M3-T01)도 같은 문제로 오판해 고치려 했으나 `EngineRuntime.
-  cancel()` 계약은 애초에 그 조항이 없어 원래 구현이 맞았음을 재확인하고
-  되돌림 — 두 인터페이스 계약이 서로 다르다는 점에 유의할 것. 전체 244개
-  테스트 통과. **M3-T04 완료**: 착수 전 사용자가 "EngineSession을 새로
-  만들기 전에 AgentSession/WorkspaceSession과 공통 개념이 있는지 먼저
-  검토하라"고 지시 → 세 Session류가 아직 실제로 겹치는 동작을 드러내지
-  않아 `BaseSession` 공통 추상화 없이 `domain/engine_session.py`에
-  `EngineSession(session_id, task_id)`을 독립 dataclass로 신규 추가(점진적
-  확장). 새 Manager 클래스를 만들지 않고 **`WorkspaceCore`를 확장**해
-  기존 `WorkspaceSession` 생명주기 메서드와 동일한 패턴으로
-  `start_engine_session`/`get_engine_session`/`end_engine_session`/
-  `list_engine_session_history` 추가 — 순수 기록용 추적이며 Engine
-  Runtime을 스스로 호출하지 않음(T1-22 원칙 유지). T1-22부터 있었지만
-  미사용이던 `WorkspaceSession.engine_session_id` 필드를 새 필드 추가 없이
-  기존 `update_session()` + 신규 `start_engine_session()` 조합만으로 연결.
-  `ManagedEngineRuntime`+`MockEngineAdapter`+`InMemoryEventBus`로 실제
-  조립해 Core 코드 변경 없이 주입 가능함과, Core·Runtime이 같은 EventBus를
-  공유할 때 Event가 실제로 도달함을 테스트로 증명. 전체 256개 테스트 통과.
-  **M3-T05 완료**: `runtime/engine/approval_pipeline.py`의
-  `EngineApprovalPipeline` 신규 — Engine Task 실행 전 사람 승인을
-  요구하는 3단계 API(`request_approval`/`decide`/`run_approved`).
-  사용자가 설계안 검토 후 `resume()`→`run_approved()` 개명과, Pipeline
-  자체 상태 머신 금지(기존 `ApprovalEngine`/`EngineRuntime` 상태만 조합)
-  두 가지를 요청해 반영. `ApprovalActionType`에 `ENGINE_TASK_EXECUTION`을
-  순수 추가(RULES.md §1.4의 거버넌스 승인 4종과 별개 목적). 기존
-  `InMemoryApprovalEngine`(T2-03)은 전혀 수정하지 않고 그대로 재사용,
-  EventBus 발행은 Pipeline이 전담. 미승인/거부/미등록/중복실행을 단일
-  예외 `UnapprovedTaskExecutionError`로 통일(최소 복잡성). 전체 267개
-  테스트 통과. **M3-T06 완료**: `domain/retry_policy.py`의
-  `RetryPolicy(max_attempts=3)`(불변 값 객체) + `runtime/engine/
-  recovering_engine_runtime.py`의 `RecoveringEngineRuntime` 신규 — 다른
-  `EngineRuntime`을 감싸는 데코레이터로 `EngineRuntime` 인터페이스를 그대로
-  구현. `run()`만 실패/예외 시 재시도하고 나머지 4개 메서드는 전부 내부
-  Runtime에 위임(새 상태 저장소 없음 — "상태 복원"은 재시도 중에도 내부
-  Runtime 상태만 진실로 유지하는 것으로 해석). 사용자가 설계안 검토 후
-  "재시도 소진 시 예외를 `EngineResult`로 변환하지 말고 그대로 재전파"를
-  요청 — 기존 `EngineRuntime.run()` 계약(예외는 그대로 전파)을 지키기
-  위함, 반영함. 전체 278개 테스트 통과. **M3-T07 완료**:
-  `tests/integration/test_m3_end_to_end.py`(신규 `tests/integration/`
-  패키지) — M3 전체 계층을 실제 구현으로 조립
-  (`ClaudeCodeEngineAdapter`(`FakeProcessRunner`만 대체)→
-  `ManagedEngineRuntime`→`RecoveringEngineRuntime`→
-  `EngineApprovalPipeline`, `WorkspaceCore`와 EventBus 공유). 사용자가
-  Event **순서** 검증과 EngineSession은 부수적으로만 다룰 것을 요청해
-  반영. 승인→실행 정상 경로(Event 순서 approval_requested→
-  approval_granted→engine_task_started→engine_task_completed 정확히
-  검증)/거부→실행 차단 경로(프로세스 전혀 호출 안 됨)/EngineSession 연동
-  (최소 확인) 3개 테스트. Retry 경로는 이미 단위 테스트로 검증되어
-  재검증하지 않음. 전체 281개 테스트 통과. **Milestone 3의 8개 Task 중
-  7개(M3-T01~T07) 완료, 다음은 M3-T08(Milestone Review)뿐**.
-- **M3 목표는 부채 청산이 아니라 실제 Engine Runtime/Engine Adapter
-  구현**이다(사용자 강조, M2 Retrospective 참고) — Deferred by Design
-  부채(#1 AgentManager/Registry, #2 CLI 통합, #5 병렬성 검증)는 자연스럽게
-  해결 가능한 경우에만 개별 Task로 포함한다.
+- **Milestone 3(실행 엔진 연동 & 상호작용) 완료 — 2026-07-25 사용자 승인.**
+  `M3-T01`~`M3-T08` 전체 DONE. `ManagedEngineRuntime`(생명주기/Timeout/
+  Cancel/Event, T2-05의 `InMemoryEngineRuntime`은 목적이 달라 전혀
+  건드리지 않음) → `ClaudeCodeEngineAdapter`(실제 Claude Code CLI
+  서브프로세스, 로컬 `--help` + 1회 실제 호출로 `--output-format json`
+  스키마 검증 후 구현) → `ProcessRunner`(`subprocess.Popen` 기반, 실제
+  프로세스를 강제 종료 가능) → `RecoveringEngineRuntime`(실패·예외 시
+  재시도하는 데코레이터, 재시도 소진 시 예외는 계약대로 그대로 재전파) →
+  `EngineApprovalPipeline`(실행 전 사람 승인 게이트, `ApprovalEngine`·
+  `EngineRuntime`·`EventBus` 3개 대등 의존성 조합, 상태 머신 새로 안 만듦)
+  → `WorkspaceCore`(`EngineSession` 추적 — `AgentSession`/
+  `WorkspaceSession`과 공통 `BaseSession` 없이 독립 유지) 전체가 같은
+  `EventBus`를 공유하며 실제 구현으로 연결되어 동작함을 E2E 테스트(순서
+  포함 Event 검증)로 증명(M3-T07). **M3 전체에서 새 Interface(ABC)를
+  하나도 추가하지 않음** — Milestone 1의 `EngineRuntime`/`EngineAdapter`
+  계약만으로 실행 엔진 전체를 구현. 전체 281개 테스트 통과, `ruff`/
+  `mypy` 클린.
+  **Milestone Review 결론**(전문은 `.ai/TASKS.md` M3-T08 "Milestone 3
+  Review" 참고): 사용자 제공 8개 Task 체크리스트 기준 전부 충족. Review
+  중 원래 `docs/ROADMAP.md` M3 DoD와 대조해 자체적으로 2개 항목
+  (Interaction Layer 미구현, `CodingAgent`의 실제 Engine 경로 미검증)이
+  8개 Task 범위에 애초에 포함되지 않았음을 발견·보고했고, 사용자 승인으로
+  두 항목은 **Milestone 4로 공식 이관**됨(M3 미완료가 아니라 범위 재정의).
+  기술 부채는 M3에서 의도적으로 미구현(Retry Backoff/Persistent Runtime
+  Recovery/실제 CLI 기반 E2E/Approval 비동기 처리/Process Timeout 정책
+  고도화)과 M2 이월 항목(#1 AgentManager/Registry 프로덕션 구현, #2 CLI-
+  WorkspaceCore 연동, #5 병렬성 실제 검증 — 전부 여전히 미해결)으로
+  구분해 `.ai/TASKS.md`에 기록.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -350,9 +295,10 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   Agent Runtime·Engine Runtime 위임형 Workspace Core 골격 + 파일 저장소(Project/
   Agent/EventStore) + 최소 CLI + 테스트. 실제 처리 로직은 Milestone 1 범위 밖.
 - **Milestone별 구체 구현 순서**: Agent Runtime·Event Store·기본 Agent, Core
-  Engines·Context Manager (Milestone 2) → Engine Runtime·Engine Adapter(Claude
-  Code 우선), Interaction Layer (Milestone 3) → 자동화·다중 프로젝트·메모리
-  고도화 (Milestone 4).
+  Engines·Context Manager (Milestone 2, 완료) → Engine Runtime·Engine
+  Adapter(Claude Code 우선) (Milestone 3, 완료) → 자동화·다중 프로젝트·메모리
+  고도화 + **Interaction Layer + CodingAgent 실제 Engine 경로 통합(M3에서
+  이관)** (Milestone 4).
 - 구현 엔진 연동 순서: Claude Code 최우선 → Codex → Gemini CLI.
 - Voice/Slack 등 표면, Event Store, Interaction은 **구조에는 포함하되 구현은 뒤로**
   미룬다 (인터페이스만 Milestone 1에서 정의).

@@ -1024,6 +1024,184 @@ Task화한다.
   기존 278개 + 신규 3개) 모두 통과.
 - 의존성: M3-T01~M3-T06 전체
 
+#### M3-T08: Milestone 3 Review
+- 목적: Approval Required 원칙에 따라 Milestone 3 산출물을 검토받는다.
+  새 기능 구현 없이 DoD 충족 여부/아키텍처 일치/Interface First 준수/
+  테스트 결과/기술 부채를 검토하고 문서를 최종 정리한다.
+- 작업 내용: DoD 체크리스트, Architecture Review, Interface First 검토,
+  테스트 결과 문서화, Technical Debt 정리, 문서(TASKS/MEMORY/ROADMAP)
+  갱신, Milestone 종료 선언.
+- 완료 조건(DoD): 위 6개 항목 모두 완료 + 사용자 승인.
+- 상태: **DONE (2026-07-25 사용자 승인 — Milestone 3 완료)** — Review에서
+  원래 ROADMAP.md DoD 대비 미충족 2개 항목(Interaction Layer, Coding
+  Agent 실제 경로 통합)을 발견해 보고했고, 사용자가 8개 Task 체크리스트
+  기준 Completed 선언 + 두 항목 Milestone 4 공식 이관을 확정함(상세는
+  아래 "Milestone 3 Review" 7절 참고)
+
+---
+
+## Milestone 3 Review
+
+**1. Definition of Done 체크리스트**
+
+*사용자가 제시한 8개 Task 기준 체크리스트*
+
+| 항목 | 상태 | 근거 |
+|---|---|---|
+| Runtime 구현 완료 | ✅ | M3-T01 `ManagedEngineRuntime`(생명주기/Timeout/Cancel/Event) |
+| Claude Adapter 구현 완료 | ✅ | M3-T02 `ClaudeCodeEngineAdapter`(`EngineAdapter` 계약 충족, 실제 CLI 플래그 1차 자료로 확정) |
+| Process 실행 가능 | ✅ | M3-T03 `ProcessRunner`(`subprocess.Popen`, 실제 안전한 프로세스로 정상/Timeout/Cancel 검증) |
+| Approval Pipeline 동작 | ✅ | M3-T05 `EngineApprovalPipeline`(요청/승인/거부/실행 4개 경로 검증) |
+| Retry/Recovery 동작 | ✅ | M3-T06 `RecoveringEngineRuntime`(실패·예외 재시도, 계약 유지 확인) |
+| EventBus 연동 | ✅ | M3-T04(Core↔Runtime 공유 검증)/M3-T05/M3-T07(전체 스택 공유 + 순서 검증) |
+| End-to-End Integration 완료 | ✅ | M3-T07(실제 구현 조립, 승인→실행/거부→차단 경로) |
+
+7개 항목 전부 충족.
+
+**⚠️ `docs/ROADMAP.md`에 원래 정의되어 있던 Milestone 3 DoD와 대조한 결과,
+차이를 발견함** — 위 8개 Task 체크리스트와는 별개로 `docs/ROADMAP.md`
+"Milestone Definition of Done"에는 다음 2개 항목이 명시되어 있었다.
+
+1. 세션 생명주기 계약을 만족하는 ClaudeCodeAdapter로 **Coding Agent**가
+   실제 Task를 end-to-end(create_session→run→결과 수집→destroy_session)
+   수행한다 — **부분 충족**. Adapter의 세션 생명주기 자체는 M3-T02/T03/T07
+   에서 실증했지만, M3-T07의 E2E 테스트는 `Task`를
+   `EngineApprovalPipeline`/`EngineRuntime`에 직접 넘겼을 뿐, M2에서 만든
+   실제 `CodingAgent`(`agents/coding_agent.py`)를 경유하지 않았다. "Agent가
+   실제로 이 경로를 쓴다"는 아직 검증되지 않았다.
+2. **Interaction Layer가 CLI/API 등 표면 입력을 표준 요청으로
+   정규화한다 — 미충족**. `src/ai_workspace/interaction/` 디렉터리 자체가
+   아직 존재하지 않는다. 사용자가 제공한 M3-T01~T08 8개 Task 개요에는
+   애초에 Interaction Layer 관련 Task가 포함되어 있지 않았다.
+
+이 차이는 지금 이 Review 단계에서 코드로 메우지 않는다(M3-T08 범위 밖 —
+"새로운 기능 구현 없음" 원칙 유지). 대신 아래 5절 Technical Debt에
+명시적으로 기록하고, Milestone 종료 판단(7절)에서 이 사실을 그대로
+보고한다 — 사용자가 원래 DoD 기준으로 M3를 완료로 볼지, 두 항목을 M4로
+이월할지 최종 판단해야 한다.
+
+**2. Architecture Review**
+
+실제 구현이 아래 구조와 일치함을 M3-T07 통합 테스트로 확인했다.
+
+```
+WorkspaceCore
+  └─ engine_runtime: RecoveringEngineRuntime   (직접 호출하지 않음, T1-22 원칙 유지)
+       └─ inner: ManagedEngineRuntime
+            └─ registered adapter: ClaudeCodeEngineAdapter
+                 └─ process_runner: ProcessRunner
+```
+
+Approval 경로는 사용자가 제시한 다이어그램처럼 단일 수직 체인이 아니라,
+`EngineApprovalPipeline`이 **세 개의 대등한 의존성**(`ApprovalEngine`,
+`EngineRuntime`, `EventBus`)을 조합하는 구조임을 확인했다 — `ApprovalEngine`을
+거쳐 `EventBus`로 내려가는 체인이 아니라, Pipeline이 세 Interface를 각각
+직접 주입받아 조율한다(M3-T05 설계). 다이어그램의 의도(계층 분리)는
+일치하지만 정확한 관계는 "체인"이 아니라 "조합"이다.
+
+`EngineApprovalPipeline`은 `WorkspaceCore`가 보관하지 않는다 —
+`EngineRuntime` 인터페이스를 구현하지 않기 때문에(사람 승인은 비동기
+사건이라 동기 `run()` 계약에 맞지 않음, M3-T05 설계 판단) Core 밖에서
+호출자(Agent 역할)가 별도로 사용한다. `WorkspaceCore`는 `RecoveringEngineRuntime`
+까지만 보관하며, M3-T07에서 실제로 이 조립이 Core 코드 변경 없이
+동작함을 확인했다.
+
+`docs/ARCHITECTURE.md` §3.9(Engine Runtime)·§8 의존성 규칙과 충돌하는
+부분 없음.
+
+**3. Interface First 원칙 검토**
+
+| 클래스 | Interface 여부 | 판단 |
+|---|---|---|
+| `ClaudeCodeEngineAdapter` | 기존 `EngineAdapter`(T1-19) 구현 | 적절 — Mock↔실제 Adapter 교체가 상위 계층 변경 없이 동작함을 M3-T07에서 실증 |
+| `RecoveringEngineRuntime` | 기존 `EngineRuntime`(T1-19) 구현 | 적절 — 데코레이터가 어디서든 `EngineRuntime` 자리에 대체 가능해야 함 |
+| `ProcessRunner` | 없음 | 적절 — Adapter 내부 협력자일 뿐 상위 계층이 직접 의존하지 않음(M3-T03 판단 유지) |
+| `EngineApprovalPipeline` | 없음 | 적절 — 단일 구현체, 비동기 승인이라는 특수 계약이라 `EngineRuntime`과 다형적으로 교체될 이유가 없음(M3-T05 판단 유지) |
+| `RetryPolicy` | 없음(값 객체) | 적절 — 동작이 아니라 데이터, Interface 대상 아님 |
+
+**M3 전체에서 새 Interface(ABC)를 하나도 추가하지 않았다** — Milestone 1
+(T1-18~21)에서 정의한 `EngineRuntime`/`EngineAdapter` 계약만으로 실제
+실행 엔진 전체를 구현할 수 있었다는 뜻이며, Interface First 원칙이 사후에
+실증되었다고 판단한다. 불필요한 추상화(예: `EngineSession`/`WorkspaceSession`/
+`AgentSession` 공통 Base 클래스, Approval Pipeline·ProcessRunner Interface)를
+추가하지 않은 판단들도 이번 Review에서 재확인했다.
+
+**4. 테스트 결과**
+
+- `pytest`: **281개 전부 통과**(M2 완료 시점 205개 → M3에서 76개 신규)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(68개 소스 파일)
+- 신규 소스 파일 7개(`process_runner.py`, `claude_code_engine_adapter.py`,
+  `managed_engine_runtime.py`, `approval_pipeline.py`,
+  `recovering_engine_runtime.py`, `engine_session.py`, `retry_policy.py`),
+  약 585줄 순증가(M2 완료 커밋 대비)
+
+**5. Technical Debt 정리**
+
+*원래 Milestone 3 DoD 대비 미충족 항목(1절에서 발견, 최우선 이월 후보)*
+- **Interaction Layer 미구현** — `docs/ROADMAP.md`의 원래 M3 DoD 2번 항목
+  ("CLI/API 등 표면 입력을 표준 요청으로 정규화"). 사용자가 제공한
+  M3-T01~T08 개요에 이 Task가 원래 포함되어 있지 않았음 — M4 착수 시
+  범위 포함 여부를 다시 논의해야 한다.
+- **CodingAgent가 실제 Engine 경로를 쓰는지 미검증** — M3-T07 E2E는
+  `Task`를 `EngineApprovalPipeline`에 직접 넘겼고, M2의 `CodingAgent`
+  (`agents/coding_agent.py`)를 경유하지 않았다. Agent가 실제로 이
+  Engine 스택을 호출하는 통합은 아직 검증되지 않았다.
+
+*M3에서 의도적으로 구현하지 않은 것(M4 이후 과제)*
+- Retry Backoff — `RetryPolicy`는 `max_attempts`만 가짐, 지수 백오프 등
+  타이밍 정책 없음(M3-T06에서 의도적 최소화)
+- Persistent Runtime Recovery — 시스템 전체가 인메모리, 프로세스 재시작 후
+  Runtime 상태 복원 없음(M3-T06 Analysis 단계에서 이미 범위 밖으로 명시)
+- 실제 Claude CLI 기반 E2E 부재 — M3-T02 1회 검증 이후 전부
+  `FakeProcessRunner`/Mock 사용(비용·비결정성 회피가 의도적 트레이드오프)
+- Approval 비동기 처리 없음 — `decide()`는 동기 호출, 알림/대기 큐 없음
+  (호출자가 나중에 직접 `decide()`를 호출하는 구조로 현재 규모엔 충분)
+- Process Timeout 정책 고도화 없음 — `ProcessRunner`는 고정 timeout +
+  고정 grace period만 지원, 재시도별 동적 조정 없음
+
+*M2에서 이월된 항목 중 M3에서도 해결되지 않은 것*(M2 Retrospective 참고)
+- #1 `AgentManager`/`AgentRegistry` 프로덕션 구현체 여전히 없음(Interface만
+  존재) — M3 범위와 자연스럽게 겹치지 않아 이월 지속
+- #2 CLI가 `WorkspaceCore`를 여전히 쓰지 않음(`cli/main.py`는
+  `FileProjectRepository`만 직접 사용) — 이월 지속
+- #5 병렬 실행 실증 여전히 없음 — `ClaudeCodeEngineAdapter.supports_parallel()
+  =True`이나 `ManagedEngineRuntime.run_parallel()`은 여전히 순차 실행(M3-T01
+  설계 그대로) — 실제 동시성 검증은 M4 이후로 이월
+- #3(Event ID 생성 방식 불일치)·#6(`Step` 도메인 미반영)은 이번 Milestone
+  범위 밖이라 재검토하지 않음(그대로 이월)
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M3-T01~T08 전체 기록) / `.ai/MEMORY.md`(M1·M2와
+동일하게 압축) / `docs/ROADMAP.md`(M3 완료 표시) 갱신 완료. `README.md`의
+"현재 상태" 안내가 "Milestone 3 착수" 상태로 멈춰 있어 M3 완료를 반영해
+갱신함(M3 결과를 반영할 내용이 있는 경우에 해당).
+
+**7. Milestone 종료 선언**
+
+Architecture Review 완료(2절), Interface First 검토 완료(3절), 테스트
+결과 문서화 완료(4절), Technical Debt 정리 완료(5절), 문서 갱신 완료
+(6절) — 5개 조건 만족. Review 중 코드 변경이 필요한 치명적 문제(버그·
+계약 위반)는 발견되지 않았다(계획대로 코드 변경 없이 종료).
+
+1절에서 발견한 원래 `docs/ROADMAP.md` M3 DoD 2개 항목("Interaction
+Layer 정규화", "Coding Agent의 실제 경로 사용")에 대해 **사용자가 선택지
+A(8개 Task 체크리스트 기준 Completed 선언 + 두 항목 Milestone 4 공식
+이관)를 확정했다.** 두 항목은 M3 미완료가 아니라 **애초에 M3-T01~T08
+Task 범위에 포함되지 않았던 것으로 재정의**되어 M4로 재배치된다(M3-T09
+추가 없음).
+
+**Definition of Done(실제 Task, 즉 M3-T01~T08 기준) 충족 + Architecture
+Review 완료 + Interface First Review 완료 + 테스트 통과 + 문서 최신화
+완료 — 6개 조건 모두 만족.**
+
+**Milestone 3 Completed (2026-07-25 사용자 승인).**
+
+**Milestone 4 공식 이관 항목**
+1. Interaction Layer 구현(CLI/API 등 표면 입력을 표준 요청으로 정규화)
+2. `CodingAgent`(M2)의 실제 Engine 실행 경로 통합 및 End-to-End 검증
+
 ---
 
 ## Milestone 4 — 자동화 및 확장 (Automation & Scale)

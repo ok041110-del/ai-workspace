@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.7.0 |
+| 문서 버전 | v0.9.0 |
 | 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1 완료(2026-07-25 사용자 승인), Milestone 2 Task T2-01~T2-07 확정) |
+| 상태 | Draft (Milestone 1·2·3 모두 완료, 2026-07-25 사용자 승인) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -46,7 +46,7 @@ Roadmap
 |---|---|---|
 | M1. 기반 구축 (Foundation) | 문서 체계 + 핵심 도메인(Mission/Step/WorkspaceSession/Agent 포함) + 전체 Interfaces(16종) + Workspace Core 골격 | **완료 (2026-07-25 사용자 승인)** |
 | M2. 멀티 에이전트 코어 (Multi-Agent Core) | Agent Runtime·Event Store·기본 Agent, Core Engines & Context Manager 구현 | **완료 (2026-07-25 사용자 승인)** |
-| M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Engine Runtime & Engine Adapter(Claude Code 우선) 구현, Interaction Layer 구현 | 예정 |
+| M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Engine Runtime & Engine Adapter(Claude Code 우선) 구현 | **완료 (2026-07-25 사용자 승인)** — Interaction Layer·Coding Agent 실제 경로 통합은 M4로 공식 이관 |
 | M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | 예정 |
 
 ---
@@ -151,14 +151,20 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
 > "부채 청산"으로 변질되지 않도록, 착수 시점에 Task를 정의할 때 이 목표
 > 우선순위를 그대로 유지한다.
 
-**Milestone Definition of Done**
+**Milestone Definition of Done**(원문, 2026-07-25 이전 작성)
 1. 세션 생명주기 계약을 만족하는 ClaudeCodeAdapter로 Coding Agent가 실제 Task를
    end-to-end(create_session→run→결과 수집→destroy_session) 수행한다.
 2. Interaction Layer가 CLI/API 등 표면 입력을 표준 요청으로 정규화한다.
 
-**진행 상태**: M3-T01(Engine Runtime)~M3-T07(End-to-End Integration) 완료.
-이후 Task는 사용자가 준비한 아래 8개 Task 개요를 따른다(상세 스펙은
-착수 시점에 `.ai/TASKS.md`에 확정).
+> **2026-07-25 Milestone 3 Review(M3-T08)에서 재확정**: 실제 착수 시
+> 사용자가 정의한 M3-T01~T08 8개 Task 범위에는 위 DoD 2번(Interaction
+> Layer)과 1번의 "Coding Agent가 실제로 수행" 부분이 처음부터 포함되지
+> 않았다(1번 중 ClaudeCodeAdapter의 세션 생명주기 자체는 M3-T02/T03/T07
+> 에서 실증됨). 사용자 승인으로 두 항목은 M3 미완료가 아니라 **Milestone
+> 4로 공식 이관**되었다 — 아래 "진행 상태"와 Milestone 4 절 참고.
+
+**진행 상태**: M3-T01(Engine Runtime)~M3-T08(Milestone Review) **완료
+(2026-07-25 사용자 승인 — Milestone 3 Completed)**.
 
 **Task 개요 — Engine Adapter & Execution** (M3-T01~M3-T08)
 1. M3-T01 Managed Engine Runtime — **완료**
@@ -182,12 +188,13 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
    →`WorkspaceCore`를 실제 구현으로 조립(FakeProcessRunner만 대체)한
    `tests/integration/test_m3_end_to_end.py`. 승인→실행/거부→차단 경로와
    Event 발행 순서까지 검증.
-6. M3-T06 Runtime Recovery — 실행 실패 복구/Retry 정책/Runtime 상태
-   복원/비정상 종료 처리
-7. M3-T07 End-to-End Integration — Workspace→Runtime→Adapter→Claude Code
-   실제 시나리오, Event 흐름, Approval 포함 통합 테스트
-8. M3-T08 Milestone Review — DoD 검증/테스트 보강/문서 업데이트/기술
-   부채 정리
+8. M3-T08 Milestone Review — **완료**: 사용자 제공 8개 Task 체크리스트
+   기준 7항목 전부 충족, 새 Interface 0개 추가(Interface First 실증),
+   `pytest` 281개/`ruff`/`mypy` 클린. 원래 이 문서의 M3 DoD 2개 항목 중
+   "Interaction Layer" 미구현, "Coding Agent 실제 경로 사용" 미검증을
+   발견해 보고했고, **사용자 승인으로 두 항목을 Milestone 4로 공식
+   이관하며 Milestone 3 Completed 확정**. 상세 Review는 `.ai/TASKS.md`의
+   "Milestone 3 Review" 참고.
 
 > M3 목표는 M2 이월 부채 청산이 아니라 실제 Engine Runtime/Adapter
 > 구현이다(위 안내 유지). Deferred by Design 부채(#1 AgentManager/
@@ -207,6 +214,15 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
   Memory Engine이 핵심 컨텍스트를 검색/요약/Snapshot 관리한다. DoD: 자동화
   시나리오 1건 이상 동작, 다중 프로젝트 조회, 메모리 검색이 확인됨. (필요 시
   파일→DB 전환은 별도 ADR.)
+- **Milestone 3에서 공식 이관된 항목**(M3-T08 Milestone 3 Review, 2026-07-25
+  사용자 승인): 이 문서의 원래 Milestone 3 DoD에는 포함되어 있었으나 실제
+  M3-T01~T08 Task 범위에는 없었던 항목 — M3 미완료가 아니라 M4로
+  재배치된 것으로 확정됨(`.ai/TASKS.md`의 "Milestone 3 Review" 7절 참고).
+  1. Interaction Layer 구현 — CLI/API 등 표면 입력을 표준 요청으로 정규화
+  2. `CodingAgent`(M2)의 실제 Engine 실행 경로(EngineApprovalPipeline→
+     RecoveringEngineRuntime→ManagedEngineRuntime→ClaudeCodeEngineAdapter)
+     통합 및 End-to-End 검증 — M3-T07 E2E는 Task를 Pipeline에 직접
+     넘겼을 뿐 실제 Agent를 경유하지 않았음
 
 ---
 
