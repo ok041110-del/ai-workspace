@@ -594,7 +594,17 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
   호출하지 않음)를 구현한다.
 - 완료 조건(DoD): `EngineRuntime.run()`이 `MockEngineAdapter`를 통해 Task를
   "실행"하고 `EngineResult(success=True)`를 반환함이 테스트로 확인된다.
-- 상태: TODO
+- 상태: **DONE (2026-07-25)** — `runtime/engine/engine_runtime.py`의
+  `InMemoryEngineRuntime`, `adapters/mock_engine_adapter.py`의
+  `MockEngineAdapter`(둘 다 `tests/interfaces/fakes.py`의
+  `FakeEngineRuntime`/`FakeEngineAdapter` 로직 승격, 신규 설계 없음).
+  `MockEngineAdapter.estimate_cost()`는 Fake의 임의값(100 토큰/$0.01) 대신
+  실제 엔진을 호출하지 않는다는 사실을 정직하게 반영해 0/0.0으로 둠.
+  `tests/adapters/test_mock_engine_adapter.py` 5개, `tests/runtime/engine/
+  test_engine_runtime.py` 7개(DoD를 직접 명시하는
+  `test_run_executes_task_via_mock_adapter_and_returns_success` 포함)
+  신규 테스트. `ruff check src tests`, `mypy src`, `pytest`(198개, 기존
+  186개 + 신규 12개) 모두 통과.
 - 의존성: T1-19
 
 #### T2-06: 능력별 Agent 골격 구현
@@ -1064,3 +1074,18 @@ unknown 예외, 방어적 복사, Snapshot 복원이 assemble_context에 반영�
 `ruff check src tests`, `mypy src`, `pytest`(186개, 기존 176개 + 신규
 10개) 모두 통과. 다음 Task: **T2-05** (Engine Runtime 최소 구현 + Mock
 EngineAdapter). |
+| 2026-07-25 | **T2-05 완료: Engine Runtime + Mock EngineAdapter**(§2.4
+Stage Checkpoint 4개 경계 모두 발동. Analysis에서 Sonnet/Medium→
+**Sonnet/Low** 하향 — 기존 `FakeEngineRuntime`/`FakeEngineAdapter` 로직
+승격 위주라 판단, 이후 3개 경계는 "동일" 유지). `runtime/engine/
+engine_runtime.py`의 `InMemoryEngineRuntime`, `adapters/
+mock_engine_adapter.py`의 `MockEngineAdapter` 구현 — 둘 다 기존 Fake
+로직 그대로 승격. 한 가지 의도적 차이: `MockEngineAdapter.
+estimate_cost()`는 Fake의 임의 테스트값(100 토큰/$0.01) 대신 실제 엔진을
+호출하지 않는다는 사실을 정직하게 반영해 0/0.0을 반환하도록 함.
+`tests/adapters/test_mock_engine_adapter.py` 5개, `tests/runtime/engine/
+test_engine_runtime.py` 7개(DoD "Mock EngineAdapter로 Task 실행 →
+success=True"를 직접 명시하는 테스트 포함) 신규 테스트. `ruff check src
+tests`, `mypy src`, `pytest`(198개, 기존 186개 + 신규 12개) 모두 통과.
+다음 Task: **T2-06** (능력별 Agent 골격 구현 — T2-01~T2-05 전부에 의존,
+지금까지 만든 5개 컴포넌트를 실제로 엮는 첫 Task). |

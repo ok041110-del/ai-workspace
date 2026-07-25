@@ -126,13 +126,15 @@
   context_manager.py`의 `InMemoryContextManager` — T2-02/03과 달리
   `MemoryEngine`을 실제로 주입받아 Snapshot을 `remember`/`recall`로
   저장(§8 규칙 7을 코드 구조로 강제, 기존 Fake는 자체 dict 사용이라
-  달랐음). 전체 186개 테스트 통과. 남은 Task: T2-05(Engine Runtime+Mock
-  Adapter, 원래 M3 표기였으나 M2 DoD 충족을 위해 앞당김) → T2-06(능력별
-  Agent 골격, T2-01~T2-05 전부 의존) → T2-07(통합 시나리오 테스트) →
-  T2-08(Milestone 2 Review). 상세는 `.ai/TASKS.md` "Milestone 2" 섹션
-  참고.
-- **다음 단계**: **`T2-05`(Engine Runtime 최소 구현 + Mock
-  EngineAdapter)**부터 진행.
+  달랐음). **T2-05 완료**: `runtime/engine/engine_runtime.py`의
+  `InMemoryEngineRuntime`, `adapters/mock_engine_adapter.py`의
+  `MockEngineAdapter` — 둘 다 기존 Fake 로직 승격(`estimate_cost`만
+  실제 호출 없음을 정직하게 반영해 0/0.0으로 조정). 전체 198개 테스트
+  통과. 남은 Task: T2-06(능력별 Agent 골격 — T2-01~T2-05 전부 의존, 지금
+  까지 만든 5개 컴포넌트를 처음 실제로 엮는 Task) → T2-07(통합 시나리오
+  테스트) → T2-08(Milestone 2 Review). 상세는 `.ai/TASKS.md` "Milestone 2"
+  섹션 참고.
+- **다음 단계**: **`T2-06`(능력별 Agent 골격 구현)**부터 진행.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
