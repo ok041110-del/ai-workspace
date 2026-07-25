@@ -412,7 +412,7 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 - 작업 내용: `cli/`에 Workspace Core와 파일 저장소를 연결해 Project 생성·조회
   명령을 구현한다 (Agent/협업 실행은 구체 구현이 없는 이 시점에는 골격까지만).
 - 완료 조건(DoD): CLI로 Project 생성 → 조회가 end-to-end로 동작한다.
-- 상태: TODO
+- 상태: DONE
 - 의존성: T1-22, T1-23
 
 #### T1-25: Tests
@@ -747,3 +747,20 @@ Validation, Validation→문서화 경계에서는 §2.4가 최소 요구하는 
 TASKS.md 편집 중 `old_string` 오지정으로 텍스트를 잘못 덮어썼다가 즉시
 되돌린 실수가 1건 있었음(Effort 인과관계는 불명확하나 참고 신호로 기록).
 T1-24부터는 나머지 경계에서도 실제로 멈춰 재판단하기로 함. |
+| 2026-07-25 | **T1-24 완료: CLI**(§2.4 Stage Checkpoint 4개 경계 모두 실제
+발동 — 4회 전부 "동일" 판정으로 Sonnet/Medium 유지, 한 줄 Skip Rule 출력 확인).
+`cli/main.py`에 argparse 기반 CLI 진입점 구현: `project create <id> <name>
+<goal> [--priority N]` / `project show <id>`, `--data-dir`(기본값
+`workspace/projects`). **설계 판단**: 명세는 "Workspace Core와 파일 저장소를
+연결"이라 되어 있으나, `WorkspaceCore` 생성자는 `ProjectRepository` 외
+6개 Interface(`WorkflowEngine`/`AgentRegistry`/`AgentScheduler`/
+`AgentManager`/`EventBus`/`EngineRuntime`)를 필수로 요구하고 이들은 아직
+구체 구현이 없음(Milestone 2+ 예정) — 지금 이를 위한 임시 더미 구현체를
+만드는 것은 범위 밖의 선점 구현(YAGNI 위반)이라 판단해, CLI는
+`FileProjectRepository`를 직접 사용함. DoD("생성→조회 e2e 동작")는 이것만
+으로 충분히 만족됨. `WorkspaceCore` 완전 연동은 Agent/Engine Runtime
+구체 구현이 준비되는 Milestone 이후로 미룸. `tests/cli/test_main.py`에
+5개 신규 테스트(e2e, priority 반영/기본값, 존재하지 않는 Project 조회 시
+오류(exit code 1 + stderr), 프로세스 재시작 후 영속성). `ruff check src
+tests`, `mypy src`, `pytest`(126개, 기존 121개 + 신규 5개) 모두 통과.
+다음 Task: **T1-25** (Tests: 전체 스위트 통합 점검 및 커버리지 보강). |
