@@ -10,13 +10,21 @@ from tests.interfaces.fakes import (
     FakeWorkflowEngine,
 )
 
-from ai_workspace.core.workspace_core import WorkspaceCore, WorkspaceSessionNotFoundError
+from ai_workspace.adapters.mock_engine_adapter import MockEngineAdapter
+from ai_workspace.core.workspace_core import (
+    EngineSessionNotFoundError,
+    WorkspaceCore,
+    WorkspaceSessionNotFoundError,
+)
 from ai_workspace.domain.project import Project
 from ai_workspace.domain.task import Task
 from ai_workspace.domain.workflow import Workflow
+from ai_workspace.events.event_bus import InMemoryEventBus
 from ai_workspace.interfaces.engine_adapter import EngineAdapter, EngineResult, EngineSessionStatus
 from ai_workspace.interfaces.engine_runtime import EngineRuntime
+from ai_workspace.interfaces.event_bus import Event
 from ai_workspace.interfaces.project_repository import ProjectNotFoundError
+from ai_workspace.runtime.engine.managed_engine_runtime import ManagedEngineRuntime
 
 
 class SpyEngineRuntime(EngineRuntime):
@@ -254,3 +262,136 @@ def test_core_has_no_task_execution_method() -> None:
 
     assert not hasattr(core, "run_task")
     assert not hasattr(core, "execute_task")
+
+
+def test_start_engine_session_creates_session_with_unique_id() -> None:
+    core = make_core()
+
+    session1 = core.start_engine_session(task_id="t1")
+    session2 = core.start_engine_session(task_id="t1")
+
+    assert session1.session_id != session2.session_id
+    assert session1.task_id == "t1"
+
+
+def test_get_engine_session_unknown_raises_error() -> None:
+    core = make_core()
+
+    with pytest.raises(EngineSessionNotFoundError):
+        core.get_engine_session("unknown")
+
+
+def test_get_engine_session_returns_tracked_session() -> None:
+    core = make_core()
+    started = core.start_engine_session(task_id="t1")
+
+    assert core.get_engine_session(started.session_id) == started
+
+
+def test_end_engine_session_removes_active_session() -> None:
+    core = make_core()
+    session = core.start_engine_session(task_id="t1")
+
+    core.end_engine_session(session.session_id)
+
+    with pytest.raises(EngineSessionNotFoundError):
+        core.get_engine_session(session.session_id)
+
+
+def test_end_engine_session_unknown_raises_error() -> None:
+    core = make_core()
+
+    with pytest.raises(EngineSessionNotFoundError):
+        core.end_engine_session("unknown")
+
+
+def test_end_engine_session_appends_to_history() -> None:
+    core = make_core()
+    session = core.start_engine_session(task_id="t1")
+
+    core.end_engine_session(session.session_id)
+
+    assert core.list_engine_session_history() == [session]
+
+
+def test_list_engine_session_history_returns_defensive_copy() -> None:
+    core = make_core()
+    session = core.start_engine_session(task_id="t1")
+    core.end_engine_session(session.session_id)
+
+    history = core.list_engine_session_history()
+    history.append(session)
+
+    assert core.list_engine_session_history() == [session]
+
+
+def test_shutdown_clears_active_engine_sessions() -> None:
+    core = make_core()
+    session = core.start_engine_session(task_id="t1")
+
+    core.shutdown()
+
+    with pytest.raises(EngineSessionNotFoundError):
+        core.get_engine_session(session.session_id)
+
+
+def test_workspace_core_wires_real_managed_engine_runtime_without_core_changes() -> None:
+    """M3-T04: WorkspaceCore가 T2-05의 InMemoryEngineRuntime뿐 아니라
+    M3-T01의 ManagedEngineRuntime도 Core 코드 변경 없이 그대로 주입받을 수
+    있음을 증명한다(T1-23의 FileProjectRepository 주입 검증과 동일한 패턴)."""
+    event_bus = InMemoryEventBus()
+    engine_runtime = ManagedEngineRuntime(event_bus=event_bus)
+    engine_runtime.register_engine("mock", MockEngineAdapter())
+    core = WorkspaceCore(
+        project_repository=FakeProjectRepository(),
+        workflow_engine=FakeWorkflowEngine(),
+        agent_registry=FakeAgentRegistry(),
+        agent_scheduler=FakeAgentScheduler(),
+        agent_manager=FakeAgentManager(),
+        event_bus=event_bus,
+        engine_runtime=engine_runtime,
+    )
+
+    assert core.engine_runtime is engine_runtime
+
+
+def test_workspace_core_event_bus_receives_managed_engine_runtime_events() -> None:
+    """EventBus 완전 연동: Core에 주입한 EventBus와 ManagedEngineRuntime에
+    주입한 EventBus가 같은 인스턴스이면, Runtime이 발행하는
+    engine_task_* 이벤트가 Core.event_bus 구독자에게 그대로 도달한다."""
+    event_bus = InMemoryEventBus()
+    engine_runtime = ManagedEngineRuntime(event_bus=event_bus)
+    engine_runtime.register_engine("mock", MockEngineAdapter())
+    core = WorkspaceCore(
+        project_repository=FakeProjectRepository(),
+        workflow_engine=FakeWorkflowEngine(),
+        agent_registry=FakeAgentRegistry(),
+        agent_scheduler=FakeAgentScheduler(),
+        agent_manager=FakeAgentManager(),
+        event_bus=event_bus,
+        engine_runtime=engine_runtime,
+    )
+    received: list[Event] = []
+    core.event_bus.subscribe(received.append)
+
+    task = Task(task_id="t1", project_id="p1", title="demo")
+    core.engine_runtime.run(task)
+
+    event_types = {event.event_type for event in received}
+    assert {"engine_task_started", "engine_task_completed"}.issubset(event_types)
+
+
+def test_workspace_core_links_engine_session_to_workspace_session() -> None:
+    """WorkspaceSession.engine_session_id(T1-22부터 존재하던 필드)가 실제
+    EngineSession과 연결되는 흐름 — 새 필드 없이 기존 update_session()과
+    새 start_engine_session()의 조합만으로 동작함을 증명한다."""
+    core = make_core()
+    ws_session = core.start_session(project_id="p1")
+    engine_session = core.start_engine_session(task_id="t1")
+
+    updated = core.update_session(
+        ws_session.session_id, engine_session_id=engine_session.session_id
+    )
+
+    assert updated.engine_session_id == engine_session.session_id
+    assert core.get_engine_session(engine_session.session_id) == engine_session

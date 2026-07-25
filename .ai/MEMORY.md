@@ -158,9 +158,22 @@
   cancel()`(M3-T01)도 같은 문제로 오판해 고치려 했으나 `EngineRuntime.
   cancel()` 계약은 애초에 그 조항이 없어 원래 구현이 맞았음을 재확인하고
   되돌림 — 두 인터페이스 계약이 서로 다르다는 점에 유의할 것. 전체 244개
-  테스트 통과. 다음은 **M3-T04**(Session & Workspace Integration —
-  WorkspaceCore↔ManagedEngineRuntime 연결, EngineSession 생명주기, 실행
-  기록, EventBus 완전 연동).
+  테스트 통과. **M3-T04 완료**: 착수 전 사용자가 "EngineSession을 새로
+  만들기 전에 AgentSession/WorkspaceSession과 공통 개념이 있는지 먼저
+  검토하라"고 지시 → 세 Session류가 아직 실제로 겹치는 동작을 드러내지
+  않아 `BaseSession` 공통 추상화 없이 `domain/engine_session.py`에
+  `EngineSession(session_id, task_id)`을 독립 dataclass로 신규 추가(점진적
+  확장). 새 Manager 클래스를 만들지 않고 **`WorkspaceCore`를 확장**해
+  기존 `WorkspaceSession` 생명주기 메서드와 동일한 패턴으로
+  `start_engine_session`/`get_engine_session`/`end_engine_session`/
+  `list_engine_session_history` 추가 — 순수 기록용 추적이며 Engine
+  Runtime을 스스로 호출하지 않음(T1-22 원칙 유지). T1-22부터 있었지만
+  미사용이던 `WorkspaceSession.engine_session_id` 필드를 새 필드 추가 없이
+  기존 `update_session()` + 신규 `start_engine_session()` 조합만으로 연결.
+  `ManagedEngineRuntime`+`MockEngineAdapter`+`InMemoryEventBus`로 실제
+  조립해 Core 코드 변경 없이 주입 가능함과, Core·Runtime이 같은 EventBus를
+  공유할 때 Event가 실제로 도달함을 테스트로 증명. 전체 256개 테스트 통과.
+  다음은 **M3-T05**(Approval Pipeline).
 - **M3 목표는 부채 청산이 아니라 실제 Engine Runtime/Engine Adapter
   구현**이다(사용자 강조, M2 Retrospective 참고) — Deferred by Design
   부채(#1 AgentManager/Registry, #2 CLI 통합, #5 병렬성 검증)는 자연스럽게

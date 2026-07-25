@@ -156,17 +156,19 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
    end-to-end(create_session→run→결과 수집→destroy_session) 수행한다.
 2. Interaction Layer가 CLI/API 등 표면 입력을 표준 요청으로 정규화한다.
 
-**진행 상태**: M3-T01(Engine Runtime)~M3-T03(Process Management) 완료.
-이후 Task는 사용자가 준비한 아래 8개 Task 개요를 따른다(상세 스펙은 착수 시점에
-`.ai/TASKS.md`에 확정).
+**진행 상태**: M3-T01(Engine Runtime)~M3-T04(Session & Workspace Integration)
+완료. 이후 Task는 사용자가 준비한 아래 8개 Task 개요를 따른다(상세 스펙은
+착수 시점에 `.ai/TASKS.md`에 확정).
 
 **Task 개요 — Engine Adapter & Execution** (M3-T01~M3-T08)
 1. M3-T01 Managed Engine Runtime — **완료**
 2. M3-T02 Claude Code Adapter — **완료**
 3. M3-T03 Process Management — **완료**
-4. M3-T04 Session & Workspace Integration — WorkspaceCore↔
+4. M3-T04 Session & Workspace Integration — **완료**: WorkspaceCore↔
    ManagedEngineRuntime 연결, EngineSession 생명주기, 실행 기록, EventBus
-   완전 연동
+   완전 연동. Deferred by Design 부채(#1 AgentManager/Registry, #2 CLI
+   통합, #5 병렬성 검증)는 이번 Task 범위와 무관해 다루지 않음 — 계속
+   이월.
 5. M3-T05 Approval Pipeline — ApprovalRequest 생성/사용자 승인 대기/
    승인·거부 Event/Runtime Resume
 6. M3-T06 Runtime Recovery — 실행 실패 복구/Retry 정책/Runtime 상태

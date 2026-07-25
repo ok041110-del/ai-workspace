@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 
+from ai_workspace.domain.engine_session import EngineSession
 from ai_workspace.domain.project import Project
 from ai_workspace.domain.session import WorkspaceSession
 from ai_workspace.domain.workflow import Workflow
@@ -18,6 +19,10 @@ class WorkspaceSessionNotFoundError(Exception):
     """관리 중이지 않은 session_id를 조회/갱신/종료하려 할 때 발생한다."""
 
 
+class EngineSessionNotFoundError(Exception):
+    """관리 중이지 않은 EngineSession session_id를 조회/종료하려 할 때 발생한다."""
+
+
 class WorkspaceCore:
     """최상위 오케스트레이터(ARCHITECTURE.md §3.3, ADR-0005, ADR-0010).
 
@@ -28,6 +33,14 @@ class WorkspaceCore:
     Runtime/Engine Adapter를 직접 호출하지 않는다(ARCHITECTURE.md §8 규칙
     3, 6). Registry/Scheduler/Manager/EventBus를 하나의 파사드로 묶지 않고
     개별 Interface로 보관한다(T1-22 명세, YAGNI).
+
+    EngineSession(M3-T04)은 실제 Engine 실행(Agent Runtime → Engine Runtime
+    경유)을 호출하지 않는 순수 기록용 추적이다 — 위 규칙과 동일하게 Workspace
+    Core는 Engine Runtime을 스스로 호출하지 않으며, 어떤 Task가 어떤
+    EngineSession으로 실행 중인지만 보관한다. `AgentSession`/`WorkspaceSession`과
+    필드 모양은 비슷하지만 공통 추상화(BaseSession)로 묶지 않는다 — 세 종류의
+    Session이 실제로 겹치는 동작을 반복적으로 드러내기 전까지는 독립된 개념으로
+    유지한다(점진적 확장 원칙, `.ai/RULES.md` §4.2).
     """
 
     def __init__(
@@ -52,6 +65,9 @@ class WorkspaceCore:
         self._config = dict(config) if config is not None else {}
         self._sessions: dict[str, WorkspaceSession] = {}
         self._session_id_generator = itertools.count(1)
+        self._engine_sessions: dict[str, EngineSession] = {}
+        self._engine_session_id_generator = itertools.count(1)
+        self._engine_session_history: list[EngineSession] = []
 
     @property
     def config(self) -> dict[str, str]:
@@ -125,5 +141,25 @@ class WorkspaceCore:
     def start_workflow(self, workflow: Workflow) -> list[str]:
         return self._workflow_engine.plan(workflow)
 
+    def start_engine_session(self, task_id: str) -> EngineSession:
+        session_id = f"engine-session-{next(self._engine_session_id_generator)}"
+        session = EngineSession(session_id=session_id, task_id=task_id)
+        self._engine_sessions[session_id] = session
+        return session
+
+    def get_engine_session(self, session_id: str) -> EngineSession:
+        if session_id not in self._engine_sessions:
+            raise EngineSessionNotFoundError(session_id)
+        return self._engine_sessions[session_id]
+
+    def end_engine_session(self, session_id: str) -> None:
+        if session_id not in self._engine_sessions:
+            raise EngineSessionNotFoundError(session_id)
+        self._engine_session_history.append(self._engine_sessions.pop(session_id))
+
+    def list_engine_session_history(self) -> list[EngineSession]:
+        return list(self._engine_session_history)
+
     def shutdown(self) -> None:
         self._sessions.clear()
+        self._engine_sessions.clear()

@@ -881,6 +881,44 @@ Task화한다.
   `pytest`(244개, 기존 235개 + 신규 9개) 모두 통과.
 - 의존성: M3-T02
 
+#### M3-T04: Session & Workspace Integration
+- 목적: `WorkspaceCore`가 실제 `ManagedEngineRuntime`과 결합될 수 있음을
+  증명하고, Engine 실행 1건을 추적하는 `EngineSession` 생성/종료/이력
+  관리를 제공한다.
+- 작업 내용: `WorkspaceCore` ↔ `ManagedEngineRuntime` 연결, `EngineSession`
+  생성/종료, 실행 기록 관리, EventBus 완전 연동.
+- 완료 조건(DoD): `ManagedEngineRuntime`을 실제로 주입해도 Core 코드
+  변경이 필요 없음을 테스트로 증명, `EngineSession` 생명주기 검증,
+  Core·Runtime이 같은 EventBus를 공유할 때 Event가 실제로 도달함을 검증,
+  `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-25)** — 사전 검토: 착수 전 사용자가 "EngineSession을
+  새로 만들기 전에 AgentSession/WorkspaceSession과 공통 개념이 있는지
+  먼저 검토하라"고 지시함. 세 Session류(AgentSession: session_id+agent_id,
+  WorkspaceSession: session_id+7개 필드, 신규 EngineSession:
+  session_id+task_id)는 형태만 유사할 뿐 실제로 겹치는 동작이 아직 3곳
+  이상에서 드러나지 않아 **`BaseSession` 등 공통 추상화는 만들지 않고
+  독립 dataclass로 결정**(점진적 확장 원칙). `domain/engine_session.py`에
+  `EngineSession(session_id, task_id)` 신규 추가. **`WorkspaceCore`
+  확장**(새 Manager 클래스를 만들지 않고 기존 `WorkspaceSession` 생명주기
+  메서드와 동일한 패턴으로 `start_engine_session`/`get_engine_session`/
+  `end_engine_session`/`list_engine_session_history` 추가 — 최소
+  복잡성/기존 코드 존중). `EngineSession` 관리는 순수 기록용 추적이며
+  Engine Runtime을 스스로 호출하지 않음(`SpyEngineRuntime` 테스트가
+  검증하는 기존 T1-22 원칙과 동일하게 유지). `WorkspaceSession.
+  engine_session_id`(T1-22부터 존재했으나 지금까지 미사용이던 필드)는
+  새 필드 추가 없이 기존 `update_session()`과 신규
+  `start_engine_session()`의 조합만으로 연결됨을 테스트로 증명.
+  `shutdown()`은 활성 `EngineSession`도 함께 정리하되 이력(history)은
+  보존. `tests/domain/test_engine_session.py`(1개) +
+  `tests/core/test_workspace_core.py`에 11개 신규 테스트 — 생명주기/이력/
+  방어적 복사/shutdown 정리 + `ManagedEngineRuntime`+`MockEngineAdapter`+
+  `InMemoryEventBus`로 구성한 실제 조립 검증(Core와 Runtime이 같은
+  EventBus를 공유할 때 `engine_task_started`/`completed` Event가
+  Core.event_bus 구독자에게 도달함을 확인) + `engine_session_id` 연결
+  검증. `ruff check src tests`, `mypy src`, `pytest`(256개, 기존 244개 +
+  신규 12개) 모두 통과.
+- 의존성: T1-22, M3-T01, T2-01
+
 ---
 
 ## Milestone 4 — 자동화 및 확장 (Automation & Scale)
