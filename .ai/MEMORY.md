@@ -192,8 +192,19 @@
   Runtime 상태만 진실로 유지하는 것으로 해석). 사용자가 설계안 검토 후
   "재시도 소진 시 예외를 `EngineResult`로 변환하지 말고 그대로 재전파"를
   요청 — 기존 `EngineRuntime.run()` 계약(예외는 그대로 전파)을 지키기
-  위함, 반영함. 전체 278개 테스트 통과. 다음은 **M3-T07**(End-to-End
-  Integration).
+  위함, 반영함. 전체 278개 테스트 통과. **M3-T07 완료**:
+  `tests/integration/test_m3_end_to_end.py`(신규 `tests/integration/`
+  패키지) — M3 전체 계층을 실제 구현으로 조립
+  (`ClaudeCodeEngineAdapter`(`FakeProcessRunner`만 대체)→
+  `ManagedEngineRuntime`→`RecoveringEngineRuntime`→
+  `EngineApprovalPipeline`, `WorkspaceCore`와 EventBus 공유). 사용자가
+  Event **순서** 검증과 EngineSession은 부수적으로만 다룰 것을 요청해
+  반영. 승인→실행 정상 경로(Event 순서 approval_requested→
+  approval_granted→engine_task_started→engine_task_completed 정확히
+  검증)/거부→실행 차단 경로(프로세스 전혀 호출 안 됨)/EngineSession 연동
+  (최소 확인) 3개 테스트. Retry 경로는 이미 단위 테스트로 검증되어
+  재검증하지 않음. 전체 281개 테스트 통과. **Milestone 3의 8개 Task 중
+  7개(M3-T01~T07) 완료, 다음은 M3-T08(Milestone Review)뿐**.
 - **M3 목표는 부채 청산이 아니라 실제 Engine Runtime/Engine Adapter
   구현**이다(사용자 강조, M2 Retrospective 참고) — Deferred by Design
   부채(#1 AgentManager/Registry, #2 CLI 통합, #5 병렬성 검증)는 자연스럽게

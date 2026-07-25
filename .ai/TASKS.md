@@ -989,6 +989,41 @@ Task화한다.
   신규 11개) 모두 통과.
 - 의존성: M3-T01
 
+#### M3-T07: End-to-End Integration
+- 목적: Milestone 3에서 만든 모든 계층(WorkspaceCore/EngineRuntime 데코레이터
+  체인/EngineAdapter/ApprovalPipeline/EventBus)이 실제로 하나의 실행
+  흐름으로 연결되는지 검증한다.
+- 작업 내용: Workspace→Runtime→Adapter→Claude Code 실제 시나리오, Event
+  흐름, Approval 포함 통합 테스트.
+- 완료 조건(DoD): 전체 스택을 실제 구현으로 조립한 승인→실행 정상 경로와
+  거부→실행 차단 경로 검증, Event 발행 **순서**까지 검증, `pytest`/
+  `ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-25)** — 사용자가 설계안 검토 후 2가지를 요청: (1)
+  Event 발생 여부뿐 아니라 **순서**까지 검증, (2) EngineSession 생명주기는
+  핵심이 아니므로 최소화/부수적으로만 다룰 것. 둘 다 반영함. **"실제
+  시나리오"의 해석**: 실제 `claude` CLI를 호출하지 않고(비용·비결정성
+  회피, M3-T02 이후 일관된 정책), `ClaudeCodeEngineAdapter` 실제 클래스에
+  `FakeProcessRunner`(M3-T02/T03 테스트에서 이미 쓰던 더블, 새로 만들지
+  않고 `tests.adapters.test_claude_code_engine_adapter`에서 그대로
+  import해 재사용)를 주입 — 명령 조립·JSON 파싱 등 실제 코드 경로는
+  그대로 거치되 프로세스만 대체함. **조립 순서**:
+  `ClaudeCodeEngineAdapter`(FakeProcessRunner) → `ManagedEngineRuntime`에
+  등록 → `RecoveringEngineRuntime`으로 감쌈 → `EngineApprovalPipeline`의
+  `engine_runtime`으로 사용, 전부 같은 `InMemoryEventBus` 공유.
+  `WorkspaceCore`는 `EngineApprovalPipeline`을 보관할 수 없음(M3-T05에서
+  의도적으로 `EngineRuntime` 인터페이스를 구현하지 않았기 때문) — Core는
+  `RecoveringEngineRuntime`을 그대로 보관하고, Approval Pipeline은 Core
+  밖에서 호출자가 별도로 사용. **Retry(M3-T06) 경로는 재검증하지 않음**
+  (이미 단위 테스트로 충분히 검증됨, 중복 방지). 신규
+  `tests/integration/` 패키지에 `test_m3_end_to_end.py` 3개 테스트 —
+  승인→실행 정상 경로(Event 순서 `approval_requested→approval_granted→
+  engine_task_started→engine_task_completed` 정확히 검증, 실제 명령 조립
+  결과 확인), 거부→실행 차단 경로(Event 2개까지만 발생하고 프로세스는
+  전혀 호출되지 않음을 확인), EngineSession↔WorkspaceSession 연동(부수적
+  확인, 최소 범위). `ruff check src tests`, `mypy src`, `pytest`(281개,
+  기존 278개 + 신규 3개) 모두 통과.
+- 의존성: M3-T01~M3-T06 전체
+
 ---
 
 ## Milestone 4 — 자동화 및 확장 (Automation & Scale)
