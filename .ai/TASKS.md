@@ -700,3 +700,25 @@ test_workspace_core.py`, 13개 테스트). `docs/ARCHITECTURE.md` §3.3·§9는
 이미 이 설계와 일치해 변경하지 않음. `ruff check src tests`, `mypy src`,
 `pytest`(100개, 기존 87개 + 신규 13개) 모두 통과. 다음 Task: **T1-23**
 (Repositories: FileProjectRepository/FileAgentRepository/FileEventStore). |
+| 2026-07-25 | **DX-01 완료: Stage Checkpoint + Smart Model Router 통합**
+(`.ai/DECISIONS.md`의 `DX-01` 항목 참고 — 시스템 아키텍처 결정이 아니라 AI
+세션 운영 절차 변경이라 ADR 번호를 소비하지 않고, Milestone 1의 T1-XX Task도
+아니라 별도 Task ID 없이 진행 로그로만 기록함). `.ai/RULES.md`에 §2.4 Stage
+Checkpoint를 신규 추가: Task 내부 4개 작업 단계 경계(Analysis/
+Implementation/Validation/Task 완료 — `Task-Planning.md`/
+`Task-Implementation.md` §5.1~5.6 절차 경계에 대응)마다 Smart Model
+Router(`.claude/skills/smart-model-router`)를 실행해 Recommendation
+(model/effort/confidence/reason)을 산출하고, Manual Recommendation
+Executor(사용자 선택 + 한국어 UI + `/model` 안내 후 대기)로 소비함. "Phase"
+대신 **"Stage"**를 공식 명칭으로 채택함(ADR-0021에서 이미 폐지된 프로젝트
+관리 계층 "Phase"와의 혼동 방지). 동일/상향/하향 어떤 경우도 Model/Effort를
+자동 전환하지 않으며, 불필요한 UI 노출을 막는 Skip Rule을 정의함. §5.1
+언어 규칙을 세션 중 사용자에게 보이는 모든 메시지(진행 상황/질문/완료
+보고/추천 결과/오류 안내/승인 요청)로 확장하고, 기술 용어(Model/Effort/
+pytest/ruff/mypy/Commit Message/클래스·함수·파일명/API)는 원문 유지로
+명시함. `Recommendation`의 실제 Python 구현은 Task Driven Development
+원칙에 따라 지금 하지 않고 §7 로드맵(M2 이후)으로 미룸 — 지금은 §2.4 안의
+개념적 스키마로만 정의함. `Task-Planning.md`(1곳), `Task-Implementation.md`
+(3곳: §5.3→5.4, §5.4→5.5, §5.6 뒤)에 Stage Checkpoint 상호 참조를 추가함.
+`README.md`/`docs/ARCHITECTURE.md`는 변경하지 않음(시스템 아키텍처가 아님).
+적용 대상 소스 코드 없음(문서 전용 변경). |

@@ -2,14 +2,22 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.2.1 |
-| 작성일 | 2026-07-24 |
+| 문서 버전 | v0.3.0 |
+| 작성일 | 2026-07-25 |
 | 적용 대상 | 이 저장소에서 작업하는 모든 AI 구현 엔진(Claude Code, Codex, Gemini CLI 등) 및 기여자 |
 
 이 문서는 AI Workspace 프로젝트에서 **반드시 지켜야 하는 개발 규칙**을 정의한다.
 아래 규칙은 사용자가 제시한 개발 철학을 프로젝트 내부 규정으로 명문화한 것이며,
 모든 Task 수행 시 최우선으로 준수해야 한다.
 
+> **v0.3.0 변경 (DX-01, `.ai/DECISIONS.md` 참고)**: §2.4 Stage Checkpoint를 신규 추가했다 —
+> Task 내부 4개 작업 단계(Analysis/Implementation/Validation/Task 완료)
+> 경계마다 Smart Model Router를 실행해 Recommendation(model/effort/
+> confidence/reason)을 산출하고, 사용자 승인 없이는 Model/Effort를 자동
+> 전환하지 않는다. "Stage"라는 이름을 쓴 것은 ADR-0021에서 이미 폐지된
+> 프로젝트 관리 계층 "Phase"와의 혼동을 피하기 위함이다. §5.1 언어 규칙을
+> 세션 중 사용자에게 보이는 모든 메시지로 확장했다.
+>
 > **v0.2.1 변경**: Phase 계층 폐지(ADR-0021)에 따라 §1.4 승인 항목의 "Phase
 > 완료"를 "Milestone 완료"로, §5.3 커밋 메시지 예시를 `[PhaseN][Pn-x]`에서
 > `[Mn][Tn-xx]`로, §7의 Task ID 참조를 갱신했다.
@@ -75,6 +83,79 @@
   확인한다.
 - 테스트가 없는 영역에 대한 신규 기능은, 해당 Task 범위 안에서 최소한의 테스트를
   함께 작성한다.
+
+### 2.4 Stage Checkpoint (DX-01)
+Task는 내부적으로 4개 **Stage** 경계를 가지며, 각 Stage가 끝날 때마다 Smart
+Model Router(`.claude/skills/smart-model-router`)를 실행해 다음 작업에 적합한
+Model/Effort를 점검한다. **"Stage"는 ADR-0021에서 폐지된 프로젝트 관리 계층
+"Phase"(`Milestone → Phase → Task`)와는 다른 개념**이며, 하나의 Task 내부
+작업 단계 경계만을 가리킨다.
+
+**Stage 4단계** (`.ai/skills/Task-Planning.md`/`Task-Implementation.md`의
+작업 절차와 대응한다)
+1. **Analysis 완료** — `Task-Planning.md`의 계획서 작성 완료 직후, 구현 착수 전.
+2. **Implementation 완료** — `Task-Implementation.md` §5.1~5.3(테스트 작성/
+   구현/범위 관리) 완료 직후, §5.4(검증) 착수 전.
+3. **Validation 완료** — `Task-Implementation.md` §5.4(pytest/ruff/mypy)
+   통과 직후, §5.5(문서화) 착수 전.
+4. **Task 완료** — `Task-Implementation.md` §5.5~5.6(문서화/상태 확정) 및
+   커밋 완료 직후, 다음 Task 착수 전 (Documentation과 Report는 하나의
+   Checkpoint로 묶는다).
+
+**흐름**
+```
+Stage Checkpoint
+      │
+      ▼
+Smart Model Router (다음 작업 · 난이도 · 비용 · 토큰 분석)
+      │
+      ▼
+Recommendation (model, effort, confidence, reason)
+      │
+      ▼
+Manual Recommendation Executor (현재)
+      │
+      ▼
+한국어 UI 표시 → 사용자 선택 → (필요 시) `/model` 안내 후 대기
+```
+
+**Recommendation**: Smart Model Router는 스스로 실행하지 않고 판단 결과만
+아래 구조로 반환한다. 지금 단계에서는 **문서화된 개념적 스키마**이며, 실제
+Python 구현(`domain/llm_policy.py` 확장 등)은 Task Driven Development 원칙에
+따라 별도 Task 없이 지금 만들지 않는다 — §7 Temporary LLM Policy의 M2 이후
+로드맵에서 다룬다.
+```
+Recommendation(
+    model: str,        # 예: "Sonnet"
+    effort: str,        # 예: "High"
+    confidence: float,  # 0.0~1.0
+    reason: str,         # 추천 사유
+)
+```
+
+**3가지 결과 처리** (Model/Effort는 어떤 경우에도 자동 전환하지 않는다)
+- **동일** — 현재 Model/Effort와 추천이 같으면 자동으로 다음 작업을 진행한다.
+- **상향 필요** — 추천이 현재보다 높으면 진행을 멈추고 사용자에게 모델 변경
+  여부를 질문한다. "예"를 선택하면 `/model`로 전환 후 계속 진행해 달라고
+  안내하고 대기한다.
+- **하향 가능** — 추천이 현재보다 낮으면 "현재 설정 유지" 또는 "추천
+  Model/Effort로 변경" 중 사용자가 선택하게 한다.
+
+**Skip Rule**: 다음 중 하나라도 해당하면 박스 UI 없이 한 줄만 출력하고
+자동 진행한다 (불필요한 중단을 막기 위함).
+- 직전 Stage의 Recommendation과 동일한 경우
+- 현재 Model/Effort가 이미 추천과 일치하는 경우
+- 연속된 Stage에서 변경 권고가 없었던 경우
+
+표시 문구 예: "현재 Model/Effort가 다음 작업에도 적합합니다. 계속
+진행합니다."
+
+**미래 확장 (Auto Recommendation Executor)**: Milestone 3에서 Engine
+Runtime/Engine Adapter가 완성되면 `Manual Recommendation Executor`(사용자
+선택 대기)만 `Auto Recommendation Executor`(Engine Runtime을 통한 자동
+선택·실행)로 교체한다. Stage Checkpoint, Smart Model Router, Recommendation
+구조, 추천 알고리즘, 한국어 UI 정책은 그대로 재사용한다 — §7 Temporary LLM
+Policy의 M2(Rule 기반 선택)~M5(Self Optimizer) 로드맵과 연결된다.
 
 ---
 
@@ -151,6 +232,11 @@
   - 클래스: `PascalCase`
   - 상수: `UPPER_SNAKE_CASE`
   - 파일/모듈: `snake_case.py`
+- AI 구현 엔진이 세션 중 사용자에게 표시하는 모든 메시지(진행 상황, 질문,
+  완료 보고, 추천 결과, 오류 안내, 승인 요청, §2.4 Stage Checkpoint의 Smart
+  Model Router 결과 포함)도 **한국어**로 작성한다(DX-01). 단, 기술
+  용어(Model, Effort, pytest, ruff, mypy, Commit Message, API 등)와
+  클래스명·함수명·파일명은 원문을 유지한다.
 
 ### 5.2 Python 코딩 규칙
 - PEP 8을 기본 스타일 가이드로 따른다.
@@ -210,3 +296,9 @@ Engine, Router 등)은 존재하지 않는다.
 
 이 섹션은 정책이 실제로 자동화되기 전까지 "임시"임을 나타내며, M2 이후 각
 Milestone에서 해당 단계의 구현이 완료되면 이 섹션과 진행 경로를 갱신한다.
+
+**§2.4 Stage Checkpoint와의 관계**: DX-01(§2.4)은 이 로드맵이 자동화되기 전
+단계에서, Claude Code 세션 수준에서 Model/Effort를 사람이 점검·선택하도록
+돕는 **Manual Recommendation Executor**다. M3에서 Engine Runtime/Engine
+Adapter가 완성되면 실행기만 Auto Recommendation Executor로 교체되며,
+Recommendation 구조와 추천 알고리즘은 그대로 이어진다.

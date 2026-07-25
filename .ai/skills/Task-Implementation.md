@@ -39,12 +39,20 @@
 1. 본 Task와 관련 없는 다른 컴포넌트의 코드를 임의로 리팩토링하거나 개선(Cleanup)하려 시도하지 않습니다.
 2. 발견된 기존의 죽은 코드(Dead Code)나 레거시는 직접 지우지 않고, 분석 및 리뷰를 위해 오로지 기록으로만 보고합니다.
 
+> §5.3까지 완료되면 `.ai/RULES.md` §2.4 Stage Checkpoint의 **Implementation
+> 완료** 지점에 해당한다 — §5.4 착수 전 Smart Model Router를 실행해
+> Model/Effort를 점검한다.
+
 ### 5.4 테스트 및 품질 도구 상시 검증 (Test Before Complete)
 1. 로컬 가상 환경을 통하여 현재 구현한 소스 코드 및 전체 테스트 스위트를 실행합니다 (예: `poetry run pytest`).
 2. 코드 품질 도구 및 정적 분석 도구(Ruff, MyPy 등)를 실행하여 단 하나의 정적 분석 에러나 경고도 용인하지 않고 완전히 클린한 상태를 만듭니다:
    - `poetry run ruff check .`
    - `poetry run mypy .`
 3. 모든 테스트와 품질 가이드라인을 극복할 때까지 **[작업 -> 검증 -> 수정]**의 안전한 회로를 반복 수행합니다.
+
+> §5.4까지 통과하면 `.ai/RULES.md` §2.4 Stage Checkpoint의 **Validation
+> 완료** 지점에 해당한다 — §5.5 착수 전 Smart Model Router를 실행해
+> Model/Effort를 점검한다.
 
 ### 5.5 연관 문서의 점진적 갱신 (Documentation First)
 1. 구현된 최신 기술 스펙이 기획 문서와 어긋나지 않도록 `docs/ARCHITECTURE.md` 등의 스펙 문서를 동일한 작업 영역 내에서 즉시 갱신합니다.
@@ -53,6 +61,10 @@
 ### 5.6 작업 상태 변경 및 이력 확정
 1. `.ai/TASKS.md`로 이동하여 방금 완료한 Task의 상태를 `DONE`으로 선언합니다.
 2. 진행 로그(Progress Log)에 작업 수행일, 주요 구현 내용, 특이사항, 그리고 실행 결과를 기록합니다.
+
+> §5.6과 커밋까지 완료되면 `.ai/RULES.md` §2.4 Stage Checkpoint의 **Task
+> 완료** 지점에 해당한다 — 다음 Task 착수 전 Smart Model Router를 실행해
+> Model/Effort를 점검한다.
 
 ## 6. 수행 원칙
 - **One Task At A Time**: 절대로 두 개 이상의 작업을 융합하여 구현하지 않습니다. 이전 작업이 테스트를 통과하고 안전하게 검토를 거쳐 종료되기 전에는 다음 작업을 손대지 않습니다.

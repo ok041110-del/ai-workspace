@@ -3,6 +3,10 @@
 이 문서는 AI Workspace 프로젝트의 주요 설계 결정을 기록한다. 각 ADR은 결정
 내용뿐 아니라 **배경, 대안, 이유, 결과**를 함께 남겨 이후 재검토가 가능하도록 한다.
 
+시스템 아키텍처가 아니라 **AI 세션 운영 절차(DX 트랙)**에 대한 결정은 ADR
+번호를 소비하지 않고 `## DX-01: 제목` 형식(형식은 ADR과 동일)으로 이 문서에
+함께 기록한다 — ADR 번호 체계는 실제 아키텍처 결정만을 위해 순번을 유지한다.
+
 형식은 다음을 따른다.
 
 ```
@@ -532,3 +536,62 @@
 - 결과/영향: `.ai/TASKS.md`의 T1-18~T1-28 재구성, `docs/ROADMAP.md`의 진행
   상태·Migration Table 주석 갱신에 반영됨. 적용 대상 코드는 없음(설계 검토 및
   계획 문서 변경).
+
+## DX-01: Stage Checkpoint + Smart Model Router 통합 (Manual Recommendation Executor)
+
+- 상태: 승인됨 (2026-07-25, 사용자 지시로 확정)
+- 날짜: 2026-07-25
+- 배경: Claude Code 세션에서 Task를 진행하는 동안 Model/Effort가 다음 작업에
+  적합한지 재판단하는 표준 절차가 없어, 매번 사람의 감에 의존했다. 이미
+  `.claude/skills/smart-model-router`(Task Type/Difficulty/Effort/Scope/
+  토큰/Reasoning/Project Stage 7개 항목 기반 판단 프레임워크)가 존재했으나
+  세션 중 수동 호출로만 쓰이고 있었고, 사용자에게 보이는 세션 메시지의
+  언어(한국어/영어 혼용)도 표준화되어 있지 않았다.
+- 결정:
+  1. `.ai/RULES.md`에 §2.4 Stage Checkpoint를 신규 추가한다. Task 내부 4개
+     작업 단계 경계(Analysis/Implementation/Validation/Task 완료)마다 Smart
+     Model Router를 실행해 Recommendation(model/effort/confidence/reason)을
+     산출한다. 4개 경계는 `.ai/skills/Task-Planning.md`(Analysis)와
+     `.ai/skills/Task-Implementation.md` §5.1~5.6(Implementation/
+     Validation/Task 완료)의 기존 절차 경계에 그대로 대응시킨다(신규 SOP를
+     만들지 않음).
+  2. **"Phase"라는 이름은 쓰지 않는다.** ADR-0021에서 `Milestone → Phase →
+     Task` 관리 계층의 "Phase"가 이미 폐지되었으므로, 이름 충돌로 인한 혼동을
+     피하기 위해 Task 내부 작업 단계는 **"Stage"**로 부른다.
+  3. Recommendation은 지금 단계에서 실행 로직이 없는 순수 판단 결과이며,
+     **Manual Recommendation Executor**(사용자에게 한국어 UI로 보여주고
+     선택받아 `/model` 전환을 안내만 하는 방식)로 소비한다. Model/Effort는
+     동일/상향/하향 어떤 경우에도 **자동 전환하지 않는다** — Claude Code
+     세션에는 이를 프로그램적으로 전환하는 도구가 없음을 확인했다(방금 도구
+     목록에서 재확인).
+  4. 세션 중 사용자에게 보이는 모든 메시지(진행 상황/질문/완료 보고/추천
+     결과/오류 안내/승인 요청)를 한국어로 통일한다(§5.1 확장). Model,
+     Effort, pytest, ruff, mypy, Commit Message, 클래스/함수/파일명, API 등
+     기술 용어는 원문을 유지한다.
+  5. 불필요한 중단을 막기 위해 Skip Rule을 둔다 — 직전 Stage와 동일한
+     Recommendation이거나 현재 설정이 이미 추천과 일치하면 박스 UI 없이 한
+     줄만 출력하고 자동 진행한다.
+  6. `Recommendation`의 실제 Python 구현(`domain/llm_policy.py` 확장 등)은
+     지금 하지 않는다. Task Driven Development 원칙(RULES.md §2.1)과 §7
+     Temporary LLM Policy의 M2 이후 로드맵에 따라, 실제 제품 코드 반영은
+     Milestone 2 이후 별도 Task로 다룬다. 지금은 §2.4 안의 개념적 스키마로만
+     정의한다.
+- 대안:
+  - 신규 `CLAUDE.md` 생성 후 그곳에 규칙 정의 — 이 저장소는 이미
+    `.ai/RULES.md`를 AI 운영 규칙의 단일 원천으로 쓰고 있어(README.md,
+    §3.1 Context Loading Rules), `CLAUDE.md`를 추가하면 두 문서가 같은
+    역할로 공존하게 되어 Context Loading Rules와 충돌한다 (기각).
+  - "Phase Checkpoint"라는 원래 요청 명칭 유지 — ADR-0021에서 이미 폐지한
+    프로젝트 관리 용어 "Phase"와 이름이 겹쳐 향후 문서 독해 시 혼동 위험이
+    크다. "Stage"로 대체해도 요청하신 UI 문구·흐름은 그대로 유지 가능하다
+    (기각, 사용자 승인).
+  - 지금 바로 `Recommendation`을 Python 도메인 객체로 구현 — Milestone 2
+    (§7 M2 "Rule 기반 선택")를 앞지르는 구현이 되어 Task Driven Development
+    원칙과 어긋난다. 지금은 RULES.md 문서 안의 스키마로만 정의하고, 실제
+    코드는 해당 Milestone에서 별도 Task로 다룬다 (기각, 사용자 설계에도
+    "미래" 경로로 명시됨).
+- 결과/영향: `.ai/RULES.md`(v0.3.0, §2.4 신규·§5.1 확장·§7 상호 참조),
+  `.ai/skills/Task-Planning.md`·`.ai/skills/Task-Implementation.md`(Stage
+  경계 상호 참조 4곳), `.ai/TASKS.md`(DX-01 진행 로그) 갱신. `README.md`,
+  `docs/ARCHITECTURE.md`는 변경하지 않음 — 시스템 아키텍처가 아니라 AI 세션
+  운영 절차이기 때문이다. 적용 대상 소스 코드(`src/`, `tests/`)는 없다.
