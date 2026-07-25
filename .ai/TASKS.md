@@ -1151,3 +1151,17 @@ Sonnet/High→**Sonnet/Medium** 하향 — 새 컴포넌트를 만들기보다 �
 먼저 점검한 뒤 실제 빈틈 2곳만 채움(상세는 위 T2-07 항목 참고). 새 파일/
 클래스 없음. `pytest`(205개, 기존 203개 + 신규 2개), `ruff`, `mypy` 모두
 통과. 다음 Task: **T2-08** (Milestone 2 Review — 최종 승인 요청). |
+| 2026-07-25 | **설계 철학을 `.ai/RULES.md` 영구 규칙으로 승격(DX-02)**.
+T2-07에서 처음 제시됐던 설계 철학(Architecture First 강화/최소 복잡성/
+YAGNI/점진적 확장/응집도/기존 코드 존중)을 일회성 제안이 아니라 프로젝트
+공식 규칙으로 통합함. 새 섹션을 만들지 않고 기존 구조에 병합(v0.3.0→
+v0.4.0): §1.2 Architecture First에 핵심 아키텍처 자산 보호 목록
+(`EngineAdapter`/`AgentRegistry`/`WorkflowEngine`/`ProjectRepository`/
+Workspace Core/Agent Runtime)과 "아키텍처 vs 단순함 충돌 시 아키텍처
+우선" 규칙 추가. §4.2 Simplicity First에 최소 복잡성·점진적 확장·자문
+질문 6개·금지 사항 목록 통합(YAGNI는 기존 내용과 중복이 커 별도 절 없이
+소제목으로만 재확인). §4.3 Surgical Changes에 "기존 코드 존중" 추가.
+신규 **§4.5 Cohesion**(응집도 우선, 기존 규칙에 없던 내용). §4 도입부에
+4.1~4.5를 잇는 구현 순서 추가. `.ai/DECISIONS.md`에 `DX-02`로 기록(ADR
+번호는 소비하지 않음, DX-01과 동일한 정책). 코드 변경 없음, 회귀 없음
+확인(205개 테스트 통과). |
