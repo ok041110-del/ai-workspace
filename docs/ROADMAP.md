@@ -95,32 +95,43 @@ Phase 1)
 3. Mock EngineAdapter 위에서 Planner→Coding→Review→Documentation 협업 시나리오가
    통과한다.
 
-**구성**: T2-01~T2-07 (7개 Task, 2026-07-25 Milestone 1 완료 승인 직후 확정,
-ADR-0022 원칙에 따라 아키텍처 책임 경계로 분해)
+**구성**: T2-01~T2-08 (8개 Task. 2026-07-25 Milestone 1 완료 승인 직후
+T2-01~T2-07(7개)로 확정했으나, T2-01 실제 착수 시 범위가 좁아져(아래 참고)
+T2-01~T2-08로 재분해)
 
-**진행 상태**: T2-01~T2-07 진행 예정 (다음 Task: T2-01). 세부 Task
-목록/DoD/상태는 `.ai/TASKS.md`의 "Milestone 2" 섹션 참고.
+**진행 상태**: T2-01 완료, T2-02~T2-08 진행 예정 (다음 Task: T2-02). 세부
+Task 목록/DoD/상태는 `.ai/TASKS.md`의 "Milestone 2" 섹션 참고.
 
-> **설계 판단 (T2-04)**: `docs/ARCHITECTURE.md` §7 표는 `EngineRuntime`/
-> `EngineAdapter`의 구체 구현을 Milestone 3로 표시하지만, 위 Milestone DoD
-> 3번("Mock EngineAdapter 위에서 시나리오 통과")을 만족하려면 최소한의
-> `EngineRuntime` 구현과 `MockEngineAdapter`(실제 LLM 호출 없이 즉시 성공
-> 반환)가 필요하다. 이를 M2로 앞당기고, M3에서는 `MockEngineAdapter`를 실제
-> Claude Code 등 어댑터로 교체하되 `EngineRuntime` 구조는 그대로 재사용한다.
+> **설계 판단 (T2-01 재분해)**: 원래 T2-01은 Registry/Scheduler/Manager/
+> EventBus 4종을 한 Task로 묶고 있었으나, 실제 착수 시 "AgentRuntime
+> 파사드 + AgentSession + Lifecycle"만 다루고 Scheduler/EventBus는
+> 배제하기로 재정의됨(T1-22가 보류했던 AgentRuntime 파사드 도입을 지금
+> 재검토하는 결정). Scheduler/EventBus는 신규 **T2-02**로 분리하고 이하
+> Task를 T2-03~T2-08로 순연했다.
+>
+> **설계 판단 (T2-05, 구 T2-04)**: `docs/ARCHITECTURE.md` §7 표는
+> `EngineRuntime`/`EngineAdapter`의 구체 구현을 Milestone 3로 표시하지만,
+> 위 Milestone DoD 3번("Mock EngineAdapter 위에서 시나리오 통과")을
+> 만족하려면 최소한의 `EngineRuntime` 구현과 `MockEngineAdapter`(실제 LLM
+> 호출 없이 즉시 성공 반환)가 필요하다. 이를 M2로 앞당기고, M3에서는
+> `MockEngineAdapter`를 실제 Claude Code 등 어댑터로 교체하되
+> `EngineRuntime` 구조는 그대로 재사용한다.
 
-T2-01~T2-04는 서로 독립적이며 순서 무관(병렬 진행 가능), T2-05는 네 Task
-모두에 의존, T2-06(통합 시나리오 테스트)·T2-07(Milestone 2 Review)은
-순차 진행한다.
+T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02는 T2-01의
+`AgentRuntime`에 붙는 구조라 T2-01 이후 진행을 권장), T2-06(능력별 Agent
+골격)은 다섯 Task 모두에 의존, T2-07(통합 시나리오 테스트)·T2-08
+(Milestone 2 Review)은 순차 진행한다.
 
-| Task | 내용 | DoD | 의존성 |
-|---|---|---|---|
-| T2-01 | Agent Runtime 구현 (`runtime/agent/`: `InMemoryAgentRegistry`/`Scheduler`/`Manager`, `InMemoryEventBus`) | 4개 구현체 계약 테스트 통과 + "생성→등록→Capability 선택→상태 전이" 통합 테스트 | T1-18 |
-| T2-02 | Core Engines 구현 (`engines/`: `InMemoryTaskEngine`/`WorkflowEngine`/`ApprovalEngine`/`AutomationEngine`) | 4개 구현체 계약 테스트 통과 + ApprovalEngine이 4대 승인 행위(ADR-0003) 차단 검증 | T1-15 |
-| T2-03 | Memory 계열 구현 (`memory/`: `InMemoryMemoryEngine`, `InMemoryContextManager`) | Snapshot 생성→복원 왕복 일치 + 의존 방향(ARCHITECTURE §8 규칙 7) 준수 확인 | T1-20 |
-| T2-04 | Engine Runtime 최소 구현 + Mock Adapter (`runtime/engine/`: `InMemoryEngineRuntime`, `adapters/`: `MockEngineAdapter`) | `EngineRuntime.run()`이 Mock Adapter로 Task를 "실행"해 `EngineResult(success=True)` 반환 검증 | T1-19 |
-| T2-05 | 능력별 Agent 골격 (`agents/`: Planning/Coding/Review/Documentation(+Coordination), EventBus 구독/발행) | `MissionPlanned`→`CodeCompleted`→`ReviewCompleted`→`DocumentationCompleted` 자동 진행 검증 | T2-01~T2-04 |
-| T2-06 | 통합 시나리오 테스트 (전체 스위트 점검 + Event Store Replay + 승인 게이트 차단 시나리오) | `ruff`/`mypy`/`pytest` 전체 통과 + Milestone DoD 3개 항목이 각각 테스트로 매핑 | T2-01~T2-05 |
-| T2-07 | Milestone 2 Review | 위 전부 DONE + 테스트 통과 상태에서 사용자 승인 | T2-01~T2-06 |
+| Task | 내용 | DoD | 의존성 | 상태 |
+|---|---|---|---|---|
+| T2-01 | AgentRuntime + AgentSession 구현 (`runtime/agent/agent_runtime.py`, `domain/agent_session.py` — `AgentManager`+`AgentRegistry`만 사용) | Lifecycle(시작/중지/종료)·상태 조회가 단위 테스트로 검증, 배제 범위(Scheduler/EventBus 등) 미import 확인 | T1-18 | **DONE** |
+| T2-02 | Agent Scheduler + Event Bus 구현 (`runtime/agent/`: `InMemoryAgentScheduler`, `events/`: `InMemoryEventBus`) | 두 구현체 계약 테스트 통과 + Capability 기준 선택/다중 구독자 전달 검증 | T1-18, T2-01(권장) | TODO |
+| T2-03 | Core Engines 구현 (`engines/`: `InMemoryTaskEngine`/`WorkflowEngine`/`ApprovalEngine`/`AutomationEngine`) | 4개 구현체 계약 테스트 통과 + ApprovalEngine이 4대 승인 행위(ADR-0003) 차단 검증 | T1-15 | TODO |
+| T2-04 | Memory 계열 구현 (`memory/`: `InMemoryMemoryEngine`, `InMemoryContextManager`) | Snapshot 생성→복원 왕복 일치 + 의존 방향(ARCHITECTURE §8 규칙 7) 준수 확인 | T1-20 | TODO |
+| T2-05 | Engine Runtime 최소 구현 + Mock Adapter (`runtime/engine/`: `InMemoryEngineRuntime`, `adapters/`: `MockEngineAdapter`) | `EngineRuntime.run()`이 Mock Adapter로 Task를 "실행"해 `EngineResult(success=True)` 반환 검증 | T1-19 | TODO |
+| T2-06 | 능력별 Agent 골격 (`agents/`: Planning/Coding/Review/Documentation(+Coordination), EventBus 구독/발행) | `MissionPlanned`→`CodeCompleted`→`ReviewCompleted`→`DocumentationCompleted` 자동 진행 검증 | T2-01~T2-05 | TODO |
+| T2-07 | 통합 시나리오 테스트 (전체 스위트 점검 + Event Store Replay + 승인 게이트 차단 시나리오) | `ruff`/`mypy`/`pytest` 전체 통과 + Milestone DoD 3개 항목이 각각 테스트로 매핑 | T2-01~T2-06 | TODO |
+| T2-08 | Milestone 2 Review | 위 전부 DONE + 테스트 통과 상태에서 사용자 승인 | T2-01~T2-07 | TODO |
 
 ---
 

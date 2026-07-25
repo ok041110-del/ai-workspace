@@ -477,31 +477,60 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 
 > Milestone DoD: `docs/ROADMAP.md`의 "Milestone 2 Definition of Done" 참고.
 > 2026-07-25 Milestone 1 완료 승인 직후, ADR-0022 원칙(아키텍처 책임 경계로
-> 분해, 정의·구현·테스트는 한 Task 안에서 완결)에 따라 T2-01~T2-07을 확정함.
-> T2-01~T2-04는 서로 독립(순서 무관, 병렬 가능), T2-05는 네 Task 모두에
-> 의존, T2-06·T2-07은 순차 진행.
+> 분해, 정의·구현·테스트는 한 Task 안에서 완결)에 따라 T2-01~T2-07(7개)을
+> 확정했다. **2026-07-25 T2-01 구현 직후 재분해**: 원래 T2-01은 Registry·
+> Scheduler·Manager·EventBus 4종을 한 Task로 묶고 있었으나, 실제 착수 시
+> 사용자 지시로 "AgentRuntime 파사드 + AgentSession + Lifecycle(Start/Stop/
+> Shutdown)"만 다루고 Scheduler·EventBus는 범위에서 제외하기로 재정의됨
+> (T1-22가 보류했던 AgentRuntime 파사드 도입을 재검토하는 결정이기도 함).
+> 이에 따라 Scheduler·EventBus를 신규 **T2-02**로 분리하고, 이하 Task를
+> T2-03~T2-08(구 T2-02~T2-07)로 순연했다. 총 8개 Task.
 >
-> **설계 판단 (T2-04)**: `docs/ARCHITECTURE.md` §7 표는 `EngineRuntime`/
-> `EngineAdapter` 구체 구현을 Milestone 3로 표시하지만, Milestone 2 DoD
-> 3번("Mock EngineAdapter 위에서 시나리오 통과")을 만족하려면 최소한의
-> `EngineRuntime` 구현과 `MockEngineAdapter`가 필요해 이를 M2로 앞당김. M3
-> 에서는 `MockEngineAdapter`만 실제 Claude Code 등 어댑터로 교체한다.
+> T2-01~T2-05는 서로 독립(순서 무관, 병렬 가능 — 단, T2-02는 T2-01이 만든
+> `AgentRuntime`에 Scheduler 연동을 붙이므로 사실상 T2-01 이후 진행 권장),
+> T2-06은 T2-01~T2-05 전부에 의존, T2-07·T2-08은 순차 진행.
+>
+> **설계 판단 (T2-05, 구 T2-04)**: `docs/ARCHITECTURE.md` §7 표는
+> `EngineRuntime`/`EngineAdapter` 구체 구현을 Milestone 3로 표시하지만,
+> Milestone 2 DoD 3번("Mock EngineAdapter 위에서 시나리오 통과")을
+> 만족하려면 최소한의 `EngineRuntime` 구현과 `MockEngineAdapter`가 필요해
+> 이를 M2로 앞당김. M3에서는 `MockEngineAdapter`만 실제 Claude Code 등
+> 어댑터로 교체한다.
 
-#### T2-01: Agent Runtime 구현
-- 목적: Agent의 등록/조회/제거(Registry), Capability 기반 선택(Scheduler),
-  생성/생명주기 관리(Manager), 발행/구독(EventBus)을 실제 동작하는 in-memory
-  구현체로 제공한다.
-- 작업 내용: `runtime/agent/`에 `InMemoryAgentRegistry`, `InMemoryAgentScheduler`,
-  `InMemoryAgentManager`를 구현하고, `runtime/`(또는 `events/`)에
-  `InMemoryEventBus`를 구현한다. 각각 Interface 계약을 그대로 만족하며,
-  `tests/interfaces/fakes.py`의 대응 Fake와 유사한 최소 로직으로 시작한다.
-- 완료 조건(DoD): 4개 구현체가 각 Interface 계약 테스트를 만족하고, 서로
-  조합해 "Agent 생성 → 등록 → Capability로 선택 → 상태 전이" 흐름이 통합
-  테스트로 검증된다.
-- 상태: TODO
+#### T2-01: AgentRuntime + AgentSession 구현
+- 목적: Agent를 실제로 실행할 수 있는 최소 Runtime 기반을 구축한다
+  (T1-22가 보류한 `AgentRuntime` 파사드 도입 재검토).
+- 작업 내용: `domain/agent_session.py`에 `AgentSession`(session_id, agent_id
+  — 상태는 중복 보관하지 않고 `AgentRegistry`에서 조회)을 정의한다.
+  `runtime/agent/agent_runtime.py`에 `AgentRuntime`을 구현한다 —
+  `AgentManager`/`AgentRegistry` 두 Interface만 키워드 전용 생성자로 주입,
+  `start_agent`/`stop_agent`/`get_session`/`get_agent_state`/`shutdown`
+  제공. Scheduler/EventBus/Core Engines/Context Manager/LLM 호출은 범위에서
+  제외(각각 T2-02, T2-04, T2-05 이후에서 다룸).
+- 완료 조건(DoD): `AgentManager`/`AgentRegistry` 계약을 그대로 사용해
+  Lifecycle(시작/중지/종료)과 상태 조회가 단위 테스트로 검증되고, 배제
+  범위(Scheduler/EventBus 등)의 어떤 구체 클래스도 import하지 않는다.
+- 상태: **DONE (2026-07-25)** — `AgentSession`, `AgentRuntime`,
+  `AgentSessionNotFoundError` 구현. `tests/runtime/agent/
+  test_agent_runtime.py` 11개 테스트(시작/상태 조회/중지/registry 제거/
+  세션 제거/unknown 예외 3종/shutdown 전체 정리/이중 중지 방지). `ruff`/
+  `mypy`/`pytest`(150개, 기존 139개 + 신규 11개) 모두 통과.
 - 의존성: T1-18
 
-#### T2-02: Core Engines 구현
+#### T2-02: Agent Scheduler + Event Bus 구현
+- 목적: Capability 기준 Agent 선택(Scheduler)과 Agent 간 Event 발행/구독
+  (EventBus)을 실제 동작하는 in-memory 구현체로 제공한다.
+- 작업 내용: `runtime/agent/`에 `InMemoryAgentScheduler`를 구현한다.
+  `events/`에 `InMemoryEventBus`를 구현한다(ARCHITECTURE.md §9 디렉터리
+  매핑 기준).
+- 완료 조건(DoD): 두 구현체가 각 Interface 계약 테스트를 만족하고,
+  Scheduler가 후보 목록에서 Capability를 만족하는 Agent만 선택함을,
+  EventBus가 여러 구독자에게 발행 이벤트를 전달함을(구독자 하나가 예외를
+  던져도 나머지에는 영향 없음, `EventBus` 계약) 테스트로 확인한다.
+- 상태: TODO
+- 의존성: T1-18, T2-01(권장 순서 — 강제 의존은 아님)
+
+#### T2-03: Core Engines 구현
 - 목적: Task 생성/전이, Workflow 계획, 승인 게이트, 자동화 트리거를 실제
   동작하는 구현체로 제공한다.
 - 작업 내용: `engines/`에 `InMemoryTaskEngine`, `InMemoryWorkflowEngine`,
@@ -512,7 +541,7 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 - 상태: TODO
 - 의존성: T1-15
 
-#### T2-03: Memory 계열 구현
+#### T2-04: Memory 계열 구현
 - 목적: Context 조립과 저장/검색 역할 분리(ADR-0017)를 실제 동작하는
   구현체로 제공한다.
 - 작업 내용: `memory/`에 `InMemoryMemoryEngine`, `InMemoryContextManager`를
@@ -524,7 +553,7 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 - 상태: TODO
 - 의존성: T1-20
 
-#### T2-04: Engine Runtime 최소 구현 + Mock EngineAdapter
+#### T2-05: Engine Runtime 최소 구현 + Mock EngineAdapter
 - 목적: Milestone 2 DoD("Mock EngineAdapter 위에서 협업 시나리오 통과")를
   만족하기 위해, 실제 LLM을 호출하지 않는 최소 Engine Runtime과 Mock
   Adapter를 제공한다. Milestone 3에서 실제 Claude Code 등 어댑터로 교체될
@@ -538,38 +567,40 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 - 상태: TODO
 - 의존성: T1-19
 
-#### T2-05: 능력별 Agent 골격 구현
+#### T2-06: 능력별 Agent 골격 구현
 - 목적: Coordination/Planning/Coding/Review/Documentation Capability를 가진
   Agent가 Event 기반으로 협업하도록 한다.
 - 작업 내용: `agents/`에 Capability별 Agent 클래스(최소 Planning/Coding/
   Review/Documentation, 필요 시 Coordination)를 구현한다. 각 Agent는
   `EventBus`를 구독하고 자신의 작업 완료 시 다음 Event를 발행한다. 실행은
-  T2-04의 `EngineRuntime`에, Context는 T2-03의 `ContextManager`에, 도메인
-  작업은 T2-02의 Core Engines에 위임한다(ARCHITECTURE.md §3.6, §8 규칙 5).
+  T2-05의 `EngineRuntime`에, Context는 T2-04의 `ContextManager`에, 도메인
+  작업은 T2-03의 Core Engines에, Lifecycle은 T2-01의 `AgentRuntime`에,
+  선택은 T2-02의 `AgentScheduler`에 위임한다(ARCHITECTURE.md §3.6, §8
+  규칙 5).
 - 완료 조건(DoD): `MissionPlanned`→`CodeCompleted`→`ReviewCompleted`→
   `DocumentationCompleted` Event 체인이 Agent 간 협업으로 자동 진행됨이
   테스트로 확인된다.
 - 상태: TODO
-- 의존성: T2-01, T2-02, T2-03, T2-04
+- 의존성: T2-01, T2-02, T2-03, T2-04, T2-05
 
-#### T2-06: 통합 시나리오 테스트
+#### T2-07: 통합 시나리오 테스트
 - 목적: Milestone 2 Definition of Done 3개 항목을 end-to-end로 증명한다.
 - 작업 내용: 전체 스위트 통합 점검(T1-25와 동일한 패턴). Event Store
   Replay 검증, 승인 게이트 차단 시나리오 검증을 추가한다.
 - 완료 조건(DoD): `ruff`, `mypy`, `pytest` 전체가 통과하고, Milestone 2
   Definition of Done 3개 항목이 각각 명시적 테스트로 매핑된다.
 - 상태: TODO
-- 의존성: T2-01 ~ T2-05
+- 의존성: T2-01 ~ T2-06
 
-#### T2-07: Milestone 2 Review
+#### T2-08: Milestone 2 Review
 - 목적: Approval Required 원칙에 따라 Milestone 2 산출물을 검토받는다.
-- 작업 내용: Agent Runtime, Core Engines, Memory 계열, Engine Runtime +
-  Mock Adapter, 능력별 Agent, 통합 시나리오 테스트 결과를 제시하고 승인을
-  요청한다.
+- 작업 내용: AgentRuntime, Agent Scheduler + Event Bus, Core Engines,
+  Memory 계열, Engine Runtime + Mock Adapter, 능력별 Agent, 통합 시나리오
+  테스트 결과를 제시하고 승인을 요청한다.
 - 완료 조건(DoD): 위 모든 Task가 DONE이고 테스트가 통과한 상태에서 사용자가
   승인한다.
 - 상태: TODO
-- 의존성: T2-01 ~ T2-06
+- 의존성: T2-01 ~ T2-07
 
 ---
 
@@ -934,3 +965,25 @@ T2-05(능력별 Agent 골격)는 T2-01~T2-04 전부에 의존(ARCHITECTURE.md §
 진행. `docs/ROADMAP.md`(v0.7.0, Milestone 2 절을 표 형식으로 재작성)와
 본 문서(Milestone 2 섹션에 T2-01~T2-07 상세 추가)에 반영함. 코드는 전혀
 작성하지 않음(계획 전용). 다음 세션은 **T2-01**부터 바로 구현 착수 가능. |
+| 2026-07-25 | **T2-01 완료: AgentRuntime + AgentSession**(§2.4 Stage
+Checkpoint 4개 경계 모두 발동, Analysis에서 Sonnet/Low→**Sonnet/Medium**
+상향 — 신규 파사드+도메인 모델 설계라 단순 CRUD보다 복잡도가 높다고 판단,
+이후 3개 경계는 "동일" 유지). 사용자 지시로 T2-01 범위가 계획 문서보다
+좁아짐: `AgentRuntime`은 `AgentManager`+`AgentRegistry` 두 Interface만
+사용하고 Scheduler/EventBus/Core Engines/Context Manager/LLM 호출/
+Multi-Agent 협업/Planner·Worker·Validator Agent/Workflow 실행을 명시적으로
+배제함(T1-22가 보류했던 `AgentRuntime` 파사드 도입을 지금 재검토하는
+결정). `domain/agent_session.py`에 `AgentSession`(session_id, agent_id —
+status는 중복 보관하지 않고 매번 `AgentRegistry.get(agent_id).status`로
+조회, 단일 진실 원천 유지) 신규 정의. `runtime/agent/agent_runtime.py`에
+`AgentRuntime`(`start_agent`/`stop_agent`/`get_session`/`get_agent_state`/
+`shutdown`, 신규 예외 `AgentSessionNotFoundError`) 구현 — WorkspaceCore와
+동일한 키워드 전용 DI 패턴. 새 Interface는 추가하지 않음(AgentRuntime도
+WorkspaceCore처럼 ABC 없는 구체 클래스). `tests/runtime/agent/
+test_agent_runtime.py` 11개 신규 테스트(기존 `FakeAgentManager`/
+`FakeAgentRegistry` 재사용, 신규 Fake 불필요). `ruff check src tests`,
+`mypy src`, `pytest`(150개, 기존 139개 + 신규 11개) 모두 통과. **범위
+축소에 따라 Milestone 2 Task 목록을 T2-01~T2-07(7개)에서 T2-01~T2-08
+(8개)로 재분해**: Scheduler+EventBus를 신규 T2-02로 분리하고 이하 Task를
+T2-03~T2-08로 순연(상세 사유는 Milestone 2 섹션 상단 안내문 참고). 다음
+Task: **T2-02** (Agent Scheduler + Event Bus 구현). |
