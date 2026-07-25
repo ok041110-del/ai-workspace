@@ -156,7 +156,7 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
    end-to-end(create_session→run→결과 수집→destroy_session) 수행한다.
 2. Interaction Layer가 CLI/API 등 표면 입력을 표준 요청으로 정규화한다.
 
-**진행 상태**: M3-T01(Engine Runtime)~M3-T05(Approval Pipeline) 완료.
+**진행 상태**: M3-T01(Engine Runtime)~M3-T06(Runtime Recovery) 완료.
 이후 Task는 사용자가 준비한 아래 8개 Task 개요를 따른다(상세 스펙은
 착수 시점에 `.ai/TASKS.md`에 확정).
 
@@ -173,6 +173,10 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
    ApprovalRequest 생성/사용자 승인 대기/승인·거부 Event/Runtime Resume
    (`run_approved()`). 기존 `ApprovalEngine`(T2-03)·`EngineRuntime`
    그대로 재사용, 새 상태 머신 없음.
+6. M3-T06 Runtime Recovery — **완료**: `RecoveringEngineRuntime`(내부
+   `EngineRuntime`을 감싸는 데코레이터) + `RetryPolicy` 신규. 실패/예외
+   시 재시도, 재시도 소진 시 결과는 그대로 반환하되 예외는 계약대로
+   그대로 재전파. 새 상태 저장소 없이 내부 Runtime 상태만 진실로 유지.
 6. M3-T06 Runtime Recovery — 실행 실패 복구/Retry 정책/Runtime 상태
    복원/비정상 종료 처리
 7. M3-T07 End-to-End Integration — Workspace→Runtime→Adapter→Claude Code

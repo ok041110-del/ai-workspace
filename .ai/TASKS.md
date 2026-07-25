@@ -954,6 +954,41 @@ Task화한다.
   256개 + 신규 11개) 모두 통과.
 - 의존성: T2-02, T2-03, M3-T01
 
+#### M3-T06: Runtime Recovery
+- 목적: Engine Task 실행 실패를 자동으로 재시도하고, 예외로 인한 비정상
+  종료 시에도 Runtime 상태 일관성을 유지한다.
+- 작업 내용: 실행 실패 복구, Retry 정책, Runtime 상태 복원, 비정상 종료
+  처리.
+- 완료 조건(DoD): 실패 후 재시도해 성공하는 경로/재시도 소진 후 실패
+  반환 경로/예외 발생 후 재시도 경로/재시도 소진 후 예외 전파 경로 모두
+  검증, `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-25)** — 사용자가 설계안 검토 후 1가지 수정을
+  요청: 재시도 소진 후 예외는 `EngineResult`로 변환하지 않고 마지막
+  예외를 그대로 전파(기존 `EngineRuntime.run()` 계약 "EngineExecutionError
+  가 발생하면 그대로 전파한다"를 그대로 지키기 위함 — 사용자가 계약
+  위반 가능성을 먼저 짚어냄). `domain/retry_policy.py`에
+  `RetryPolicy(max_attempts=3)` 신규(불변 값 객체, `llm_policy.py` 패턴과
+  동일, `max_attempts<1`은 `InvalidRetryPolicyError`). `runtime/engine/
+  recovering_engine_runtime.py`에 `RecoveringEngineRuntime` 신규 — 다른
+  `EngineRuntime`을 감싸는 **데코레이터**로 `EngineRuntime` 인터페이스를
+  그대로 구현(Approval Pipeline과 달리 사람 개입이 없어 동기적으로 끝나기
+  때문에 인터페이스 구현이 자연스러움). `run()`만 재시도 로직을 갖고,
+  `register_engine`/`run_parallel`/`cancel`/`status`는 전부 내부
+  Runtime에 위임 — 새 상태 저장소를 두지 않음("Runtime 상태 복원" =
+  재시도 중에도 내부 Runtime의 상태만을 유일한 진실로 유지, M3-T05와
+  동일한 원칙). `EngineResult(success=False)`(정상 실패)는 재시도 소진 시
+  마지막 결과를 그대로 반환, 예외(비정상 종료)는 재시도 소진 시 마지막
+  예외를 그대로 재전파. `tests/runtime/engine/
+  test_recovering_engine_runtime.py`에 11개 신규 테스트(RetryPolicy
+  자체 테스트 2개 포함, 별도 domain 테스트 파일 없이 한 파일에 통합) —
+  `ScriptedEngineRuntime`(결과/예외 시퀀스를 순서대로 반환하는 로컬 테스트
+  더블)로 첫 성공/실패 후 재시도 성공/재시도 소진 후 실패 반환/예외 후
+  재시도 성공/재시도 소진 후 예외 전파 + `FakeEngineRuntime`+
+  `MockEngineAdapter`로 4개 위임 메서드 검증 + `RetryPolicy` 기본값/검증
+  2개. `ruff check src tests`, `mypy src`, `pytest`(278개, 기존 267개 +
+  신규 11개) 모두 통과.
+- 의존성: M3-T01
+
 ---
 
 ## Milestone 4 — 자동화 및 확장 (Automation & Scale)

@@ -183,7 +183,17 @@
   `InMemoryApprovalEngine`(T2-03)은 전혀 수정하지 않고 그대로 재사용,
   EventBus 발행은 Pipeline이 전담. 미승인/거부/미등록/중복실행을 단일
   예외 `UnapprovedTaskExecutionError`로 통일(최소 복잡성). 전체 267개
-  테스트 통과. 다음은 **M3-T06**(Runtime Recovery).
+  테스트 통과. **M3-T06 완료**: `domain/retry_policy.py`의
+  `RetryPolicy(max_attempts=3)`(불변 값 객체) + `runtime/engine/
+  recovering_engine_runtime.py`의 `RecoveringEngineRuntime` 신규 — 다른
+  `EngineRuntime`을 감싸는 데코레이터로 `EngineRuntime` 인터페이스를 그대로
+  구현. `run()`만 실패/예외 시 재시도하고 나머지 4개 메서드는 전부 내부
+  Runtime에 위임(새 상태 저장소 없음 — "상태 복원"은 재시도 중에도 내부
+  Runtime 상태만 진실로 유지하는 것으로 해석). 사용자가 설계안 검토 후
+  "재시도 소진 시 예외를 `EngineResult`로 변환하지 말고 그대로 재전파"를
+  요청 — 기존 `EngineRuntime.run()` 계약(예외는 그대로 전파)을 지키기
+  위함, 반영함. 전체 278개 테스트 통과. 다음은 **M3-T07**(End-to-End
+  Integration).
 - **M3 목표는 부채 청산이 아니라 실제 Engine Runtime/Engine Adapter
   구현**이다(사용자 강조, M2 Retrospective 참고) — Deferred by Design
   부채(#1 AgentManager/Registry, #2 CLI 통합, #5 병렬성 검증)는 자연스럽게
