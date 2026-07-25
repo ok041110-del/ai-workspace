@@ -85,6 +85,12 @@ def test_config_returns_defensive_copy() -> None:
     assert core.config == {"log_level": "info"}
 
 
+def test_config_defaults_to_empty_dict() -> None:
+    core = make_core()
+
+    assert core.config == {}
+
+
 def test_start_session_creates_session_with_unique_id() -> None:
     core = make_core()
 
@@ -93,6 +99,14 @@ def test_start_session_creates_session_with_unique_id() -> None:
 
     assert session1.session_id != session2.session_id
     assert session1.current_project_id == "p1"
+
+
+def test_start_session_defaults_project_id_to_none() -> None:
+    core = make_core()
+
+    session = core.start_session()
+
+    assert session.current_project_id is None
 
 
 def test_get_session_unknown_raises_error() -> None:
@@ -110,6 +124,51 @@ def test_update_session_changes_only_provided_fields() -> None:
 
     assert updated.current_mission_id == "m1"
     assert updated.current_project_id == "p1"
+
+
+def test_update_session_updates_active_workflow_id() -> None:
+    core = make_core()
+    session = core.start_session()
+
+    updated = core.update_session(session.session_id, active_workflow_id="w1")
+
+    assert updated.active_workflow_id == "w1"
+
+
+def test_update_session_updates_active_agent_ids_defensively() -> None:
+    core = make_core()
+    session = core.start_session()
+    agent_ids = ["a1", "a2"]
+
+    updated = core.update_session(session.session_id, active_agent_ids=agent_ids)
+    agent_ids.append("a3")
+
+    assert updated.active_agent_ids == ["a1", "a2"]
+
+
+def test_update_session_updates_memory_snapshot_id() -> None:
+    core = make_core()
+    session = core.start_session()
+
+    updated = core.update_session(session.session_id, memory_snapshot_id="snap1")
+
+    assert updated.memory_snapshot_id == "snap1"
+
+
+def test_update_session_updates_engine_session_id() -> None:
+    core = make_core()
+    session = core.start_session()
+
+    updated = core.update_session(session.session_id, engine_session_id="es1")
+
+    assert updated.engine_session_id == "es1"
+
+
+def test_update_session_unknown_raises_error() -> None:
+    core = make_core()
+
+    with pytest.raises(WorkspaceSessionNotFoundError):
+        core.update_session("unknown", current_mission_id="m1")
 
 
 def test_end_session_removes_session() -> None:

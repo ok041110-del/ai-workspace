@@ -424,7 +424,7 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
   cli}/` 전체를 훑어 누락된 컴포넌트별 테스트를 보강한다. `ruff`/`mypy`도 전체
   기준으로 함께 통과시킨다.
 - 완료 조건(DoD): `ruff`, `mypy`, `pytest` 실행 시 전체가 통과한다.
-- 상태: TODO
+- 상태: DONE
 - 의존성: T1-16 ~ T1-24
 
 #### T1-26: Documentation
@@ -764,3 +764,21 @@ T1-24부터는 나머지 경계에서도 실제로 멈춰 재판단하기로 함
 오류(exit code 1 + stderr), 프로세스 재시작 후 영속성). `ruff check src
 tests`, `mypy src`, `pytest`(126개, 기존 121개 + 신규 5개) 모두 통과.
 다음 Task: **T1-25** (Tests: 전체 스위트 통합 점검 및 커버리지 보강). |
+| 2026-07-25 | **T1-25 완료: Tests**(§2.4 Stage Checkpoint 4개 경계 모두
+발동, 전부 "동일" 판정으로 Sonnet/Medium 유지). `pytest` 설정(`pythonpath`/
+`testpaths`)은 점검 결과 이미 최소·정확해 변경 없음. `tests/interfaces/`
+(708줄, 16개 Interface)는 T1-15~T1-21에서 이미 계약 테스트로 탄탄하게
+작성되어 있음을 확인(가장 짧은 2개 파일을 직접 재확인) — 보강 대상에서
+제외. 실제 갭 3곳을 보강함: (1) `tests/core/test_workspace_core.py` —
+T1-22 리뷰에서 지적된 5개 경계 조건(`update_session`의 `active_workflow_id`/
+`active_agent_ids`(방어적 복사 포함)/`memory_snapshot_id`/
+`engine_session_id`, `config` 기본값 `{}`, `start_session` 기본
+`project_id=None`, 존재하지 않는 session에 대한 `update_session` 예외) 6개
+테스트 추가. (2) `tests/domain/test_task.py` — `TaskStatus`의 두 종단
+상태(`DONE`/`CANCELLED`)가 전이 불가임을 검증하는 테스트, `BLOCKED` 순환
+경로(`IN_PROGRESS`→`BLOCKED`→`IN_PROGRESS`), `REVIEW`→`IN_PROGRESS`(반려),
+`TODO`→`CANCELLED` 5개 테스트 추가. (3) `tests/domain/test_workflow.py` —
+3노드 간접 순환(직접·자기 순환 외의 경로) 1개 테스트 추가. 프로덕션 코드는
+전혀 변경하지 않음(테스트 전용 Task). `ruff check src tests`, `mypy src`,
+`pytest`(139개, 기존 126개 + 신규 13개) 모두 통과. 다음 Task: **T1-26**
+(Documentation: `docs/ARCHITECTURE.md` 최종 정합성 확인). |

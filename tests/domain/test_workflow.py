@@ -43,3 +43,13 @@ def test_workflow_detects_self_cycle() -> None:
             task_ids=["t1"],
             dependencies={"t1": {"t1"}},
         )
+
+
+def test_workflow_detects_indirect_cycle_across_three_tasks() -> None:
+    with pytest.raises(WorkflowCycleError):
+        Workflow(
+            workflow_id="w1",
+            mission_id="m1",
+            task_ids=["t1", "t2", "t3"],
+            dependencies={"t1": {"t3"}, "t2": {"t1"}, "t3": {"t2"}},
+        )

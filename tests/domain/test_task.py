@@ -48,3 +48,43 @@ def test_todo_cannot_jump_to_done() -> None:
 
     with pytest.raises(InvalidTaskTransitionError):
         task.transition_to(TaskStatus.DONE)
+
+
+def test_done_is_a_terminal_state() -> None:
+    task = make_task(status=TaskStatus.DONE)
+
+    with pytest.raises(InvalidTaskTransitionError):
+        task.transition_to(TaskStatus.CANCELLED)
+
+
+def test_cancelled_is_a_terminal_state() -> None:
+    task = make_task(status=TaskStatus.CANCELLED)
+
+    with pytest.raises(InvalidTaskTransitionError):
+        task.transition_to(TaskStatus.IN_PROGRESS)
+
+
+def test_in_progress_can_be_blocked_and_resumed() -> None:
+    task = make_task(status=TaskStatus.IN_PROGRESS)
+
+    task.transition_to(TaskStatus.BLOCKED)
+    assert task.status == TaskStatus.BLOCKED
+
+    task.transition_to(TaskStatus.IN_PROGRESS)
+    assert task.status == TaskStatus.IN_PROGRESS
+
+
+def test_review_can_be_sent_back_to_in_progress() -> None:
+    task = make_task(status=TaskStatus.REVIEW)
+
+    task.transition_to(TaskStatus.IN_PROGRESS)
+
+    assert task.status == TaskStatus.IN_PROGRESS
+
+
+def test_todo_can_be_cancelled() -> None:
+    task = make_task(status=TaskStatus.TODO)
+
+    task.transition_to(TaskStatus.CANCELLED)
+
+    assert task.status == TaskStatus.CANCELLED
