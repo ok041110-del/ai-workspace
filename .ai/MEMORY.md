@@ -106,10 +106,15 @@
   T1-29(SOP Skills)는 별도 세션의 병렬 작업이 origin에 먼저 병합되어 있어
   `git merge`로 반영함 — `.ai/skills/`에 문서만 추가되어 코드/아키텍처
   변경은 없음.
-- **다음 단계**: Milestone 2(멀티 에이전트 코어) 착수. `docs/ROADMAP.md`의
-  "Milestone 2" 절 목표(Agent Runtime·Event Store·기본 Agent, Core
-  Engines·Context Manager 구현)를 바탕으로 목표/DoD를 확정한 뒤 `T2-01`
-  부터 개별 Task를 정의한다(Task Driven Development — 착수 시점에 정의).
+- **Milestone 2 계획 확정됨(2026-07-25, 세션 종료 전)**: Goal/DoD는
+  `docs/ROADMAP.md` 기존 서술 유지, `T2-01`~`T2-07`(7개) 확정 —
+  T2-01(Agent Runtime)/T2-02(Core Engines)/T2-03(Memory 계열)/T2-04
+  (Engine Runtime 최소 구현+Mock Adapter, 원래 M3 표기였으나 M2 DoD
+  충족을 위해 앞당김)는 서로 독립·병렬 가능, T2-05(능력별 Agent 골격)는
+  네 Task 모두에 의존, T2-06(통합 시나리오 테스트)·T2-07(Milestone 2
+  Review)은 순차 진행. 상세는 `.ai/TASKS.md` "Milestone 2" 섹션 참고.
+- **다음 단계**: 다음 세션에서 **`T2-01`(Agent Runtime 구현)**부터 바로
+  구현 착수. 코드는 아직 작성되지 않음(이번 세션은 계획까지만).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

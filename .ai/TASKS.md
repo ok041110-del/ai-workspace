@@ -476,10 +476,100 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 ## Milestone 2 — 멀티 에이전트 코어 (Multi-Agent Core)
 
 > Milestone DoD: `docs/ROADMAP.md`의 "Milestone 2 Definition of Done" 참고.
-> 세부 Task(`T2-01`부터)는 Milestone 1 완료 승인 이후, 착수 시점에 이 문서에
-> 추가한다 (Task Driven Development). 예정 작업 영역은 `docs/ROADMAP.md`의
-> "Milestone 2" 섹션 참고 (Agent Runtime & Event Store & 기본 Agent / Core
-> Engines & Context Manager 구현).
+> 2026-07-25 Milestone 1 완료 승인 직후, ADR-0022 원칙(아키텍처 책임 경계로
+> 분해, 정의·구현·테스트는 한 Task 안에서 완결)에 따라 T2-01~T2-07을 확정함.
+> T2-01~T2-04는 서로 독립(순서 무관, 병렬 가능), T2-05는 네 Task 모두에
+> 의존, T2-06·T2-07은 순차 진행.
+>
+> **설계 판단 (T2-04)**: `docs/ARCHITECTURE.md` §7 표는 `EngineRuntime`/
+> `EngineAdapter` 구체 구현을 Milestone 3로 표시하지만, Milestone 2 DoD
+> 3번("Mock EngineAdapter 위에서 시나리오 통과")을 만족하려면 최소한의
+> `EngineRuntime` 구현과 `MockEngineAdapter`가 필요해 이를 M2로 앞당김. M3
+> 에서는 `MockEngineAdapter`만 실제 Claude Code 등 어댑터로 교체한다.
+
+#### T2-01: Agent Runtime 구현
+- 목적: Agent의 등록/조회/제거(Registry), Capability 기반 선택(Scheduler),
+  생성/생명주기 관리(Manager), 발행/구독(EventBus)을 실제 동작하는 in-memory
+  구현체로 제공한다.
+- 작업 내용: `runtime/agent/`에 `InMemoryAgentRegistry`, `InMemoryAgentScheduler`,
+  `InMemoryAgentManager`를 구현하고, `runtime/`(또는 `events/`)에
+  `InMemoryEventBus`를 구현한다. 각각 Interface 계약을 그대로 만족하며,
+  `tests/interfaces/fakes.py`의 대응 Fake와 유사한 최소 로직으로 시작한다.
+- 완료 조건(DoD): 4개 구현체가 각 Interface 계약 테스트를 만족하고, 서로
+  조합해 "Agent 생성 → 등록 → Capability로 선택 → 상태 전이" 흐름이 통합
+  테스트로 검증된다.
+- 상태: TODO
+- 의존성: T1-18
+
+#### T2-02: Core Engines 구현
+- 목적: Task 생성/전이, Workflow 계획, 승인 게이트, 자동화 트리거를 실제
+  동작하는 구현체로 제공한다.
+- 작업 내용: `engines/`에 `InMemoryTaskEngine`, `InMemoryWorkflowEngine`,
+  `InMemoryApprovalEngine`, `InMemoryAutomationEngine`을 구현한다.
+- 완료 조건(DoD): 4개 구현체가 각 Interface 계약을 만족하고, `ApprovalEngine`
+  이 승인 대상 4대 행위(아키텍처 변경/신규 기능/리팩토링/Milestone 완료,
+  ADR-0003)를 판별·차단함이 테스트로 확인된다.
+- 상태: TODO
+- 의존성: T1-15
+
+#### T2-03: Memory 계열 구현
+- 목적: Context 조립과 저장/검색 역할 분리(ADR-0017)를 실제 동작하는
+  구현체로 제공한다.
+- 작업 내용: `memory/`에 `InMemoryMemoryEngine`, `InMemoryContextManager`를
+  구현한다. `ContextManager`는 내부적으로 `MemoryEngine`을 사용해 Context를
+  조립하고 Snapshot 생명주기를 관리한다.
+- 완료 조건(DoD): Snapshot 생성 → 복원 왕복 결과가 원본 Context와 동일함이
+  테스트로 확인되고, `MemoryEngine`이 Context Manager를 거치지 않고 직접
+  Snapshot을 다루지 않음(ARCHITECTURE.md §8 규칙 7 준수)이 코드로 확인된다.
+- 상태: TODO
+- 의존성: T1-20
+
+#### T2-04: Engine Runtime 최소 구현 + Mock EngineAdapter
+- 목적: Milestone 2 DoD("Mock EngineAdapter 위에서 협업 시나리오 통과")를
+  만족하기 위해, 실제 LLM을 호출하지 않는 최소 Engine Runtime과 Mock
+  Adapter를 제공한다. Milestone 3에서 실제 Claude Code 등 어댑터로 교체될
+  자리표시자다.
+- 작업 내용: `runtime/engine/`에 `InMemoryEngineRuntime`(capabilities 기반
+  엔진 선택, 순차 실행)을 구현한다. `adapters/`에 `MockEngineAdapter`(세션
+  생성/실행/종료 계약은 만족하되 즉시 성공 결과를 반환하고 실제 프로세스는
+  호출하지 않음)를 구현한다.
+- 완료 조건(DoD): `EngineRuntime.run()`이 `MockEngineAdapter`를 통해 Task를
+  "실행"하고 `EngineResult(success=True)`를 반환함이 테스트로 확인된다.
+- 상태: TODO
+- 의존성: T1-19
+
+#### T2-05: 능력별 Agent 골격 구현
+- 목적: Coordination/Planning/Coding/Review/Documentation Capability를 가진
+  Agent가 Event 기반으로 협업하도록 한다.
+- 작업 내용: `agents/`에 Capability별 Agent 클래스(최소 Planning/Coding/
+  Review/Documentation, 필요 시 Coordination)를 구현한다. 각 Agent는
+  `EventBus`를 구독하고 자신의 작업 완료 시 다음 Event를 발행한다. 실행은
+  T2-04의 `EngineRuntime`에, Context는 T2-03의 `ContextManager`에, 도메인
+  작업은 T2-02의 Core Engines에 위임한다(ARCHITECTURE.md §3.6, §8 규칙 5).
+- 완료 조건(DoD): `MissionPlanned`→`CodeCompleted`→`ReviewCompleted`→
+  `DocumentationCompleted` Event 체인이 Agent 간 협업으로 자동 진행됨이
+  테스트로 확인된다.
+- 상태: TODO
+- 의존성: T2-01, T2-02, T2-03, T2-04
+
+#### T2-06: 통합 시나리오 테스트
+- 목적: Milestone 2 Definition of Done 3개 항목을 end-to-end로 증명한다.
+- 작업 내용: 전체 스위트 통합 점검(T1-25와 동일한 패턴). Event Store
+  Replay 검증, 승인 게이트 차단 시나리오 검증을 추가한다.
+- 완료 조건(DoD): `ruff`, `mypy`, `pytest` 전체가 통과하고, Milestone 2
+  Definition of Done 3개 항목이 각각 명시적 테스트로 매핑된다.
+- 상태: TODO
+- 의존성: T2-01 ~ T2-05
+
+#### T2-07: Milestone 2 Review
+- 목적: Approval Required 원칙에 따라 Milestone 2 산출물을 검토받는다.
+- 작업 내용: Agent Runtime, Core Engines, Memory 계열, Engine Runtime +
+  Mock Adapter, 능력별 Agent, 통합 시나리오 테스트 결과를 제시하고 승인을
+  요청한다.
+- 완료 조건(DoD): 위 모든 Task가 DONE이고 테스트가 통과한 상태에서 사용자가
+  승인한다.
+- 상태: TODO
+- 의존성: T2-01 ~ T2-06
 
 ---
 
@@ -828,3 +918,19 @@ Checkpoint)도 Milestone 1 기간 중 도입되어 "동일"·"하향"·"상향" 
 권고에 따라 다음은 Milestone 2 목표/DoD 확정 후 `T2-01`부터 착수 예정
 (아직 세부 Task 미정의 — Task Driven Development 원칙상 착수 시점에
 정의). |
+| 2026-07-25 | **Milestone 2 계획 확정**(세션 종료 전 사용자 요청 —
+"Milestone 2는 처음부터 범위와 완료 기준이 명확한 상태에서 시작"). Goal과
+Milestone DoD(3개 항목)는 기존 `docs/ROADMAP.md` 서술을 그대로 유지하고,
+ADR-0022 원칙(아키텍처 책임 경계로 분해)에 따라 `T2-01`~`T2-07`(7개) 확정.
+T2-01(Agent Runtime: Registry/Scheduler/Manager/EventBus), T2-02(Core
+Engines: Task/Workflow/Approval/Automation Engine), T2-03(Memory 계열:
+MemoryEngine+ContextManager)은 서로 독립이라 순서 무관. **설계 판단**:
+`docs/ARCHITECTURE.md` §7 표는 EngineRuntime/EngineAdapter 구체 구현을
+Milestone 3로 표시하지만, Milestone 2 DoD 3번("Mock EngineAdapter 위에서
+협업 시나리오 통과")을 만족하려면 최소 구현이 필요해 T2-04(`InMemoryEngineRuntime`
++ `MockEngineAdapter`)로 앞당김 — M3에서는 Mock만 실제 어댑터로 교체.
+T2-05(능력별 Agent 골격)는 T2-01~T2-04 전부에 의존(ARCHITECTURE.md §8
+규칙 5). T2-06(통합 시나리오 테스트)·T2-07(Milestone 2 Review)은 순차
+진행. `docs/ROADMAP.md`(v0.7.0, Milestone 2 절을 표 형식으로 재작성)와
+본 문서(Milestone 2 섹션에 T2-01~T2-07 상세 추가)에 반영함. 코드는 전혀
+작성하지 않음(계획 전용). 다음 세션은 **T2-01**부터 바로 구현 착수 가능. |
