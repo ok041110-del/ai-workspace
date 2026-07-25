@@ -202,10 +202,13 @@
   M2~M4 내내 전혀 진행되지 않음(T1-16 Domain 정의 이후 실제 선택 로직
   없음) — M5-T01/T02가 M2/M3 단계를 소급 구현하고, Self Optimizer는 M6
   이후로 이관. PRD 대비 추가 확인한 갭: 7.8 Multi-Engine(Claude Code만
-  존재), 7.3 Workflow 조건부 분기 없음. **M5 착수 전 사전 정리**(공식
-  Task 아님, 사용자 확인): Event ID 생성 방식 불일치(M2 이월 부채 #3)를
-  작은 유지보수 커밋으로 정리 — ADR-0021로 P0/P1 접두어가 폐지되어
-  "M5-P0-01" 같은 이름은 쓰지 않고 Task ID 없이 처리하기로 함.
+  존재), 7.3 Workflow 조건부 분기 없음. **M5 착수 전 사전 정리 결과**:
+  Event ID 생성 방식 불일치(M2 이월 부채 #3)를 조사한 결과 `src/
+  ai_workspace/` 전체의 모든 `Event(...)` 생성 지점이 이미 `str(uuid.
+  uuid4())`로 일관되어 있어(M3의 `ManagedEngineRuntime`/
+  `EngineApprovalPipeline` 구현 때 자연스럽게 해소됨) **코드 변경 없이
+  부채 항목만 해소로 종결**. Task ID는 부여하지 않음(ADR-0021로 P0/P1
+  접두어 폐지 — 조사만으로 끝난 사안이라 애초에 불필요했음).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

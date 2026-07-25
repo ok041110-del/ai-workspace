@@ -1677,13 +1677,17 @@ T02로 압축해 소급 구현한다 — Self Optimizer(실행 결과 피드백 
 | M5-T06 | Workflow 조건부 분기(예: 테스트 실패 시 재작업 Task 자동 생성) + 필요한 범위의 `Step` Domain 반영(M2 이월 부채 #6) | PRD 7.3 갭 + M2 이월 부채 #6 |
 | M5-T07 | Milestone 5 Review | 관례 |
 
-**M5 착수 전 사전 정리(공식 Task 아님)**: Event ID 생성 방식 불일치
-(M2 이월 부채 #3 — Agent는 `uuid4()`, 일부 Core/Runtime 클래스는 로컬
-`itertools.count()`)를 작은 유지보수 커밋으로 정리한다. 별도 Task ID를
-부여하지 않는다(사용자 확인 — 정리 규모가 작아 공식 Task로 등록할
-필요 없음).
+**M5 착수 전 사전 정리(공식 Task 아님) — 조사 결과 조치 불필요로 종결**:
+Event ID 생성 방식 불일치(M2 이월 부채 #3)를 정리하려 `src/ai_workspace/`
+전체에서 `Event(...)`를 생성하는 모든 지점(4개 Agent, `ManagedEngineRuntime`,
+`EngineApprovalPipeline`)을 조사한 결과, **이미 전부 `str(uuid.uuid4())`로
+일관되어 있었다** — M3에서 `ManagedEngineRuntime`/`EngineApprovalPipeline`
+이 uuid4 방식으로 구현되며 자연스럽게 해소된 것으로 보인다.
+`itertools.count()`는 다른 종류의 ID(session_id/subscription_id/task_id)
+에만 쓰이고 Event ID 생성에는 전혀 관여하지 않는다. 코드 변경 없이 이
+부채 항목을 해소로 종결한다(아래 5절 각주 참고).
 
-상태: 전체 TODO(사전 정리 포함).
+상태: 전체 TODO(사전 정리는 완료).
 
 ---
 
