@@ -809,6 +809,42 @@ Task화한다.
   tests`, `mypy src`, `pytest`(219개, 기존 205개 + 신규 14개) 모두 통과.
 - 의존성: T1-19, T2-05(설계 참고용, 코드 의존 없음)
 
+#### M3-T02: Claude Code Adapter
+- 목적: `EngineAdapter` 계약을 충족하는 실제 Claude Code CLI 어댑터를
+  구현한다.
+- 작업 내용: `ClaudeCodeEngineAdapter` 구현, `EngineAdapter` 계약 충족,
+  Claude Code CLI 실행, stdout/stderr 수집, 실행 결과 반환,
+  `EngineExecutionError` 처리.
+- 완료 조건(DoD): DoD는 명시적으로 재확인되지 않았으나 `EngineAdapter`
+  계약 테스트 전부 통과 + `pytest`/`ruff`/`mypy` 통과로 간주함(M3-T01과
+  동일한 기준).
+- 상태: **DONE (2026-07-25)** — `adapters/claude_code_engine_adapter.py`
+  에 `ClaudeCodeEngineAdapter` 신규 구현. **사전 조사**: 로컬
+  `claude --help`로 실제 플래그를 확인(`-p`/`--print`, `--output-format
+  json`, `--permission-mode`, `--model`, `--session-id`) — 추측하지 않고
+  1차 자료로 확정. `--output-format json`의 실제 필드명은 사용자 승인
+  하에 `claude -p "숫자 42라고만 답하세요." --output-format json`을 1회
+  실제 호출해 검증함(`is_error`/`result`/`session_id`/`total_cost_usd`
+  등 확인, 실제 API 비용 소액 발생). **설계 결정**: `create_session()`은
+  `uuid4()`를 생성해 Claude Code의 `--session-id`에 그대로 매핑(우리
+  시스템 세션 개념과 CLI 세션 개념을 자연스럽게 일치시킴). `--permission-
+  mode`는 헤드리스에서 영원히 대기하는 `manual`을 생성자에서
+  `ValueError`로 차단하고 기본값을 `acceptEdits`로 둠. JSON 파싱은
+  방어적으로 처리(`is_error`/`result` 없으면 원문 텍스트+종료 코드로
+  폴백). `FileNotFoundError`(CLI 미설치)/`subprocess.TimeoutExpired`만
+  `EngineExecutionError`로 변환(계약대로 "호출 자체 실패"), 0이 아닌
+  종료 코드는 예외가 아니라 `EngineResult(success=False)`로 반환(계약대로
+  "Task 처리 자체 실패"). **알려진 한계(M3-T03으로 명시적 이관)**:
+  `run()`이 `subprocess.run()`으로 동기 실행되어 `cancel()`이 실제 OS
+  프로세스를 종료하지 못함(상태만 CANCELLED로 표시) — 진짜
+  `terminate`/`kill`은 `ProcessRunner`(M3-T03) 책임으로 docstring에
+  명시. `tests/adapters/test_claude_code_engine_adapter.py`에 16개
+  신규 테스트 — **전부 `unittest.mock.patch("subprocess.run", ...)`로
+  처리해 실제 프로세스를 호출하지 않음**(비용·속도·비결정성 방지).
+  `ruff check src tests`, `mypy src`, `pytest`(235개, 기존 219개 + 신규
+  16개) 모두 통과.
+- 의존성: M3-T01, T1-19
+
 ---
 
 ## Milestone 4 — 자동화 및 확장 (Automation & Scale)
@@ -1309,3 +1345,15 @@ T2-05의 `InMemoryEngineRuntime`은 전혀 수정하지 않음(상세 설계 근
 check src tests`, `mypy src`, `pytest`(219개, 기존 205개 + 신규 14개)
 모두 통과, 타이밍 테스트 5회 연속 안정성 확인. 다음 Task: **M3-T02**
 (실제 Claude Code Adapter 연동 — 별도 준비된 계획 참고). |
+| 2026-07-25 | **사용자가 M3-T01~T08 전체 개요 제공**("Engine Adapter &
+Execution", ChatGPT 작성). `docs/ROADMAP.md`의 Milestone 3 절에 8개
+Task 개요 반영. **M3-T02 완료: Claude Code Adapter**(§2.4 Stage
+Checkpoint 4개 경계 모두 발동, 전부 Sonnet/High "동일" — M3-T01과 동일한
+복잡도의 새 통합이라 판단). 로컬 `claude --help`로 실제 플래그를
+확인하고, 사용자 승인 하에 `claude -p ... --output-format json`을 1회
+실제 호출해 JSON 스키마를 검증함(추측 없이 1차 자료 확보). 상세 설계
+근거는 위 M3-T02 항목 참고. `ClaudeCodeEngineAdapter`를 새 파일로 구현.
+테스트 16개는 전부 `subprocess.run`을 mock 처리해 실제 프로세스 호출
+없음. `ruff check src tests`, `mypy src`, `pytest`(235개, 기존 219개 +
+신규 16개) 모두 통과. 다음 Task: **M3-T03**(Process Management —
+`ProcessRunner`, Timeout 시 terminate/kill, Cancel, 종료 코드 관리). |

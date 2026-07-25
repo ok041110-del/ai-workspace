@@ -136,9 +136,22 @@
   그대로 재사용하고 새 Interface·Enum은 만들지 않음. Timeout/Cancel은
   `adapter.run()`을 백그라운드 스레드로 실행 후 `Thread.join(timeout)`으로
   감시하는 최소 구조(Python은 실행 중 스레드를 강제 종료할 수 없어 "구조"
-  까지만 제공, 문서화된 한계). 전체 219개 테스트 통과. **Task 목록은
-  사용자가 별도로 준비(ChatGPT 작성) — 다음은 M3-T02(실제 Claude Code
-  Adapter 연동, 별도 준비된 계획 참고)**.
+  까지만 제공, 문서화된 한계). 전체 219개 테스트 통과. **M3 전체 개요
+  (M3-T01~T08, "Engine Adapter & Execution", 사용자 제공/ChatGPT 작성)
+  가 `docs/ROADMAP.md`에 반영됨**: T02 Claude Code Adapter → T03 Process
+  Management → T04 Session & Workspace Integration → T05 Approval
+  Pipeline → T06 Runtime Recovery → T07 End-to-End Integration → T08
+  Milestone Review. **M3-T02 완료**: `adapters/claude_code_engine_
+  adapter.py`의 `ClaudeCodeEngineAdapter` — 로컬 `claude --help` +
+  사용자 승인 하 실제 CLI 호출 1회로 `--output-format json` 스키마
+  (`is_error`/`result`/`session_id`/`total_cost_usd`)를 검증 후 구현.
+  `create_session()`이 `uuid4()`를 Claude Code의 `--session-id`에 매핑.
+  `--permission-mode manual`은 생성자에서 차단(헤드리스 무한 대기 방지).
+  `cancel()`이 실제 OS 프로세스를 종료하지 못하는 한계를 M3-T03
+  (Process Management)로 명시적으로 이관. 테스트 16개는 전부
+  `subprocess.run` mock 처리(실제 프로세스 호출 없음). 전체 235개 테스트
+  통과. 다음은 **M3-T03**(Process Management — `ProcessRunner`, Timeout
+  시 terminate/kill, Cancel, 종료 코드 관리).
 - **M3 목표는 부채 청산이 아니라 실제 Engine Runtime/Engine Adapter
   구현**이다(사용자 강조, M2 Retrospective 참고) — Deferred by Design
   부채(#1 AgentManager/Registry, #2 CLI 통합, #5 병렬성 검증)는 자연스럽게

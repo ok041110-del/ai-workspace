@@ -156,20 +156,33 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
    end-to-end(create_session→run→결과 수집→destroy_session) 수행한다.
 2. Interaction Layer가 CLI/API 등 표면 입력을 표준 요청으로 정규화한다.
 
-**진행 상태**: M3-T01(Engine Runtime 프로덕션 구현) 완료. 이후 Task 목록은
-별도로 준비됨(`.ai/TASKS.md` 참고).
+**진행 상태**: M3-T01(Engine Runtime 프로덕션 구현) 완료, M3-T02(Claude
+Code Adapter) 진행 중. 이후 Task는
+사용자가 준비한 아래 8개 Task 개요를 따른다(상세 스펙은 착수 시점에
+`.ai/TASKS.md`에 확정).
 
-**예정 작업 영역** (Milestone 2 완료 후 착수 시점에 `T3-01`부터 개별 Task로 정의)
-- Engine Runtime & Engine Adapter 구현(Claude Code 우선): **Engine Runtime**
-  (엔진 선택/세션 풀/병렬) 구현과, 세션 생명주기 계약(create_session/run/
-  cancel/status/destroy_session/capabilities/supports_parallel/estimate_cost)을
-  만족하는 ClaudeCodeAdapter 구현, 이후 Codex/Gemini CLI. DoD: Coding Agent가
-  Engine Runtime을 거쳐 ClaudeCodeAdapter로 최소 1개 Task를 실제 수행하고
-  결과를 통합함.
-- Interaction Layer 구현: InteractionEngine 구현으로 CLI/API를 통합.
-  Voice/Slack/Webhook 등 추가 표면 대비 구조 확정(표면 자체 구현은 이후). DoD:
-  최소 2개 표면(CLI, API)의 입력이 동일한 표준 요청으로 정규화되어 Workspace
-  Core에 전달됨.
+**Task 개요 — Engine Adapter & Execution** (M3-T01~M3-T08)
+1. M3-T01 Managed Engine Runtime — **완료**
+2. M3-T02 Claude Code Adapter — `ClaudeCodeEngineAdapter`, `EngineAdapter`
+   계약 충족, CLI 실행/출력 수집/결과 반환/`EngineExecutionError` 처리
+3. M3-T03 Process Management — `ProcessRunner`, subprocess 관리, Timeout
+   시 terminate/kill, Cancel, 종료 코드 관리
+4. M3-T04 Session & Workspace Integration — WorkspaceCore↔
+   ManagedEngineRuntime 연결, EngineSession 생명주기, 실행 기록, EventBus
+   완전 연동
+5. M3-T05 Approval Pipeline — ApprovalRequest 생성/사용자 승인 대기/
+   승인·거부 Event/Runtime Resume
+6. M3-T06 Runtime Recovery — 실행 실패 복구/Retry 정책/Runtime 상태
+   복원/비정상 종료 처리
+7. M3-T07 End-to-End Integration — Workspace→Runtime→Adapter→Claude Code
+   실제 시나리오, Event 흐름, Approval 포함 통합 테스트
+8. M3-T08 Milestone Review — DoD 검증/테스트 보강/문서 업데이트/기술
+   부채 정리
+
+> M3 목표는 M2 이월 부채 청산이 아니라 실제 Engine Runtime/Adapter
+> 구현이다(위 안내 유지). Deferred by Design 부채(#1 AgentManager/
+> Registry, #2 CLI 통합, #5 병렬성 검증)는 자연스럽게 해결 가능한 Task
+> (예: M3-T04)에 자연히 포함될 수 있다.
 
 ---
 
