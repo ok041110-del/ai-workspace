@@ -191,6 +191,21 @@
   16종 Interface·계층 구조를 기본값으로 유지하고 새 기능은 그 위에
   조립하며, 구조 변경이 필요하면 지금까지처럼 "Interface 변경 여부
   우선 검토" 절차를 거친다.
+- **Milestone 5(실제 개발 수행) Task List 확정(2026-07-26)**: M5-T01
+  (Rule 기반 `LLMPolicyEngine`) → M5-T02(Agent가 Policy Engine을 통해
+  Model/Effort·Engine 선택) → M5-T03(`DevelopmentContext` 도입 + Coding/
+  Review Agent 강화) → M5-T04(`ShellAgent` 신규) → M5-T05(Codex/Gemini
+  CLI Adapter, 가능한 범위) → M5-T06(Workflow 조건부 분기 + 필요 범위
+  `Step` Domain 반영) → M5-T07(Milestone 5 Review). **사전 조사로 발견한
+  것**: `.ai/RULES.md` §7의 LLM Policy 로드맵("M2 Rule 기반 선택 → M3
+  Agent Policy 참조 → M4 Policy Engine 자동 선택 → M5 Self Optimizer")이
+  M2~M4 내내 전혀 진행되지 않음(T1-16 Domain 정의 이후 실제 선택 로직
+  없음) — M5-T01/T02가 M2/M3 단계를 소급 구현하고, Self Optimizer는 M6
+  이후로 이관. PRD 대비 추가 확인한 갭: 7.8 Multi-Engine(Claude Code만
+  존재), 7.3 Workflow 조건부 분기 없음. **M5 착수 전 사전 정리**(공식
+  Task 아님, 사용자 확인): Event ID 생성 방식 불일치(M2 이월 부채 #3)를
+  작은 유지보수 커밋으로 정리 — ADR-0021로 P0/P1 접두어가 폐지되어
+  "M5-P0-01" 같은 이름은 쓰지 않고 Task ID 없이 처리하기로 함.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -335,7 +350,9 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   Engines·Context Manager (Milestone 2, 완료) → Engine Runtime·Engine
   Adapter(Claude Code 우선) (Milestone 3, 완료) → 자동화·다중 프로젝트·메모리
   고도화 + **Interaction Layer + CodingAgent 실제 Engine 경로 통합(M3에서
-  이관)** (Milestone 4).
+  이관)** (Milestone 4, 완료, v0.5.0 아키텍처 기준선) → **LLM Policy
+  Engine·DevelopmentContext+Agent 강화·ShellAgent·Codex/Gemini Adapter·
+  Workflow 조건부 분기**(Milestone 5, Task List 확정).
 - 구현 엔진 연동 순서: Claude Code 최우선 → Codex → Gemini CLI.
 - Voice/Slack 등 표면, Event Store, Interaction은 **구조에는 포함하되 구현은 뒤로**
   미룬다 (인터페이스만 Milestone 1에서 정의).

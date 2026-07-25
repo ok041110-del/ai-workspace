@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.11.0 |
+| 문서 버전 | v0.12.0 |
 | 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1~4 구현 완료, v0.5.0 아키텍처 기준선 선언 — 사용자 승인 대기) |
+| 상태 | Draft (Milestone 1~4 완료, v0.5.0 아키텍처 기준선 선언, Milestone 5 Task List 확정) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -47,7 +47,8 @@ Roadmap
 | M1. 기반 구축 (Foundation) | 문서 체계 + 핵심 도메인(Mission/Step/WorkspaceSession/Agent 포함) + 전체 Interfaces(16종) + Workspace Core 골격 | **완료 (2026-07-25 사용자 승인)** |
 | M2. 멀티 에이전트 코어 (Multi-Agent Core) | Agent Runtime·Event Store·기본 Agent, Core Engines & Context Manager 구현 | **완료 (2026-07-25 사용자 승인)** |
 | M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Engine Runtime & Engine Adapter(Claude Code 우선) 구현 | **완료 (2026-07-25 사용자 승인)** — Interaction Layer·Coding Agent 실제 경로 통합은 M4로 공식 이관 |
-| M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | M4-T01~T09 구현 완료, **Milestone Review 제출 — v0.5.0 아키텍처 기준선 선언, 사용자 승인 대기** |
+| M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | **완료 (2026-07-26 사용자 승인)** — v0.5.0 아키텍처 기준선 선언(ADR-0024) |
+| M5. 실제 개발 수행 (Real Development Execution) | LLM Policy Engine, DevelopmentContext+Agent 강화, ShellAgent, Multi-Engine(Codex/Gemini), Workflow 조건부 분기 | Task List 확정(M5-T01~T07, 2026-07-26) — 착수 예정 |
 
 ---
 
@@ -244,6 +245,34 @@ Review" 7절 참고).
    RecoveringEngineRuntime→ManagedEngineRuntime→ClaudeCodeEngineAdapter)
    통합 및 End-to-End 검증 — M3-T07 E2E는 Task를 Pipeline에 직접
    넘겼을 뿐 실제 Agent를 경유하지 않았음
+
+---
+
+## Milestone 5 — 실제 개발 수행 (Real Development Execution)
+
+**목표**: v0.5.0 아키텍처 기준선(ADR-0024) 이후 첫 Milestone. Agent가
+실제 개발 작업을 수행하도록 만든다 — 구조 변경보다 기능 확장에 집중한다.
+
+> **`.ai/RULES.md` §7(Temporary LLM Policy) 로드맵과의 관계**: 원래
+> 로드맵은 "M2 Rule 기반 선택 → M3 Agent Policy 참조 → M4 Policy Engine
+> 자동 선택 → M5 Self Optimizer"였으나, M2~M4 내내 Domain 정의(T1-16)
+> 이후 실제 선택 로직이 전혀 구현되지 않았다. M5-T01/T02가 M2/M3 단계를
+> 소급 구현하며, Self Optimizer(M5 원래 목표)는 M6 이후로 미룬다.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 5" 참고)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M5-T01 | Rule 기반 `LLMPolicyEngine` 구현 | RULES §7 M2 단계 소급 |
+| M5-T02 | Agent Runtime/Engine Runtime이 `LLMPolicyEngine`을 통해 Model/Effort·Engine을 선택하도록 연결 | RULES §7 M3 단계 소급 |
+| M5-T03 | `DevelopmentContext` 도입 + 기존 Coding/Review Agent 강화 | 사용자 지시 — M5 핵심 목표 |
+| M5-T04 | `ShellAgent` 신규(실제 쉘 명령 실행 능력) | 사용자 지시 — M5 핵심 목표 |
+| M5-T05 | Codex/Gemini CLI Engine Adapter(가능한 범위) | PRD 7.8 Multi-Engine 지원 |
+| M5-T06 | Workflow 조건부 분기 + 필요 범위의 `Step` Domain 반영(M2 이월 부채 #6) | PRD 7.3 갭 + M2 이월 부채 #6 |
+| M5-T07 | Milestone 5 Review | 관례 |
+
+**M5 착수 전 사전 정리(공식 Task 아님)**: Event ID 생성 방식 불일치(M2
+이월 부채 #3)를 작은 유지보수 커밋으로 정리한다.
 
 ---
 

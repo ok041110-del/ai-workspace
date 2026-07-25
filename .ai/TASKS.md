@@ -1650,6 +1650,43 @@ Architecture Review 완료(2절), Interface First 검토 완료(3절), 테스트
 
 ---
 
+## Milestone 5 — 실제 개발 수행 (Real Development Execution)
+
+> v0.5.0 아키텍처 기준선(ADR-0024) 이후 첫 Milestone. **핵심 목표는
+> "Agent가 실제 개발 작업을 수행하는 단계"** — 구조 변경보다 기능 확장에
+> 집중한다(기준선 선언의 취지 그대로).
+
+**사전 조사로 확인한 것**: `.ai/RULES.md` §7(Temporary LLM Policy)이
+정의한 로드맵("M2: Rule 기반 선택 → M3: Agent Policy 참조 → M4: Policy
+Engine 자동 선택 → M5: Self Optimizer")이 **M2~M4 내내 전혀 진행되지
+않았다** — T1-16의 Domain 정의(`LLMProvider`/`LLMModel`/`LLMEffort`)
+이후 실제 선택 로직은 한 번도 구현되지 않았음. M5는 "Self Optimizer"로
+바로 가지 않고 M2/M3 단계(Rule 기반 선택, Agent Policy 참조)를 M5-T01/
+T02로 압축해 소급 구현한다 — Self Optimizer(실행 결과 피드백 기반 정책
+자동 최적화)는 M6 이후로 미룬다.
+
+**Task List**(2026-07-26 확정, 상세 스펙은 각 Task 착수 시점에 이 문서에 추가)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M5-T01 | Rule 기반 `LLMPolicyEngine` 구현 | RULES §7 M2 단계 소급 |
+| M5-T02 | Agent Runtime/Engine Runtime이 `LLMPolicyEngine`을 통해 Model/Effort·Engine을 선택하도록 연결 | RULES §7 M3 단계 소급 |
+| M5-T03 | `DevelopmentContext` 도입 + 기존 Coding/Review Agent 강화(Task 제목만이 아니라 파일 diff·테스트 결과 등 실제 개발 컨텍스트를 주고받도록) | 사용자 지시 — M5 핵심 목표 |
+| M5-T04 | `ShellAgent` 신규(실제 쉘 명령 실행 능력을 가진 새 Agent 종류) | 사용자 지시 — M5 핵심 목표 |
+| M5-T05 | Codex/Gemini CLI Engine Adapter(가능한 범위) | PRD 7.8 Multi-Engine 지원 |
+| M5-T06 | Workflow 조건부 분기(예: 테스트 실패 시 재작업 Task 자동 생성) + 필요한 범위의 `Step` Domain 반영(M2 이월 부채 #6) | PRD 7.3 갭 + M2 이월 부채 #6 |
+| M5-T07 | Milestone 5 Review | 관례 |
+
+**M5 착수 전 사전 정리(공식 Task 아님)**: Event ID 생성 방식 불일치
+(M2 이월 부채 #3 — Agent는 `uuid4()`, 일부 Core/Runtime 클래스는 로컬
+`itertools.count()`)를 작은 유지보수 커밋으로 정리한다. 별도 Task ID를
+부여하지 않는다(사용자 확인 — 정리 규모가 작아 공식 Task로 등록할
+필요 없음).
+
+상태: 전체 TODO(사전 정리 포함).
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |
