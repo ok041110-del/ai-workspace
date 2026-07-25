@@ -1432,6 +1432,45 @@ Review 완료 + Interface First Review 완료 + 테스트 통과 + 문서 최신
   기존 307개 + 신규 5개) 모두 통과.
 - 의존성: M3-T01, T1-18
 
+#### M4-T07: Automation Engine 구현
+- 목적: `AutomationEngine`(T2-03)이 실제로 Workflow를 발동시킬 수 있게
+  하여 M4 목표("자동화 시나리오 1건 이상 동작")를 충족한다.
+- 작업 내용: Analysis 단계에서 Interface 변경 여부 우선 검토 →
+  `AutomationEngine`에 `bind_workflow`/`fire` 추가, `InMemoryAutomationEngine`
+  확장.
+- 완료 조건(DoD): trigger에 Workflow를 연결하고 발동시켜 실제
+  `WorkflowEngine`으로 실행 순서가 나오는 시나리오 1건 이상 검증,
+  `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — **Interface 변경 필요 확인**: 기존
+  `register_trigger(trigger_id, description)`/`list_triggers()`는 텍스트
+  설명만 저장할 뿐 실행 계약이 전혀 없어 확장이 불가피했음. `AutomationEngine`
+  에 `bind_workflow(trigger_id, workflow)`/`fire(trigger_id) -> Workflow`
+  순수 추가(기존 2개 메서드 변경 없음) + `TriggerNotFoundError`/
+  `TriggerNotBoundError` 신규. **사용자가 설계 검토 후 책임 경계를 한 번
+  더 좁힐 것을 제안**: 처음 설계안은 `fire()`가 내부적으로
+  `WorkflowEngine.plan()`까지 호출해 `InMemoryAutomationEngine`이
+  `workflow_engine` 생성자 의존성을 갖는 안이었으나, 사용자 지적에 따라
+  `fire()`는 **연결된 Workflow를 반환만** 하고 실제 실행(WorkflowEngine
+  호출)은 호출자 책임으로 남기도록 수정 — 결과적으로
+  `InMemoryAutomationEngine`은 생성자 변경 없이(기존 `__init__(self)`
+  그대로) `WorkflowEngine`에 전혀 의존하지 않게 됨(더 낮은 결합도, M5
+  이후 Git/Cron/Webhook/Slack 등 다양한 Trigger 추가 시에도 "연결 관리"
+  (AutomationEngine)와 "실행"(WorkflowEngine) 책임이 일관되게 유지됨).
+  "조건/일정"의 최소 해석: 언제 발동할지 스스로 판단하는 조건 평가
+  엔진은 만들지 않음(YAGNI) — 호출자가 `fire()`를 부르는 시점이 곧
+  조건 충족 시점. `docs/ARCHITECTURE.md`(v0.9.0) §3.7에 이 책임 경계
+  반영. `FakeAutomationEngine`도 동일하게 확장(다른 계약 테스트가 계속
+  통과하도록). `tests/interfaces/test_automation_engine.py`/`tests/
+  engines/test_automation_engine.py`에 각각 5개 테스트(미등록 trigger
+  연결/발동 오류, 미연결 발동 오류, 발동 시 연결된 Workflow 반환,
+  재연결 시 최신 Workflow로 덮어씀) + **자동화 시나리오 E2E 테스트**
+  (`test_automation_scenario_fires_and_executes_real_workflow` —
+  trigger 등록→Workflow 연결→발동→`InMemoryWorkflowEngine.plan()`으로
+  실제 의존관계를 만족하는 실행 순서 산출까지 확인, M4 DoD 충족의
+  직접 증거). `ruff check src tests`, `mypy src`, `pytest`(322개, 기존
+  312개 + 신규 10개) 모두 통과.
+- 의존성: T2-03
+
 ---
 
 ## 진행 로그

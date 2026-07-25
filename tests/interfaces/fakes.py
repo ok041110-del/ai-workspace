@@ -24,7 +24,12 @@ from ai_workspace.interfaces.approval_engine import (
     ApprovalRequest,
     ApprovalRequestNotFoundError,
 )
-from ai_workspace.interfaces.automation_engine import AutomationEngine, DuplicateTriggerError
+from ai_workspace.interfaces.automation_engine import (
+    AutomationEngine,
+    DuplicateTriggerError,
+    TriggerNotBoundError,
+    TriggerNotFoundError,
+)
 from ai_workspace.interfaces.context_manager import ContextManager, SnapshotNotFoundError
 from ai_workspace.interfaces.engine_adapter import (
     CostEstimate,
@@ -170,6 +175,7 @@ class FakeApprovalEngine(ApprovalEngine):
 class FakeAutomationEngine(AutomationEngine):
     def __init__(self) -> None:
         self._triggers: list[str] = []
+        self._workflows: dict[str, Workflow] = {}
 
     def register_trigger(self, trigger_id: str, description: str) -> None:
         if trigger_id in self._triggers:
@@ -178,6 +184,18 @@ class FakeAutomationEngine(AutomationEngine):
 
     def list_triggers(self) -> list[str]:
         return list(self._triggers)
+
+    def bind_workflow(self, trigger_id: str, workflow: Workflow) -> None:
+        if trigger_id not in self._triggers:
+            raise TriggerNotFoundError(trigger_id)
+        self._workflows[trigger_id] = workflow
+
+    def fire(self, trigger_id: str) -> Workflow:
+        if trigger_id not in self._triggers:
+            raise TriggerNotFoundError(trigger_id)
+        if trigger_id not in self._workflows:
+            raise TriggerNotBoundError(trigger_id)
+        return self._workflows[trigger_id]
 
 
 class FakeEngineAdapter(EngineAdapter):

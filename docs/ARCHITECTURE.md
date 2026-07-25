@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.8.0 |
+| 문서 버전 | v0.9.0 |
 | 작성일 | 2026-07-25 |
 | 상태 | Draft (Milestone 1~3 완료, Milestone 4 진행 중 — ADR-0023으로 §3.4/§3.9 병렬 실행 책임 경계 명시) |
 
@@ -229,7 +229,10 @@ Agent의 실행을 담당하는 계층.
 Task · Workflow · Approval · Automation Engine. Agent가 사용하는 능력 서비스.
 - **Workflow Engine**: Mission→Workflow→Task→Step 협업 흐름 계획/실행(§4).
 - **Approval Engine**: 승인 대상 4행위 판별/차단.
-- **Automation Engine**: 조건/일정 트리거. (Agent가 아니라 서비스, ADR-0012.)
+- **Automation Engine**: 조건/일정 트리거를 Workflow와 연결(bind)·발동
+  (fire)한다(M4-T07). **연결 관리만** 담당하고 `WorkflowEngine`에
+  의존하지 않는다 — 언제 발동할지(조건/일정 평가)와 발동된 Workflow의
+  실제 실행은 호출자 책임이다. (Agent가 아니라 서비스, ADR-0012.)
 - Task Engine: Task 생성/상태 전이.
 
 ### 3.8 Memory 계열 — Context Manager + Memory Engine (역할 분리, ADR-0017)

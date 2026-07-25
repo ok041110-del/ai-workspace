@@ -223,6 +223,16 @@
   `RecoveringEngineRuntime`은 수정하지 않고, `run_parallel()`이 병렬
   배치 안의 개별 Task 재시도를 지원하지 않는다는 것을 테스트로 확인·
   기록(신규 기술 부채). 전체 312개 테스트 통과.
+- **M4-T07 완료(2026-07-26)**: `AutomationEngine`에 `bind_workflow`/
+  `fire` 추가(Interface 변경 필요 확인 후 진행) — 사용자가 설계 검토 후
+  `fire()`가 실행까지 하지 않고 **연결된 Workflow만 반환**하도록 책임을
+  더 좁힐 것을 제안해 반영: `InMemoryAutomationEngine`은
+  `WorkflowEngine`에 전혀 의존하지 않음(생성자 변경 없음, 결합도 최소화
+  — M5 이후 다양한 Trigger 추가 시에도 "연결 관리"/"실행" 책임 분리
+  유지). "조건/일정 판단"은 호출자 책임으로 남김(YAGNI). 자동화
+  시나리오 E2E(trigger 등록→Workflow 연결→발동→실제
+  `WorkflowEngine.plan()` 실행)로 M4 DoD 직접 증명. 전체 322개 테스트
+  통과.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
