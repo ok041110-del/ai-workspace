@@ -2,14 +2,22 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.6.3 |
-| 작성일 | 2026-07-24 |
-| 상태 | Draft (Milestone 1 — 구현 진행 중, T1-17까지 완료 / 다음 T1-18) |
+| 문서 버전 | v0.7.0 |
+| 작성일 | 2026-07-25 |
+| 상태 | Draft (Milestone 1 — 구현 진행 중, T1-25까지 완료 / 다음 T1-26) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
 (Documentation First 원칙).
 
+> **v0.7.0 변경 사항 (T1-26, 실제 구현과의 정합성 확인)**
+> T1-22~T1-25 구현 완료에 따라 문서 상단 상태 표기를 갱신하고, §7 Interface
+> 표에서 `ProjectRepository`/`AgentRepository`/`EventStore`가 T1-23에서
+> `FileProjectRepository`/`FileAgentRepository`/`FileEventStore`로 실제
+> 구현되었음을 반영했다. §9 디렉터리 구조에서 이미 구현된 `core/`/`storage/`/
+> `cli/`에 완료 표시를 추가했다. 시스템 구조(컴포넌트·의존성) 자체는 변경
+> 없음 — 실제 구현이 기존 설계와 정확히 일치함을 확인한 결과다.
+>
 > **v0.6.3 변경 사항 (T1-18 설계 검토 및 재분해, ADR-0022)**
 > 구 `T1-18`(신규 Interface 16종 정의 및 EngineAdapter 세션 계약 확장)의
 > 설계를 검토한 결과, Interface 계약 내용 자체(§3.4~3.10, ADR-0010~0019)는
@@ -293,22 +301,27 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
-| `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 | 기존 |
+| `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 (T1-15 계약, T1-23 `FileProjectRepository` 구현) | **완료(계약+구현)** |
 | `WorkflowEngine` | Mission→…→Step 협업 흐름 | 이후 | 기존 |
 | `TaskEngine` | Task 생성/상태 전이 | 이후 | 기존 |
 | `MemoryEngine` | Memory 저장/검색 (Snapshot 제외) | Milestone 1 (T1-15, T1-20 재확인) | 기존(축소, 변경 없음) |
 | `ApprovalEngine` | 승인 대상 판별/차단 | 이후 | 기존 |
 | `AutomationEngine` | 조건/일정 트리거 | 이후 | 기존 |
 | `EngineAdapter` | per-engine 세션 계약 (create_session/run/cancel/status/destroy_session/capabilities/supports_parallel/estimate_cost) | Milestone 1 (T1-19) 계약, Milestone 3 구현 | **완료(계약)** |
-| `AgentManager` | Agent 생성/생명주기/상태 | Milestone 1 (T1-18) | **완료** |
-| `AgentRepository` | Agent 조회/저장 | Milestone 1 (T1-18) | **완료** |
-| `AgentRegistry` | Agent 등록/조회/제거 | Milestone 1 (T1-18) | **완료** |
-| `AgentScheduler` | Capability 기준 선택/병렬/우선순위 | Milestone 1 (T1-18) | **완료** |
+| `AgentManager` | Agent 생성/생명주기/상태 | Milestone 1 (T1-18) | **완료(계약)** |
+| `AgentRepository` | Agent 조회/저장 | Milestone 1 (T1-18 계약, T1-23 `FileAgentRepository` 구현) | **완료(계약+구현)** |
+| `AgentRegistry` | Agent 등록/조회/제거 | Milestone 1 (T1-18) | **완료(계약)** |
+| `AgentScheduler` | Capability 기준 선택/병렬/우선순위 | Milestone 1 (T1-18) | **완료(계약)** |
 | `InteractionEngine` | 입력 표면 정규화/응답 변환 (기존 ConversationEngine 대체) | Milestone 1 (T1-21) 계약, Milestone 3 구현 | **완료(계약)** |
-| `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료** |
-| `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18) | **완료** |
-| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행 | Milestone 1 (T1-19) | **완료** |
-| `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료** |
+| `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료(계약)** |
+| `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
+| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행 | Milestone 1 (T1-19) | **완료(계약)** |
+| `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
+
+> **참고**: "완료(계약)"은 Interface 정의와 Fake 기반 계약 테스트만 존재하고
+> 실제 서비스에 쓰일 구체 구현체는 아직 없다는 뜻이다(각 컴포넌트의 계획된
+> Milestone에서 구현 예정). "완료(계약+구현)"은 `storage/`의 파일 기반
+> 구현체까지 존재해 CLI 등에서 실제로 쓰이고 있다는 뜻이다.
 
 ## 8. 의존성 규칙 (Dependency Rules)
 
@@ -335,8 +348,10 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 src/ai_workspace/
 ├── domain/            # Project, Mission, Workflow, Task, Step,
 │                       #   WorkspaceSession, Agent, AgentRole, AgentCapability, AgentStatus
-├── interfaces/         # 추상 계약 (16종, §7)
+│                       #   (구현됨, T1-14~T1-17)
+├── interfaces/         # 추상 계약 (16종, §7) (구현됨, T1-15~T1-21)
 ├── core/              # Workspace Core (WorkspaceSession 관리, Runtime 초기화)
+│                       #   (구현됨, T1-22)
 ├── runtime/           # (Milestone 2 이후)
 │   ├── agent/         #   Agent Runtime: registry, scheduler, manager
 │   └── engine/        #   Engine Runtime: 선택/세션 풀/병렬
@@ -346,8 +361,9 @@ src/ai_workspace/
 ├── events/            # Event Bus + Event Store 구현 (Milestone 2 이후)
 ├── interaction/        # Interaction Layer 구현 (Milestone 3 이후)
 ├── adapters/          # EngineAdapter 구현 (Milestone 3: claude_code.py, codex.py, gemini_cli.py)
-├── storage/           # ProjectRepository/AgentRepository/EventStore 파일 구현
-└── cli/               # CLI 진입점 (UI Surface의 하나)
+├── storage/           # FileProjectRepository/FileAgentRepository/FileEventStore
+│                       #   (구현됨, T1-23)
+└── cli/               # CLI 진입점 (UI Surface의 하나) — main.py (구현됨, T1-24)
 ```
 
 ## 10. 확장성 고려사항

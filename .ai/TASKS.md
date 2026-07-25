@@ -432,7 +432,7 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 - 작업 내용: 구현된 구조/디렉터리/컴포넌트를 ARCHITECTURE.md와 대조하고 필요 시
   갱신한다.
 - 완료 조건(DoD): 문서와 실제 코드가 일치한다.
-- 상태: TODO
+- 상태: DONE
 - 의존성: T1-16 ~ T1-25
 
 #### T1-27: ADR
@@ -782,3 +782,22 @@ T1-22 리뷰에서 지적된 5개 경계 조건(`update_session`의 `active_work
 전혀 변경하지 않음(테스트 전용 Task). `ruff check src tests`, `mypy src`,
 `pytest`(139개, 기존 126개 + 신규 13개) 모두 통과. 다음 Task: **T1-26**
 (Documentation: `docs/ARCHITECTURE.md` 최종 정합성 확인). |
+| 2026-07-25 | **T1-26 완료: Documentation**(§2.4 Stage Checkpoint 4개 경계
+모두 발동. Analysis 단계에서 Sonnet/Medium→**Sonnet/Low**로 하향 — 순수
+대조/표기 수정이라 Effort를 낮춰도 충분하다고 판단, 이후 3개 경계 모두
+Low 유지로 "동일" 판정). `docs/ARCHITECTURE.md`를 v0.6.3→v0.7.0으로 갱신,
+실제 구현과 대조해 불일치 3곳만 수정(신규 아키텍처 결정 없음): (1) 문서
+헤더 상태를 "T1-17까지 완료"에서 "T1-25까지 완료"로 갱신. (2) §7 Interface
+표에서 `ProjectRepository`/`AgentRepository`/`EventStore`가 T1-23에서
+각각 `FileProjectRepository`/`FileAgentRepository`/`FileEventStore`로
+실제 구현되었음을 반영(상태를 "완료(계약)"→"완료(계약+구현)"으로 세분화하고,
+나머지 계약 전용 Interface는 "완료(계약)"으로 명확화, 범례 추가). (3) §9
+디렉터리 구조에서 이미 구현된 `core/`(T1-22)/`storage/`(T1-23)/`cli/`
+(T1-24)에 완료 표시를 추가해 Milestone 2/3 이후로 표시된 미구현
+디렉터리와 구분되게 함. §3.3 Workspace Core 책임 서술, §2 다이어그램, §8
+의존성 규칙, §11 기술 스택은 대조 결과 이미 실제 구현과 일치해 변경하지
+않음(§11 저장 방식 "Markdown/JSON"은 ADR-0004가 아직 "제안" 상태라 JSON
+으로 단정하지 않고 그대로 둠 — 확정은 T1-27 소관). 소스 코드는 전혀
+변경하지 않음. `ruff check src tests`, `mypy src`, `pytest`(139개, 회귀
+없음) 모두 통과. 다음 Task: **T1-27** (ADR: ADR-0002, ADR-0004 상태를
+"승인됨"으로 갱신). |

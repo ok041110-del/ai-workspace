@@ -40,11 +40,11 @@
   Milestone 1 소속 `T1-01`~`T1-25`로 번호만 이어졌다가, 같은 날 설계 검토를
   거쳐 `T1-18`~`T1-28`로 추가 재분해됨(ADR-0022, 대응표는 `docs/ROADMAP.md`
   하단 참고).
-- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-25` 완료
+- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-26` 완료
   (T1-18~T1-21 Interface 그룹, T1-22 Workspace Core Skeleton, T1-23
-  Repositories, T1-24 CLI, T1-25 Tests 전체 완료), `T1-29`(SOP Skills
-  System, 별도 세션에서 병렬로 완료되어 병합됨)도 완료, `T1-26`~`T1-28`
-  남음(3개 Task).
+  Repositories, T1-24 CLI, T1-25 Tests, T1-26 Documentation 전체 완료),
+  `T1-29`(SOP Skills System, 별도 세션에서 병렬로 완료되어 병합됨)도 완료,
+  `T1-27`~`T1-28` 남음(2개 Task).
 - **완료된 Task 요약**: `T1-01`~`T1-11`(문서화 세트 작성 및 승인), `T1-12`
   (구현 착수 승인), `T1-13`(디렉터리 구조), `T1-14`(Project/Task/Workflow
   도메인), `T1-15`(Interfaces 7종), `T1-16`(Mission/Step/WorkspaceSession/
@@ -81,10 +81,14 @@
   config 기본값/start_session 기본값/unknown session 예외), `tests/domain/
   test_task.py`(5개: DONE·CANCELLED 종단 상태, BLOCKED 순환, REVIEW 반려,
   TODO→CANCELLED), `tests/domain/test_workflow.py`(1개: 3노드 간접 순환)
-  보강. 프로덕션 코드 변경 없음) — 전체 139개 테스트 통과, `ruff`/`mypy`
-  클린.
-- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-26`
-  Documentation → `T1-27` ADR → `T1-28` Milestone 1 Review.
+  보강. 프로덕션 코드 변경 없음), `T1-26`(Documentation:
+  `docs/ARCHITECTURE.md` v0.7.0 — 문서 헤더 상태, §7 Interface 표(
+  `ProjectRepository`/`AgentRepository`/`EventStore`를 "완료(계약+구현)"로
+  세분화), §9 디렉터리 구조(`core`/`storage`/`cli` 완료 표시) 3곳만 실제
+  구현과 대조해 수정. 시스템 구조 자체는 이미 일치해 변경 없음) — 전체
+  139개 테스트 통과(회귀 없음), `ruff`/`mypy` 클린.
+- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-27` ADR
+  → `T1-28` Milestone 1 Review.
 - **아키텍처는 v0.6.3으로 갱신** (ADR-0006~0022, Multi-Agent First 심화 + 안정화
   보완 + Task-Workflow 관계 보완 + Phase→Task 거버넌스 전환 + Task 분해 원칙).
   시스템 구조 자체(컴포넌트/의존성)는 T1-18 설계 검토로 변경되지 않았음 — 자세한
@@ -96,15 +100,16 @@
   T1-29(SOP Skills)는 별도 세션의 병렬 작업이 origin에 먼저 병합되어 있어
   `git merge`로 반영함 — `.ai/skills/`에 문서만 추가되어 코드/아키텍처
   변경은 없음.
-- **다음 단계**: `.ai/TASKS.md`의 `T1-26`(Documentation: 구현된 구조/
-  디렉터리/컴포넌트를 `docs/ARCHITECTURE.md`와 대조하고 필요 시 갱신)부터
-  진행.
+- **다음 단계**: `.ai/TASKS.md`의 `T1-27`(ADR: `.ai/DECISIONS.md`의
+  ADR-0002·ADR-0004 상태를 "제안"에서 "승인됨"으로 갱신)부터 진행.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
-  4개 경계 중 1개만 실제 발동하는 실행 누락이 있었으나, T1-24·T1-25에서는
-  4개 경계 전부 실제로 발동해 정상 궤도를 유지하고 있다(모두 "동일" 판정,
-  Sonnet/Medium 유지 — Skip Rule 경로가 아직 반복 검증되고 있음).
+  4개 경계 중 1개만 실제 발동하는 실행 누락이 있었으나, T1-24 이후에는
+  매 Task마다 4개 경계 전부 실제로 발동하고 있다. T1-26에서 처음으로
+  **"하향" 판정**(Sonnet/Medium→Sonnet/Low)이 실제로 나왔고 사용자가 승인해
+  적용됨 — Skip Rule("동일")뿐 아니라 실제 Model/Effort 변경 경로도 처음
+  검증되었다.
 
 ## 2. 프로젝트 정체성
 
