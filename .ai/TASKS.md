@@ -673,15 +673,93 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
   신규 2개) 모두 통과.
 - 의존성: T2-01 ~ T2-06
 
-#### T2-08: Milestone 2 Review
+#### T2-08: Milestone 2 Review + Retrospective
 - 목적: Approval Required 원칙에 따라 Milestone 2 산출물을 검토받는다.
+  사용자 제안으로 단순 산출물 검토를 넘어 **Milestone Retrospective**로
+  범위를 확장함 — 목표 달성 여부/설계 원칙 적용 결과/기술 부채/M3 과제/
+  아키텍처 변경 필요성/유지하기로 한 설계와 이유를 함께 기록해, M3 착수
+  시 "왜 지금 구조가 이렇게 되었는지"를 다시 조사할 필요가 없게 한다.
 - 작업 내용: AgentRuntime, Agent Scheduler + Event Bus, Core Engines,
   Memory 계열, Engine Runtime + Mock Adapter, 능력별 Agent, 통합 시나리오
   테스트 결과를 제시하고 승인을 요청한다.
 - 완료 조건(DoD): 위 모든 Task가 DONE이고 테스트가 통과한 상태에서 사용자가
   승인한다.
-- 상태: TODO
+- 상태: **DONE (2026-07-25 사용자 승인 — Milestone 2 완료)**
 - 의존성: T2-01 ~ T2-07
+
+**Milestone 2 Retrospective**
+
+**1. 목표 달성 여부** — Goal("Agent Runtime과 Event Store, 능력별 Agent를
+구현해 실제 멀티 에이전트 협업이 동작하게 하고, Agent가 사용하는 Core
+Engines를 구현한다") 및 DoD 3개 항목 전부 달성함:
+1. Agent 등록/선택/스케줄링/생명주기 + Event Bus·Event Store 협업·기록 —
+   T2-01(Lifecycle)/T2-02(Scheduler+EventBus)/T2-06(4개 Agent 등록 검증)/
+   T2-07(`FileEventStore` Replay 검증)
+2. Core Engines(Task/Workflow/Memory/Approval/Automation) + Mission→
+   Workflow→Task→Step 실행 — T2-03/T2-04/T2-07
+3. Mock EngineAdapter 위 Planner→Coding→Review→Documentation 협업 — T2-05/
+   T2-06
+
+`pytest` 205개 통과, `ruff`/`mypy` 클린. 신규 소스 21개 파일, 약 2,093줄.
+
+**Milestone 2는 계획된 범위를 모두 완료하였다. 현재 남아 있는 항목은
+Milestone 2의 미완료가 아니라, Milestone 3 이상의 확장 범위 또는
+의도적으로 이월한 기술 부채이다.**
+
+**2. 설계 원칙 적용 결과 (DX-02)** — T2-01~06은 철학 공식화 이전 작업이나
+사후 확인 결과 이미 원칙을 따르고 있었음(Fake 승격 패턴=점진적 확장,
+AgentRuntime 재도입=필요성 확인 후 추상화). T2-07이 첫 공식 적용 사례로,
+기존 테스트 점검 후 실제 빈틈 2곳만 채우고 새 파일 0개 생성 — 원칙이
+실제로 작업량을 줄인다는 것을 증명함. 가장 뚜렷한 실천은 T2-06에서
+`AgentScheduler`를 이벤트 핸들러에 강제로 넣지 않고 별도 헬퍼로 분리한
+판단.
+
+**3. 기술 부채 목록** (성격별로 구분)
+
+*Deferred by Design* (의도적으로 뒤로 미룬 설계 — 부채라기보다 계획된
+순연):
+- #1 `AgentManager`/`AgentRegistry` 프로덕션 구현체(`InMemory*`) 없음
+  (T2-01에서 의도적 보류, YAGNI)
+- #2 CLI가 `WorkspaceCore`를 완전히 쓰지 못함(T1-24 결정 — 이제 T2-03/04
+  구현 완료로 재검토 가능 시점)
+- #5 `MockEngineAdapter.supports_parallel()=True`이나 실제 동시성 미검증
+  (M3 실제 병렬 어댑터 도입 시 재검증 필요)
+
+*Implementation Observation* (구현 중 발견한 특성/관찰 — 결함은 아니나
+기록해 둘 가치가 있음):
+- #3 `InMemoryEventBus`가 핸들러 내부 재귀 `publish()` 시 수신 순서를
+  뒤집음(문서화 안 됨, 테스트는 이미 회피 설계됨)
+- #4 Event ID 생성 방식이 컴포넌트마다 다름(Agent는 `uuid4`, Core/Runtime
+  클래스는 로컬 `itertools.count`) — 기능적 문제 없음, 일관성만 부재
+- #6 `Step` 도메인이 아직 Workflow 실행에 실질적으로 반영되지 않음(T2-07
+  에서 존재만 확인, Task 단위로만 동작)
+
+**4. M3에서 해결할 과제** — ROADMAP.md 기존 M3 범위(Engine Runtime/Adapter
+실제 구현, Interaction Layer)는 변경하지 않는다. **M3는 기술 부채 청산이
+목표가 아니라 실제 Engine Runtime과 Engine Adapter 구현이 목표다.** 다만
+M3 진행 중 자연스럽게 해결 가능한 Deferred by Design 항목(#1 AgentManager/
+Registry, #2 CLI 통합, #5 병렬성 검증)은 별도 Task로 포함할 수 있다.
+Implementation Observation 항목(#3/#4/#6)은 실사용 중 문제가 생기면 그때
+Task화한다.
+
+**5. 아키텍처 변경이 필요한 부분** — 없음. T1-26에서 확인한 ARCHITECTURE.md
+와 구현의 일치가 M2 진행 중에도 깨지지 않음 — 기존 설계(§3.4~3.9)가 실제
+구현을 정확히 예측했다는 뜻이다. `InMemoryEventBus`의 재귀 발행 순서
+특성(#3)은 문서화되지 않은 구현 세부사항이라 M3에서 실사용 패턴이 늘면
+재검토 권장(지금 당장 필요하지 않음).
+
+**6. 유지하기로 결정한 설계와 이유**
+- AgentRuntime을 별도 파사드로 도입(T2-01) — T1-22의 YAGNI 보류를
+  재검토, Lifecycle 관리 반복 필요성 확인 + WorkspaceCore와 동일한 DI
+  패턴 유지
+- Scheduler/EventBus를 AgentRuntime에서 분리(T2-01→02 재분해) — 응집도
+  원칙, AgentRuntime은 순수 Lifecycle만 담당
+- ContextManager가 MemoryEngine을 실제로 사용(T2-04) — §8 규칙 7을 코드
+  구조로 강제
+- MockEngineAdapter를 테스트용 Fake와 별도 유지(T2-05) — M3에서 Mock만
+  교체 가능하게 관심사 분리
+- AgentScheduler를 이벤트 핸들러 밖 헬퍼로 사용(T2-06) — 강제 사용 대신
+  실제 필요한 형태로만, 최소 복잡성 원칙 실천
 
 ---
 
@@ -1165,3 +1243,18 @@ Workspace Core/Agent Runtime)과 "아키텍처 vs 단순함 충돌 시 아키텍
 4.1~4.5를 잇는 구현 순서 추가. `.ai/DECISIONS.md`에 `DX-02`로 기록(ADR
 번호는 소비하지 않음, DX-01과 동일한 정책). 코드 변경 없음, 회귀 없음
 확인(205개 테스트 통과). |
+| 2026-07-25 | **T2-08 완료 & Milestone 2 종료: 사용자 승인**. 단순 산출물
+검토가 아니라 **Milestone Retrospective**로 확장해 진행(사용자 제안).
+목표/DoD 3개 항목 전부 달성 확인(상세는 위 T2-08 항목의 Retrospective
+참고). "Milestone 2는 계획된 범위를 모두 완료했으며, 남은 항목은 M2
+미완료가 아니라 M3 이상 확장 범위 또는 의도적 이월 부채"임을 명시적으로
+선언(사용자 요청). 기술 부채를 **Deferred by Design**(#1 AgentManager/
+Registry, #2 CLI 통합, #5 병렬성 검증)과 **Implementation Observation**
+(#3 EventBus 발행 순서, #4 Event ID 생성 방식 불일치, #6 Step 미세분화
+실행)로 성격 구분(사용자 제안). 아키텍처 변경 불필요 확인(T1-26 이후
+ARCHITECTURE.md와 구현 일치 유지). 유지하기로 한 설계 5건과 이유 기록.
+`docs/ROADMAP.md` Milestone 3 절에 "M3는 부채 청산이 아니라 Engine
+Runtime/Adapter 구현이 목표이되, #1/#2/#5는 자연스럽게 포함 가능"이라는
+문구 반영(사용자 제안). **Milestone 2(멀티 에이전트 코어) 종료.** 다음은
+Milestone 3(실행 엔진 연동 & 상호작용) 착수 — 세부 Task는 착수 시점에
+`T3-01`부터 정의. |

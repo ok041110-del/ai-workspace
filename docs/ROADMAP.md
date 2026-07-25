@@ -45,7 +45,7 @@ Roadmap
 | Milestone | 핵심 목표 | 상태 |
 |---|---|---|
 | M1. 기반 구축 (Foundation) | 문서 체계 + 핵심 도메인(Mission/Step/WorkspaceSession/Agent 포함) + 전체 Interfaces(16종) + Workspace Core 골격 | **완료 (2026-07-25 사용자 승인)** |
-| M2. 멀티 에이전트 코어 (Multi-Agent Core) | Agent Runtime·Event Store·기본 Agent, Core Engines & Context Manager 구현 | 예정 |
+| M2. 멀티 에이전트 코어 (Multi-Agent Core) | Agent Runtime·Event Store·기본 Agent, Core Engines & Context Manager 구현 | **완료 (2026-07-25 사용자 승인)** |
 | M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Engine Runtime & Engine Adapter(Claude Code 우선) 구현, Interaction Layer 구현 | 예정 |
 | M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | 예정 |
 
@@ -99,9 +99,10 @@ Phase 1)
 T2-01~T2-07(7개)로 확정했으나, T2-01 실제 착수 시 범위가 좁아져(아래 참고)
 T2-01~T2-08로 재분해)
 
-**진행 상태**: T2-01~T2-07 완료, T2-08 진행 예정 (다음 Task: T2-08,
-Milestone 2 Review). 세부 Task 목록/DoD/상태는 `.ai/TASKS.md`의
-"Milestone 2" 섹션 참고.
+**진행 상태**: T2-01~T2-08 전체 완료. **2026-07-25 사용자 승인으로
+Milestone 2 종료.** Retrospective(목표 달성 여부/설계 원칙 적용/기술
+부채/M3 과제/유지 결정)는 `.ai/TASKS.md`의 T2-08 항목 참고. 다음은
+Milestone 3 착수 — 세부 Task는 착수 시점에 `T3-01`부터 정의.
 
 > **설계 판단 (T2-01 재분해)**: 원래 T2-01은 Registry/Scheduler/Manager/
 > EventBus 4종을 한 Task로 묶고 있었으나, 실제 착수 시 "AgentRuntime
@@ -140,6 +141,15 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
 
 **목표**: 실제 구현 엔진(Claude Code 우선)에 Task를 위임하고, 다양한 표면을
 통합하는 Interaction Layer를 구현한다.
+
+> **M2 Retrospective와의 관계**(`.ai/TASKS.md` T2-08 참고): **M3는 M2에서
+> 이월된 기술 부채를 해결하는 것이 목표가 아니라, 실제 Engine Runtime과
+> Engine Adapter 구현이 목표다.** 다만 M3 진행 중 자연스럽게 해결 가능한
+> Deferred by Design 부채(`InMemoryAgentManager`/`AgentRegistry` 프로덕션
+> 구현, CLI-WorkspaceCore 완전 연동, 실제 병렬 EngineAdapter 도입 시
+> `run_parallel` 동시성 재검증)는 별도 Task로 포함할 수 있다. M3의 목표가
+> "부채 청산"으로 변질되지 않도록, 착수 시점에 Task를 정의할 때 이 목표
+> 우선순위를 그대로 유지한다.
 
 **Milestone Definition of Done**
 1. 세션 생명주기 계약을 만족하는 ClaudeCodeAdapter로 Coding Agent가 실제 Task를

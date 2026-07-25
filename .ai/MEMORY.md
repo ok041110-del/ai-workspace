@@ -106,47 +106,31 @@
   T1-29(SOP Skills)는 별도 세션의 병렬 작업이 origin에 먼저 병합되어 있어
   `git merge`로 반영함 — `.ai/skills/`에 문서만 추가되어 코드/아키텍처
   변경은 없음.
-- **Milestone 2 계획 확정 및 T2-01 완료(2026-07-25)**: 처음 확정했던
-  `T2-01`~`T2-07`(7개)은 T2-01 실제 착수 시 사용자 지시로 범위가 좁아져
-  `T2-01`~`T2-08`(8개)로 재분해됨 — Scheduler/EventBus를 T2-01에서 분리해
-  신규 T2-02로 만듦(T1-22가 보류한 `AgentRuntime` 파사드 도입을 지금
-  재검토하는 결정). **T2-01 완료**: `domain/agent_session.py`의
-  `AgentSession`, `runtime/agent/agent_runtime.py`의 `AgentRuntime`
-  (`AgentManager`+`AgentRegistry`만 사용, Scheduler/EventBus/Core
-  Engines/Context Manager/LLM 호출 배제) — `tests/runtime/agent/
-  test_agent_runtime.py` 11개 테스트. **T2-02 완료**: `runtime/agent/
-  agent_scheduler.py`의 `InMemoryAgentScheduler`, 신규 `events/` 패키지의
-  `InMemoryEventBus` — 둘 다 기존 Fake 로직을 그대로 승격(신규 설계 없음).
-  `AgentRuntime`과의 실제 연동은 T2-06에서 다룸. **T2-03 완료**: `engines/`
-  에 `InMemoryTaskEngine`/`WorkflowEngine`/`ApprovalEngine`/
-  `AutomationEngine` 구현(Fake 로직 승격). 부가 발견: `ApprovalActionType.
-  PHASE_COMPLETION`이 ADR-0021 이후 갱신 안 된 것을 발견해
-  `MILESTONE_COMPLETION`으로 정정. **T2-04 완료**: `memory/
-  memory_engine.py`의 `InMemoryMemoryEngine`(Fake 승격), `memory/
-  context_manager.py`의 `InMemoryContextManager` — T2-02/03과 달리
-  `MemoryEngine`을 실제로 주입받아 Snapshot을 `remember`/`recall`로
-  저장(§8 규칙 7을 코드 구조로 강제, 기존 Fake는 자체 dict 사용이라
-  달랐음). **T2-05 완료**: `runtime/engine/engine_runtime.py`의
-  `InMemoryEngineRuntime`, `adapters/mock_engine_adapter.py`의
-  `MockEngineAdapter` — 둘 다 기존 Fake 로직 승격(`estimate_cost`만
-  실제 호출 없음을 정직하게 반영해 0/0.0으로 조정). 전체 198개 테스트
-  통과. **T2-06 완료**: `agents/`에 `PlanningAgent`/`CodingAgent`/
-  `ReviewAgent`/`DocumentationAgent` 구현, Event 기반으로 T2-01~T2-05
-  전부를 실제로 엮음(Lifecycle=AgentRuntime, 선택=AgentScheduler,
-  실행=EngineRuntime+MockAdapter, Context=ContextManager, 도메인=Core
-  Engines). `InMemoryEventBus`의 재귀 publish 순서 뒤집힘을 발견해 집합
-  기반 테스트로 회피. `AgentManager`/`AgentRegistry` 프로덕션 구현체가
-  아직 없다는 공백을 문서화(향후 Task 후보). 전체 203개 테스트 통과.
-  **설계 철학 확립(2026-07-25)**: 사용자가 Architecture First/최소
-  복잡성/YAGNI/응집도 우선/점진적 확장/기존 코드 존중 6원칙을 앞으로의
-  모든 작업 기본 원칙으로 제시함(개인 기억 시스템 `feedback_design_
-  philosophy.md`에 저장). **T2-07 완료**: 새 철학을 적용해 기존 테스트를
-  먼저 점검, 실제 빈틈 2곳만 채움 — Event Store 기록 검증(T1-23
-  `FileEventStore`를 EventBus에 연결), Mission→Workflow→Task→Step
-  다단계 계획 검증. 새 파일/클래스 없음. 전체 205개 테스트 통과. 남은
-  Task: T2-08(Milestone 2 Review, 마지막 1개). 상세는 `.ai/TASKS.md`
-  "Milestone 2" 섹션 참고.
-- **다음 단계**: **`T2-08`(Milestone 2 Review)**부터 진행.
+- **Milestone 2(멀티 에이전트 코어) 완료 — 2026-07-25 사용자 승인.**
+  `T2-01`~`T2-08` 전체 DONE. Agent Runtime(`AgentRuntime`/`InMemory
+  AgentScheduler`/`InMemoryEventBus`), Core Engines 4종, Memory 계열
+  (`InMemoryContextManager`가 `MemoryEngine`을 실제로 주입받아 사용),
+  Engine Runtime+`MockEngineAdapter`, 능력별 Agent 4종(Planning/Coding/
+  Review/Documentation)을 구현해 `MissionPlanned`→`CodeCompleted`→
+  `ReviewCompleted`→`DocumentationCompleted` Event 체인이 실제로 동작함
+  (Event Store 기록·Mission→Workflow→Task→Step 다단계 계획 포함). 전체
+  205개 테스트 통과, `ruff`/`mypy` 클린.
+  **Retrospective 결론**(전문은 `.ai/TASKS.md` T2-08 항목): Goal/DoD 3개
+  항목 전부 달성, 아키텍처 변경 불필요(ARCHITECTURE.md와 구현 일치 유지).
+  기술 부채는 **Deferred by Design**(#1 `AgentManager`/`AgentRegistry`
+  프로덕션 구현 없음, #2 CLI-WorkspaceCore 미완전 연동, #5 병렬성 실제
+  미검증)과 **Implementation Observation**(#3 `InMemoryEventBus` 재귀
+  발행 시 수신 순서 뒤집힘, #4 Event ID 생성 방식 컴포넌트별 불일치,
+  #6 `Step` 도메인이 아직 Workflow 실행에 미반영)으로 구분해 기록.
+  "Milestone 2는 계획된 범위를 모두 완료했으며 남은 항목은 미완료가 아니라
+  M3 이상 확장 범위 또는 의도적 이월"임을 명시적으로 선언.
+  **설계 철학(DX-02)**이 T2-07에서 첫 공식 적용됨 — 기존 테스트 점검 후
+  실제 빈틈만 채우는 방식으로 새 파일 0개 생성.
+- **다음 단계**: Milestone 3(실행 엔진 연동 & 상호작용) 착수. **M3 목표는
+  부채 청산이 아니라 실제 Engine Runtime/Engine Adapter 구현**이다(사용자
+  강조) — 다만 Deferred by Design 부채(#1/#2/#5)는 M3 진행 중 자연스럽게
+  해결 가능하면 별도 Task로 포함할 수 있다. 세부 Task는 착수 시점에
+  `T3-01`부터 정의(Task Driven Development).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

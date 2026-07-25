@@ -19,13 +19,14 @@ AI Workspace는 또 하나의 코딩 AI가 아닙니다. 실제 코드 작성은
 - 다중 프로젝트 관리 (Multi Project)
 - 구현 엔진(Claude Code, Codex 등) 관리
 
-> **현재 상태**: **Milestone 1(기반 구축)이 2026-07-25 사용자 승인으로
-> 완료되었습니다.** Milestone 2(멀티 에이전트 코어) `T2-01`~`T2-07`까지
-> 완료 — `MissionPlanned`→`CodeCompleted`→`ReviewCompleted`→
+> **현재 상태**: **Milestone 1(기반 구축)과 Milestone 2(멀티 에이전트
+> 코어)가 모두 2026-07-25 사용자 승인으로 완료되었습니다.**
+> `MissionPlanned`→`CodeCompleted`→`ReviewCompleted`→
 > `DocumentationCompleted` Event 체인이 Event Store 기록까지 포함해 실제로
-> 동작합니다. 다음은 `T2-08`(Milestone 2 Review, 최종 승인 요청)입니다
-> (`docs/ROADMAP.md` 참고). Multi-Agent First 구조를 Agent Runtime·Engine
-> Runtime·Context Manager·Event Store·Interaction Layer·
+> 동작합니다. 다음은 Milestone 3(실행 엔진 연동 & 상호작용) 착수입니다 —
+> 목표는 기술 부채 청산이 아니라 실제 Engine Runtime/Engine Adapter
+> 구현입니다(`docs/ROADMAP.md` 참고). Multi-Agent First 구조를 Agent
+> Runtime·Engine Runtime·Context Manager·Event Store·Interaction Layer·
 > Mission→Workflow→Task→Step 계층까지
 > 확정(ADR-0006~0022)했으며, 도메인 모델과 인터페이스 계약을 구현하는 중입니다.
 > 프로젝트 관리 체계는 2026-07-24부로 `Milestone → Task` 2단 계층입니다
