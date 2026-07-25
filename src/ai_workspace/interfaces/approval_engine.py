@@ -10,6 +10,7 @@ class ApprovalActionType(Enum):
     NEW_FEATURE = "new_feature"
     REFACTORING = "refactoring"
     MILESTONE_COMPLETION = "milestone_completion"
+    ENGINE_TASK_EXECUTION = "engine_task_execution"
 
 
 class ApprovalDecision(Enum):
@@ -37,7 +38,9 @@ class ApprovalAlreadyDecidedError(Exception):
 class ApprovalEngine(ABC):
     """승인 대상 행위(아키텍처 변경/신규 기능/리팩토링/Milestone 완료) 판별·차단
     계약(RULES.md §1.4, ADR-0021). 구체 구현체는 Milestone 2(T2-03)에서
-    작성한다."""
+    작성한다. `ENGINE_TASK_EXECUTION`(M3-T05)은 RULES.md §1.4의 4대 행위와는
+    별개로, Engine Task 실행 자체에 대한 승인 게이트에 쓰인다(Engine
+    Approval Pipeline이 소비)."""
 
     @abstractmethod
     def submit(self, action_type: ApprovalActionType, description: str) -> ApprovalRequest:

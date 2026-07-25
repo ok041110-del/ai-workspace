@@ -52,12 +52,14 @@ def test_unknown_request_raises_not_found() -> None:
         engine.is_approved("unknown")
 
 
-def test_approval_action_type_covers_exactly_four_gated_actions() -> None:
+def test_approval_action_type_covers_governance_and_engine_execution_actions() -> None:
     """RULES.md §1.4의 승인 대상 4대 행위(아키텍처 변경/신규 기능/리팩토링/
-    Milestone 완료)가 빠짐없이 판별·차단 가능함을 확인한다(T2-03 DoD)."""
+    Milestone 완료, T2-03 DoD)에 더해 Engine Task 실행 승인
+    (ENGINE_TASK_EXECUTION, M3-T05)까지 빠짐없이 판별·차단 가능함을
+    확인한다."""
     action_types = list(ApprovalActionType)
 
-    assert len(action_types) == 4
+    assert len(action_types) == 5
     for action_type in action_types:
         engine = InMemoryApprovalEngine()
         request = engine.submit(action_type, f"{action_type.value} 승인 요청")

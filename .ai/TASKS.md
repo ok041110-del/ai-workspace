@@ -919,6 +919,41 @@ Task화한다.
   신규 12개) 모두 통과.
 - 의존성: T1-22, M3-T01, T2-01
 
+#### M3-T05: Approval Pipeline
+- 목적: Engine Task 실행 전 사람 승인을 요구하는 게이트를 제공한다.
+- 작업 내용: ApprovalRequest 생성, 사용자 승인 대기, 승인·거부 Event,
+  Runtime Resume(승인된 Task만 실제 실행).
+- 완료 조건(DoD): 승인 전에는 Task가 실행되지 않음을 검증, 승인/거부 각각
+  Event 발행 검증, 승인된 Task만 EngineRuntime으로 실제 실행됨을 검증,
+  `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-25)** — 사용자가 설계안 검토 후 2가지 수정을
+  요청: (1) `resume()` → `run_approved()`로 이름 변경(승인 전제조건을
+  메서드명에 명시), (2) Pipeline 자체의 상태 머신을 만들지 않고 기존
+  `ApprovalEngine`(승인 상태)·`EngineRuntime`(실행 상태)의 상태를 그대로
+  조합. `runtime/engine/approval_pipeline.py`에 `EngineApprovalPipeline`
+  신규 — `EngineRuntime` 인터페이스는 구현하지 않음(사람 승인은 비동기적
+  사건이라 `run()` 안에서 동기적으로 기다릴 수 없기 때문에 의도적으로
+  분리된 3단계 API: `request_approval`/`decide`/`run_approved`).
+  `interfaces/approval_engine.py`의 `ApprovalActionType`에
+  `ENGINE_TASK_EXECUTION` 신규 추가(순수 추가, 기존 4개 값 변경 없음) —
+  RULES.md §1.4의 AI 세션 거버넌스 승인 4종과는 별개 목적임을 docstring에
+  명시. **기존 코드 재사용**: `InMemoryApprovalEngine`(T2-03)은 전혀
+  수정하지 않고 그대로 주입받아 사용, EventBus 발행 책임은 Pipeline이
+  전담. Pipeline은 `request_id → Task` 매핑만 `run_approved()` 호출에
+  필요한 최소 데이터로 보관(상태 머신이 아니라 단순 조회용 데이터).
+  `run_approved()`는 미승인/거부/미등록/이미 실행된 request_id 전부를
+  단일 예외(`UnapprovedTaskExecutionError`)로 통일 — "지금 실행할 수
+  없다"는 같은 의미이므로 별도 예외 타입을 늘리지 않음(최소 복잡성). 기존
+  T2-03 테스트 중 `ApprovalActionType`이 정확히 4개임을 단언하던 테스트를
+  5개로 갱신(순수 추가이므로 실패가 예상된 결과, 의미도 함께 갱신).
+  `tests/runtime/engine/test_approval_pipeline.py`에 11개 신규 테스트 —
+  요청 생성/Event 발행/승인·거부 Event/중복 결정 차단/미승인 실행 차단/
+  거부 후 실행 차단/미등록 request_id 차단/중복 실행 차단/승인 후 실제
+  `EngineRuntime.run()` 호출 검증(`FakeEngineRuntime`+`MockEngineAdapter`
+  재사용). `ruff check src tests`, `mypy src`, `pytest`(267개, 기존
+  256개 + 신규 11개) 모두 통과.
+- 의존성: T2-02, T2-03, M3-T01
+
 ---
 
 ## Milestone 4 — 자동화 및 확장 (Automation & Scale)

@@ -173,7 +173,17 @@
   `ManagedEngineRuntime`+`MockEngineAdapter`+`InMemoryEventBus`로 실제
   조립해 Core 코드 변경 없이 주입 가능함과, Core·Runtime이 같은 EventBus를
   공유할 때 Event가 실제로 도달함을 테스트로 증명. 전체 256개 테스트 통과.
-  다음은 **M3-T05**(Approval Pipeline).
+  **M3-T05 완료**: `runtime/engine/approval_pipeline.py`의
+  `EngineApprovalPipeline` 신규 — Engine Task 실행 전 사람 승인을
+  요구하는 3단계 API(`request_approval`/`decide`/`run_approved`).
+  사용자가 설계안 검토 후 `resume()`→`run_approved()` 개명과, Pipeline
+  자체 상태 머신 금지(기존 `ApprovalEngine`/`EngineRuntime` 상태만 조합)
+  두 가지를 요청해 반영. `ApprovalActionType`에 `ENGINE_TASK_EXECUTION`을
+  순수 추가(RULES.md §1.4의 거버넌스 승인 4종과 별개 목적). 기존
+  `InMemoryApprovalEngine`(T2-03)은 전혀 수정하지 않고 그대로 재사용,
+  EventBus 발행은 Pipeline이 전담. 미승인/거부/미등록/중복실행을 단일
+  예외 `UnapprovedTaskExecutionError`로 통일(최소 복잡성). 전체 267개
+  테스트 통과. 다음은 **M3-T06**(Runtime Recovery).
 - **M3 목표는 부채 청산이 아니라 실제 Engine Runtime/Engine Adapter
   구현**이다(사용자 강조, M2 Retrospective 참고) — Deferred by Design
   부채(#1 AgentManager/Registry, #2 CLI 통합, #5 병렬성 검증)는 자연스럽게
