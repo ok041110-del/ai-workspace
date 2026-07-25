@@ -175,6 +175,15 @@
   신규 — `FakeAgentManager`/`FakeAgentRegistry`(허용 전이 규칙 포함)를
   T2-02/T2-03과 동일한 패턴으로 그대로 승격, 새 Interface 없음.
   CLI/WorkspaceCore 연동은 M4-T02 범위. 전체 291개 테스트 통과.
+- **M4-T02 완료(2026-07-26)**: `WorkspaceCore.save_project()` 추가
+  (`load_project()`와 대칭). `cli/main.py`가 `FileProjectRepository`
+  직접 호출을 없애고 `WorkspaceCore`를 유일한 진입점으로 사용 —
+  M2 이월 부채 #2 해소. 사용자 요청으로 `ClaudeCodeEngineAdapter`는
+  "기본 채택 Engine"으로 문서화만 하고 실제로는 등록하지 않는 지연
+  초기화 상태 유지(현재 CLI 명령이 Engine 실행을 안 써서 `claude`
+  실행 파일 의존성 불필요). 기존 CLI 테스트 5개는 수정 없이 그대로
+  통과(외부 동작 무변경 증명). `project list`는 M4-T05로 유지. 전체
+  292개 테스트 통과.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

@@ -77,6 +77,16 @@ def test_load_project_delegates_to_project_repository() -> None:
     assert loaded == project
 
 
+def test_save_project_delegates_to_project_repository() -> None:
+    project_repository = FakeProjectRepository()
+    core = make_core(project_repository=project_repository)
+    project = Project(project_id="p1", name="Demo", goal="목표")
+
+    core.save_project(project)
+
+    assert project_repository.load("p1") == project
+
+
 def test_load_project_missing_raises_error() -> None:
     core = make_core()
 

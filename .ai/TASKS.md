@@ -1251,6 +1251,38 @@ Review 완료 + Interface First Review 완료 + 테스트 통과 + 문서 최신
   tests`, `mypy src`, `pytest`(291개, 기존 281개 + 신규 10개) 모두 통과.
 - 의존성: T1-18
 
+#### M4-T02: CLI ↔ WorkspaceCore 완전 연동
+- 목적: CLI가 `FileProjectRepository`를 직접 호출하던 것을 없애고
+  `WorkspaceCore`를 유일한 진입점으로 쓰도록 바꿔 M2 이월 부채 #2를
+  해소한다.
+- 작업 내용: `WorkspaceCore.save_project()` 추가, `cli/main.py`가
+  `WorkspaceCore`를 조립해 `project create`/`project show`를 Core
+  경유로 재구현.
+- 완료 조건(DoD): 기존 CLI 동작(입출력/종료 코드)이 그대로 유지된 채
+  내부적으로 `WorkspaceCore`만 거치는 것을 테스트로 증명, `pytest`/
+  `ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — `WorkspaceCore`에 `save_project(project)`
+  추가(기존 `load_project()`와 대칭, `project_repository.save()`에
+  위임 — 새 책임 아님). `cli/main.py`에 `_build_workspace_core(data_dir)`
+  신규 — `FileProjectRepository`(T1-23)+`InMemoryWorkflowEngine`(T2-03)+
+  `InMemoryAgentRegistry`/`InMemoryAgentManager`(M4-T01)+
+  `InMemoryAgentScheduler`(T2-02)+`InMemoryEventBus`(T2-02)+
+  `ManagedEngineRuntime`(M3-T01)로 실제 `WorkspaceCore`를 조립.
+  **사용자 요청 반영**: `ClaudeCodeEngineAdapter`(M3-T02)를 "기본 채택
+  Engine"으로 문서화하되, 현재 CLI 명령 중 실제 Engine 실행을 요구하는
+  것이 없어 **등록하지 않고 지연 초기화 상태로 남김**(`ManagedEngineRuntime`
+  객체 자체는 생성하되 `register_engine()` 호출 없음) — CLI가 `claude`
+  실행 파일 설치 여부에 불필요하게 의존하지 않게 함. `_create_project`/
+  `_show_project`가 `FileProjectRepository` 대신 `core.save_project()`/
+  `core.load_project()`를 사용하도록 변경(기존 `tests/cli/test_main.py`
+  5개 테스트는 CLI 입출력만 검증하므로 수정 없이 그대로 통과 — 내부
+  구현 변경이 외부 동작에 영향 없음을 증명). `project list` 명령은
+  범위에서 제외(M4-T05로 유지). 새 Interface 없음.
+  `tests/core/test_workspace_core.py`에 `save_project` 테스트 1개 추가.
+  `ruff check src tests`, `mypy src`, `pytest`(292개, 기존 291개 +
+  신규 1개) 모두 통과.
+- 의존성: M4-T01, T1-22, T1-23, T1-24
+
 ---
 
 ## 진행 로그
