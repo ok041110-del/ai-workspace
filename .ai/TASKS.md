@@ -527,7 +527,13 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
   Scheduler가 후보 목록에서 Capability를 만족하는 Agent만 선택함을,
   EventBus가 여러 구독자에게 발행 이벤트를 전달함을(구독자 하나가 예외를
   던져도 나머지에는 영향 없음, `EventBus` 계약) 테스트로 확인한다.
-- 상태: TODO
+- 상태: **DONE (2026-07-25)** — `runtime/agent/agent_scheduler.py`의
+  `InMemoryAgentScheduler`, `events/event_bus.py`의 `InMemoryEventBus`
+  구현(둘 다 `tests/interfaces/fakes.py`의 대응 Fake 로직을 그대로 승격,
+  신규 설계 판단 없음). `tests/runtime/agent/test_agent_scheduler.py`
+  3개, `tests/events/test_event_bus.py` 6개 신규 테스트. `AgentRuntime`
+  과의 연동은 T2-06 범위. `ruff`/`mypy`/`pytest`(159개, 기존 150개 +
+  신규 9개) 모두 통과.
 - 의존성: T1-18, T2-01(권장 순서 — 강제 의존은 아님)
 
 #### T2-03: Core Engines 구현
@@ -987,3 +993,19 @@ test_agent_runtime.py` 11개 신규 테스트(기존 `FakeAgentManager`/
 (8개)로 재분해**: Scheduler+EventBus를 신규 T2-02로 분리하고 이하 Task를
 T2-03~T2-08로 순연(상세 사유는 Milestone 2 섹션 상단 안내문 참고). 다음
 Task: **T2-02** (Agent Scheduler + Event Bus 구현). |
+| 2026-07-25 | **T2-02 완료: Agent Scheduler + Event Bus**(§2.4 Stage
+Checkpoint 4개 경계 모두 발동, Analysis에서 Sonnet/Medium→**Sonnet/Low**
+하향 — 이미 검증된 Fake 로직을 그대로 승격하는 기계적 작업이라 판단,
+이후 3개 경계는 "동일" 유지). `runtime/agent/agent_scheduler.py`에
+`InMemoryAgentScheduler`, 신규 `events/` 패키지의 `event_bus.py`에
+`InMemoryEventBus` 구현 — 둘 다 `tests/interfaces/fakes.py`의
+`FakeAgentScheduler`/`FakeEventBus`와 로직이 동일해 새로운 설계 판단이
+없었음(T1-23의 File 저장소 구현 때와 같은 "Fake 승격" 패턴).
+`AgentRuntime`과의 실제 연동(Scheduler로 후보 선택, EventBus로 Agent 간
+통신)은 의도적으로 하지 않음 — T2-06(능력별 Agent 골격) 범위.
+`tests/runtime/agent/test_agent_scheduler.py` 3개(Capability 매칭/
+max_count/미매칭 시 빈 리스트), `tests/events/test_event_bus.py` 6개
+(단일·다중 구독 전달, 구독자 예외 격리, 구독 해제, 존재하지 않는 구독
+해제 예외, 구독 전 발행분 소급 전달 안 됨) 신규 테스트. `ruff check src
+tests`, `mypy src`, `pytest`(159개, 기존 150개 + 신규 9개) 모두 통과.
+다음 Task: **T2-03** (Core Engines 구현). |

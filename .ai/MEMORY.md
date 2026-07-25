@@ -114,13 +114,16 @@
   `AgentSession`, `runtime/agent/agent_runtime.py`의 `AgentRuntime`
   (`AgentManager`+`AgentRegistry`만 사용, Scheduler/EventBus/Core
   Engines/Context Manager/LLM 호출 배제) — `tests/runtime/agent/
-  test_agent_runtime.py` 11개 테스트, 전체 150개 통과. 남은 Task:
-  T2-02(Agent Scheduler+Event Bus) → T2-03(Core Engines) → T2-04(Memory
-  계열) → T2-05(Engine Runtime+Mock Adapter, 원래 M3 표기였으나 M2 DoD
-  충족을 위해 앞당김) → T2-06(능력별 Agent 골격, T2-01~T2-05 전부 의존)
-  → T2-07(통합 시나리오 테스트) → T2-08(Milestone 2 Review). 상세는
-  `.ai/TASKS.md` "Milestone 2" 섹션 참고.
-- **다음 단계**: **`T2-02`(Agent Scheduler + Event Bus 구현)**부터 진행.
+  test_agent_runtime.py` 11개 테스트. **T2-02 완료**: `runtime/agent/
+  agent_scheduler.py`의 `InMemoryAgentScheduler`, 신규 `events/` 패키지의
+  `InMemoryEventBus` — 둘 다 기존 Fake 로직을 그대로 승격(신규 설계 없음).
+  `AgentRuntime`과의 실제 연동은 T2-06에서 다룸. 전체 159개 테스트 통과.
+  남은 Task: T2-03(Core Engines) → T2-04(Memory 계열) → T2-05(Engine
+  Runtime+Mock Adapter, 원래 M3 표기였으나 M2 DoD 충족을 위해 앞당김) →
+  T2-06(능력별 Agent 골격, T2-01~T2-05 전부 의존) → T2-07(통합 시나리오
+  테스트) → T2-08(Milestone 2 Review). 상세는 `.ai/TASKS.md` "Milestone 2"
+  섹션 참고.
+- **다음 단계**: **`T2-03`(Core Engines 구현)**부터 진행.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
