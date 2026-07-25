@@ -403,7 +403,7 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
   `FileEventStore`(append-only 로그)를 구현한다.
 - 완료 조건(DoD): 세 구현체가 각 인터페이스 계약을 만족함을 테스트로 확인하고,
   Workspace Core에 주입해도 Core 코드 변경이 필요 없음을 확인한다.
-- 상태: TODO
+- 상태: DONE
 - 의존성: T1-18
 
 #### T1-24: CLI
@@ -722,3 +722,28 @@ pytest/ruff/mypy/Commit Message/클래스·함수·파일명/API)는 원문 유�
 (3곳: §5.3→5.4, §5.4→5.5, §5.6 뒤)에 Stage Checkpoint 상호 참조를 추가함.
 `README.md`/`docs/ARCHITECTURE.md`는 변경하지 않음(시스템 아키텍처가 아님).
 적용 대상 소스 코드 없음(문서 전용 변경). |
+| 2026-07-25 | **T1-23 완료: Repositories**(§2.4 Stage Checkpoint 적용,
+Sonnet/Medium). `storage/`에 `FileProjectRepository`/`FileAgentRepository`
+(엔티티당 JSON 파일 1개)/`FileEventStore`(단일 append-only JSON Lines
+로그)를 구현함. Enum/frozenset은 JSON 직렬화가 안 되어 각 구현체 내부에서
+`.value`↔생성자로 변환하고 도메인 모델(`Project`/`Agent`/`Event`)은 건드리지
+않음. `tests/storage/`에 21개 신규 테스트 추가 — CRUD, Interface 계약
+예외(`ProjectNotFoundError`/`AgentNotFoundError`), `replay(since_event_id)`
+순서·필터링, 그리고 파일 기반의 핵심 차별점인 "새 인스턴스로 재오픈해도
+데이터 유지"를 검증함. DoD의 "Workspace Core 주입 시 Core 코드 변경
+불필요"는 `FileProjectRepository`를 `WorkspaceCore`에 직접 주입하는 테스트로
+증명함(`AgentRepository`/`EventStore`는 T1-22 설계상 Workspace Core
+생성자의 직접 의존 대상이 아니므로 해당 없음 — Agent Runtime/Event Bus
+독립 구독자가 Milestone 2에서 사용할 대상). `ruff check src tests`,
+`mypy src`, `pytest`(121개, 기존 100개 + 신규 21개) 모두 통과. 다음 Task:
+**T1-24** (CLI).
+
+**DX-01 첫 실사용 회고**: §2.4의 4개 Stage Checkpoint 중 실제로 Smart Model
+Router가 재판단을 수행한 것은 Task 착수 전 1회뿐이었다. Implementation→
+Validation, Validation→문서화 경계에서는 §2.4가 최소 요구하는 Skip Rule
+한 줄 출력조차 하지 않고 통과함 — 규칙 자체의 결함이 아니라 실행 누락으로
+판단됨(규칙은 정확히 쓰여 있음). Skip Rule 경로는 이번에 한 번도 실행되지
+않아 검증되지 못함. 표시된 한국어 UI(박스 2회)는 승인된 템플릿과 일관됨.
+TASKS.md 편집 중 `old_string` 오지정으로 텍스트를 잘못 덮어썼다가 즉시
+되돌린 실수가 1건 있었음(Effort 인과관계는 불명확하나 참고 신호로 기록).
+T1-24부터는 나머지 경계에서도 실제로 멈춰 재판단하기로 함. |

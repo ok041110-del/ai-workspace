@@ -68,8 +68,8 @@ Phase 1)
    포함), 파일 저장소, 최소 CLI가 동작하며 테스트를 통과한다 (T1-12~T1-28).
 3. Multi-Agent First 관련 아키텍처 결정(ADR-0006~0022)이 문서로 확정되어 있다.
 
-**진행 상태**: T1-01~T1-22 완료 (T1-18~T1-21 Interface 그룹 + T1-22 Workspace
-Core Skeleton), T1-23~T1-28 진행 예정 (다음 Task: T1-23).
+**진행 상태**: T1-01~T1-23 완료 (T1-18~T1-21 Interface 그룹 + T1-22 Workspace
+Core Skeleton + T1-23 Repositories), T1-24~T1-28 진행 예정 (다음 Task: T1-24).
 세부 Task 목록/DoD/상태는 `.ai/TASKS.md`의 "Milestone 1" 섹션 참고.
 
 > **2026-07-24 Task 재분해(ADR-0022)**: 설계 검토 결과 원래 하나의 Task였던
@@ -185,7 +185,7 @@ Phase 체계 폐지에 따라 기존 Phase 0/Phase 1의 모든 Task를 Milestone
 | P1-5 | T1-17 | Core/Agent/LLM Domain 마무리 및 코드 품질 도구(Ruff/MyPy) 도입 | DONE |
 | P1-6 | T1-18~T1-21 | (2026-07-24 ADR-0022로 4개 Task로 재분해 — 아래 표 참고) | DONE |
 | P1-7 | T1-22 | Workspace Core 골격 구현 (Agent Runtime 위임형) | DONE |
-| P1-8 | T1-23 | 파일 기반 저장소 구현 (ProjectRepository + AgentRepository + EventStore) | TODO |
+| P1-8 | T1-23 | 파일 기반 저장소 구현 (ProjectRepository + AgentRepository + EventStore) | DONE |
 | P1-9 | T1-24 | CLI 진입점 구성 | TODO |
 | P1-10 | T1-25 | 기본 테스트 환경 구축 및 테스트 작성 | TODO |
 | P1-11 | T1-26 | `docs/ARCHITECTURE.md` 최종 정합성 확인 | TODO |
