@@ -130,11 +130,23 @@
   `InMemoryEngineRuntime`, `adapters/mock_engine_adapter.py`의
   `MockEngineAdapter` — 둘 다 기존 Fake 로직 승격(`estimate_cost`만
   실제 호출 없음을 정직하게 반영해 0/0.0으로 조정). 전체 198개 테스트
-  통과. 남은 Task: T2-06(능력별 Agent 골격 — T2-01~T2-05 전부 의존, 지금
-  까지 만든 5개 컴포넌트를 처음 실제로 엮는 Task) → T2-07(통합 시나리오
-  테스트) → T2-08(Milestone 2 Review). 상세는 `.ai/TASKS.md` "Milestone 2"
-  섹션 참고.
-- **다음 단계**: **`T2-06`(능력별 Agent 골격 구현)**부터 진행.
+  통과. **T2-06 완료**: `agents/`에 `PlanningAgent`/`CodingAgent`/
+  `ReviewAgent`/`DocumentationAgent` 구현, Event 기반으로 T2-01~T2-05
+  전부를 실제로 엮음(Lifecycle=AgentRuntime, 선택=AgentScheduler,
+  실행=EngineRuntime+MockAdapter, Context=ContextManager, 도메인=Core
+  Engines). `InMemoryEventBus`의 재귀 publish 순서 뒤집힘을 발견해 집합
+  기반 테스트로 회피. `AgentManager`/`AgentRegistry` 프로덕션 구현체가
+  아직 없다는 공백을 문서화(향후 Task 후보). 전체 203개 테스트 통과.
+  **설계 철학 확립(2026-07-25)**: 사용자가 Architecture First/최소
+  복잡성/YAGNI/응집도 우선/점진적 확장/기존 코드 존중 6원칙을 앞으로의
+  모든 작업 기본 원칙으로 제시함(개인 기억 시스템 `feedback_design_
+  philosophy.md`에 저장). **T2-07 완료**: 새 철학을 적용해 기존 테스트를
+  먼저 점검, 실제 빈틈 2곳만 채움 — Event Store 기록 검증(T1-23
+  `FileEventStore`를 EventBus에 연결), Mission→Workflow→Task→Step
+  다단계 계획 검증. 새 파일/클래스 없음. 전체 205개 테스트 통과. 남은
+  Task: T2-08(Milestone 2 Review, 마지막 1개). 상세는 `.ai/TASKS.md`
+  "Milestone 2" 섹션 참고.
+- **다음 단계**: **`T2-08`(Milestone 2 Review)**부터 진행.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

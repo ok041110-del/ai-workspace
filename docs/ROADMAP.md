@@ -99,8 +99,9 @@ Phase 1)
 T2-01~T2-07(7개)로 확정했으나, T2-01 실제 착수 시 범위가 좁아져(아래 참고)
 T2-01~T2-08로 재분해)
 
-**진행 상태**: T2-01~T2-05 완료, T2-06~T2-08 진행 예정 (다음 Task: T2-06).
-세부 Task 목록/DoD/상태는 `.ai/TASKS.md`의 "Milestone 2" 섹션 참고.
+**진행 상태**: T2-01~T2-07 완료, T2-08 진행 예정 (다음 Task: T2-08,
+Milestone 2 Review). 세부 Task 목록/DoD/상태는 `.ai/TASKS.md`의
+"Milestone 2" 섹션 참고.
 
 > **설계 판단 (T2-01 재분해)**: 원래 T2-01은 Registry/Scheduler/Manager/
 > EventBus 4종을 한 Task로 묶고 있었으나, 실제 착수 시 "AgentRuntime
@@ -129,8 +130,8 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
 | T2-03 | Core Engines 구현 (`engines/`: `InMemoryTaskEngine`/`WorkflowEngine`/`ApprovalEngine`/`AutomationEngine`) | 4개 구현체 계약 테스트 통과 + ApprovalEngine이 4대 승인 행위(ADR-0003) 차단 검증 | T1-15 | **DONE** |
 | T2-04 | Memory 계열 구현 (`memory/`: `InMemoryMemoryEngine`, `InMemoryContextManager`) | Snapshot 생성→복원 왕복 일치 + 의존 방향(ARCHITECTURE §8 규칙 7) 준수 확인 | T1-20 | **DONE** |
 | T2-05 | Engine Runtime 최소 구현 + Mock Adapter (`runtime/engine/`: `InMemoryEngineRuntime`, `adapters/`: `MockEngineAdapter`) | `EngineRuntime.run()`이 Mock Adapter로 Task를 "실행"해 `EngineResult(success=True)` 반환 검증 | T1-19 | **DONE** |
-| T2-06 | 능력별 Agent 골격 (`agents/`: Planning/Coding/Review/Documentation(+Coordination), EventBus 구독/발행) | `MissionPlanned`→`CodeCompleted`→`ReviewCompleted`→`DocumentationCompleted` 자동 진행 검증 | T2-01~T2-05 | TODO |
-| T2-07 | 통합 시나리오 테스트 (전체 스위트 점검 + Event Store Replay + 승인 게이트 차단 시나리오) | `ruff`/`mypy`/`pytest` 전체 통과 + Milestone DoD 3개 항목이 각각 테스트로 매핑 | T2-01~T2-06 | TODO |
+| T2-06 | 능력별 Agent 골격 (`agents/`: Planning/Coding/Review/Documentation(+Coordination), EventBus 구독/발행) | `MissionPlanned`→`CodeCompleted`→`ReviewCompleted`→`DocumentationCompleted` 자동 진행 검증 | T2-01~T2-05 | **DONE** |
+| T2-07 | 통합 시나리오 테스트 (전체 스위트 점검 + Event Store Replay + 승인 게이트 차단 시나리오) | `ruff`/`mypy`/`pytest` 전체 통과 + Milestone DoD 3개 항목이 각각 테스트로 매핑 | T2-01~T2-06 | **DONE** |
 | T2-08 | Milestone 2 Review | 위 전부 DONE + 테스트 통과 상태에서 사용자 승인 | T2-01~T2-07 | TODO |
 
 ---

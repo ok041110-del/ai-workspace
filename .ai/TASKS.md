@@ -620,7 +620,31 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 - 완료 조건(DoD): `MissionPlanned`→`CodeCompleted`→`ReviewCompleted`→
   `DocumentationCompleted` Event 체인이 Agent 간 협업으로 자동 진행됨이
   테스트로 확인된다.
-- 상태: TODO
+- 상태: **DONE (2026-07-25)** — `agents/`에 `PlanningAgent`(진입점,
+  `plan_mission()` 호출로 체인 시작)/`CodingAgent`/`ReviewAgent`/
+  `DocumentationAgent` 4종 구현(Coordination은 선형 파이프라인에 불필요해
+  배제, YAGNI). 각 Agent는 생성자에서 `AgentRuntime.start_agent()`로
+  자신을 시작(T2-01)하고 `EventBus.subscribe()`로 트리거 Event를 구독.
+  `CodingAgent`/`ReviewAgent`/`DocumentationAgent`는 `EngineRuntime.run()`
+  (T2-05, Mock Adapter)으로 실행을 위임하고 `TaskEngine`(T2-03)으로 상태를
+  전이함. `DocumentationAgent`는 완료 시 `ContextManager.create_snapshot()`
+  (T2-04)으로 ARCHITECTURE.md §5의 "Context Manager → Memory Engine 갱신"
+  마무리 단계를 구현. `agents/scheduling.py`의 `find_agent_by_capability()`
+  로 `AgentScheduler`(T2-02) 사용을 이벤트 핸들러 안에 억지로 넣지 않고
+  분리해 테스트로 직접 검증. **설계 함정 발견 및 회피**: `InMemoryEventBus`
+  는 핸들러 내부에서 재귀적으로 `publish()`가 호출되면(Agent가 이벤트
+  처리 중 다음 이벤트를 발행) 동기 재귀 특성상 수신 순서가 뒤집힘(가장
+  안쪽에서 발행된 이벤트를 먼저 관측) — 테스트는 순서가 아니라 수신된
+  Event 타입의 **집합**과 최종 Task 상태(DONE)로 체인 완주를 검증해 이
+  함정을 피함. **남은 공백**: `AgentManager`/`AgentRegistry`의 프로덕션
+  구현체(`InMemory*`)가 아직 없어(T2-01에서 의도적으로 보류) 이 둘만
+  기존 Fake를 사용하고, 나머지(EventBus/Scheduler/TaskEngine/
+  EngineRuntime+MockAdapter/ContextManager)는 T2-02~05에서 만든 실제
+  구현체를 사용함. `tests/agents/test_pipeline.py`에 5개 신규 테스트
+  (전체 체인 완주, Context Snapshot 생성, Scheduler로 Capability 탐색
+  성공/실패, 4개 Agent 모두 서로 다른 Capability로 등록됨). `ruff check
+  src tests`, `mypy src`, `pytest`(203개, 기존 198개 + 신규 5개) 모두
+  통과.
 - 의존성: T2-01, T2-02, T2-03, T2-04, T2-05
 
 #### T2-07: 통합 시나리오 테스트
@@ -629,7 +653,24 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
   Replay 검증, 승인 게이트 차단 시나리오 검증을 추가한다.
 - 완료 조건(DoD): `ruff`, `mypy`, `pytest` 전체가 통과하고, Milestone 2
   Definition of Done 3개 항목이 각각 명시적 테스트로 매핑된다.
-- 상태: TODO
+- 상태: **DONE (2026-07-25)** — 사용자가 제시한 설계 철학(Architecture
+  First/최소 복잡성/YAGNI/응집도/점진적 확장/기존 코드 존중, 기억에 저장)
+  을 적용해 기존 테스트를 먼저 점검한 결과 실제 빈틈 2곳만 남았음을 확인:
+  (1) `tests/agents/test_pipeline.py`에
+  `test_event_store_records_full_pipeline_event_chain` 추가 —
+  `FileEventStore`(T1-23)를 `EventBus.subscribe(event_store.record)`로
+  연결해 DoD 1번("Event Bus+Event Store로 협업과 이벤트 기록")을 증명.
+  (2) `tests/engines/test_workflow_engine.py`에
+  `test_plan_executes_mission_workflow_task_step_hierarchy` 추가 —
+  실제 `TaskEngine`으로 생성한 Task를 `Mission`→`Workflow`→`Task`→`Step`
+  계층으로 엮어 DoD 2번의 Workflow 실행 부분을 증명. DoD 3번은 T2-06의
+  `test_mission_planned_triggers_full_event_chain`으로 이미 검증되어
+  있어 재작성하지 않음. 승인 게이트 차단도 T2-03의
+  `test_approval_action_type_covers_exactly_four_gated_actions`로 이미
+  충분히 검증되어 있어 중복 테스트를 만들지 않음(최소 복잡성/기존 코드
+  존중). 새 클래스/파일/추상화 없음 — 기존 두 테스트 파일에 테스트만
+  추가. `ruff check src tests`, `mypy src`, `pytest`(205개, 기존 203개 +
+  신규 2개) 모두 통과.
 - 의존성: T2-01 ~ T2-06
 
 #### T2-08: Milestone 2 Review
@@ -1089,3 +1130,24 @@ success=True"를 직접 명시하는 테스트 포함) 신규 테스트. `ruff c
 tests`, `mypy src`, `pytest`(198개, 기존 186개 + 신규 12개) 모두 통과.
 다음 Task: **T2-06** (능력별 Agent 골격 구현 — T2-01~T2-05 전부에 의존,
 지금까지 만든 5개 컴포넌트를 실제로 엮는 첫 Task). |
+| 2026-07-25 | **T2-06 완료: 능력별 Agent 골격**(§2.4 Stage Checkpoint
+4개 경계 모두 발동. Analysis에서 Sonnet/Low→**Sonnet/High** 상향 — 5개
+컴포넌트를 처음 실제로 엮는 Milestone 2 핵심 통합 작업이라 판단, 이후
+3개 경계는 "동일" 유지). 상세 내용은 위 T2-06 항목의 "상태" 필드 참고.
+요약: `PlanningAgent`/`CodingAgent`/`ReviewAgent`/`DocumentationAgent`
+4종을 Event 기반으로 연결해 DoD의 4단계 Event 체인을 구현·검증함.
+`InMemoryEventBus`의 재귀 publish 순서 뒤집힘 함정을 설계 단계에서
+발견해 집합 기반 검증으로 회피(순서 기반 assertion이었다면 실패했을
+것). `AgentManager`/`AgentRegistry` 프로덕션 구현체 공백을 문서화(향후
+Task 후보). `pytest`(203개, 기존 198개 + 신규 5개), `ruff`, `mypy` 모두
+통과. 다음 Task: **T2-07** (통합 시나리오 테스트 — Milestone 2 DoD 3개
+항목을 end-to-end로 최종 증명). |
+| 2026-07-25 | **설계 철학 확립**: 사용자가 Architecture First/최소
+복잡성/YAGNI/응집도 우선/점진적 확장/기존 코드 존중 6원칙을 앞으로의
+모든 작업 기본 원칙으로 제시함(기억 시스템에 저장). **T2-07 완료: 통합
+시나리오 테스트**(§2.4 Stage Checkpoint 4개 경계 모두 발동. Analysis에서
+Sonnet/High→**Sonnet/Medium** 하향 — 새 컴포넌트를 만들기보다 이미 만든
+것들을 검증·연결하는 작업이라 판단). 새 설계 철학을 적용해 기존 테스트를
+먼저 점검한 뒤 실제 빈틈 2곳만 채움(상세는 위 T2-07 항목 참고). 새 파일/
+클래스 없음. `pytest`(205개, 기존 203개 + 신규 2개), `ruff`, `mypy` 모두
+통과. 다음 Task: **T2-08** (Milestone 2 Review — 최종 승인 요청). |
