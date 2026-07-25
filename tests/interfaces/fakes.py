@@ -53,7 +53,7 @@ from ai_workspace.interfaces.interaction_engine import (
     NormalizedRequest,
     UnsupportedSurfaceError,
 )
-from ai_workspace.interfaces.llm_policy_engine import LLMPolicyEngine, PolicyNotFoundError
+from ai_workspace.interfaces.llm_policy_engine import LLMPolicyEngine
 from ai_workspace.interfaces.memory_engine import MemoryEngine
 from ai_workspace.interfaces.project_repository import ProjectNotFoundError, ProjectRepository
 from ai_workspace.interfaces.task_engine import TaskEngine, TaskNotFoundError
@@ -495,7 +495,5 @@ class FakeLLMPolicyEngine(LLMPolicyEngine):
     def __init__(self, rules: dict[AgentRole, LLMPolicyDecision] | None = None) -> None:
         self._rules = dict(rules) if rules is not None else {}
 
-    def select(self, role: AgentRole) -> LLMPolicyDecision:
-        if role not in self._rules:
-            raise PolicyNotFoundError(role)
-        return self._rules[role]
+    def select(self, role: AgentRole) -> LLMPolicyDecision | None:
+        return self._rules.get(role)

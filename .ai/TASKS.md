@@ -1730,6 +1730,47 @@ Event ID 생성 방식 불일치(M2 이월 부채 #3)를 정리하려 `src/ai_wo
   신규 10개) 모두 통과.
 - 의존성: T1-16
 
+#### M5-T02: Agent Runtime이 LLMPolicyEngine을 통해 정책을 조회하도록 연결
+- 목적: `.ai/RULES.md` §7 M3 단계(Agent가 Policy 참조)를 소급 구현해,
+  Agent 시작 시점에 Role별 LLM 정책이 실제로 조회·기록되게 한다.
+- 작업 내용: `AgentRuntime`이 `LLMPolicyEngine`을 선택적으로 주입받아
+  `start_agent()` 시점에 정책을 조회해 `AgentSession`에 기록.
+- 완료 조건(DoD): Role에 정책이 있으면 실제로 조회·기록됨, 없으면
+  `None`으로 정상 처리됨(예외 없음), `pytest`/`ruff`/`mypy` 통과. 실제
+  Engine/Adapter 선택 반영은 포함하지 않음(M5-T05 Multi-Engine 이후).
+- 상태: **DONE (2026-07-26)** — **M5-T01 인터페이스 자체 정정(자체
+  발견 아닌 사용자 제안)**: 착수 전 사용자가 "정책 없음을
+  `PolicyNotFoundError` 예외 대신 `None`을 정상 결과로 반환하도록
+  설계하라"고 제안 — Policy Engine은 항상 답을 주는 컴포넌트가 되고
+  Runtime은 예외 처리 없이 생명주기 관리에만 집중할 수 있다는 이유.
+  M5-T01에서 이미 커밋된 `LLMPolicyEngine.select()`/
+  `InMemoryLLMPolicyEngine`/`FakeLLMPolicyEngine`을 이번 Task에서
+  즉시 수정 — `PolicyNotFoundError` 완전 제거(`select()`가 `LLMPolicyDecision
+  | None` 반환), 관련 테스트 전부 "예외 발생" 검증에서 "None 반환" 검증으로
+  갱신(같은 Milestone 내 하루 안에 나온 설계 개선이라 별도 마이그레이션
+  경로 없이 바로 반영, "M2/M3 완료 기능 수정 금지"는 이 경우에 해당하지
+  않음 — M5 자신의 아주 최근 작업에 대한 정상적인 반복 개선).
+  **연결 구현**: `AgentSession`(domain)에 `llm_policy_decision:
+  LLMPolicyDecision | None = None` 필드 추가 — 상태처럼 변할 수 있는
+  값이 아니라 시작 시점에 한 번 결정되는 값이라 `AgentSession`에 직접
+  캐싱해도 기존 "status는 중복 보관하지 않는다" 원칙과 충돌하지 않음(새
+  `get_policy_decision()` 메서드 불필요, 반환된 `AgentSession`을 그대로
+  읽으면 됨). `AgentRuntime.__init__`에 `llm_policy_engine:
+  LLMPolicyEngine | None = None`(선택적 — 기존 모든 호출부는 그대로 동작,
+  하위 호환) 추가, `start_agent()`가 주어지면 `select(role)`을 호출해
+  세션에 기록. **아직 하지 않은 것(범위 밖, M5-T05로 이월)**: 실제
+  `ManagedEngineRuntime`/`ClaudeCodeEngineAdapter`의 model이 이 정책을
+  따라 바뀌지는 않음 — 현재 Runtime은 Adapter를 하나만 등록할 수 있어
+  Role별 실제 모델 전환이 인프라적으로 불가능(여러 Adapter가 실제로
+  생기는 M5-T05 이후 의미가 생김). `tests/interfaces/`+`tests/engines/`
+  의 `test_llm_policy_engine.py`(예외→None 반환으로 갱신) +
+  `tests/runtime/agent/test_agent_runtime.py`에 4개 신규 테스트(정책
+  없음/있음/역할 불일치/**실제 `docs/llm_policy.example.yaml`을 로드한
+  진짜 `InMemoryLLMPolicyEngine`으로 전체 조립해 검증**하는 통합
+  테스트 포함). `ruff check src tests`, `mypy src`, `pytest`(345개,
+  기존 341개 + 신규 4개, 기존 테스트 내용 일부 갱신) 모두 통과.
+- 의존성: M5-T01
+
 ---
 
 ## 진행 로그

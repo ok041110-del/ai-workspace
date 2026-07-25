@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
-from tests.interfaces.fakes import FakeAgentManager, FakeAgentRegistry
+from tests.interfaces.fakes import FakeAgentManager, FakeAgentRegistry, FakeLLMPolicyEngine
 
 from ai_workspace.domain.agent import AgentCapability, AgentRole, AgentStatus
+from ai_workspace.domain.llm_policy import LLMEffort, LLMModel, LLMPolicyDecision, LLMProvider
+from ai_workspace.engines.llm_policy_engine import InMemoryLLMPolicyEngine
 from ai_workspace.interfaces.agent_registry import AgentNotRegisteredError
 from ai_workspace.runtime.agent.agent_runtime import AgentRuntime, AgentSessionNotFoundError
+from ai_workspace.storage.llm_policy_loader import load_llm_policy_rules
+
+_EXAMPLE_YAML = Path(__file__).resolve().parents[3] / "docs" / "llm_policy.example.yaml"
 
 
 def make_runtime(
@@ -114,3 +121,59 @@ def test_stop_agent_twice_raises_session_not_found_on_second_call() -> None:
 
     with pytest.raises(AgentSessionNotFoundError):
         runtime.stop_agent(session.session_id)
+
+
+def test_start_agent_without_llm_policy_engine_leaves_decision_none() -> None:
+    runtime = make_runtime()
+
+    session = runtime.start_agent(AgentRole.CODING)
+
+    assert session.llm_policy_decision is None
+
+
+def test_start_agent_records_llm_policy_decision_when_engine_provided() -> None:
+    decision = LLMPolicyDecision(
+        model=LLMModel(LLMProvider.ANTHROPIC, "opus"), effort=LLMEffort.HIGH
+    )
+    llm_policy_engine = FakeLLMPolicyEngine({AgentRole.CODING: decision})
+    runtime = AgentRuntime(
+        agent_manager=FakeAgentManager(),
+        agent_registry=FakeAgentRegistry(),
+        llm_policy_engine=llm_policy_engine,
+    )
+
+    session = runtime.start_agent(AgentRole.CODING)
+
+    assert session.llm_policy_decision == decision
+
+
+def test_start_agent_records_none_when_role_has_no_policy() -> None:
+    llm_policy_engine = FakeLLMPolicyEngine({})
+    runtime = AgentRuntime(
+        agent_manager=FakeAgentManager(),
+        agent_registry=FakeAgentRegistry(),
+        llm_policy_engine=llm_policy_engine,
+    )
+
+    session = runtime.start_agent(AgentRole.COORDINATOR)
+
+    assert session.llm_policy_decision is None
+
+
+def test_start_agent_reflects_real_policy_loaded_from_example_yaml() -> None:
+    """M5-T02: 실제 `InMemoryLLMPolicyEngine`을 실제 `docs/llm_policy.
+    example.yaml`로 구성해 AgentRuntime에 연결하면, start_agent() 시점에
+    해당 Role의 실제 정책이 세션에 기록됨을 증명한다(가짜가 아닌 전체
+    조립으로 "연결"을 검증)."""
+    llm_policy_engine = InMemoryLLMPolicyEngine(load_llm_policy_rules(_EXAMPLE_YAML))
+    runtime = AgentRuntime(
+        agent_manager=FakeAgentManager(),
+        agent_registry=FakeAgentRegistry(),
+        llm_policy_engine=llm_policy_engine,
+    )
+
+    session = runtime.start_agent(AgentRole.CODING)
+
+    assert session.llm_policy_decision == LLMPolicyDecision(
+        model=LLMModel(LLMProvider.ANTHROPIC, "opus"), effort=LLMEffort.HIGH
+    )

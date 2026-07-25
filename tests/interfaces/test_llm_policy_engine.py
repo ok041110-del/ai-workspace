@@ -1,8 +1,5 @@
-import pytest
-
 from ai_workspace.domain.agent import AgentRole
 from ai_workspace.domain.llm_policy import LLMEffort, LLMModel, LLMPolicyDecision, LLMProvider
-from ai_workspace.interfaces.llm_policy_engine import PolicyNotFoundError
 
 from .fakes import FakeLLMPolicyEngine
 
@@ -16,8 +13,7 @@ def test_select_returns_configured_decision() -> None:
     assert engine.select(AgentRole.CODING) == decision
 
 
-def test_select_unknown_role_raises_policy_not_found() -> None:
+def test_select_unknown_role_returns_none() -> None:
     engine = FakeLLMPolicyEngine()
 
-    with pytest.raises(PolicyNotFoundError):
-        engine.select(AgentRole.COORDINATOR)
+    assert engine.select(AgentRole.COORDINATOR) is None

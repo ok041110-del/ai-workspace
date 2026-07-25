@@ -218,8 +218,24 @@
   `docs/llm_policy.example.yaml`의 key를 `AgentRole.value`와 정확히
   일치하도록 수정(이제부터 실제로 파싱되는 설정 파일). 알 수 없는
   role/provider/effort는 `InvalidLLMPolicyRuleError`로 명확히 실패.
-  전체 341개 테스트 통과. 다음은 **M5-T02**(Agent가 LLMPolicyEngine을
-  통해 Model/Effort·Engine 선택).
+  전체 341개 테스트 통과.
+- **M5-T02 완료(2026-07-26)**: 착수 전 사용자가 "`PolicyNotFoundError`
+  예외 대신 `None`을 정상 결과로 반환하도록 설계하라"고 제안 —
+  **M5-T01에서 이미 커밋된 `LLMPolicyEngine.select()`를 즉시 정정**
+  (`PolicyNotFoundError` 완전 제거, `LLMPolicyDecision | None` 반환).
+  같은 Milestone 내 하루 안에 나온 설계 개선이라 "M2/M3 완료 기능 수정
+  금지" 원칙과 무관하게 바로 반영. **연결**: `AgentSession`에
+  `llm_policy_decision: LLMPolicyDecision | None = None` 필드 추가(상태와
+  달리 시작 시 한 번 결정되는 값이라 세션에 직접 캐싱해도 "status 중복
+  보관 금지" 원칙과 무충돌). `AgentRuntime`이 선택적
+  `llm_policy_engine`을 주입받아 `start_agent()` 시점에 정책을 조회·
+  기록(기존 호출부는 전부 하위 호환). **실제 `docs/llm_policy.example.
+  yaml`을 로드한 진짜 `InMemoryLLMPolicyEngine`으로 전체 조립해 검증하는
+  통합 테스트**로 "연결"을 실증. **아직 하지 않은 것(M5-T05로 이월)**:
+  실제 Adapter의 model이 이 정책을 따라 바뀌지는 않음 —
+  `ManagedEngineRuntime`이 Adapter를 하나만 등록할 수 있어 여러 Adapter가
+  실제로 생기기 전까지는 의미가 없음. 전체 345개 테스트 통과. 다음은
+  **M5-T03**(`DevelopmentContext` 도입 + Coding/Review Agent 강화).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

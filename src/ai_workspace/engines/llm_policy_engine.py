@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ai_workspace.domain.agent import AgentRole
 from ai_workspace.domain.llm_policy import LLMPolicyDecision
-from ai_workspace.interfaces.llm_policy_engine import LLMPolicyEngine, PolicyNotFoundError
+from ai_workspace.interfaces.llm_policy_engine import LLMPolicyEngine
 
 
 class InMemoryLLMPolicyEngine(LLMPolicyEngine):
@@ -14,7 +14,5 @@ class InMemoryLLMPolicyEngine(LLMPolicyEngine):
     def __init__(self, rules: dict[AgentRole, LLMPolicyDecision]) -> None:
         self._rules = dict(rules)
 
-    def select(self, role: AgentRole) -> LLMPolicyDecision:
-        if role not in self._rules:
-            raise PolicyNotFoundError(role)
-        return self._rules[role]
+    def select(self, role: AgentRole) -> LLMPolicyDecision | None:
+        return self._rules.get(role)

@@ -1,9 +1,6 @@
-import pytest
-
 from ai_workspace.domain.agent import AgentRole
 from ai_workspace.domain.llm_policy import LLMEffort, LLMModel, LLMPolicyDecision, LLMProvider
 from ai_workspace.engines.llm_policy_engine import InMemoryLLMPolicyEngine
-from ai_workspace.interfaces.llm_policy_engine import PolicyNotFoundError
 
 
 def test_select_returns_configured_decision() -> None:
@@ -15,11 +12,10 @@ def test_select_returns_configured_decision() -> None:
     assert engine.select(AgentRole.CODING) == decision
 
 
-def test_select_unknown_role_raises_policy_not_found() -> None:
+def test_select_unknown_role_returns_none() -> None:
     engine = InMemoryLLMPolicyEngine({})
 
-    with pytest.raises(PolicyNotFoundError):
-        engine.select(AgentRole.RESEARCH)
+    assert engine.select(AgentRole.RESEARCH) is None
 
 
 def test_rules_are_copied_defensively() -> None:
@@ -28,5 +24,4 @@ def test_rules_are_copied_defensively() -> None:
     engine = InMemoryLLMPolicyEngine(rules)
     rules[AgentRole.RESEARCH] = decision
 
-    with pytest.raises(PolicyNotFoundError):
-        engine.select(AgentRole.RESEARCH)
+    assert engine.select(AgentRole.RESEARCH) is None
