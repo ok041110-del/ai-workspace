@@ -99,6 +99,9 @@ class WorkspaceCore:
     def save_project(self, project: Project) -> None:
         self._project_repository.save(project)
 
+    def list_projects(self) -> list[Project]:
+        return self._project_repository.list_projects()
+
     def start_session(self, project_id: str | None = None) -> WorkspaceSession:
         session_id = f"session-{next(self._session_id_generator)}"
         session = WorkspaceSession(session_id=session_id, current_project_id=project_id)

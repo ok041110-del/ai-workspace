@@ -59,6 +59,34 @@ def test_list_projects_empty_when_no_projects(tmp_path: Path) -> None:
     assert repo.list_projects() == []
 
 
+def test_load_returns_independent_project_each_call(tmp_path: Path) -> None:
+    """M4-T05: `load()`가 매번 새 `Project` 인스턴스를 만들어 반환하므로,
+    호출자가 반환된 객체를 변경해도 저장소나 이후 조회 결과에 영향을 주지
+    않음을 증명한다(다중 프로젝트 운용 시 객체 독립성)."""
+    repo = FileProjectRepository(tmp_path)
+    repo.save(Project(project_id="p1", name="Demo", goal="목표"))
+
+    first = repo.load("p1")
+    first.name = "변경됨"
+    second = repo.load("p1")
+
+    assert first is not second
+    assert second.name == "Demo"
+
+
+def test_list_projects_returns_independent_project_objects(tmp_path: Path) -> None:
+    repo = FileProjectRepository(tmp_path)
+    repo.save(Project(project_id="p1", name="A", goal="목표"))
+    repo.save(Project(project_id="p2", name="B", goal="목표"))
+
+    projects = repo.list_projects()
+    for project in projects:
+        project.name = "오염됨"
+
+    reloaded = {p.project_id: p.name for p in repo.list_projects()}
+    assert reloaded == {"p1": "A", "p2": "B"}
+
+
 def test_creates_base_dir_if_missing(tmp_path: Path) -> None:
     target = tmp_path / "nested" / "dir"
 
@@ -91,3 +119,20 @@ def test_workspace_core_accepts_file_project_repository_without_core_changes(
     )
 
     assert core.load_project("p1").name == "Demo"
+
+
+def test_workspace_core_lists_multiple_projects_via_file_repository(tmp_path: Path) -> None:
+    repo = FileProjectRepository(tmp_path)
+    repo.save(Project(project_id="p1", name="A", goal="목표"))
+    repo.save(Project(project_id="p2", name="B", goal="목표"))
+    core = WorkspaceCore(
+        project_repository=repo,
+        workflow_engine=FakeWorkflowEngine(),
+        agent_registry=FakeAgentRegistry(),
+        agent_scheduler=FakeAgentScheduler(),
+        agent_manager=FakeAgentManager(),
+        event_bus=FakeEventBus(),
+        engine_runtime=FakeEngineRuntime(),
+    )
+
+    assert {p.project_id for p in core.list_projects()} == {"p1", "p2"}

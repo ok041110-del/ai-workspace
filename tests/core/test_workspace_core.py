@@ -87,6 +87,40 @@ def test_save_project_delegates_to_project_repository() -> None:
     assert project_repository.load("p1") == project
 
 
+def test_list_projects_delegates_to_project_repository() -> None:
+    project_repository = FakeProjectRepository()
+    project_repository.save(Project(project_id="p1", name="A", goal="목표"))
+    project_repository.save(Project(project_id="p2", name="B", goal="목표"))
+    core = make_core(project_repository=project_repository)
+
+    projects = core.list_projects()
+
+    assert {p.project_id for p in projects} == {"p1", "p2"}
+
+
+def test_multiple_workspace_sessions_for_different_projects_are_isolated() -> None:
+    """M4-T05: 서로 다른 Project에 묶인 WorkspaceSession을 여러 개 동시에
+    운용해도 한 세션의 상태 변경이 다른 세션에 전혀 영향을 주지 않음을
+    증명한다(다중 프로젝트 운용 검증)."""
+    core = make_core()
+    session_a = core.start_session(project_id="p1")
+    session_b = core.start_session(project_id="p2")
+
+    core.update_session(session_a.session_id, current_mission_id="m1")
+    core.update_session(session_b.session_id, current_mission_id="m2")
+
+    assert core.get_session(session_a.session_id).current_project_id == "p1"
+    assert core.get_session(session_a.session_id).current_mission_id == "m1"
+    assert core.get_session(session_b.session_id).current_project_id == "p2"
+    assert core.get_session(session_b.session_id).current_mission_id == "m2"
+
+    core.end_session(session_a.session_id)
+
+    with pytest.raises(WorkspaceSessionNotFoundError):
+        core.get_session(session_a.session_id)
+    assert core.get_session(session_b.session_id).current_project_id == "p2"
+
+
 def test_load_project_missing_raises_error() -> None:
     core = make_core()
 

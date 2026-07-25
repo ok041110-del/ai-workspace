@@ -1362,6 +1362,37 @@ Review 완료 + Interface First Review 완료 + 테스트 통과 + 문서 최신
   신규 3개) 모두 통과.
 - 의존성: T2-06, M3-T01, M3-T02, M3-T03, M3-T06
 
+#### M4-T05: 다중 프로젝트 운용 검증
+- 목적: AI Workspace가 여러 Project를 안전하게 동시에 관리할 수 있음을
+  Repository→Core→CLI 전체 경로로 증명한다.
+- 작업 내용: `WorkspaceCore.list_projects()` 추가, CLI `project list`
+  명령 추가, WorkspaceSession 상태 격리 검증, Project 객체 독립성 검증.
+- 완료 조건(DoD): 여러 Project를 CLI로 조회 가능, 서로 다른 Project에
+  묶인 WorkspaceSession들의 상태가 서로 간섭하지 않음을 증명, `load()`가
+  반환하는 Project 객체가 서로 독립적임을 증명, `pytest`/`ruff`/`mypy`
+  통과.
+- 상태: **DONE (2026-07-26)** — `WorkspaceCore.list_projects()` 추가
+  (`load_project`/`save_project`와 동일 패턴, `project_repository.
+  list_projects()`에 위임 — 이미 T1-23에 구현되어 있던 메서드를 그대로
+  재사용). `cli/main.py`에 `project list` 서브커맨드 추가(M4-T02에서
+  유보했던 항목). **사용자가 요청한 2가지 보강**: (1) Project 객체
+  자체의 독립성 검증 — `tests/storage/test_file_project_repository.py`에
+  `test_load_returns_independent_project_each_call`/
+  `test_list_projects_returns_independent_project_objects` 추가(반환된
+  Project를 변경해도 저장소나 재조회 결과에 영향 없음을 증명 —
+  `FileProjectRepository.load()`가 매번 JSON에서 새 인스턴스를 생성하는
+  기존 구현 덕분에 이미 성립, 회귀 방지용으로 고정). (2) CLI 테스트는
+  실제 `FileProjectRepository`를 거치는 통합 경로로 작성 — 기존 CLI
+  테스트 전부가 이미 mock 없이 `tmp_path` 기반 실제 파일 저장소를
+  사용하는 관례를 그대로 따름(`test_list_shows_multiple_projects_end_to_end`).
+  `tests/core/test_workspace_core.py`에 `list_projects` 위임 테스트 +
+  `test_multiple_workspace_sessions_for_different_projects_are_isolated`
+  (서로 다른 Project에 묶인 2개 WorkspaceSession의 상태 변경이 서로
+  영향을 주지 않고, 하나를 종료해도 다른 하나는 그대로 유지됨을 증명)
+  추가. 새 Interface·새 클래스 없음. `ruff check src tests`, `mypy src`,
+  `pytest`(307개, 기존 300개 + 신규 7개) 모두 통과.
+- 의존성: M4-T02, T1-22, T1-23
+
 ---
 
 ## 진행 로그

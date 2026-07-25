@@ -204,6 +204,14 @@
   직접 검증 — 가장 안쪽 `documentation_completed`가 먼저,
   `mission_planned`이 마지막), (3) 파일명은 Milestone 번호 대신 기능
   중심으로 명명. 전체 300개 테스트 통과.
+- **M4-T05 완료(2026-07-26)**: `WorkspaceCore.list_projects()` 추가
+  (`load_project`/`save_project`와 동일 패턴). CLI `project list` 명령
+  추가(M4-T02에서 유보한 항목). 사용자 요청 2가지 반영: Project 객체
+  독립성 검증(`FileProjectRepository.load()`가 매번 새 인스턴스를 생성해
+  반환된 객체를 변경해도 저장소/재조회에 영향 없음을 고정하는 테스트),
+  CLI 테스트는 실제 `FileProjectRepository`를 거치는 통합 경로로 작성.
+  서로 다른 Project에 묶인 WorkspaceSession 2개가 서로 간섭하지 않음도
+  검증. 새 Interface·클래스 없음. 전체 307개 테스트 통과.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

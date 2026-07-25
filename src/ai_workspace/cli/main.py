@@ -56,6 +56,8 @@ def _build_parser() -> argparse.ArgumentParser:
     show_parser = project_subparsers.add_parser("show", help="Project 조회")
     show_parser.add_argument("project_id")
 
+    project_subparsers.add_parser("list", help="Project 목록 조회")
+
     return parser
 
 
@@ -82,6 +84,16 @@ def _show_project(core: WorkspaceCore, args: argparse.Namespace) -> int:
     return 0
 
 
+def _list_projects(core: WorkspaceCore, args: argparse.Namespace) -> int:
+    projects = core.list_projects()
+    if not projects:
+        print("등록된 Project가 없습니다.")
+        return 0
+    for project in projects:
+        print(f"{project.project_id}\t{project.name}\t{project.status.value}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -89,6 +101,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.project_command == "create":
         return _create_project(core, args)
+    if args.project_command == "list":
+        return _list_projects(core, args)
     return _show_project(core, args)
 
 
