@@ -2,12 +2,20 @@ from __future__ import annotations
 
 import pytest
 from tests.interfaces.fakes import FakeEngineRuntime
+from tests.runtime.engine.test_managed_engine_runtime import SelectivelyFailingEngineAdapter
 
 from ai_workspace.adapters.mock_engine_adapter import MockEngineAdapter
 from ai_workspace.domain.retry_policy import InvalidRetryPolicyError, RetryPolicy
 from ai_workspace.domain.task import Task
-from ai_workspace.interfaces.engine_adapter import EngineAdapter, EngineResult, EngineSessionStatus
+from ai_workspace.events.event_bus import InMemoryEventBus
+from ai_workspace.interfaces.engine_adapter import (
+    EngineAdapter,
+    EngineExecutionError,
+    EngineResult,
+    EngineSessionStatus,
+)
 from ai_workspace.interfaces.engine_runtime import EngineRuntime
+from ai_workspace.runtime.engine.managed_engine_runtime import ManagedEngineRuntime
 from ai_workspace.runtime.engine.recovering_engine_runtime import RecoveringEngineRuntime
 
 
@@ -144,6 +152,20 @@ def test_run_parallel_delegates_to_inner_runtime() -> None:
     results = runtime.run_parallel([make_task("t1"), make_task("t2")])
 
     assert [r.success for r in results] == [True, True]
+
+
+def test_run_parallel_does_not_retry_individual_task_failures() -> None:
+    """ADR-0023/M4-T06으로 확인·기록한 알려진 범위: `run_parallel()`은
+    `inner.run_parallel()`에 그대로 위임하며 `self.run()`의 재시도 로직을
+    거치지 않는다 — 따라서 병렬 배치 안의 개별 Task 실패는
+    `RecoveringEngineRuntime`을 통해서도 재시도되지 않는다(단일 `run()`
+    호출과의 차이점, 필요 시 이후 Task로 이월)."""
+    managed = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    managed.register_engine("selective", SelectivelyFailingEngineAdapter(failing_task_id="t2"))
+    runtime = RecoveringEngineRuntime(inner=managed, retry_policy=RetryPolicy(max_attempts=3))
+
+    with pytest.raises(EngineExecutionError):
+        runtime.run_parallel([make_task("t1"), make_task("t2"), make_task("t3")])
 
 
 def test_retry_policy_defaults_to_three_attempts() -> None:

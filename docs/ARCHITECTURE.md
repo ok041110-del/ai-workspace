@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.7.0 |
+| 문서 버전 | v0.8.0 |
 | 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1 — 구현 진행 중, T1-25까지 완료 / 다음 T1-26) |
+| 상태 | Draft (Milestone 1~3 완료, Milestone 4 진행 중 — ADR-0023으로 §3.4/§3.9 병렬 실행 책임 경계 명시) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -199,7 +199,11 @@ Event Bus를 통한 수평 결합이며, Event Store는 Bus의 독립 구독자�
 Agent의 실행을 담당하는 계층.
 - **Agent Registry** (`AgentRegistry`): Agent 등록/조회/제거.
 - **Agent Scheduler** (`AgentScheduler`): **Capability 기준** 실행 가능 Agent
-  선택, 병렬 실행 관리, 우선순위·순서 결정.
+  선택, 병렬 실행 관리, 우선순위·순서 결정. **"병렬 실행 관리"의 의미
+  (ADR-0023)**: `select(candidates, capability, max_count)`로 **동시에
+  활동할 Agent 후보를 최대 max_count개 선택**하는 정책 결정만 한다 —
+  선택된 Agent를 실제로 동시에 실행시키는 메커니즘은 갖지 않는다(그
+  메커니즘은 3.9 Engine Runtime의 `run_parallel()` 책임).
 - **Agent Manager** (`AgentManager`): Agent 생성/생명주기/상태 관리.
 - **Event Bus** (`EventBus`): Event 발행/구독/Agent 간 통신.
 
@@ -240,7 +244,12 @@ Task · Workflow · Approval · Automation Engine. Agent가 사용하는 능력 
 Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
 - **책임**: **엔진 선택**(capabilities/estimate_cost/supports_parallel 기반),
   **엔진 세션 풀 관리**(Engine Adapter의 create_session/destroy_session 활용),
-  **병렬 실행 관리**.
+  **병렬 실행 관리**. **"병렬 실행 관리"의 의미(ADR-0023)**:
+  `run_parallel(tasks)`로 **여러 Engine Task 실행을 실제로 동시에
+  수행**하는 메커니즘 자체를 책임진다(`ManagedEngineRuntime`은
+  `ThreadPoolExecutor` 기반, M4-T06) — 3.4 Agent Scheduler의 "후보 선택"
+  과는 다른 층위다: Scheduler는 누구를 동시에 활동시킬지 고르고,
+  Engine Runtime은 실제로 여러 실행을 동시에 수행한다.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 

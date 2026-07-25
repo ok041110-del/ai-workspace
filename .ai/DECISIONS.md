@@ -664,3 +664,45 @@
   §4 도입부에 구현 순서 추가). 앞으로 모든 Task의 설계 판단·구현·
   리팩터링은 이 통합된 규칙을 기준으로 한다. 소스 코드(`src/`, `tests/`)
   변경 없음.
+
+## ADR-0023: `run_parallel()` 병렬 실행 책임 경계 확정 (AgentScheduler vs EngineRuntime)
+
+- 상태: 승인됨 (2026-07-26, 사용자 지시로 확정)
+- 날짜: 2026-07-26
+- 배경: M4-T06(`run_parallel` 실제 동시성 검증) 착수 중,
+  `docs/ARCHITECTURE.md` §3.4(Agent Scheduler)와 §3.9(Engine Runtime)
+  양쪽 모두 "병렬 실행"을 자신의 책임으로 서술하고 있어(§3.4 "병렬 실행
+  관리", §3.9/ADR-0016 "병렬 실행을 담당") 두 컴포넌트 사이의 책임 경계가
+  불명확했다. 실제 구현(`AgentScheduler.select()` vs
+  `EngineRuntime.run_parallel()`)의 시그니처를 대조해 경계를 확정한다.
+- 결정: 두 컴포넌트의 "병렬"은 서로 다른 층위의 책임이며 충돌하지 않는다.
+  - **AgentScheduler(선택/할당 책임)**: `select(candidates, capability,
+    max_count)`로 **동시에 활동할 수 있는 Agent 후보를 최대 max_count개
+    선택**하는 정책 결정만 한다. 선택된 Agent들을 실제로 동시에
+    실행시키는 메커니즘은 갖지 않는다 — 각 Agent가 이후 독립적으로
+    Event를 구독·처리하면서 결과적으로 동시에 활동하게 될 뿐이다.
+  - **EngineRuntime(실행 책임)**: `run_parallel(tasks)`로 **여러 Engine
+    Task 실행을 실제로 동시에 수행**하는 메커니즘 자체를 책임진다. 이번
+    ADR로 `ManagedEngineRuntime.run_parallel()`을 `ThreadPoolExecutor`
+    기반 실제 동시 실행으로 구현한다(기존에는 순차 반복 호출).
+  - 요약: **"누구를 동시에 활동시킬지 고르는 것"은 AgentScheduler,
+    "실제로 여러 실행을 동시에 수행하는 것"은 EngineRuntime.**
+- 대안:
+  - AgentScheduler에도 실행 메커니즘을 두는 방안 — Agent 실행과 Engine
+    실행이라는 서로 다른 층위의 동시성을 한 컴포넌트가 떠안게 되어
+    ARCHITECTURE.md §8 의존 방향(Agent Runtime → Engine Runtime)과
+    책임 분리 원칙에 어긋남 (기각).
+  - 두 컴포넌트 문서에서 "병렬" 표현을 아예 제거 — 실제로 둘 다 병렬성과
+    관련이 있으므로 표현 자체를 지우기보다 의미를 구체화하는 편이
+    맞다고 판단 (기각).
+- 이유: 시그니처가 이미 답을 말하고 있다 — `select()`는 `list[Agent]`를
+  반환하는 순수 선택 함수이고, `run_parallel()`은 `list[EngineResult]`를
+  반환하는 실행 함수다. 문서의 "병렬" 표현이 겹쳐 보였을 뿐, 실제
+  책임은 처음부터 겹치지 않았다.
+- 결과/영향: `docs/ARCHITECTURE.md` §3.4/§3.9에 위 경계를 명시하는 문장
+  추가. `runtime/engine/managed_engine_runtime.py`의 `run_parallel()`을
+  `ThreadPoolExecutor`로 재구현(입력 순서 보장 계약은 그대로 유지).
+  `RecoveringEngineRuntime.run_parallel()`은 이번 ADR 범위에서 수정하지
+  않음 — 여전히 `inner.run_parallel()`에 그대로 위임하므로, 병렬 배치
+  안의 개별 Task 재시도는 지원하지 않는다(M4-T06에서 테스트로 확인·
+  기록, 필요 시 이후 Task로 이월).

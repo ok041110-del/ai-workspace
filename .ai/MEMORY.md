@@ -212,6 +212,17 @@
   CLI 테스트는 실제 `FileProjectRepository`를 거치는 통합 경로로 작성.
   서로 다른 Project에 묶인 WorkspaceSession 2개가 서로 간섭하지 않음도
   검증. 새 Interface·클래스 없음. 전체 307개 테스트 통과.
+- **M4-T06 완료(2026-07-26, Effort High 승인)**: **ADR-0023 신규** —
+  `AgentScheduler.select()`(선택 책임)와 `EngineRuntime.run_parallel()`
+  (실행 책임)의 병렬 경계를 확정, `docs/ARCHITECTURE.md`(v0.8.0)에 반영.
+  `ManagedEngineRuntime.run_parallel()`을 `ThreadPoolExecutor` 기반 실제
+  동시 실행으로 재구현(기존 순차 반복 대체, 입력 순서 보장 계약 유지).
+  실제 동시 실행을 시간으로 증명(0.2초 지연 3개 Task가 0.4초 미만 완료,
+  5회 연속 확인), 독립 실패 처리(`with` 블록의 `shutdown(wait=True)`
+  덕분에 예외 전파 전 모든 Task 완료 보장) 검증. 사용자 지시대로
+  `RecoveringEngineRuntime`은 수정하지 않고, `run_parallel()`이 병렬
+  배치 안의 개별 Task 재시도를 지원하지 않는다는 것을 테스트로 확인·
+  기록(신규 기술 부채). 전체 312개 테스트 통과.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

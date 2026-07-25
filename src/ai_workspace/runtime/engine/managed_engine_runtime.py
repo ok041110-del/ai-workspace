@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_adapter import (
@@ -36,6 +37,14 @@ class ManagedEngineRuntime(EngineRuntime):
     실패로 처리하고 `adapter.cancel()`을 호출해 어댑터에 취소를
     알릴 뿐이다(진짜 실행 엔진이 이를 어떻게 받아들일지는 M3-T02 이후
     실제 Adapter 구현에 달려 있다 — 지금은 구조만 제공한다).
+
+    `run_parallel()`은 `ThreadPoolExecutor`로 각 Task의 `run()`을 실제로
+    동시에 실행한다(ADR-0023, M4-T06 — 이전에는 순차 반복 호출이었음).
+    반환 목록은 `EngineRuntime.run_parallel()` 계약대로 입력 순서를
+    보장하며, 한 Task의 실패/예외가 다른 Task의 실행을 막지 않는다(모두
+    이미 동시에 제출되어 독립적으로 실행되기 때문). `with` 블록이 끝날 때
+    `ThreadPoolExecutor.shutdown(wait=True)`가 호출되므로, 예외가
+    전파되기 전에 제출된 모든 Task가 이미 완료된 상태임이 보장된다.
     """
 
     def __init__(
@@ -93,7 +102,11 @@ class ManagedEngineRuntime(EngineRuntime):
     def run_parallel(
         self, tasks: list[Task], required_capabilities: frozenset[str] = frozenset()
     ) -> list[EngineResult]:
-        return [self.run(task, required_capabilities) for task in tasks]
+        if not tasks:
+            return []
+        with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+            futures = [executor.submit(self.run, task, required_capabilities) for task in tasks]
+            return [future.result() for future in futures]
 
     def cancel(self, task_id: str) -> None:
         if task_id not in self._task_status:

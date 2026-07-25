@@ -1393,6 +1393,45 @@ Review 완료 + Interface First Review 완료 + 테스트 통과 + 문서 최신
   `pytest`(307개, 기존 300개 + 신규 7개) 모두 통과.
 - 의존성: M4-T02, T1-22, T1-23
 
+#### M4-T06: `run_parallel` 실제 동시성 검증
+- 목적: M2 이월 부채 #5(`supports_parallel()=True`이나 실제 동시성
+  미검증)를 해소하고, `EngineRuntime.run_parallel()`이 실제로 여러
+  Task를 동시에 실행함을 증명한다.
+- 작업 내용: `AgentScheduler`↔`EngineRuntime` 병렬 책임 경계를 ADR로
+  확정, `ManagedEngineRuntime.run_parallel()`을 `ThreadPoolExecutor`
+  기반 실제 동시 실행으로 재구현, 통합 테스트 보강(실제 동시 시작/입력
+  순서 보장/독립 실패 처리/Retry 상호작용).
+- 완료 조건(DoD): 순차 실행이었다면 불가능한 짧은 시간 안에 여러 Task가
+  동시에 완료됨을 시간으로 증명, 입력 순서 보장 유지, 한 Task의 실패가
+  다른 Task를 막지 않음을 증명, `RecoveringEngineRuntime`과의 상호작용
+  확인·기록, `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — **Effort 상향(Medium→High) 사용자 승인**
+  (동시성 코드는 일반 구현보다 검토 필요). **ADR-0023 신규**
+  (`.ai/DECISIONS.md`) — `AgentScheduler.select()`(동시에 활동할 Agent
+  후보를 고르는 "선택" 책임)와 `EngineRuntime.run_parallel()`(여러 Task
+  실행을 실제로 동시에 수행하는 "실행" 책임)이 서로 다른 층위임을
+  확정. `docs/ARCHITECTURE.md`(v0.8.0) §3.4/§3.9에 이 경계를 명시하는
+  문장 추가. **`ManagedEngineRuntime.run_parallel()`을
+  `concurrent.futures.ThreadPoolExecutor`로 재구현**(기존 순차 반복
+  호출 대체) — `EngineRuntime.run_parallel()` 계약(입력 순서 보장)은
+  그대로 유지, 빈 목록은 `ThreadPoolExecutor(max_workers=0)`이 예외를
+  던지므로 조기 반환으로 처리. `RecoveringEngineRuntime`은 사용자 지시대로
+  **수정하지 않음** — `run_parallel()`이 여전히 `inner.run_parallel()`에
+  그대로 위임해 병렬 배치 안의 개별 Task 재시도는 지원하지 않는다는 것을
+  테스트로 확인·기록(신규 기술 부채, 필요 시 이후 Task로 이월).
+  `tests/runtime/engine/test_managed_engine_runtime.py`에
+  `SlowParallelEngineAdapter`(세션 ID가 고유해 동시 호출에 안전 —
+  기존 `SlowEngineAdapter`는 세션 ID가 고정이라 동시 호출 시 충돌)/
+  `SelectivelyFailingEngineAdapter`(지정된 task_id만 실패) 신규 + 4개
+  테스트(실제 동시 실행 시간 증명 — 0.2초 지연 3개 Task가 0.4초 미만에
+  완료, 5회 연속 실행으로 안정성 확인/입력 순서 보장/독립 실패 처리 —
+  `ThreadPoolExecutor`의 `with` 블록이 예외 전파 전 모든 제출 작업의
+  완료를 기다림을 이용/빈 목록 처리). `tests/runtime/engine/
+  test_recovering_engine_runtime.py`에 위 미지원 상호작용을 확인하는
+  테스트 1개 추가. `ruff check src tests`, `mypy src`, `pytest`(312개,
+  기존 307개 + 신규 5개) 모두 통과.
+- 의존성: M3-T01, T1-18
+
 ---
 
 ## 진행 로그
