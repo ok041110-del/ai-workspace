@@ -845,6 +845,42 @@ Task화한다.
   16개) 모두 통과.
 - 의존성: M3-T01, T1-19
 
+#### M3-T03: Process Management
+- 목적: `ClaudeCodeEngineAdapter`가 실제 OS 프로세스를 안전하게 실행·
+  Timeout·Cancel할 수 있는 기반을 제공한다.
+- 작업 내용: `ProcessRunner` 구현, subprocess 관리, Timeout 시
+  terminate/kill, Cancel 처리, 종료 코드 관리.
+- 완료 조건(DoD): 실제(안전한) 프로세스로 정상 실행/Timeout 강제 종료/
+  Cancel이 검증되고, `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-25)** — `adapters/process_runner.py`에
+  `ProcessRunner`(`subprocess.Popen` 기반), `ProcessResult`,
+  `ProcessNotFoundError` 신규 구현. Interface(ABC)는 만들지 않음 —
+  상위 계층이 직접 의존하는 대상이 아니라 Adapter 내부 협력자이므로
+  Interface First 대상이 아니라고 판단.
+  **`ClaudeCodeEngineAdapter` 리팩터링**: `subprocess.run()` 직접 호출
+  → `ProcessRunner` 주입(생성자 선택 인자)으로 전환. Timeout은
+  `ProcessResult.timed_out`을 확인해 `EngineExecutionError`로 정확히
+  전파(계약 그대로). **M3-T02에서 문서화해 둔 한계 해소**: `cancel()`이
+  이제 `ProcessRunner.cancel()`을 통해 실제 프로세스를 종료함.
+  **발견 및 수정한 버그**: `ClaudeCodeEngineAdapter.cancel()`이
+  `interfaces/engine_adapter.py`의 계약("이미 COMPLETED/FAILED로 끝난
+  세션은 상태가 유지된다")을 위반해 완료된 세션도 무조건 CANCELLED로
+  덮어쓰고 있었음 — 종단 상태 보존 로직 추가로 수정.
+  **자체 정정**: 처음에는 `ManagedEngineRuntime.cancel()`(M3-T01)도
+  같은 버그로 오판해 수정하려 했으나, `interfaces/engine_runtime.py`의
+  `cancel()` 계약을 재확인한 결과 이쪽은 애초에 "완료 상태 유지" 조항이
+  없고 무조건 CANCELLED 전이가 맞는 계약임을 확인 — 변경을 되돌리고
+  원래 구현이 옳았음을 테스트 주석으로 남김(정직하게 기록). `tests/
+  adapters/test_process_runner.py`에 6개 신규 테스트 —
+  `sys.executable -c "..."`로 **실제 프로세스**를 띄워 정상 실행/비정상
+  종료 코드/Timeout 강제 종료/Cancel/미등록 예외를 검증(타이밍 테스트는
+  5회 연속 실행으로 안정성 확인). `tests/adapters/
+  test_claude_code_engine_adapter.py`는 `subprocess.run` mock 대신
+  주입 가능한 `FakeProcessRunner`로 전면 재작성(테스트 경계 개선) +
+  종단 상태 보존 테스트 추가. `ruff check src tests`, `mypy src`,
+  `pytest`(244개, 기존 235개 + 신규 9개) 모두 통과.
+- 의존성: M3-T02
+
 ---
 
 ## Milestone 4 — 자동화 및 확장 (Automation & Scale)
@@ -1357,3 +1393,22 @@ Checkpoint 4개 경계 모두 발동, 전부 Sonnet/High "동일" — M3-T01과 
 없음. `ruff check src tests`, `mypy src`, `pytest`(235개, 기존 219개 +
 신규 16개) 모두 통과. 다음 Task: **M3-T03**(Process Management —
 `ProcessRunner`, Timeout 시 terminate/kill, Cancel, 종료 코드 관리). |
+| 2026-07-25 | **M3-T03 완료: Process Management**(§2.4 Stage Checkpoint
+4개 경계 모두 발동, 전부 Sonnet/High "동일"). `adapters/process_runner.py`
+에 `ProcessRunner` 신규 구현, `ClaudeCodeEngineAdapter`를 이를 사용하도록
+리팩터링(M3-T02에서 문서화해 둔 "cancel()이 실제 프로세스를 못 죽이는
+한계" 해소). **버그 발견 및 수정**: `ClaudeCodeEngineAdapter.cancel()`이
+`EngineAdapter` 계약("완료된 세션 상태 유지")을 위반하고 있었음을
+발견해 수정. **자체 정정**: `ManagedEngineRuntime.cancel()`(M3-T01)도
+같은 문제로 오판해 고치려 했으나, `EngineRuntime.cancel()` 계약은
+애초에 "완료 상태 유지" 조항이 없어 원래 구현이 맞았음을 재확인하고
+변경을 되돌림 — 두 인터페이스의 계약이 서로 다르다는 점을 놓칠 뻔한
+사례로 정직하게 기록. `tests/adapters/test_process_runner.py`는
+`sys.executable -c "..."`로 **실제(안전한) 프로세스**를 띄워 검증(정상
+실행/Timeout 강제 종료/Cancel), `test_claude_code_engine_adapter.py`는
+`subprocess.run` mock 대신 주입식 `FakeProcessRunner`로 전면 재작성.
+`ruff check src tests`, `mypy src`, `pytest`(244개, 기존 235개 + 신규
+9개) 모두 통과, 타이밍 테스트 5회 연속 안정성 확인. 다음 Task:
+**M3-T04**(Session & Workspace Integration — WorkspaceCore↔
+ManagedEngineRuntime 연결, EngineSession 생명주기, 실행 기록, EventBus
+완전 연동). |

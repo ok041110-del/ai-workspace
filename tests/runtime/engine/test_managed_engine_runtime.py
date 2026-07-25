@@ -131,6 +131,12 @@ def test_cancel_unknown_task_raises_not_found() -> None:
 
 
 def test_cancel_after_completion_marks_status_cancelled() -> None:
+    """interfaces/engine_runtime.py의 cancel() 계약은 EngineAdapter.cancel()
+    과 달리 "이미 완료된 실행은 상태 유지" 조항이 없다 — cancel(task_id)
+    이후 status(task_id)는 예외 없이 항상 CANCELLED다(M3-T03에서
+    EngineAdapter.cancel()과 혼동해 이 동작을 "버그"로 오판할 뻔했으나,
+    두 인터페이스의 계약 문서를 재확인해 EngineRuntime 쪽은 원래
+    구현이 맞다는 것을 확인함)."""
     runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
     runtime.register_engine("mock", MockEngineAdapter())
     task = make_task()

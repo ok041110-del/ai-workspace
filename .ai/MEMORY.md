@@ -149,9 +149,18 @@
   `--permission-mode manual`은 생성자에서 차단(헤드리스 무한 대기 방지).
   `cancel()`이 실제 OS 프로세스를 종료하지 못하는 한계를 M3-T03
   (Process Management)로 명시적으로 이관. 테스트 16개는 전부
-  `subprocess.run` mock 처리(실제 프로세스 호출 없음). 전체 235개 테스트
-  통과. 다음은 **M3-T03**(Process Management — `ProcessRunner`, Timeout
-  시 terminate/kill, Cancel, 종료 코드 관리).
+  `subprocess.run` mock 처리(실제 프로세스 호출 없음). **M3-T03 완료**:
+  `adapters/process_runner.py`의 `ProcessRunner` 신규(`subprocess.Popen`
+  기반) — `ClaudeCodeEngineAdapter`가 이를 사용하도록 리팩터링해 M3-T02의
+  한계를 해소(`cancel()`이 이제 실제 프로세스를 종료함). 버그 발견·수정:
+  `ClaudeCodeEngineAdapter.cancel()`이 `EngineAdapter` 계약("완료된 세션
+  상태 유지")을 위반하고 있었음. **자체 정정**: `ManagedEngineRuntime.
+  cancel()`(M3-T01)도 같은 문제로 오판해 고치려 했으나 `EngineRuntime.
+  cancel()` 계약은 애초에 그 조항이 없어 원래 구현이 맞았음을 재확인하고
+  되돌림 — 두 인터페이스 계약이 서로 다르다는 점에 유의할 것. 전체 244개
+  테스트 통과. 다음은 **M3-T04**(Session & Workspace Integration —
+  WorkspaceCore↔ManagedEngineRuntime 연결, EngineSession 생명주기, 실행
+  기록, EventBus 완전 연동).
 - **M3 목표는 부채 청산이 아니라 실제 Engine Runtime/Engine Adapter
   구현**이다(사용자 강조, M2 Retrospective 참고) — Deferred by Design
   부채(#1 AgentManager/Registry, #2 CLI 통합, #5 병렬성 검증)는 자연스럽게

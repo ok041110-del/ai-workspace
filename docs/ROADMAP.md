@@ -156,17 +156,14 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
    end-to-end(create_session→run→결과 수집→destroy_session) 수행한다.
 2. Interaction Layer가 CLI/API 등 표면 입력을 표준 요청으로 정규화한다.
 
-**진행 상태**: M3-T01(Engine Runtime 프로덕션 구현) 완료, M3-T02(Claude
-Code Adapter) 진행 중. 이후 Task는
-사용자가 준비한 아래 8개 Task 개요를 따른다(상세 스펙은 착수 시점에
+**진행 상태**: M3-T01(Engine Runtime)~M3-T03(Process Management) 완료.
+이후 Task는 사용자가 준비한 아래 8개 Task 개요를 따른다(상세 스펙은 착수 시점에
 `.ai/TASKS.md`에 확정).
 
 **Task 개요 — Engine Adapter & Execution** (M3-T01~M3-T08)
 1. M3-T01 Managed Engine Runtime — **완료**
-2. M3-T02 Claude Code Adapter — `ClaudeCodeEngineAdapter`, `EngineAdapter`
-   계약 충족, CLI 실행/출력 수집/결과 반환/`EngineExecutionError` 처리
-3. M3-T03 Process Management — `ProcessRunner`, subprocess 관리, Timeout
-   시 terminate/kill, Cancel, 종료 코드 관리
+2. M3-T02 Claude Code Adapter — **완료**
+3. M3-T03 Process Management — **완료**
 4. M3-T04 Session & Workspace Integration — WorkspaceCore↔
    ManagedEngineRuntime 연결, EngineSession 생명주기, 실행 기록, EventBus
    완전 연동
