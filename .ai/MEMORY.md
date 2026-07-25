@@ -40,9 +40,10 @@
   Milestone 1 소속 `T1-01`~`T1-25`로 번호만 이어졌다가, 같은 날 설계 검토를
   거쳐 `T1-18`~`T1-28`로 추가 재분해됨(ADR-0022, 대응표는 `docs/ROADMAP.md`
   하단 참고).
-- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-21` 완료
-  (T1-18~T1-21 Interface 그룹 전체 완료), `T1-29`(SOP Skills System, 별도
-  세션에서 병렬로 완료되어 병합됨)도 완료, `T1-22`~`T1-28` 남음(7개 Task).
+- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-22` 완료
+  (T1-18~T1-21 Interface 그룹 전체 완료, T1-22 Workspace Core Skeleton
+  완료), `T1-29`(SOP Skills System, 별도 세션에서 병렬로 완료되어 병합됨)도
+  완료, `T1-23`~`T1-28` 남음(6개 Task).
 - **완료된 Task 요약**: `T1-01`~`T1-11`(문서화 세트 작성 및 승인), `T1-12`
   (구현 착수 승인), `T1-13`(디렉터리 구조), `T1-14`(Project/Task/Workflow
   도메인), `T1-15`(Interfaces 7종), `T1-16`(Mission/Step/WorkspaceSession/
@@ -58,11 +59,16 @@
   재검토 후 변경 없음), `T1-21`(Interaction Interfaces: `InteractionEngine`
   신규 정의 — `normalize`/`format_response`/`supported_surfaces`, 기존
   `ConversationEngine` 명칭 대체), `T1-29`(SOP Skills System: `.ai/skills/`
-  에 7개 표준 작업 절차 문서 추가, 별도 세션에서 완료되어 병합됨) — 전체
-  87개 테스트 통과, `ruff`/`mypy` 클린.
-- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-22`
-  Workspace Core Skeleton → `T1-23` Repositories → `T1-24` CLI → `T1-25`
-  Tests → `T1-26` Documentation → `T1-27` ADR → `T1-28` Milestone 1 Review.
+  에 7개 표준 작업 절차 문서 추가, 별도 세션에서 완료되어 병합됨), `T1-22`
+  (Workspace Core Skeleton: `core/workspace_core.py`에 `WorkspaceCore` 구현
+  — Project 로드/Config 보관/WorkspaceSession in-memory 관리(생성·갱신·
+  종료)/Agent Runtime·Engine Runtime Interface 보관(읽기 전용 프로퍼티)/
+  Workflow 시작(`WorkflowEngine.plan` 위임)/Shutdown; Task 실행 메서드를
+  아예 두지 않고 `SpyEngineRuntime`으로 "직접 실행하지 않음"을 테스트로
+  증명) — 전체 100개 테스트 통과, `ruff`/`mypy` 클린.
+- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-23`
+  Repositories → `T1-24` CLI → `T1-25` Tests → `T1-26` Documentation →
+  `T1-27` ADR → `T1-28` Milestone 1 Review.
 - **아키텍처는 v0.6.3으로 갱신** (ADR-0006~0022, Multi-Agent First 심화 + 안정화
   보완 + Task-Workflow 관계 보완 + Phase→Task 거버넌스 전환 + Task 분해 원칙).
   시스템 구조 자체(컴포넌트/의존성)는 T1-18 설계 검토로 변경되지 않았음 — 자세한
@@ -74,10 +80,9 @@
   T1-29(SOP Skills)는 별도 세션의 병렬 작업이 origin에 먼저 병합되어 있어
   `git merge`로 반영함 — `.ai/skills/`에 문서만 추가되어 코드/아키텍처
   변경은 없음.
-- **다음 단계**: `.ai/TASKS.md`의 `T1-22`(Workspace Core Skeleton: 최상위
-  오케스트레이터의 최소 골격 — 프로젝트/설정 로드, WorkspaceSession 관리,
-  Agent Runtime·Engine Runtime 초기화, Workflow 시작, 종료; Task 실행은
-  Agent Runtime에 위임)부터 진행.
+- **다음 단계**: `.ai/TASKS.md`의 `T1-23`(Repositories:
+  `FileProjectRepository`/`FileAgentRepository`/`FileEventStore` 파일 기반
+  구현)부터 진행.
 
 ## 2. 프로젝트 정체성
 

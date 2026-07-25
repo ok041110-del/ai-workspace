@@ -393,7 +393,7 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 - 완료 조건(DoD): Mock Interfaces를 주입해 위 책임이 단위 테스트로 검증되고,
   Core 코드에 구체 클래스 직접 참조가 없음을 확인한다. **Task를 직접 실행하지
   않고 Agent Runtime에 위임함**을 테스트로 확인한다.
-- 상태: TODO
+- 상태: DONE
 - 의존성: T1-16, T1-18, T1-19
 
 #### T1-23: Repositories
@@ -677,3 +677,26 @@ origin에 이미 다른 세션에서 병합한 커밋이 있어 `git merge`로 �
 없어 그대로 수용하고 `.ai/TASKS.md`에 정식 Task로 편입함(T1-28 뒤,
 Milestone 1 Review 검토 대상에 포함). `ruff check src tests`, `mypy src`,
 `pytest`(87개, T1-21 관련 회귀 없음) 모두 통과 확인 후 병합 커밋 진행. |
+| 2026-07-25 | **T1-22 완료: Workspace Core Skeleton**. `core/workspace_core.py`에
+`WorkspaceCore`를 신규 구현함(ADR-0005, ADR-0010). 생성자에서
+`ProjectRepository`/`WorkflowEngine`/`AgentRegistry`/`AgentScheduler`/
+`AgentManager`/`EventBus`/`EngineRuntime` 7개 Interface와 `config:
+dict[str, str]`를 키워드 전용으로 주입받아 보관한다 — Registry/Scheduler/
+Manager/EventBus를 하나의 `AgentRuntime` 파사드로 묶지 않고 개별 필드로
+유지함(T1-22 명세의 YAGNI 지시 그대로 따름). `load_project`(→
+`ProjectRepository.load` 위임), `config` 프로퍼티(방어적 복사),
+`start_session`/`get_session`/`update_session`/`end_session`(WorkspaceSession은
+어떤 Interface로도 영속화 대상이 아니므로 Core 내부 in-memory 레지스트리로
+관리, 신규 예외 `WorkspaceSessionNotFoundError`), `agent_registry`/
+`agent_scheduler`/`agent_manager`/`event_bus`/`engine_runtime` 읽기 전용
+프로퍼티(Milestone 2 구현체가 사용할 수 있도록 노출만 함), `start_workflow`
+(→ `WorkflowEngine.plan` 위임), `shutdown`(모든 Session 정리)을 구현함.
+**Task 직접 실행 금지 증명**: `run_task`/`execute_task` 같은 메서드를
+아예 두지 않았고, 테스트에서 `run()`/`run_parallel()` 등 모든 메서드가
+호출되면 `AssertionError`를 던지는 `SpyEngineRuntime`을 주입한 뒤 Core의
+모든 공개 메서드를 호출해도 예외가 발생하지 않음을 확인해 Core가 Engine
+Runtime을 스스로 호출하지 않음을 테스트로 증명함(`tests/core/
+test_workspace_core.py`, 13개 테스트). `docs/ARCHITECTURE.md` §3.3·§9는
+이미 이 설계와 일치해 변경하지 않음. `ruff check src tests`, `mypy src`,
+`pytest`(100개, 기존 87개 + 신규 13개) 모두 통과. 다음 Task: **T1-23**
+(Repositories: FileProjectRepository/FileAgentRepository/FileEventStore). |
