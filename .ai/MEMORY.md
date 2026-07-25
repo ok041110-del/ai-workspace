@@ -191,6 +191,19 @@
   명시적으로 문서화. `normalize()` 반환 타입은 기존 `NormalizedRequest`
   (T1-21)를 그대로 사용 — 모든 Surface가 동일 DTO로 Core에 전달된다는
   목표를 이미 만족해 새 타입을 만들지 않음. 전체 297개 테스트 통과.
+- **M4-T04 완료(2026-07-26)**: `CodingAgent`(T2-06)가 이미
+  `EngineRuntime`을 Interface로만 주입받는 설계라 **소스 코드 변경 없이**
+  신규 `tests/integration/test_coding_agent_runtime_integration.py`만
+  추가 — Planning→Coding→Review→Documentation 파이프라인을 M3 실제
+  Engine 스택(`ClaudeCodeEngineAdapter`+`ManagedEngineRuntime`+
+  `RecoveringEngineRuntime`)으로 조립해 검증(T2-06의 Mock 기반
+  `test_pipeline.py`는 그대로 유지). 사용자 제안 3가지 반영: (1)
+  `FlakyProcessRunner`로 Coding 1차 실행 실패→재시도 성공 시나리오
+  실증, (2) Runtime Event/Agent Event 전체 순서를 정확히 단언(M2
+  Implementation Observation #3의 재귀 발행 역전 특성이 만드는 순서를
+  직접 검증 — 가장 안쪽 `documentation_completed`가 먼저,
+  `mission_planned`이 마지막), (3) 파일명은 Milestone 번호 대신 기능
+  중심으로 명명. 전체 300개 테스트 통과.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

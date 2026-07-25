@@ -1315,6 +1315,53 @@ Review 완료 + Interface First Review 완료 + 테스트 통과 + 문서 최신
   기존 292개 + 신규 5개) 모두 통과.
 - 의존성: T1-21
 
+#### M4-T04: CodingAgent 실제 Engine 통합 + E2E
+- 목적: M3 Review에서 이관된 항목 — M2의 Agent 파이프라인(Coding/Review/
+  Documentation)이 `MockEngineAdapter`가 아니라 M3의 실제 Engine 스택
+  위에서도 동작함을 증명한다.
+- 작업 내용: 실제 Engine 스택(`ClaudeCodeEngineAdapter`+
+  `ManagedEngineRuntime`+`RecoveringEngineRuntime`)으로 조립한
+  Planning→Coding→Review→Documentation E2E 테스트 추가.
+- 완료 조건(DoD): 전체 Event 체인이 실제 Engine 스택 위에서 완주,
+  RecoveringEngineRuntime의 재시도가 실제로 한 번 발생·복구되는 시나리오
+  검증, Runtime Event와 Agent Event의 연결 순서 검증, `pytest`/`ruff`/
+  `mypy` 통과.
+- 상태: **DONE (2026-07-26)** — **핵심 발견**: `CodingAgent`(T2-06)는
+  이미 `engine_runtime: EngineRuntime`을 Interface로만 주입받아
+  `self._engine_runtime.run(task)`를 호출하도록 설계되어 있어(
+  `MockEngineAdapter`에 하드코딩되지 않음), **소스 코드 변경 없이 새
+  테스트만으로 충분**함을 확인(Interface First가 의도대로 작동한 사례).
+  기존 `tests/agents/test_pipeline.py`(T2-06, Mock 기반)는 그대로 유지
+  (빠르고 Adapter에 무관한 검증으로 계속 유효) — 신규
+  `tests/integration/test_coding_agent_runtime_integration.py`(사용자
+  제안대로 Milestone 번호가 아닌 기능 중심 파일명) 추가.
+  **사용자가 제안한 3가지 보강 사항 모두 반영**:
+  1. `FlakyProcessRunner`(신규 로컬 테스트 더블)로 Coding 단계의 첫 실행만
+     실패시켜 `RecoveringEngineRuntime`이 실제로 재시도·복구하는 시나리오
+     검증(`test_retry_actually_recovers_a_failed_first_attempt`) — 재시도가
+     CodingAgent에게 완전히 투명함(예외가 전파되지 않음)을 확인.
+  2. Runtime Event(`engine_task_started`/`completed`/`failed`)와 Agent
+     Event(`mission_planned`/`code_completed`/`review_completed`/
+     `documentation_completed`)의 연결 순서를 **정확한 전체 순서로 단언**
+     (`test_engine_and_agent_events_interleave_in_expected_nested_order`).
+     Coding→Review→Documentation이 서로의 이벤트 핸들러 안에서 중첩
+     호출되므로, M2 Retrospective Implementation Observation #3
+     (`InMemoryEventBus`가 핸들러 내부 재귀 발행 시 가장 안쪽 이벤트를
+     먼저 관측)이 정확히 어떤 순서를 만들어내는지 직접 유도해 검증함 —
+     `documentation_completed`(가장 안쪽)가 가장 먼저, `mission_planned`
+     (가장 바깥쪽 트리거)가 가장 마지막에 관측됨.
+  3. 파일명을 `test_m4_...` 대신 기능 중심(`test_coding_agent_runtime_
+     integration.py`)으로 명명.
+  `ClaudeCodeEngineAdapter`는 `FakeProcessRunner`가 아니라 신규
+  `FlakyProcessRunner`(호출 순서대로 결과를 반환하는 더블)를 사용 —
+  기존 `FakeProcessRunner`는 고정된 단일 결과만 반환해 이번 시나리오(첫
+  실패 후 재시도 성공)에 맞지 않아 새로 작성. `success_result`/
+  `error_result` 헬퍼는 `tests.adapters.test_claude_code_engine_adapter`
+  에서 그대로 import(M3-T07과 동일한 재사용 원칙). 신규 테스트 3개.
+  `ruff check src tests`, `mypy src`, `pytest`(300개, 기존 297개 +
+  신규 3개) 모두 통과.
+- 의존성: T2-06, M3-T01, M3-T02, M3-T03, M3-T06
+
 ---
 
 ## 진행 로그
