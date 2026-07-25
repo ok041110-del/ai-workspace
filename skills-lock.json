@@ -1,6 +1,24 @@
 {
   "version": 1,
   "skills": {
+    "Python Backend Architecture Review": {
+      "source": "rknall/claude-skills",
+      "sourceType": "github",
+      "skillPath": "python-architecture-review/SKILL.md",
+      "computedHash": "154e38693a23268939074145c1fb0dc520466aa278174d1b3a55ed8f5c99e823"
+    },
+    "adr-documentation": {
+      "source": "MadAppGang/claude-code",
+      "sourceType": "github",
+      "skillPath": "plugins/dev/skills/adr-documentation/SKILL.md",
+      "computedHash": "3c10aba23e41aa59cbd2ae737865f6643509cf4e9a7c2e9f98ae667432dcf26e"
+    },
+    "agent-browser": {
+      "source": "vercel-labs/agent-browser",
+      "sourceType": "github",
+      "skillPath": "skills/agent-browser/SKILL.md",
+      "computedHash": "548a1f92c7ff55081c65ec1577ff5136beb1d0f58252d448d5bd43f05fefc703"
+    },
     "banner-design": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",
@@ -18,6 +36,12 @@
       "sourceType": "github",
       "skillPath": ".claude/skills/brand/SKILL.md",
       "computedHash": "3c7acb846082f9e4cc873f1cf85bd57ade027206e18c7c050797f815e3a56af7"
+    },
+    "browser": {
+      "source": "browserbase/skills",
+      "sourceType": "github",
+      "skillPath": "skills/browser/SKILL.md",
+      "computedHash": "1db8101630cecd0782347bf67c9ccc1ab57f6ffe408f527612088ab55a392a5f"
     },
     "cavecrew": {
       "source": "juliusbrussee/caveman",
@@ -133,11 +157,23 @@
       "skillPath": ".claude/skills/design-system/SKILL.md",
       "computedHash": "a05715299135276628f53519484e1267ec8ad111e6355a09c2da1cf66aee2cc3"
     },
+    "detect-code-smells": {
+      "source": "mickeyyaya/refactoring-skills",
+      "sourceType": "github",
+      "skillPath": "skills/detect-code-smells/SKILL.md",
+      "computedHash": "ee346e92fb342caa468b9c050b88d9296855792b7e79cd13a0fa60096ebb02e2"
+    },
     "dispatching-parallel-agents": {
       "source": "obra/superpowers",
       "sourceType": "github",
       "skillPath": "skills/dispatching-parallel-agents/SKILL.md",
       "computedHash": "b011107f17188e0b2898bb1856b5bac8b49537cc86e737c82126558a235bd62a"
+    },
+    "documentation-standards": {
+      "source": "MadAppGang/claude-code",
+      "sourceType": "github",
+      "skillPath": "plugins/dev/skills/documentation-standards/SKILL.md",
+      "computedHash": "08263b9a859b96f5870d6a4f103f7b5aaf5719e5f1547708219fcb3fbdb975b9"
     },
     "executing-plans": {
       "source": "obra/superpowers",
@@ -151,6 +187,12 @@
       "skillPath": "skills/finishing-a-development-branch/SKILL.md",
       "computedHash": "a2afe045ea677114a89854f296ae57f8d34eb84864daa7b08ea9434acded724d"
     },
+    "git-workflow": {
+      "source": "netresearch/git-workflow-skill",
+      "sourceType": "github",
+      "skillPath": "skills/git-workflow/SKILL.md",
+      "computedHash": "45a6070cb1ef324462c8efecedb23092ca5510a1733f006c0c4b40b63aa04441"
+    },
     "grill-me": {
       "source": "mattpocock/skills",
       "sourceType": "github",
@@ -162,6 +204,12 @@
       "sourceType": "github",
       "skillPath": "skills/productivity/handoff/SKILL.md",
       "computedHash": "ad03e8d4ea3cbbff66420eb7ba3cc375b5cbe1821a2449b53e863256cf5b5cde"
+    },
+    "improving-python-code-quality": {
+      "source": "wdm0006/python-skills",
+      "sourceType": "github",
+      "skillPath": "skills/python/code-quality/SKILL.md",
+      "computedHash": "beadc4bf9c13531d9e5102f699c6140cef356b80c5bb99c06098942d32c461a8"
     },
     "karpathy-guidelines": {
       "source": "forrestchang/andrej-karpathy-skills",
@@ -180,6 +228,60 @@
       "sourceType": "github",
       "skillPath": "skills/receiving-code-review/SKILL.md",
       "computedHash": "59361179fc9225173e0c145ffd9bafbf9fdbf8b43ce3dc308497a0b4f83a6063"
+    },
+    "refactor": {
+      "source": "mickeyyaya/refactoring-skills",
+      "sourceType": "github",
+      "skillPath": "skills/refactor/SKILL.md",
+      "computedHash": "4b24de489c1c64aee8680edbe569f5b32405f44a549671b9b26245b6f41bc92f"
+    },
+    "refactor-composing-methods": {
+      "source": "mickeyyaya/refactoring-skills",
+      "sourceType": "github",
+      "skillPath": "skills/refactor-composing-methods/SKILL.md",
+      "computedHash": "f96d3209aee3c247775d7a639f9b1161abeb93d0cc771f150224db141e358de6"
+    },
+    "refactor-functional-patterns": {
+      "source": "mickeyyaya/refactoring-skills",
+      "sourceType": "github",
+      "skillPath": "skills/refactor-functional-patterns/SKILL.md",
+      "computedHash": "8aca8f32c3ca0171832a51e8108babf247d818ade301d5f58d06df4c82f8fd62"
+    },
+    "refactor-generalization": {
+      "source": "mickeyyaya/refactoring-skills",
+      "sourceType": "github",
+      "skillPath": "skills/refactor-generalization/SKILL.md",
+      "computedHash": "e0e51315960ec72cae1d99bbc806ffa2e38e9ed037a04e6e0ece24f85a12f41c"
+    },
+    "refactor-moving-features": {
+      "source": "mickeyyaya/refactoring-skills",
+      "sourceType": "github",
+      "skillPath": "skills/refactor-moving-features/SKILL.md",
+      "computedHash": "095982b0c83c5c3703f3ab4df2005e28c7811aa0f4639c81ab9183e15fc1ccf9"
+    },
+    "refactor-organizing-data": {
+      "source": "mickeyyaya/refactoring-skills",
+      "sourceType": "github",
+      "skillPath": "skills/refactor-organizing-data/SKILL.md",
+      "computedHash": "b27ad40f5665abef63df7a335b9a0b44472a7043bc19f976be924449931a8e05"
+    },
+    "refactor-simplifying-conditionals": {
+      "source": "mickeyyaya/refactoring-skills",
+      "sourceType": "github",
+      "skillPath": "skills/refactor-simplifying-conditionals/SKILL.md",
+      "computedHash": "c276c6e3b76cb5764c550474aa74fcee2a76914df9254b7a7626ca3cc15477bd"
+    },
+    "refactor-simplifying-method-calls": {
+      "source": "mickeyyaya/refactoring-skills",
+      "sourceType": "github",
+      "skillPath": "skills/refactor-simplifying-method-calls/SKILL.md",
+      "computedHash": "b85769aa8d4336d9a3e0594217210516b0a87bf2cc54d3ce117c16541ae7c141"
+    },
+    "refactoring-decision-matrix": {
+      "source": "mickeyyaya/refactoring-skills",
+      "sourceType": "github",
+      "skillPath": "skills/refactoring-decision-matrix/SKILL.md",
+      "computedHash": "0acc263e979dc684d55e6e70ae9789e56c076dc7f6c2b55ddd140ef2cec3340e"
     },
     "requesting-code-review": {
       "source": "obra/superpowers",
@@ -216,6 +318,12 @@
       "sourceType": "github",
       "skillPath": "skills/test-driven-development/SKILL.md",
       "computedHash": "a4126a9c5f17be3c228aa9e5755898ade283448b86099f56f40852e8c14532be"
+    },
+    "testing-python-libraries": {
+      "source": "wdm0006/python-skills",
+      "sourceType": "github",
+      "skillPath": "skills/python/testing-strategy/SKILL.md",
+      "computedHash": "29191a693ba1d0a891b20d00977f5dd20bc87a064ff51f9443940c4039c6d5f8"
     },
     "ui-styling": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
