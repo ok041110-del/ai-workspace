@@ -221,7 +221,7 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
 
 | Task | 내용 | 근거/출처 |
 |---|---|---|
-| M4-T01 | `AgentManager`/`AgentRegistry` 프로덕션 구현 | M2 이월 부채 #1 |
+| M4-T01 | `AgentManager`/`AgentRegistry` 프로덕션 구현 — **완료** | M2 이월 부채 #1 |
 | M4-T02 | CLI ↔ WorkspaceCore 완전 연동 | M2 이월 부채 #2 |
 | M4-T03 | Interaction Layer 구현 | M3 Review에서 공식 이관 |
 | M4-T04 | `CodingAgent` 실제 Engine 통합 + E2E | M3 Review에서 공식 이관 |

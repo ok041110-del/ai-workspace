@@ -1226,8 +1226,30 @@ Review 완료 + Interface First Review 완료 + 테스트 통과 + 문서 최신
 | M4-T08 | Memory Engine 고도화(Analysis 단계에서 Interface 변경 여부 우선 검토) | M4 목표(ROADMAP DoD) | 없음 |
 | M4-T09 | Milestone 4 Review + v0.5.0 아키텍처 기준선 확정 | 관례(M2-T08/M3-T08) + 사용자 신규 제안 | M4-T01~T08 |
 
-상태: 전체 TODO. 착수 순서는 위 표 순서를 기본으로 하되, 의존성이 없는
-Task는 순서를 바꿔 진행할 수 있다.
+상태: M4-T01 DONE, 나머지 TODO. 착수 순서는 위 표 순서를 기본으로 하되,
+의존성이 없는 Task는 순서를 바꿔 진행할 수 있다.
+
+#### M4-T01: AgentManager/AgentRegistry 프로덕션 구현
+- 목적: T1-18에서 계약만 정의된 `AgentManager`/`AgentRegistry`의 실제
+  구현체를 제공해 M2 Retrospective의 Deferred by Design 부채 #1을
+  해소한다.
+- 작업 내용: `InMemoryAgentManager`(Agent 생성/상태 전이), `InMemoryAgentRegistry`
+  (런타임 등록/조회/제거) 구현.
+- 완료 조건(DoD): 두 Interface의 기존 계약 테스트(`tests/interfaces/
+  test_agent_manager.py`/`test_agent_registry.py`)와 동일한 시나리오가
+  새 구현체에서도 통과, `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — `tests/interfaces/fakes.py`의
+  `FakeAgentManager`/`FakeAgentRegistry`가 이미 완전한 로직(허용 전이
+  규칙 `_ALLOWED_AGENT_TRANSITIONS` 포함)을 갖고 있어 T2-02/T2-03과
+  동일한 "Fake 승격" 패턴을 그대로 적용함 — 로직 변경 없이 위치만
+  `runtime/agent/agent_manager.py`/`agent_registry.py`로 이동. 새
+  Interface 없음(T1-18 계약 그대로). CLI/WorkspaceCore 연동은 이번
+  Task 범위가 아님(M4-T02에서 수행) — 아직 어디에도 주입되지 않은
+  독립 구현체 상태. `tests/runtime/agent/test_agent_manager.py`/
+  `test_agent_registry.py`에 기존 계약 테스트와 동일한 10개 테스트
+  (T2-02의 `test_agent_scheduler.py` 승격 패턴과 동일). `ruff check src
+  tests`, `mypy src`, `pytest`(291개, 기존 281개 + 신규 10개) 모두 통과.
+- 의존성: T1-18
 
 ---
 

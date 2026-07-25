@@ -170,6 +170,11 @@
   넘어가는 전환점이므로, M4-T09(Milestone Review)에서 단순 Review를 넘어
   **v0.5.0 아키텍처 기준선(Baseline)**을 확정 — 이후 M5+는 구조 변경보다
   기능 확장에 집중.
+- **M4-T01 완료(2026-07-26)**: `runtime/agent/agent_manager.py`/
+  `agent_registry.py`에 `InMemoryAgentManager`/`InMemoryAgentRegistry`
+  신규 — `FakeAgentManager`/`FakeAgentRegistry`(허용 전이 규칙 포함)를
+  T2-02/T2-03과 동일한 패턴으로 그대로 승격, 새 Interface 없음.
+  CLI/WorkspaceCore 연동은 M4-T02 범위. 전체 291개 테스트 통과.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
