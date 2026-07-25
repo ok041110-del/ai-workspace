@@ -184,6 +184,13 @@
   실행 파일 의존성 불필요). 기존 CLI 테스트 5개는 수정 없이 그대로
   통과(외부 동작 무변경 증명). `project list`는 M4-T05로 유지. 전체
   292개 테스트 통과.
+- **M4-T03 완료(2026-07-26)**: `interaction/interaction_engine.py`(신규
+  패키지)의 `InMemoryInteractionEngine` — `FakeInteractionEngine` 승격.
+  CLI는 이미 구조화된 입력을 제공해 이 계층을 거치지 않는 예외 Surface로
+  유지(사용자 확인) — `docs/ARCHITECTURE.md` §3.1/§3.2에 이 예외 관계를
+  명시적으로 문서화. `normalize()` 반환 타입은 기존 `NormalizedRequest`
+  (T1-21)를 그대로 사용 — 모든 Surface가 동일 DTO로 Core에 전달된다는
+  목표를 이미 만족해 새 타입을 만들지 않음. 전체 297개 테스트 통과.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

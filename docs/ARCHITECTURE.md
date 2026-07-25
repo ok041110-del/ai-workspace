@@ -174,10 +174,18 @@ Event Bus를 통한 수평 결합이며, Event Store는 Bus의 독립 구독자�
 - **책임**: 사용자와의 접점(CLI/Dashboard/Mobile/Voice/REST API/Slack/Discord/
   Webhook). 입력을 Interaction Layer로 전달.
 - **의존 방향**: Interaction Layer만 호출.
+- **예외(CLI, M4-T03)**: CLI는 argparse로 이미 구조화된 입력(서브커맨드+
+  타입 지정 인자)을 제공하므로 자유 텍스트 정규화가 필요 없다. 따라서
+  CLI는 Interaction Layer를 거치지 않고 `WorkspaceCore`를 직접 호출하는
+  예외적인 Surface다(`cli/main.py`). Voice/Slack/REST API처럼 자유
+  텍스트를 받는 Surface가 실제로 추가될 때 이 계층을 거친다.
 
 ### 3.2 Interaction Layer (InteractionEngine)
-- **책임**: 다양한 입력 표면을 표준 요청으로 정규화하고 응답을 표면에 맞게 변환
-  (ADR-0013). Voice는 이 계층에 붙는 표면이다.
+- **책임**: 다양한 입력 표면을 표준 요청(`NormalizedRequest`)으로 정규화하고
+  응답을 표면에 맞게 변환(ADR-0013). Voice는 이 계층에 붙는 표면이다.
+  모든 Surface(Voice/Slack/REST/Dashboard 등)가 동일한 `NormalizedRequest`
+  DTO를 통해 Workspace Core에 전달되어야 이 계층의 가치가 성립한다 — 위
+  3.1의 예외(CLI)를 제외하고는 항상 이 계층을 거쳐야 한다.
 - **의존 방향**: UI Surfaces로부터 호출받음 / Workspace Core를 호출.
 
 ### 3.3 Workspace Core (최상위 오케스트레이터)

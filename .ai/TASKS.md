@@ -1283,6 +1283,38 @@ Review 완료 + Interface First Review 완료 + 테스트 통과 + 문서 최신
   신규 1개) 모두 통과.
 - 의존성: M4-T01, T1-22, T1-23, T1-24
 
+#### M4-T03: Interaction Layer 구현
+- 목적: T1-21에서 계약만 정의된 `InteractionEngine`의 실제 구현체를
+  제공해 M3 Review에서 이관된 항목을 해소한다.
+- 작업 내용: `InMemoryInteractionEngine`(정규화/응답 변환/지원 Surface
+  조회) 구현.
+- 완료 조건(DoD): 기존 `InteractionEngine` 계약 테스트와 동일한 시나리오가
+  새 구현체에서도 통과, `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — `tests/interfaces/fakes.py`의
+  `FakeInteractionEngine`이 이미 완전한 로직을 갖고 있어 지금까지와
+  동일한 "Fake 승격" 패턴 적용. `interaction/interaction_engine.py`
+  (신규 `interaction/` 패키지, M3 Review에서 확인했듯 이전까지 존재하지
+  않던 디렉터리)에 `InMemoryInteractionEngine` 신규 — `surfaces` 기본값은
+  Fake의 `frozenset({"cli"})` 대신 **`frozenset()`으로 변경**(CLI는
+  이 계층을 거치지 않는 예외 Surface이므로 기본 지원 목록에 넣지 않음).
+  **설계 판단(사용자 확인)**: CLI(`cli/main.py`, M4-T02에서
+  `WorkspaceCore`와 완전 연동됨)는 이미 argparse로 구조화된 입력을
+  받으므로 이 Interaction Layer를 거치지 않는 예외적인 Surface로
+  유지 — 억지로 CLI를 텍스트 재파싱 구조로 바꾸지 않음(최소 복잡성).
+  `normalize()`의 반환 타입은 T1-21에서 이미 정의된 `NormalizedRequest`
+  dataclass(surface/text/session_id)를 그대로 사용 — 사용자가 제안한
+  "모든 Surface가 동일한 DTO를 WorkspaceCore에 전달"하는 목표를 이미
+  만족하는 기존 타입이라 새 이름(`InteractionRequest` 등)으로 바꾸지
+  않음. **`docs/ARCHITECTURE.md` §3.1/§3.2에 위 예외 관계를 명시적으로
+  문서화**(사용자 제안 반영) — CLI는 Interaction Layer를 거치지 않고
+  `WorkspaceCore`를 직접 호출하는 예외 Surface임과, Voice/Slack/REST
+  같은 자유 텍스트 Surface가 실제로 추가될 때 이 계층을 거친다는 점을
+  명시. `tests/interaction/test_interaction_engine.py`(신규 테스트
+  디렉터리)에 5개 테스트(voice/slack 등 비-CLI Surface로 검증, CLI가
+  예외임을 반영). `ruff check src tests`, `mypy src`, `pytest`(297개,
+  기존 292개 + 신규 5개) 모두 통과.
+- 의존성: T1-21
+
 ---
 
 ## 진행 로그
