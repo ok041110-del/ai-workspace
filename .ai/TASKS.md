@@ -1226,8 +1226,8 @@ Review 완료 + Interface First Review 완료 + 테스트 통과 + 문서 최신
 | M4-T08 | Memory Engine 고도화(Analysis 단계에서 Interface 변경 여부 우선 검토) | M4 목표(ROADMAP DoD) | 없음 |
 | M4-T09 | Milestone 4 Review + v0.5.0 아키텍처 기준선 확정 | 관례(M2-T08/M3-T08) + 사용자 신규 제안 | M4-T01~T08 |
 
-상태: M4-T01 DONE, 나머지 TODO. 착수 순서는 위 표 순서를 기본으로 하되,
-의존성이 없는 Task는 순서를 바꿔 진행할 수 있다.
+상태: M4-T01~T09 전체 DONE. Milestone 4 Review는 아래 "Milestone 4
+Review" 절 참고.
 
 #### M4-T01: AgentManager/AgentRegistry 프로덕션 구현
 - 목적: T1-18에서 계약만 정의된 `AgentManager`/`AgentRegistry`의 실제
@@ -1501,6 +1501,152 @@ Review 완료 + Interface First Review 완료 + 테스트 통과 + 문서 최신
   테스트 포함). `ruff check src tests`, `mypy src`, `pytest`(331개,
   기존 322개 + 신규 9개) 모두 통과.
 - 의존성: T2-04
+
+#### M4-T09: Milestone 4 Review + v0.5.0 아키텍처 기준선 확정
+- 목적: Approval Required 원칙에 따라 Milestone 4 산출물을 검토받고,
+  "기반 프레임워크→사용 가능한 워크스페이스" 전환점으로서 아키텍처
+  기준선을 공식 선언한다.
+- 작업 내용: DoD 체크리스트, Architecture Review, Interface First 검토,
+  테스트 결과 문서화, Technical Debt 정리, v0.5.0 기준선 선언, 문서
+  갱신, Milestone 종료 선언.
+- 완료 조건(DoD): 위 항목 모두 완료 + 사용자 승인.
+- 상태: **DONE (2026-07-26) — 아래 Review 제출, 사용자 승인 대기**
+
+---
+
+## Milestone 4 Review
+
+**1. Definition of Done 체크리스트**
+
+| 항목(ROADMAP 원문 DoD) | 상태 | 근거 |
+|---|---|---|
+| 자동화 시나리오 1건 이상 동작 | ✅ | M4-T07 `AutomationEngine.bind_workflow/fire` + E2E 테스트(trigger→Workflow→실제 `WorkflowEngine.plan()` 실행) |
+| 다중 프로젝트 조회(2개 이상 동시 운용) | ✅ | M4-T05 `WorkspaceCore.list_projects()` + CLI `project list` + WorkspaceSession 격리 검증 |
+| 메모리 검색이 확인됨 | ✅(검색만) | M4-T08 `MemoryEngine.search()`/`ContextManager.find_snapshots()` |
+
+**"검색/요약" 중 요약(summarization)은 이번 Milestone에서 구현하지 않았다** —
+M3-T08과 달리 이번엔 착수 전 발견한 "놀라운 gap"이 아니라, M4-T08
+Analysis 단계에서 **사용자 승인 하에 사전에 합의된 범위 조정**이다: LLM
+Policy/Router가 아직 Temporary 단계(RULES.md §7)라 지금 요약을 만들면 실제
+호출할 LLM이 없는 껍데기가 되기 때문. LLM Router 준비 이후 Milestone으로
+공식 이관한다(6절에서 다시 기록).
+
+M2/M3에서 이월된 부채도 이번 Milestone에서 모두 해소되었다:
+
+| 이월 부채 | 상태 | 근거 |
+|---|---|---|
+| #1 AgentManager/AgentRegistry 프로덕션 구현 없음 | ✅ 해소 | M4-T01 |
+| #2 CLI-WorkspaceCore 미완전 연동 | ✅ 해소 | M4-T02 |
+| #5 병렬 실행 실제 미검증 | ✅ 해소 | M4-T06 |
+| Interaction Layer 미구현(M3에서 이관) | ✅ 해소 | M4-T03 |
+| CodingAgent 실제 Engine 경로 미검증(M3에서 이관) | ✅ 해소 | M4-T04 |
+
+**2. Architecture Review**
+
+M4에서 실제로 바뀐 구조:
+- `ManagedEngineRuntime.run_parallel()`이 `ThreadPoolExecutor` 기반 진짜
+  동시 실행으로 전환(M4-T06). **ADR-0023**으로 `AgentScheduler`(선택
+  책임)와 `EngineRuntime`(실행 책임)의 병렬 경계를 명시적으로 확정 —
+  두 컴포넌트의 "병렬" 언급이 겹쳐 보였던 문서상의 모호함을 해소했다.
+- `AutomationEngine`/`ContextManager`/`MemoryEngine` Interface가 순수
+  추가로 확장됨(`bind_workflow`/`fire`, `find_snapshots`, `search`) —
+  기존 메서드는 하나도 변경되지 않았다.
+- `WorkspaceCore`가 `save_project`/`list_projects`로 대칭 확장되고(M4-T02/
+  T05), CLI가 `WorkspaceCore`를 유일한 진입점으로 쓰게 되어 T1-24부터
+  이월되던 "CLI가 Core를 완전히 못 쓴다"는 상태가 마침내 해소됨.
+- `interaction/` 패키지가 처음 생겼지만(M4-T03), CLI는 여전히 이 계층을
+  거치지 않는 예외 Surface로 남아있다(구조화된 입력이라 정규화가
+  불필요, `docs/ARCHITECTURE.md` §3.1에 명시).
+
+`docs/ARCHITECTURE.md` §3.4/§3.9(병렬 경계)/§3.7(Automation Engine
+책임)/§3.1~3.2(Interaction Layer 예외)에 위 변경이 모두 문서화되어
+있음을 확인했다(각 Task 완료 시점에 즉시 반영해 옴). 구현과 문서 사이의
+괴리는 발견되지 않았다.
+
+**3. Interface First 원칙 검토**
+
+M4 전체에서 **새 Interface(ABC) 파일을 하나도 추가하지 않았다** — M1에서
+정의한 16종 Interface 중 3종(`AutomationEngine`/`ContextManager`/
+`MemoryEngine`)만 메서드를 순수 추가로 확장했고, 나머지는 기존 계약
+그대로 재사용했다(`AgentManager`/`AgentRegistry`는 이미 있던 T1-18
+계약의 첫 프로덕션 구현체를 얻었을 뿐, 계약 자체는 무변경).
+`ManagedEngineRuntime.run_parallel()`은 구현만 바뀌었고 `EngineRuntime`
+인터페이스의 시그니처는 그대로다. M3 Review에서 확인한 "M1 Interface
+설계가 이후 Milestone 전체를 커버한다"는 결론이 M4에서도 그대로
+유지되었다 — 3개 Interface의 추가도 전부 사전에 "Interface 변경 여부
+우선 검토"를 거쳐 필요성이 확인된 뒤에만 이뤄졌다(M4-T07/T08).
+
+**4. 테스트 결과**
+
+- `pytest`: **331개 전부 통과**(M3 완료 시점 281개 → M4에서 50개 신규)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(72개 소스 파일)
+- M3 완료 커밋(`4135559`) 대비 소스 30개 파일 변경(신규 4개:
+  `interaction/` 패키지 2개, `runtime/agent/agent_manager.py`/
+  `agent_registry.py`), 약 1,102줄 순증가(src+tests 합산)
+
+**5. Technical Debt 정리**
+
+*M4에서 의도적으로 범위를 좁힌 것(다음 Milestone 이후 과제)*
+- Memory Engine 요약(summarization) — LLM Router 준비 이후로 이관(1절
+  참고)
+- Automation Engine의 "조건 평가"(언제 발동할지 판단) — 여전히 호출자
+  책임, 실제 Scheduler/Cron 컴포넌트는 아직 없음(M4-T07에서 의도적
+  경계로 확정)
+- `RecoveringEngineRuntime.run_parallel()`이 병렬 배치 안의 개별 Task
+  재시도를 지원하지 않음(M4-T06에서 발견·테스트로 확인, `run()` 단일
+  호출과의 차이) — 필요성이 실사용에서 증명되면 재검토
+- `MemoryEngine.search()`가 선형 스캔(O(n)) — 현재 인메모리 규모에선
+  문제없음, 데이터가 커지면 인덱싱 검토 필요
+
+*M2에서 이월되었으나 M4 범위 밖이라 그대로 유지되는 것*
+- #3 Event ID 생성 방식이 컴포넌트마다 다름(기능적 문제 없음)
+- #6 `Step` 도메인이 Workflow 실행에 아직 실질 반영되지 않음
+
+*M3에서 이월되었으나 M4 범위 밖이라 그대로 유지되는 것*
+- Retry Backoff, Persistent Runtime Recovery, 실제 Claude CLI 기반 E2E,
+  Approval 비동기 처리, Process Timeout 정책 고도화 — 전부 M3-T08에서
+  기록된 그대로 미해결
+
+**6. v0.5.0 아키텍처 기준선(Baseline) 선언**
+
+사용자 제안대로, M4 종료를 "기반 프레임워크 → 사용 가능한 워크스페이스"
+전환점으로 규정한다. 판단 근거:
+- Milestone 1~4를 거치며 **16종 Interface + 도메인 모델 + Workspace
+  Core + Agent Runtime + Engine Runtime(+3개 데코레이터: Recovering/
+  ApprovalPipeline) + Core Engines 4종 + Memory 계열 + Interaction
+  Layer + CLI**까지 ARCHITECTURE.md가 그리는 전체 구조가 실제 구현으로
+  채워졌다.
+- M2/M3/M4 3개 Milestone 내내 **새 최상위 Interface가 추가된 적이
+  없다** — M1의 설계가 구조적으로 안정적이라는 뜻이며, 이 안정성이
+  "기준선"을 선언할 수 있는 근거다.
+- `pyproject.toml`의 `version`을 `0.1.0` → **`0.5.0`**으로 상향해
+  이 기준선을 표시한다. `.ai/DECISIONS.md`에 **ADR-0024**로 공식 기록한다
+  (아래 결과/영향 참고).
+- 기준선 선언의 의미: M5 이후 작업은 **기존 16종 Interface·계층 구조를
+  변경하지 않는 것을 기본값**으로 하고, 새 기능은 가능한 한 기존 구조
+  위에 조립한다(M2~M4 내내 실증된 패턴). 구조 자체를 바꿔야 하는 경우
+  (Interface 추가/계층 변경)는 지금처럼 "Interface 변경 여부 우선
+  검토" 절차를 거쳐 명시적 승인을 받는다 — 기준선 선언이 "앞으로 절대
+  구조를 안 바꾼다"는 뜻은 아니다.
+
+**7. 문서 정리**
+
+`.ai/TASKS.md`(본 Review) / `.ai/MEMORY.md`(M1~M3와 동일하게 압축) /
+`docs/ROADMAP.md`(M4 완료 표시) / `docs/ARCHITECTURE.md`(각 Task 진행 중
+이미 갱신됨, 최종 버전 확인) / `pyproject.toml`(버전 0.5.0) /
+`.ai/DECISIONS.md`(ADR-0024 신규) / `README.md`(M4 결과 반영) 갱신 완료.
+
+**8. Milestone 종료 선언**
+
+Definition of Done 충족(1절, 요약 제외는 사전 합의된 범위 조정),
+Architecture Review 완료(2절), Interface First 검토 완료(3절), 테스트
+결과 문서화 완료(4절), Technical Debt 정리 완료(5절), v0.5.0 기준선
+선언(6절), 문서 갱신 완료(7절) — 7개 조건 모두 만족. Review 중 코드
+변경이 필요한 치명적 문제(버그·계약 위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 4 Completed 및 v0.5.0 아키텍처
+기준선을 선언한다.**
 
 ---
 

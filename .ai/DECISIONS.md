@@ -706,3 +706,46 @@
   않음 — 여전히 `inner.run_parallel()`에 그대로 위임하므로, 병렬 배치
   안의 개별 Task 재시도는 지원하지 않는다(M4-T06에서 테스트로 확인·
   기록, 필요 시 이후 Task로 이월).
+
+## ADR-0024: v0.5.0 아키텍처 기준선(Baseline) 선언
+
+- 상태: 승인됨 (2026-07-26, 사용자 지시로 확정)
+- 날짜: 2026-07-26
+- 배경: M4-T09(Milestone 4 Review) 진행 중, 사용자가 "M4는 AI Workspace가
+  '기반 프레임워크'에서 '사용 가능한 워크스페이스'로 넘어가는 전환점"이라고
+  규정하며, Milestone 2·3처럼 단순 Review로 끝내지 말고 아키텍처
+  기준선(Baseline)을 공식 선언할 것을 제안했다.
+- 결정: **`pyproject.toml`의 `version`을 `0.1.0` → `0.5.0`으로 상향해
+  아키텍처 기준선을 표시한다.** 근거:
+  1. Milestone 1~4를 거치며 ARCHITECTURE.md가 그리는 전체 구조(16종
+     Interface, 도메인 모델, Workspace Core, Agent Runtime, Engine
+     Runtime과 그 위의 Recovering/ApprovalPipeline 데코레이터, Core
+     Engines 4종, Memory 계열, Interaction Layer, CLI)가 실제 구현으로
+     모두 채워졌다.
+  2. Milestone 2·3·4 세 Milestone 내내 **새 최상위 Interface가 한 번도
+     추가되지 않았다** — 매 Milestone Review(T2-08/M3-T08/M4-T09)에서
+     반복 확인된 사실이며, M1의 Interface 설계가 구조적으로 안정적임을
+     뜻한다.
+  3. 기준선 선언 이후 원칙: M5 이후 작업은 기존 Interface·계층 구조를
+     변경하지 않는 것을 기본값으로 하고 새 기능은 기존 구조 위에
+     조립한다. 구조 자체를 바꿔야 하는 경우(Interface 추가/계층 변경)는
+     지금까지와 동일하게 "Interface 변경 여부 우선 검토" 절차를 거쳐
+     명시적 승인을 받는다 — 기준선 선언이 구조 변경을 영구히 금지하는
+     것은 아니다.
+- 대안:
+  - 버전을 올리지 않고 문서(MEMORY.md 등)에만 "기준선"이라고 서술 —
+    선언의 무게감이 약하고, 이후 세션이 프로젝트 상태를 빠르게 파악할
+    표준 지표(버전 번호)가 없어짐 (기각).
+  - `1.0.0`으로 상향 — 아직 Interaction Layer의 실제 표면(Voice/Slack/
+    REST 등) 연동, Memory 요약, LLM Policy Engine 자동화 등 PRD의 핵심
+    기능이 다수 남아 있어 "1.0"이 의미하는 완성도에는 이르지 못했다고
+    판단 (기각, 사용자가 제시한 `0.5.0`을 그대로 채택).
+- 이유: 버전 번호는 "구조적 완성도"와 "기능적 완성도"를 구분해 전달할
+  수 있는 가장 간단한 신호다. `0.5.0`은 구조(Architecture)는 안정
+  기준선에 도달했지만 기능(Feature)은 아직 절반 수준이라는 의미를
+  정확히 전달한다.
+- 결과/영향: `pyproject.toml`(`version = "0.5.0"`), `.ai/TASKS.md`의
+  "Milestone 4 Review" 6절에 선언 근거 기록. `docs/ARCHITECTURE.md`/
+  `docs/ROADMAP.md`/`README.md`는 이 ADR을 참고해 M4 완료 상태와 함께
+  갱신한다. 소스 코드(`src/`, `tests/`) 변경 없음(문서·버전 메타데이터
+  변경만).

@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.10.0 |
+| 문서 버전 | v0.11.0 |
 | 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1·2·3 완료, Milestone 4 Task List 확정) |
+| 상태 | Draft (Milestone 1~4 구현 완료, v0.5.0 아키텍처 기준선 선언 — 사용자 승인 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -47,7 +47,7 @@ Roadmap
 | M1. 기반 구축 (Foundation) | 문서 체계 + 핵심 도메인(Mission/Step/WorkspaceSession/Agent 포함) + 전체 Interfaces(16종) + Workspace Core 골격 | **완료 (2026-07-25 사용자 승인)** |
 | M2. 멀티 에이전트 코어 (Multi-Agent Core) | Agent Runtime·Event Store·기본 Agent, Core Engines & Context Manager 구현 | **완료 (2026-07-25 사용자 승인)** |
 | M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Engine Runtime & Engine Adapter(Claude Code 우선) 구현 | **완료 (2026-07-25 사용자 승인)** — Interaction Layer·Coding Agent 실제 경로 통합은 M4로 공식 이관 |
-| M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | Task List 확정(M4-T01~T09, 2026-07-26) — 착수 예정 |
+| M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | M4-T01~T09 구현 완료, **Milestone Review 제출 — v0.5.0 아키텍처 기준선 선언, 사용자 승인 대기** |
 
 ---
 
@@ -212,9 +212,12 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
 
 **Milestone Definition of Done**
 - 자동화 시나리오 1건 이상 동작(Automation Engine이 조건/일정 기반으로
-  Workflow/Mission을 실제로 트리거)
-- 다중 프로젝트 조회(2개 이상 프로젝트를 동시에 운용)
-- 메모리 검색이 확인됨(Memory Engine이 핵심 컨텍스트를 검색/요약)
+  Workflow/Mission을 실제로 트리거) — **충족(M4-T07)**
+- 다중 프로젝트 조회(2개 이상 프로젝트를 동시에 운용) — **충족(M4-T05)**
+- 메모리 검색이 확인됨(Memory Engine이 핵심 컨텍스트를 검색/요약) —
+  **검색만 충족(M4-T08)**. 요약(summarization)은 M4-T08 Analysis
+  단계에서 사용자 승인 하에 범위를 좁혀 LLM Policy/Router 준비 이후
+  Milestone으로 공식 이관(LLM 없이는 실질적인 요약을 구현할 수 없음)
 - (필요 시 파일→DB 전환은 별도 ADR)
 
 **Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 4" 참고)
@@ -229,7 +232,7 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
 | M4-T06 | `run_parallel` 실제 동시성 검증 — **완료** | M2 이월 부채 #5 |
 | M4-T07 | Automation Engine 구현 — **완료**: `bind_workflow`/`fire` 추가, AutomationEngine은 연결 관리만 담당(WorkflowEngine 미의존) | M4 DoD |
 | M4-T08 | Memory Engine 고도화 — **완료**: `search()`/`find_snapshots()` 추가(검색만, 요약은 LLM Router 이후로 이관) | M4 DoD |
-| M4-T09 | Milestone 4 Review + v0.5.0 아키텍처 기준선 확정 | 관례 + 사용자 신규 제안 |
+| M4-T09 | Milestone 4 Review + v0.5.0 아키텍처 기준선 확정 — **완료**: `pyproject.toml` 버전 0.5.0 상향, ADR-0024 신규 | 관례 + 사용자 신규 제안 |
 
 **Milestone 3에서 공식 이관된 항목**(M3-T08 Milestone 3 Review, 2026-07-25
 사용자 승인, 위 M4-T03/T04에 반영됨): 이 문서의 원래 Milestone 3 DoD에는

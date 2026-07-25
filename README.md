@@ -19,29 +19,35 @@ AI Workspace는 또 하나의 코딩 AI가 아닙니다. 실제 코드 작성은
 - 다중 프로젝트 관리 (Multi Project)
 - 구현 엔진(Claude Code, Codex 등) 관리
 
-> **현재 상태**: **Milestone 1(기반 구축)·Milestone 2(멀티 에이전트 코어)·
-> Milestone 3(실행 엔진 연동)가 모두 2026-07-25 사용자 승인으로
-> 완료되었습니다.** `MissionPlanned`→`CodeCompleted`→`ReviewCompleted`→
+> **현재 상태**: **Milestone 1~4가 모두 2026-07-26 사용자 승인으로
+> 완료되었고, v0.5.0 아키텍처 기준선(Baseline)이 선언되었습니다**
+> (ADR-0024). `MissionPlanned`→`CodeCompleted`→`ReviewCompleted`→
 > `DocumentationCompleted` Event 체인이 Event Store 기록까지 포함해 실제로
-> 동작하며, `ClaudeCodeEngineAdapter`(실제 Claude Code CLI 서브프로세스
-> 실행)→`ManagedEngineRuntime`(생명주기/Timeout/Cancel)→
-> `RecoveringEngineRuntime`(재시도)→`EngineApprovalPipeline`(실행 전 승인
-> 게이트)까지 전체 Engine 실행 계층이 실제 구현으로 연결되어 동작합니다
-> (`docs/ROADMAP.md` 참고). Milestone 3 Review에서 원래 계획에 있던
-> Interaction Layer 구현과 CodingAgent의 실제 Engine 경로 통합이 실제
-> Task 범위에 없었음을 발견해 **Milestone 4로 공식 이관**했습니다. Multi-
-> Agent First 구조를 Agent Runtime·Engine Runtime·Context Manager·Event
-> Store·Interaction Layer·Mission→Workflow→Task→Step 계층까지 확정
-> (ADR-0006~0022)했습니다. 프로젝트 관리 체계는 2026-07-24부로
-> `Milestone → Task` 2단 계층입니다(기존 Phase 계층은 폐지, ADR-0021).
-> Task는 아키텍처 책임 경계에 따라 분해합니다(ADR-0022). 자세한 계획은
-> [`docs/ROADMAP.md`](docs/ROADMAP.md)와
+> 동작하고, `ClaudeCodeEngineAdapter`(실제 Claude Code CLI 서브프로세스
+> 실행)→`ManagedEngineRuntime`(생명주기/Timeout/Cancel, `run_parallel()`은
+> `ThreadPoolExecutor` 기반 실제 동시 실행)→`RecoveringEngineRuntime`
+> (재시도)→`EngineApprovalPipeline`(실행 전 승인 게이트)까지 전체 Engine
+> 실행 계층이 CodingAgent 등 실제 Agent를 통해서도 동작함을 확인했습니다.
+> `WorkspaceCore`가 CLI의 유일한 진입점이 되었고(`project create/show/
+> list`), `AutomationEngine`(트리거→Workflow 연결·발동)과
+> `MemoryEngine`(검색)도 실제로 동작합니다(`docs/ROADMAP.md` 참고).
+> **Milestone 1~4 내내 새 최상위 Interface가 한 번도 추가되지 않아**
+> M1의 16종 Interface 설계가 구조적으로 안정적임이 반복 확인되었고, 이
+> 안정성을 근거로 v0.5.0을 아키텍처 기준선으로 선언했습니다 — 이후
+> Milestone은 기존 구조 위에 기능을 조립하는 것을 기본값으로 합니다.
+> Multi-Agent First 구조를 Agent Runtime·Engine Runtime·Context
+> Manager·Event Store·Interaction Layer·Mission→Workflow→Task→Step
+> 계층까지 확정(ADR-0006~0024)했습니다. 프로젝트 관리 체계는
+> 2026-07-24부로 `Milestone → Task` 2단 계층입니다(기존 Phase 계층은
+> 폐지, ADR-0021). Task는 아키텍처 책임 경계에 따라 분해합니다
+> (ADR-0022). 자세한 계획은 [`docs/ROADMAP.md`](docs/ROADMAP.md)와
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)를 참고하세요.
 
 ## 시작 방법
 
-Milestone 1~3(도메인·Interfaces·Workspace Core·멀티 에이전트 코어·실행
-엔진 연동)까지 구현된 단계입니다. 아래 문서를 순서대로 읽어보는 것을
+Milestone 1~4(도메인·Interfaces·Workspace Core·멀티 에이전트 코어·실행
+엔진 연동·자동화/다중 프로젝트/메모리 검색)까지 구현되어 v0.5.0 아키텍처
+기준선에 도달한 단계입니다. 아래 문서를 순서대로 읽어보는 것을
 권장합니다.
 
 1. [`docs/PRD.md`](docs/PRD.md) — 이 프로젝트가 왜 필요한지, 무엇을 목표로 하는지
@@ -77,7 +83,7 @@ ai-workspace/
 │   ├── agents/             # 능력별 Agent (Milestone 2)
 │   ├── engines/            # Core Engines 구현 (Milestone 2)
 │   ├── events/             # Event Bus + Event Store (Milestone 2)
-│   ├── interaction/         # Interaction Layer (Milestone 4로 이관, 아직 없음)
+│   ├── interaction/         # Interaction Layer (Milestone 4, CLI는 예외 Surface로 미경유)
 │   ├── adapters/           # Engine Adapter 구현 (Milestone 3)
 │   ├── storage/            # 파일 기반 저장소 구현
 │   └── cli/                # CLI 진입점

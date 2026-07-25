@@ -154,96 +154,43 @@
   고도화)과 M2 이월 항목(#1 AgentManager/Registry 프로덕션 구현, #2 CLI-
   WorkspaceCore 연동, #5 병렬성 실제 검증 — 전부 여전히 미해결)으로
   구분해 `.ai/TASKS.md`에 기록.
-- **Milestone 4 Task List 확정(2026-07-26)**: M4-T01(AgentManager/Registry)
-  → M4-T02(CLI↔WorkspaceCore 연동) → M4-T03(Interaction Layer) →
-  M4-T04(CodingAgent 실제 Engine 통합+E2E) → M4-T05(다중 프로젝트 운용
-  검증) → M4-T06(`run_parallel` 동시성 검증) → M4-T07(Automation Engine,
-  Interface 변경 여부 우선 검토) → M4-T08(Memory Engine 고도화, Interface
-  변경 여부 우선 검토) → M4-T09(Milestone 4 Review). 사전 조사로 확인한
-  것: `ProjectRepository.list_projects()`는 이미 구현되어 있어(T1-23)
-  다중 프로젝트 조회는 저장소 계층에서는 이미 가능(CLI/Core 노출만 부족).
-  `MemoryEngine`/`AutomationEngine` Interface 자체에는 검색/트리거 실행
-  메서드가 없어(`remember`/`recall`, `register_trigger`/`list_triggers`
-  뿐) M4-T07/T08은 Interface 확장(RULES §1.4 "아키텍처 변경" 승인 대상일
-  가능성)이 필요할 수 있음 — 각 Task 착수 시 Analysis 단계에서 먼저 검토.
-  **사용자 제안**: M4는 "기반 프레임워크"에서 "사용 가능한 워크스페이스"로
-  넘어가는 전환점이므로, M4-T09(Milestone Review)에서 단순 Review를 넘어
-  **v0.5.0 아키텍처 기준선(Baseline)**을 확정 — 이후 M5+는 구조 변경보다
-  기능 확장에 집중.
-- **M4-T01 완료(2026-07-26)**: `runtime/agent/agent_manager.py`/
-  `agent_registry.py`에 `InMemoryAgentManager`/`InMemoryAgentRegistry`
-  신규 — `FakeAgentManager`/`FakeAgentRegistry`(허용 전이 규칙 포함)를
-  T2-02/T2-03과 동일한 패턴으로 그대로 승격, 새 Interface 없음.
-  CLI/WorkspaceCore 연동은 M4-T02 범위. 전체 291개 테스트 통과.
-- **M4-T02 완료(2026-07-26)**: `WorkspaceCore.save_project()` 추가
-  (`load_project()`와 대칭). `cli/main.py`가 `FileProjectRepository`
-  직접 호출을 없애고 `WorkspaceCore`를 유일한 진입점으로 사용 —
-  M2 이월 부채 #2 해소. 사용자 요청으로 `ClaudeCodeEngineAdapter`는
-  "기본 채택 Engine"으로 문서화만 하고 실제로는 등록하지 않는 지연
-  초기화 상태 유지(현재 CLI 명령이 Engine 실행을 안 써서 `claude`
-  실행 파일 의존성 불필요). 기존 CLI 테스트 5개는 수정 없이 그대로
-  통과(외부 동작 무변경 증명). `project list`는 M4-T05로 유지. 전체
-  292개 테스트 통과.
-- **M4-T03 완료(2026-07-26)**: `interaction/interaction_engine.py`(신규
-  패키지)의 `InMemoryInteractionEngine` — `FakeInteractionEngine` 승격.
-  CLI는 이미 구조화된 입력을 제공해 이 계층을 거치지 않는 예외 Surface로
-  유지(사용자 확인) — `docs/ARCHITECTURE.md` §3.1/§3.2에 이 예외 관계를
-  명시적으로 문서화. `normalize()` 반환 타입은 기존 `NormalizedRequest`
-  (T1-21)를 그대로 사용 — 모든 Surface가 동일 DTO로 Core에 전달된다는
-  목표를 이미 만족해 새 타입을 만들지 않음. 전체 297개 테스트 통과.
-- **M4-T04 완료(2026-07-26)**: `CodingAgent`(T2-06)가 이미
-  `EngineRuntime`을 Interface로만 주입받는 설계라 **소스 코드 변경 없이**
-  신규 `tests/integration/test_coding_agent_runtime_integration.py`만
-  추가 — Planning→Coding→Review→Documentation 파이프라인을 M3 실제
-  Engine 스택(`ClaudeCodeEngineAdapter`+`ManagedEngineRuntime`+
-  `RecoveringEngineRuntime`)으로 조립해 검증(T2-06의 Mock 기반
-  `test_pipeline.py`는 그대로 유지). 사용자 제안 3가지 반영: (1)
-  `FlakyProcessRunner`로 Coding 1차 실행 실패→재시도 성공 시나리오
-  실증, (2) Runtime Event/Agent Event 전체 순서를 정확히 단언(M2
-  Implementation Observation #3의 재귀 발행 역전 특성이 만드는 순서를
-  직접 검증 — 가장 안쪽 `documentation_completed`가 먼저,
-  `mission_planned`이 마지막), (3) 파일명은 Milestone 번호 대신 기능
-  중심으로 명명. 전체 300개 테스트 통과.
-- **M4-T05 완료(2026-07-26)**: `WorkspaceCore.list_projects()` 추가
-  (`load_project`/`save_project`와 동일 패턴). CLI `project list` 명령
-  추가(M4-T02에서 유보한 항목). 사용자 요청 2가지 반영: Project 객체
-  독립성 검증(`FileProjectRepository.load()`가 매번 새 인스턴스를 생성해
-  반환된 객체를 변경해도 저장소/재조회에 영향 없음을 고정하는 테스트),
-  CLI 테스트는 실제 `FileProjectRepository`를 거치는 통합 경로로 작성.
-  서로 다른 Project에 묶인 WorkspaceSession 2개가 서로 간섭하지 않음도
-  검증. 새 Interface·클래스 없음. 전체 307개 테스트 통과.
-- **M4-T06 완료(2026-07-26, Effort High 승인)**: **ADR-0023 신규** —
-  `AgentScheduler.select()`(선택 책임)와 `EngineRuntime.run_parallel()`
-  (실행 책임)의 병렬 경계를 확정, `docs/ARCHITECTURE.md`(v0.8.0)에 반영.
+- **Milestone 4(자동화 및 확장) 완료 — 2026-07-26 사용자 승인.**
+  `M4-T01`~`M4-T09` 전체 DONE. `InMemoryAgentManager`/`InMemoryAgentRegistry`
+  (M4-T01, M2 이월 부채 #1 해소) → `WorkspaceCore.save_project()`로
+  CLI가 `WorkspaceCore`를 유일한 진입점으로 사용(M4-T02, 부채 #2 해소) →
+  `InMemoryInteractionEngine`(M4-T03, CLI는 이미 구조화된 입력이라 이
+  계층을 거치지 않는 예외 Surface로 문서화) → `CodingAgent` 파이프라인이
+  M3 실제 Engine 스택(`ClaudeCodeEngineAdapter`+`ManagedEngineRuntime`+
+  `RecoveringEngineRuntime`) 위에서도 동작함을 소스 변경 없이 새 테스트로
+  증명(M4-T04, Runtime/Agent Event 정확한 중첩 순서·재시도 실증 포함) →
+  `WorkspaceCore.list_projects()`+CLI `project list`(M4-T05, 다중
+  프로젝트 운용·세션 격리·Project 객체 독립성 검증) → **ADR-0023**으로
+  `AgentScheduler`(선택)/`EngineRuntime`(실행) 병렬 책임 경계를 확정하고
   `ManagedEngineRuntime.run_parallel()`을 `ThreadPoolExecutor` 기반 실제
-  동시 실행으로 재구현(기존 순차 반복 대체, 입력 순서 보장 계약 유지).
-  실제 동시 실행을 시간으로 증명(0.2초 지연 3개 Task가 0.4초 미만 완료,
-  5회 연속 확인), 독립 실패 처리(`with` 블록의 `shutdown(wait=True)`
-  덕분에 예외 전파 전 모든 Task 완료 보장) 검증. 사용자 지시대로
-  `RecoveringEngineRuntime`은 수정하지 않고, `run_parallel()`이 병렬
-  배치 안의 개별 Task 재시도를 지원하지 않는다는 것을 테스트로 확인·
-  기록(신규 기술 부채). 전체 312개 테스트 통과.
-- **M4-T07 완료(2026-07-26)**: `AutomationEngine`에 `bind_workflow`/
-  `fire` 추가(Interface 변경 필요 확인 후 진행) — 사용자가 설계 검토 후
-  `fire()`가 실행까지 하지 않고 **연결된 Workflow만 반환**하도록 책임을
-  더 좁힐 것을 제안해 반영: `InMemoryAutomationEngine`은
-  `WorkflowEngine`에 전혀 의존하지 않음(생성자 변경 없음, 결합도 최소화
-  — M5 이후 다양한 Trigger 추가 시에도 "연결 관리"/"실행" 책임 분리
-  유지). "조건/일정 판단"은 호출자 책임으로 남김(YAGNI). 자동화
-  시나리오 E2E(trigger 등록→Workflow 연결→발동→실제
-  `WorkflowEngine.plan()` 실행)로 M4 DoD 직접 증명. 전체 322개 테스트
-  통과.
-- **M4-T08 완료(2026-07-26)**: `MemoryEngine.search(query) -> list[str]`
-  (value 부분 문자열 검색) + `ContextManager.find_snapshots()`(검색을
-  `MemoryEngine.search()`에 위임, §8 규칙 7 유지) 추가. 사용자 요청 2가지
-  반영: 검색 계약(부분 문자열, key는 검색 대상 아님)을 docstring에
-  명시, 장기적으로 key/value 쌍 반환 확장 가능성을 docstring에 남기되
-  지금은 최소 형태 유지. **요약은 이번 범위에서 제외**(LLM Policy/
-  Router가 아직 Temporary 단계라 실제 백엔드 없이 껍데기만 만들게 됨 —
-  M4-T07의 "조건 평가는 나중" 판단과 동일 원칙, LLM Router 준비 이후
-  Milestone으로 이관). 전체 331개 테스트 통과. **Milestone 4의 8개 Task
-  중 8개(M4-T01~T08) 모두 완료, 다음은 M4-T09(Milestone Review + v0.5.0
-  아키텍처 기준선 확정)뿐**.
+  동시 실행으로 재구현(M4-T06, 부채 #5 해소, Effort High 승인) →
+  `AutomationEngine.bind_workflow`/`fire`(M4-T07, fire()는 Workflow
+  반환만 하고 실행은 호출자 책임 — `InMemoryAutomationEngine`이
+  `WorkflowEngine`에 의존하지 않도록 결합도 최소화) →
+  `MemoryEngine.search()`+`ContextManager.find_snapshots()`(M4-T08,
+  검색만 구현, 요약은 LLM Router 준비 이후로 이관). **M4 전체에서 새
+  Interface(ABC) 파일을 하나도 추가하지 않음**(3개 기존 Interface에
+  메서드만 순수 추가) — M1~M4 내내 Interface First가 실증됨. 전체
+  331개 테스트 통과(M3 완료 시점 281개 → M4에서 50개 신규), `ruff`/
+  `mypy` 클린.
+  **Milestone Review 결론**(전문은 `.ai/TASKS.md` M4-T09 "Milestone 4
+  Review" 참고): ROADMAP DoD 3개 항목 중 자동화·다중 프로젝트는 완전
+  충족, 메모리는 검색만 충족(요약은 사전 합의된 범위 조정, M3처럼 뒤늦게
+  발견한 gap이 아님). M2/M3에서 이월된 부채(#1/#2/#5, Interaction Layer,
+  CodingAgent 통합) 전부 해소. 신규 부채: `RecoveringEngineRuntime`이
+  병렬 배치 내 개별 Task 재시도 미지원, `MemoryEngine.search()` 선형
+  스캔.
+  **ADR-0024 신규 — v0.5.0 아키텍처 기준선(Baseline) 선언**(사용자
+  제안): `pyproject.toml` 버전을 `0.1.0`→`0.5.0`으로 상향. 근거: M2·M3·
+  M4 세 Milestone 내내 새 최상위 Interface가 한 번도 추가되지 않아 M1의
+  Interface 설계가 구조적으로 안정적임이 반복 확인됨. 이후 M5+는 기존
+  16종 Interface·계층 구조를 기본값으로 유지하고 새 기능은 그 위에
+  조립하며, 구조 변경이 필요하면 지금까지처럼 "Interface 변경 여부
+  우선 검토" 절차를 거친다.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
