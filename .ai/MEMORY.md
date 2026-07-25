@@ -40,12 +40,10 @@
   Milestone 1 소속 `T1-01`~`T1-25`로 번호만 이어졌다가, 같은 날 설계 검토를
   거쳐 `T1-18`~`T1-28`로 추가 재분해됨(ADR-0022, 대응표는 `docs/ROADMAP.md`
   하단 참고).
-- **현재 위치**: Milestone 1 (기반 구축) 진행 중 — `T1-01`~`T1-27` 완료
-  (T1-18~T1-21 Interface 그룹, T1-22 Workspace Core Skeleton, T1-23
-  Repositories, T1-24 CLI, T1-25 Tests, T1-26 Documentation, T1-27 ADR
-  전체 완료), `T1-29`(SOP Skills System, 별도 세션에서 병렬로 완료되어
-  병합됨)도 완료. **`T1-28`(Milestone 1 Review) 1개만 남음** — 사용자
-  승인을 받으면 Milestone 1이 종료된다.
+- **현재 위치**: **Milestone 1(기반 구축) 완료 — 2026-07-25 사용자 승인.**
+  `T1-01`~`T1-29` 전체 DONE(T1-28 Milestone 1 Review 포함). 다음은
+  Milestone 2(멀티 에이전트 코어) 목표/DoD 확정 후 `T2-01`부터 착수(아직
+  세부 Task 미정의 — Task Driven Development 원칙상 착수 시점에 정의).
 - **완료된 Task 요약**: `T1-01`~`T1-11`(문서화 세트 작성 및 승인), `T1-12`
   (구현 착수 승인), `T1-13`(디렉터리 구조), `T1-14`(Project/Task/Workflow
   도메인), `T1-15`(Interfaces 7종), `T1-16`(Mission/Step/WorkspaceSession/
@@ -91,9 +89,12 @@
   `.ai/DECISIONS.md`의 ADR-0002(EngineAdapter 세션 생명주기 계약,
   ADR-0009·ADR-0015 반영해 재확정)/ADR-0004(파일 기반 저장 — 실제로는
   JSON만 채택되었음을 확인)를 "제안"→"승인됨"으로 확정. 소스 코드 변경
-  없음) — 전체 139개 테스트 통과(회귀 없음), `ruff`/`mypy` 클린.
-- **남은 Task 구조 (ADR-0022, 아키텍처 책임 경계 기준 분해)**: `T1-28`
-  Milestone 1 Review (마지막 1개).
+  없음), `T1-28`(Milestone 1 Review: 도메인/Interfaces 16종/Workspace
+  Core/저장소/CLI/테스트 결과를 종합 제시하고 사용자 승인을 받음. 미결
+  항목(Interfaces 13종 구체 구현 등)은 계획대로 Milestone 2·3으로 이월) —
+  전체 139개 테스트 통과(회귀 없음), `ruff`/`mypy` 클린.
+- **Milestone 1 Task 구조는 모두 완료됨** (T1-01~T1-29). 남은 작업 없음 —
+  다음은 Milestone 2 착수.
 - **아키텍처는 v0.6.3으로 갱신** (ADR-0006~0022, Multi-Agent First 심화 + 안정화
   보완 + Task-Workflow 관계 보완 + Phase→Task 거버넌스 전환 + Task 분해 원칙).
   시스템 구조 자체(컴포넌트/의존성)는 T1-18 설계 검토로 변경되지 않았음 — 자세한
@@ -105,10 +106,10 @@
   T1-29(SOP Skills)는 별도 세션의 병렬 작업이 origin에 먼저 병합되어 있어
   `git merge`로 반영함 — `.ai/skills/`에 문서만 추가되어 코드/아키텍처
   변경은 없음.
-- **다음 단계**: `.ai/TASKS.md`의 `T1-28`(Milestone 1 Review) — 도메인(Agent
-  포함), 전체 Interfaces, Workspace Core 골격, 저장소, CLI, 테스트 결과를
-  제시하고 Milestone 1 완료를 사용자에게 승인 요청한다(RULES.md §1.4
-  Approval Required). T1-29(SOP Skills System)도 검토 대상에 포함.
+- **다음 단계**: Milestone 2(멀티 에이전트 코어) 착수. `docs/ROADMAP.md`의
+  "Milestone 2" 절 목표(Agent Runtime·Event Store·기본 Agent, Core
+  Engines·Context Manager 구현)를 바탕으로 목표/DoD를 확정한 뒤 `T2-01`
+  부터 개별 Task를 정의한다(Task Driven Development — 착수 시점에 정의).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

@@ -44,7 +44,7 @@ Roadmap
 
 | Milestone | 핵심 목표 | 상태 |
 |---|---|---|
-| M1. 기반 구축 (Foundation) | 문서 체계 + 핵심 도메인(Mission/Step/WorkspaceSession/Agent 포함) + 전체 Interfaces(16종) + Workspace Core 골격 | 진행 중 |
+| M1. 기반 구축 (Foundation) | 문서 체계 + 핵심 도메인(Mission/Step/WorkspaceSession/Agent 포함) + 전체 Interfaces(16종) + Workspace Core 골격 | **완료 (2026-07-25 사용자 승인)** |
 | M2. 멀티 에이전트 코어 (Multi-Agent Core) | Agent Runtime·Event Store·기본 Agent, Core Engines & Context Manager 구현 | 예정 |
 | M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Engine Runtime & Engine Adapter(Claude Code 우선) 구현, Interaction Layer 구현 | 예정 |
 | M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | 예정 |
@@ -68,10 +68,9 @@ Phase 1)
    포함), 파일 저장소, 최소 CLI가 동작하며 테스트를 통과한다 (T1-12~T1-28).
 3. Multi-Agent First 관련 아키텍처 결정(ADR-0006~0022)이 문서로 확정되어 있다.
 
-**진행 상태**: T1-01~T1-27 완료 (T1-18~T1-21 Interface 그룹 + T1-22 Workspace
-Core Skeleton + T1-23 Repositories + T1-24 CLI + T1-25 Tests + T1-26
-Documentation + T1-27 ADR), T1-28 진행 예정 (다음 Task: T1-28, Milestone 1
-Review).
+**진행 상태**: T1-01~T1-28 전체 완료. **2026-07-25 사용자 승인으로 Milestone 1
+종료.** 다음은 Milestone 2 목표/DoD 확정 후 `T2-01`부터 착수 (세부 Task는
+착수 시점에 정의).
 세부 Task 목록/DoD/상태는 `.ai/TASKS.md`의 "Milestone 1" 섹션 참고.
 
 > **2026-07-24 Task 재분해(ADR-0022)**: 설계 검토 결과 원래 하나의 Task였던
@@ -192,7 +191,7 @@ Phase 체계 폐지에 따라 기존 Phase 0/Phase 1의 모든 Task를 Milestone
 | P1-10 | T1-25 | 기본 테스트 환경 구축 및 테스트 작성 | DONE |
 | P1-11 | T1-26 | `docs/ARCHITECTURE.md` 최종 정합성 확인 | DONE |
 | P1-12 | T1-27 | ADR 상태 갱신 (ADR-0002, ADR-0004) | DONE |
-| P1-13 | T1-28 | Milestone 1 완료 승인 요청 (구 "Phase 1 완료 승인 요청") | TODO |
+| P1-13 | T1-28 | Milestone 1 완료 승인 요청 (구 "Phase 1 완료 승인 요청") | DONE |
 
 Milestone 2~4는 아직 개별 Task로 분해되지 않았으므로(과거에도 "Phase 2 상세
 Task는 착수 시점에 정의"였음), 대응표에 포함하지 않는다. 각 Milestone 착수 시점에

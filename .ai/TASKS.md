@@ -451,7 +451,7 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
   Milestone 1 기간 중 추가된 산출물이므로 함께 검토 대상에 포함한다.**
 - 완료 조건(DoD): 위 모든 Task가 DONE이고 테스트가 통과한 상태에서 사용자가
   승인한다.
-- 상태: TODO
+- 상태: **DONE (2026-07-25 사용자 승인 — Milestone 1 완료)**
 - 의존성: T1-01 ~ T1-27
 
 #### T1-29: Standard Operating Procedure (SOP) Skills System
@@ -813,3 +813,18 @@ Enum/frozenset 등 구조화된 값을 다루기에 JSON이 더 적합)을 추�
 코드는 전혀 변경하지 않음. `ruff check src tests`, `mypy src`,
 `pytest`(139개, 회귀 없음) 모두 통과. 다음 Task: **T1-28** (Milestone 1
 Review — 최종 승인 요청). |
+| 2026-07-25 | **T1-28 완료 & Milestone 1 종료: 사용자 승인**. 도메인
+(Project/Mission/Workflow/Task/Step/WorkspaceSession/Agent 계열, LLM
+Policy 초안), Interfaces 16종(`ProjectRepository`/`AgentRepository`/
+`EventStore` 3종은 계약+구현 완료, 나머지 13종은 계약만 완료 — Milestone
+2·3에서 구현 예정), Workspace Core 골격(T1-22), 파일 기반 저장소 3종
+(T1-23), CLI 진입점(T1-24), 테스트 스위트(139개 통과, T1-25에서 커버리지
+보강), 문서 정합성(T1-26), ADR 확정(T1-27), SOP Skills System(T1-29)을
+종합 제시했고 사용자가 Milestone 1 완료를 승인함. 미결 항목(Interfaces
+13종 구체 구현, `AgentRuntime` 파사드 도입 여부, CLI-WorkspaceCore 완전
+연동)은 결함이 아니라 Milestone 2·3으로 계획대로 이월됨. DX-01(Stage
+Checkpoint)도 Milestone 1 기간 중 도입되어 "동일"·"하향"·"상향" 3가지
+판정 경로가 모두 실사용 검증됨. **Milestone 1(기반 구축) 종료.** 사용자
+권고에 따라 다음은 Milestone 2 목표/DoD 확정 후 `T2-01`부터 착수 예정
+(아직 세부 Task 미정의 — Task Driven Development 원칙상 착수 시점에
+정의). |
