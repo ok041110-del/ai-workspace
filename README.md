@@ -21,11 +21,11 @@ AI Workspace는 또 하나의 코딩 AI가 아닙니다. 실제 코드 작성은
 
 > **현재 상태**: **Milestone 1(기반 구축)이 2026-07-25 사용자 승인으로
 > 완료되었습니다.** Milestone 2(멀티 에이전트 코어) 진행 중 — `T2-01`
-> (AgentRuntime + AgentSession)·`T2-02`(Agent Scheduler + Event Bus)·
-> `T2-03`(Core Engines)까지 완료, 다음은 `T2-04`(Memory 계열)입니다
-> (`docs/ROADMAP.md` 참고). Multi-Agent First 구조를 Agent Runtime·Engine
-> Runtime·Context Manager·Event Store·Interaction Layer·
-> Mission→Workflow→Task→Step 계층까지
+> ~`T2-04`(AgentRuntime, Agent Scheduler + Event Bus, Core Engines,
+> Memory 계열)까지 완료, 다음은 `T2-05`(Engine Runtime + Mock
+> EngineAdapter)입니다(`docs/ROADMAP.md` 참고). Multi-Agent First 구조를
+> Agent Runtime·Engine Runtime·Context Manager·Event Store·Interaction
+> Layer·Mission→Workflow→Task→Step 계층까지
 > 확정(ADR-0006~0022)했으며, 도메인 모델과 인터페이스 계약을 구현하는 중입니다.
 > 프로젝트 관리 체계는 2026-07-24부로 `Milestone → Task` 2단 계층입니다
 > (기존 Phase 계층은 폐지, ADR-0021). Task는 아키텍처 책임 경계에 따라

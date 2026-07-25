@@ -569,7 +569,18 @@ Task ID 형식: `T{Milestone 번호}-{일련번호}` (예: `T1-01`). 하나의 T
 - 완료 조건(DoD): Snapshot 생성 → 복원 왕복 결과가 원본 Context와 동일함이
   테스트로 확인되고, `MemoryEngine`이 Context Manager를 거치지 않고 직접
   Snapshot을 다루지 않음(ARCHITECTURE.md §8 규칙 7 준수)이 코드로 확인된다.
-- 상태: TODO
+- 상태: **DONE (2026-07-25)** — `memory/memory_engine.py`의
+  `InMemoryMemoryEngine`(Fake 로직 승격, Snapshot 개념을 전혀 모름),
+  `memory/context_manager.py`의 `InMemoryContextManager`. T2-02/03과
+  달리 **단순 Fake 승격이 아니라 실제 의존 배선을 새로 설계**함 — 기존
+  `FakeContextManager`는 자체 dict에 Snapshot을 보관했지만, 이번 구현은
+  `MemoryEngine`을 생성자로 주입받아 `remember(snapshot_id,
+  json.dumps(context))`/`recall()`+`json.loads()`로 실제 저장·복원함
+  (§8 규칙 7 준수를 코드 구조로 강제). `tests/memory/
+  test_context_manager.py`에 "MemoryEngine.recall()로 Snapshot이 실제
+  저장되었는지" 직접 확인하는 테스트를 포함해 DoD를 코드+테스트 양쪽으로
+  증명. `tests/memory/`에 10개 신규 테스트. `ruff check src tests`,
+  `mypy src`, `pytest`(186개, 기존 176개 + 신규 10개) 모두 통과.
 - 의존성: T1-20
 
 #### T2-05: Engine Runtime 최소 구현 + Mock EngineAdapter
@@ -1035,3 +1046,21 @@ tests`, `mypy src`, `pytest`(159개, 기존 150개 + 신규 9개) 모두 통과.
 판별·차단")를 직접 증명. `ruff check src tests`, `mypy src`,
 `pytest`(176개, 기존 159개 + 신규 17개) 모두 통과. 다음 Task: **T2-04**
 (Memory 계열 구현). |
+| 2026-07-25 | **T2-04 완료: Memory 계열**(§2.4 Stage Checkpoint 4개
+경계 모두 발동. Analysis에서 Sonnet/Low→**Sonnet/Medium** 상향 — T2-02/03
+과 달리 ContextManager↔MemoryEngine 실제 의존 배선이 필요한 설계 작업
+이라 판단, 이후 3개 경계는 "동일" 유지). `memory/memory_engine.py`의
+`InMemoryMemoryEngine`은 Fake 로직 그대로 승격. `memory/
+context_manager.py`의 `InMemoryContextManager`는 기존 `FakeContextManager`
+(자체 dict에 Snapshot 보관)와 다르게 설계 — `MemoryEngine`을 생성자로
+주입받아 `remember(snapshot_id, json.dumps(context))`/`recall()`+
+`json.loads()`로 Snapshot을 실제 저장·복원해 ARCHITECTURE.md §8 규칙 7
+("Memory 접근은 Agent → Context Manager → Memory Engine 순서로만")을
+코드 구조로 강제함. `tests/memory/test_context_manager.py`에
+`MemoryEngine.recall()`로 Snapshot이 실제 저장되었는지 직접 확인하는
+테스트를 포함해 DoD를 코드+테스트 양쪽으로 증명. `tests/memory/`에 10개
+신규 테스트(Context 조립 2, 왕복 일치, MemoryEngine 경유 저장 증명,
+unknown 예외, 방어적 복사, Snapshot 복원이 assemble_context에 반영됨).
+`ruff check src tests`, `mypy src`, `pytest`(186개, 기존 176개 + 신규
+10개) 모두 통과. 다음 Task: **T2-05** (Engine Runtime 최소 구현 + Mock
+EngineAdapter). |
