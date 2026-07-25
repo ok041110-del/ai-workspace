@@ -154,6 +154,22 @@
   고도화)과 M2 이월 항목(#1 AgentManager/Registry 프로덕션 구현, #2 CLI-
   WorkspaceCore 연동, #5 병렬성 실제 검증 — 전부 여전히 미해결)으로
   구분해 `.ai/TASKS.md`에 기록.
+- **Milestone 4 Task List 확정(2026-07-26)**: M4-T01(AgentManager/Registry)
+  → M4-T02(CLI↔WorkspaceCore 연동) → M4-T03(Interaction Layer) →
+  M4-T04(CodingAgent 실제 Engine 통합+E2E) → M4-T05(다중 프로젝트 운용
+  검증) → M4-T06(`run_parallel` 동시성 검증) → M4-T07(Automation Engine,
+  Interface 변경 여부 우선 검토) → M4-T08(Memory Engine 고도화, Interface
+  변경 여부 우선 검토) → M4-T09(Milestone 4 Review). 사전 조사로 확인한
+  것: `ProjectRepository.list_projects()`는 이미 구현되어 있어(T1-23)
+  다중 프로젝트 조회는 저장소 계층에서는 이미 가능(CLI/Core 노출만 부족).
+  `MemoryEngine`/`AutomationEngine` Interface 자체에는 검색/트리거 실행
+  메서드가 없어(`remember`/`recall`, `register_trigger`/`list_triggers`
+  뿐) M4-T07/T08은 Interface 확장(RULES §1.4 "아키텍처 변경" 승인 대상일
+  가능성)이 필요할 수 있음 — 각 Task 착수 시 Analysis 단계에서 먼저 검토.
+  **사용자 제안**: M4는 "기반 프레임워크"에서 "사용 가능한 워크스페이스"로
+  넘어가는 전환점이므로, M4-T09(Milestone Review)에서 단순 Review를 넘어
+  **v0.5.0 아키텍처 기준선(Baseline)**을 확정 — 이후 M5+는 구조 변경보다
+  기능 확장에 집중.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.9.0 |
+| 문서 버전 | v0.10.0 |
 | 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1·2·3 모두 완료, 2026-07-25 사용자 승인) |
+| 상태 | Draft (Milestone 1·2·3 완료, Milestone 4 Task List 확정) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -47,7 +47,7 @@ Roadmap
 | M1. 기반 구축 (Foundation) | 문서 체계 + 핵심 도메인(Mission/Step/WorkspaceSession/Agent 포함) + 전체 Interfaces(16종) + Workspace Core 골격 | **완료 (2026-07-25 사용자 승인)** |
 | M2. 멀티 에이전트 코어 (Multi-Agent Core) | Agent Runtime·Event Store·기본 Agent, Core Engines & Context Manager 구현 | **완료 (2026-07-25 사용자 승인)** |
 | M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Engine Runtime & Engine Adapter(Claude Code 우선) 구현 | **완료 (2026-07-25 사용자 승인)** — Interaction Layer·Coding Agent 실제 경로 통합은 M4로 공식 이관 |
-| M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | 예정 |
+| M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | Task List 확정(M4-T01~T09, 2026-07-26) — 착수 예정 |
 
 ---
 
@@ -206,23 +206,41 @@ T2-01~T2-05는 서로 독립적이며 순서 무관(병렬 진행 가능, T2-02�
 ## Milestone 4 — 자동화 및 확장 (Automation & Scale)
 
 **목표**: Automation Engine 기반 자동화, 다중 프로젝트 운용, Memory Engine
-고도화.
+고도화. **사용자 강조: M4는 "기반 프레임워크"에서 "사용 가능한
+워크스페이스"로 넘어가는 전환점이다** — Milestone 종료 시 v0.5.0 아키텍처
+기준선(Baseline)을 확정해, M5 이후는 구조 변경보다 기능 확장에 집중한다.
 
-**예정 작업 영역** (Milestone 3 완료 후 착수 시점에 `T4-01`부터 개별 Task로 정의)
-- 자동화·다중 프로젝트·메모리 고도화: Automation Engine이 조건/일정 기반으로
-  협업 Workflow(Mission)를 트리거하고, 2개 이상 프로젝트를 동시에 운용하며,
-  Memory Engine이 핵심 컨텍스트를 검색/요약/Snapshot 관리한다. DoD: 자동화
-  시나리오 1건 이상 동작, 다중 프로젝트 조회, 메모리 검색이 확인됨. (필요 시
-  파일→DB 전환은 별도 ADR.)
-- **Milestone 3에서 공식 이관된 항목**(M3-T08 Milestone 3 Review, 2026-07-25
-  사용자 승인): 이 문서의 원래 Milestone 3 DoD에는 포함되어 있었으나 실제
-  M3-T01~T08 Task 범위에는 없었던 항목 — M3 미완료가 아니라 M4로
-  재배치된 것으로 확정됨(`.ai/TASKS.md`의 "Milestone 3 Review" 7절 참고).
-  1. Interaction Layer 구현 — CLI/API 등 표면 입력을 표준 요청으로 정규화
-  2. `CodingAgent`(M2)의 실제 Engine 실행 경로(EngineApprovalPipeline→
-     RecoveringEngineRuntime→ManagedEngineRuntime→ClaudeCodeEngineAdapter)
-     통합 및 End-to-End 검증 — M3-T07 E2E는 Task를 Pipeline에 직접
-     넘겼을 뿐 실제 Agent를 경유하지 않았음
+**Milestone Definition of Done**
+- 자동화 시나리오 1건 이상 동작(Automation Engine이 조건/일정 기반으로
+  Workflow/Mission을 실제로 트리거)
+- 다중 프로젝트 조회(2개 이상 프로젝트를 동시에 운용)
+- 메모리 검색이 확인됨(Memory Engine이 핵심 컨텍스트를 검색/요약)
+- (필요 시 파일→DB 전환은 별도 ADR)
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 4" 참고)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M4-T01 | `AgentManager`/`AgentRegistry` 프로덕션 구현 | M2 이월 부채 #1 |
+| M4-T02 | CLI ↔ WorkspaceCore 완전 연동 | M2 이월 부채 #2 |
+| M4-T03 | Interaction Layer 구현 | M3 Review에서 공식 이관 |
+| M4-T04 | `CodingAgent` 실제 Engine 통합 + E2E | M3 Review에서 공식 이관 |
+| M4-T05 | 다중 프로젝트 운용 검증 | M4 DoD |
+| M4-T06 | `run_parallel` 실제 동시성 검증 | M2 이월 부채 #5 |
+| M4-T07 | Automation Engine 구현(Interface 변경 여부 우선 검토) | M4 DoD |
+| M4-T08 | Memory Engine 고도화(Interface 변경 여부 우선 검토) | M4 DoD |
+| M4-T09 | Milestone 4 Review + v0.5.0 아키텍처 기준선 확정 | 관례 + 사용자 신규 제안 |
+
+**Milestone 3에서 공식 이관된 항목**(M3-T08 Milestone 3 Review, 2026-07-25
+사용자 승인, 위 M4-T03/T04에 반영됨): 이 문서의 원래 Milestone 3 DoD에는
+포함되어 있었으나 실제 M3-T01~T08 Task 범위에는 없었던 항목 — M3
+미완료가 아니라 M4로 재배치된 것으로 확정됨(`.ai/TASKS.md`의 "Milestone 3
+Review" 7절 참고).
+1. Interaction Layer 구현 — CLI/API 등 표면 입력을 표준 요청으로 정규화
+2. `CodingAgent`(M2)의 실제 Engine 실행 경로(EngineApprovalPipeline→
+   RecoveringEngineRuntime→ManagedEngineRuntime→ClaudeCodeEngineAdapter)
+   통합 및 End-to-End 검증 — M3-T07 E2E는 Task를 Pipeline에 직접
+   넘겼을 뿐 실제 Agent를 경유하지 않았음
 
 ---
 

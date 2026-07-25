@@ -1207,9 +1207,27 @@ Review 완료 + Interface First Review 완료 + 테스트 통과 + 문서 최신
 ## Milestone 4 — 자동화 및 확장 (Automation & Scale)
 
 > Milestone DoD: `docs/ROADMAP.md`의 "Milestone 4 Definition of Done" 참고.
-> 세부 Task(`T4-01`부터)는 Milestone 3 완료 승인 이후, 착수 시점에 이 문서에
-> 추가한다. 예정 작업 영역은 `docs/ROADMAP.md`의 "Milestone 4" 섹션 참고
-> (자동화·다중 프로젝트·메모리 고도화).
+> **M4는 "기반 프레임워크"에서 "사용 가능한 워크스페이스"로 넘어가는
+> 전환점**이다(사용자 강조) — Milestone 종료 시 M2·M3처럼 단순 Review에
+> 그치지 않고 **v0.5.0 아키텍처 기준선(Baseline)**을 확정해, M5 이후
+> 작업이 구조 변경보다 기능 확장에 집중할 수 있게 한다(M4-T09에서 수행).
+
+**Task List**(2026-07-26 확정, 상세 스펙은 각 Task 착수 시점에 이 문서에 추가)
+
+| Task | 내용 | 근거/출처 | 의존성 |
+|---|---|---|---|
+| M4-T01 | `AgentManager`/`AgentRegistry` 프로덕션 구현 | M2 이월 부채 #1 | 없음 |
+| M4-T02 | CLI ↔ WorkspaceCore 완전 연동 | M2 이월 부채 #2 | M4-T01 |
+| M4-T03 | Interaction Layer 구현 | M3 Review에서 공식 이관 | 없음 |
+| M4-T04 | `CodingAgent` 실제 Engine 통합 + E2E | M3 Review에서 공식 이관 | 없음(M3 스택 완료) |
+| M4-T05 | 다중 프로젝트 운용 검증 | M4 목표(ROADMAP DoD) | M4-T02 |
+| M4-T06 | `run_parallel` 실제 동시성 검증 | M2 이월 부채 #5 | 없음 |
+| M4-T07 | Automation Engine 구현(Analysis 단계에서 Interface 변경 여부 우선 검토) | M4 목표(ROADMAP DoD) | 없음 |
+| M4-T08 | Memory Engine 고도화(Analysis 단계에서 Interface 변경 여부 우선 검토) | M4 목표(ROADMAP DoD) | 없음 |
+| M4-T09 | Milestone 4 Review + v0.5.0 아키텍처 기준선 확정 | 관례(M2-T08/M3-T08) + 사용자 신규 제안 | M4-T01~T08 |
+
+상태: 전체 TODO. 착수 순서는 위 표 순서를 기본으로 하되, 의존성이 없는
+Task는 순서를 바꿔 진행할 수 있다.
 
 ---
 
