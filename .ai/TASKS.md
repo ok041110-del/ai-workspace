@@ -2763,7 +2763,7 @@ memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새
 |---|---|---|
 | M8-T01 | `ContextManager`에 `latest_snapshot_id(project_id)` 신규 메서드 추가(계약+구현) — project별 최신 snapshot 포인터 — **완료** | M7 Review 이월 갭 |
 | M8-T02 | `DocumentationAgent`가 Mission 종료 시 `workspace_session.memory_snapshot_id`를 새 snapshot_id로 갱신 — **완료** | Milestone DoD |
-| M8-T03 | `PlanningAgent`가 Mission 시작 시 `memory_snapshot_id`가 없으면 `latest_snapshot_id(project_id)`로 자동 복원 | Milestone DoD |
+| M8-T03 | `PlanningAgent`가 Mission 시작 시 `memory_snapshot_id`가 없으면 `latest_snapshot_id(project_id)`로 자동 복원 — **완료** | Milestone DoD |
 | M8-T04 | End-to-End 검증(같은 세션 내 연속 Mission + 새 세션에서도 이전 요약을 자동으로 이어받음을 증명) | Milestone DoD |
 | M8-T05 | Milestone 8 Review | 관례 |
 
@@ -2822,7 +2822,7 @@ memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새
    라우팅, Adapter 계열 통합 등은 이번 Milestone 범위 밖으로 유지된다.
 
 **상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). M8-T01/M8-T02 완료, 다음 Task는 M8-T03.
+사용자 확정). M8-T01~T03 완료, 다음 Task는 M8-T04(End-to-End 검증).
 
 #### M8-T01: `ContextManager.latest_snapshot_id(project_id)` 신규 메서드
 - 목적: "project별 최신 snapshot"을 안정적으로 찾을 수 있는 계약을
@@ -2871,6 +2871,30 @@ memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새
   tests`/`mypy src` 클린. `PlanningAgent`가 이 값을 실제로 읽어 Mission
   시작 시 복원하는 것은 M8-T03 범위.
 - 의존성: M8-T01
+
+#### M8-T03: `PlanningAgent`가 Mission 시작 시 최신 snapshot 자동 복원
+- 목적: "세션 연속성"의 읽기 측 — 새 세션(또는 처음부터 세션 중이던
+  Mission)이 project의 최신 Memory Snapshot을 실제로 이어받게 한다.
+- 작업 내용: `PlanningAgent`에 `context_manager: ContextManager`,
+  `workspace_session: WorkspaceSession` 생성자 의존성 신규 추가.
+  `plan_mission()` 시작 시 `workspace_session.memory_snapshot_id is None`
+  이면 `context_manager.latest_snapshot_id(project_id)`로 채운다(이미
+  값이 있으면 건드리지 않음). `PlanningAgent`를 생성하는 3개 호출부
+  (`tests/agents/test_pipeline.py`, `tests/integration/
+  test_m6_policy_routing.py`, `tests/integration/
+  test_coding_agent_runtime_integration.py`) 모두 이미 `context_manager`/
+  `workspace_session`을 갖고 있어 전달만 추가.
+- 완료 조건(DoD): `memory_snapshot_id`가 비어 있는 세션은 자동 복원됨,
+  이미 값이 있으면 덮어쓰지 않음, 대응하는 Snapshot이 없으면 `None`
+  그대로 유지됨, 다른 project의 Snapshot을 잘못 이어받지 않음(project별
+  독립). `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — `tests/agents/test_planning_agent.py`
+  신규(`PlanningAgent` 최초 전용 단위 테스트 파일) 5개: 자동 복원됨,
+  기존 값 덮어쓰지 않음, 이전 Snapshot 없으면 `None` 유지, 다른
+  project는 이어받지 않음, 기존 `MissionPlanned` 발행 동작 회귀 없음.
+  `docs/ARCHITECTURE.md` §3.6에 반영. `pytest` 440개(M8-T02 종료 시점
+  435개 + 신규 5개) 전부 통과, `ruff check src tests`/`mypy src` 클린.
+- 의존성: M8-T01, M8-T02
 
 ---
 

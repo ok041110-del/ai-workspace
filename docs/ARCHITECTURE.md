@@ -229,6 +229,13 @@ Agent의 실행을 담당하는 계층.
 - **협업**: Agent끼리 직접 호출하지 않고 Event 기반으로 협업(§5).
 - **실행**: 실제 일은 **Engine Runtime**을 통해 구현 엔진에 위임하고, Context는
   **Context Manager**로, 도메인 작업은 **Core Engines**로 처리한다.
+- **세션 연속성(M8-T03)**: `PlanningAgent`(파이프라인 진입점)는
+  `context_manager`/`workspace_session`을 생성자로 주입받는다.
+  `plan_mission()` 호출 시 `workspace_session.memory_snapshot_id`가
+  비어 있으면 `context_manager.latest_snapshot_id(project_id)`로 그
+  project의 최신 Snapshot을 자동 복원한다(이미 값이 있으면 덮어쓰지
+  않음). §8 규칙 5(Agent → Context Manager)로 해결하며, Workspace
+  Core는 이 로직에 관여하지 않는다(§8 규칙 3·7 무변경).
 
 ### 3.7 Core Engines (Services)
 Task · Workflow · Approval · Automation Engine. Agent가 사용하는 능력 서비스.

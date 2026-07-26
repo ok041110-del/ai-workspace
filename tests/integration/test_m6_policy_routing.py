@@ -109,7 +109,11 @@ def assemble() -> dict[str, Any]:
     workspace_session = WorkspaceSession(session_id="s1", current_project_id="p1")
 
     planning_agent = PlanningAgent(
-        agent_runtime=agent_runtime, event_bus=event_bus, task_engine=task_engine
+        agent_runtime=agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
+        context_manager=context_manager,
+        workspace_session=workspace_session,
     )
     CodingAgent(
         agent_runtime=agent_runtime,
