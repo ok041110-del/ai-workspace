@@ -3589,7 +3589,18 @@ Claude API 기반 EngineAdapter, Model/Effort 수준 라우팅(M6 Review 최초
 - 완료 조건(DoD): M11-T01의 계약 테스트 스위트를
   `LocalExecutionEnvironment`에도 재사용해 통과 + 기존
   `test_process_runner.py` 무변경 통과.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `adapters/local_execution_environment.py`
+  에 `LocalExecutionEnvironment` 구현. 새 프로세스 관리 로직 없이
+  `ProcessRunner`(M3-T03)에 그대로 위임하고, `ProcessResult`↔
+  `ExecutionResult`/`ProcessNotFoundError`↔`ExecutionNotFoundError`만
+  변환한다(`ProcessRunner` 자체는 수정하지 않음). `tests/adapters/
+  test_local_execution_environment.py`에 `test_process_runner.py`와
+  동일한 5개 시나리오(정상 실행/stderr+nonzero/Timeout 강제 종료/
+  unknown cancel 예외/실행 중 cancel)를 `ExecutionEnvironment` 계약
+  기준으로 재작성. `test_process_runner.py`는 무변경으로 그대로 통과.
+  `ruff check src tests`, `mypy src`, `pytest`(459개, 기존 454개 +
+  신규 5개) 모두 통과. 다음 Task: **M11-T03**(`EngineAdapter`가
+  `ExecutionEnvironment`를 사용하도록 전환).
 - 의존성: M11-T01.
 
 #### M11-T03: `EngineAdapter`가 `ExecutionEnvironment`를 사용하도록 전환
