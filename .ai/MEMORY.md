@@ -394,8 +394,8 @@
   Adapter 계열 통합, Codex/Gemini CLI 실검증, `MemoryEngine.search`
   성능, Retry Backoff 등, `ShellAgent` 화이트리스트 고정) — M11은 새
   부채를 남기지 않았다.
-- **Milestone 12(Workflow Automation) 완료 — 문서화 완료, 사용자 승인
-  대기.** 목표는 "Workflow가 사람 개입 없이 순차적으로 Task를 실행하는
+- **Milestone 12(Workflow Automation) 완료 — 2026-07-26 사용자 승인.**
+  목표는 "Workflow가 사람 개입 없이 순차적으로 Task를 실행하는
   MVP"(Multi-Agent/Routing/병렬/Retry/Approval 범위 밖, 사용자 확정).
   **핵심 발견**: `WorkspaceCore.start_workflow()`가 `WorkflowEngine.
   plan()`으로 순서를 계산해왔지만, 그 순서를 실제로 실행하는 코드는
@@ -594,12 +594,12 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-26)**: Milestone 1~11 완료(사용자 승인), Milestone
-  12(Workflow Automation)는 구현+문서화 완료·사용자 승인 대기. 버전
-  v0.5.0 유지(ADR-0024 기준선 — `ExecutionEnvironment`/`WorkflowRunner`
-  둘 다 최상위 흐름이나 기존 Interface 계약을 바꾸지 않는 추가라 기준선
-  재선언 대상이 아님). `pytest` 465개, `ruff`/`mypy` 클린. Milestone 13은
-  아직 목표/DoD/Task List 미정의(Task Driven Development 원칙).
+- **현재 상태(2026-07-26)**: Milestone 1~12 전체 완료(사용자 승인).
+  버전 v0.5.0 유지(ADR-0024 기준선 — `ExecutionEnvironment`/
+  `WorkflowRunner` 둘 다 최상위 흐름이나 기존 Interface 계약을 바꾸지
+  않는 추가라 기준선 재선언 대상이 아님). `pytest` 465개, `ruff`/`mypy`
+  클린. Milestone 13은 아직 목표/DoD/Task List 미정의(Task Driven
+  Development 원칙).
 - **이 환경의 제약(2026-07-26 확인)**: `claude` CLI만 설치되어 있고
   `codex`/`gemini` CLI는 설치되어 있지 않다(`which` 확인). Codex/Gemini
   관련 Task는 이 세션에서 실행 불가 — 실제 CLI가 설치된 환경이 필요하다.

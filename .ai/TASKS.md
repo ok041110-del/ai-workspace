@@ -4030,6 +4030,8 @@ Interface First 검토 완료(3절, 새 Interface 0개), 테스트 결과 문서
 
 **사용자 승인을 조건으로 Milestone 12 Completed를 선언한다.**
 
+**Milestone 12 종료 — 2026-07-26 사용자 승인.**
+
 **Milestone 13 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
 `docs/ROADMAP.md`가 원래 그려둔 다음 단계는 M13(Multi-Agent
 Collaboration)이지만, 이는 사전 논의 없이 확정된 것이 아니며 Milestone
