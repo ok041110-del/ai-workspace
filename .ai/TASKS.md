@@ -2482,7 +2482,7 @@ M2~M6가 그래왔듯).
 |---|---|---|
 | M7-T01 | `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가(인터페이스 확장, 하위 호환) — **완료** | PRD 7.4 갭 |
 | M7-T02 | `DocumentationAgent`가 기존에 버려지던 `engine_runtime.run()` 결과를 캡처해 요약으로 전달 — **완료** | PRD 7.4 갭 |
-| M7-T03 | End-to-End 검증(파이프라인 실행 후 요약이 저장·검색·복원됨을 통합 테스트로 증명) | Milestone DoD |
+| M7-T03 | End-to-End 검증(파이프라인 실행 후 요약이 저장·검색·복원됨을 통합 테스트로 증명) — **완료** | Milestone DoD |
 | M7-T04 | Milestone 7 Review | 관례 |
 
 **Architecture Review(사전 검토, 착수 전)**:
@@ -2525,7 +2525,7 @@ M2~M6가 그래왔듯).
    라우팅, 그 외 소규모 이월 부채는 이번 Milestone 범위 밖으로 유지된다.
 
 **상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). M7-T01/M7-T02 완료, 다음 Task는 M7-T03.
+사용자 확정). M7-T01~T03 완료, 다음 Task는 M7-T04(Milestone Review).
 
 #### M7-T01: `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가
 - 목적: Memory 요약을 저장할 최소 계약을 마련한다 — `MemoryEngine`은
@@ -2574,6 +2574,30 @@ M2~M6가 그래왔듯).
   `pytest` 424개(M7-T01 종료 시점 422개 + 신규 2개) 전부 통과, `ruff
   check src tests`/`mypy src` 클린.
 - 의존성: M7-T01
+
+#### M7-T03: End-to-End 검증
+- 목적: M7-T01(계약 확장)/M7-T02(Agent 반영)가 실제 파이프라인 안에서
+  맞물려 동작하는지 증명한다 — Milestone DoD 1·3번의 직접 검증 대상.
+- 작업 내용: `tests/agents/test_pipeline.py`에
+  `test_pipeline_stores_documentation_summary_searchable_via_memory`
+  신규 — 기존 `build_pipeline()`(`InMemoryEngineRuntime`+`MockEngineAdapter`
+  +실제 `InMemoryContextManager`/`InMemoryMemoryEngine`, T2-06/M5-T06이
+  이미 조립해 둔 헬퍼)을 그대로 재사용해 전체 6-Agent 파이프라인을
+  실행한 뒤, `context_manager.find_snapshots(<Documentation 실행
+  결과>)`로 요약이 실제로 검색되고 `restore_snapshot()`으로 복원된
+  내용에 `summary` 키가 정확히 포함됨을 확인한다. 새 테스트 픽스처를
+  만들지 않고 기존 것을 재사용(YAGNI).
+- 완료 조건(DoD): 파이프라인 실행 후 요약이 검색 가능(`find_snapshots`),
+  복원 가능(`restore_snapshot`)함이 통합 테스트로 증명. 기존 파이프라인
+  테스트 전부 회귀 없음. `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — 신규 테스트 1개 추가. `MockEngineAdapter`
+  가 `f"{task.task_id} 완료(Mock)"`을 반환하므로 이를 예상 요약값으로
+  삼아 검색·복원을 함께 검증. `pytest` 425개(M7-T02 종료 시점 424개 +
+  신규 1개) 전부 통과, `ruff check src tests`/`mypy src` 클린. M6의
+  다중 Adapter 통합 테스트(`test_m6_policy_routing.py`)는 건드리지
+  않았다 — M7 DoD가 요구하는 검증은 기존 파이프라인 헬퍼만으로 충분히
+  증명되어 두 Milestone의 테스트 파일 경계를 그대로 유지했다.
+- 의존성: M7-T01, M7-T02
 
 ---
 

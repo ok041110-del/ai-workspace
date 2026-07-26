@@ -132,6 +132,22 @@ def test_documentation_agent_creates_context_snapshot_on_completion() -> None:
     assert context["project_id"] == "p1"
 
 
+def test_pipeline_stores_documentation_summary_searchable_via_memory() -> None:
+    """M7-T03: 전체 파이프라인이 끝나면 DocumentationAgent가 Engine
+    실행 결과를 요약으로 저장하고, MemoryEngine.search()(M4-T08)를 통해
+    실제로 검색·복원 가능함을 증명한다 — PRD 7.4 "검색/요약" 완전 충족을
+    End-to-End로 검증."""
+    pipeline = build_pipeline()
+
+    task = pipeline["planning_agent"].plan_mission("p1", "구현하기")
+
+    expected_summary = f"{task.task_id} 완료(Mock)"
+    snapshot_ids = pipeline["context_manager"].find_snapshots(expected_summary)
+    assert snapshot_ids != []
+    restored = pipeline["context_manager"].restore_snapshot(snapshot_ids[0])
+    assert restored["summary"] == expected_summary
+
+
 def test_agent_scheduler_finds_coding_agent_by_capability() -> None:
     pipeline = build_pipeline()
 
