@@ -114,3 +114,30 @@ def test_review_agent_passes_required_capabilities_from_llm_policy_decision() ->
     )
 
     assert engine_runtime.received_required_capabilities == [frozenset({"codex"})]
+
+
+def test_review_agent_passes_model_from_llm_policy_decision() -> None:
+    """M14-T03: REVIEWER Role에 gpt 모델 정책이 있으면 실제로
+    model="gpt"가 전달된다."""
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="검토 완료"))
+    policy_engine = InMemoryLLMPolicyEngine(
+        {
+            AgentRole.REVIEWER: LLMPolicyDecision(
+                LLMModel(LLMProvider.OPENAI, "gpt"), LLMEffort.MEDIUM
+            )
+        }
+    )
+    _agent, event_bus, task_engine = build_review_agent(
+        engine_runtime, llm_policy_engine=policy_engine
+    )
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+
+    event_bus.publish(
+        Event(
+            event_id="e1",
+            event_type=CODE_VERIFIED,
+            payload={"task_id": task.task_id, "output": "def login(): ...", "success": True},
+        )
+    )
+
+    assert engine_runtime.received_models == ["gpt"]

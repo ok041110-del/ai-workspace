@@ -6,7 +6,7 @@ from dataclasses import replace
 from ai_workspace.agents.events import CODE_VERIFIED, REVIEW_COMPLETED
 from ai_workspace.domain.agent import AgentCapability, AgentRole
 from ai_workspace.domain.development_context import DevelopmentContext
-from ai_workspace.domain.llm_policy import required_capabilities
+from ai_workspace.domain.llm_policy import model_name, required_capabilities
 from ai_workspace.interfaces.engine_runtime import EngineRuntime
 from ai_workspace.interfaces.event_bus import Event, EventBus
 from ai_workspace.interfaces.task_engine import TaskEngine
@@ -28,7 +28,8 @@ class ReviewAgent:
 
     **Policy→Execution 라우팅(M6-T02)**: `CodingAgent`와 동일하게
     `AgentSession.llm_policy_decision`을 `required_capabilities()`로
-    변환해 `engine_runtime.run()`에 전달한다."""
+    변환해 `engine_runtime.run()`에 전달한다. **Model 라우팅(M14-T03)**:
+    같은 방식으로 `model_name()`도 함께 전달한다."""
 
     def __init__(
         self,
@@ -59,6 +60,7 @@ class ReviewAgent:
         result = self._engine_runtime.run(
             replace(task, title=context.to_prompt()),
             required_capabilities=required_capabilities(self._session.llm_policy_decision),
+            model=model_name(self._session.llm_policy_decision),
         )
         self._event_bus.publish(
             Event(

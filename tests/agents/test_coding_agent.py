@@ -22,23 +22,33 @@ from ai_workspace.runtime.agent.agent_runtime import AgentRuntime
 
 
 class RecordingEngineRuntime(EngineRuntime):
-    """실제로 넘어온 Task(특히 title)와 required_capabilities(M6-T02)를
-    기록하는 테스트 더블."""
+    """실제로 넘어온 Task(특히 title)와 required_capabilities(M6-T02)/
+    model(M14-T03)을 기록하는 테스트 더블."""
 
     def __init__(self, result: EngineResult) -> None:
         self._result = result
         self.received_tasks: list[Task] = []
         self.received_required_capabilities: list[frozenset[str]] = []
+        self.received_models: list[str | None] = []
 
     def register_engine(self, name, adapter) -> None:
         raise NotImplementedError
 
-    def run(self, task: Task, required_capabilities: frozenset[str] = frozenset()) -> EngineResult:
+    def run(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
+    ) -> EngineResult:
         self.received_tasks.append(task)
         self.received_required_capabilities.append(required_capabilities)
+        self.received_models.append(model)
         return self._result
 
-    def run_parallel(self, tasks, required_capabilities: frozenset[str] = frozenset()):
+    def run_parallel(
+        self, tasks, required_capabilities: frozenset[str] = frozenset(), *, model=None
+    ):
         raise NotImplementedError
 
     def cancel(self, task_id: str) -> None:
@@ -168,6 +178,41 @@ def test_coding_agent_passes_required_capabilities_from_llm_policy_decision() ->
     )
 
     assert engine_runtime.received_required_capabilities == [frozenset({"claude_code"})]
+
+
+def test_coding_agent_passes_model_from_llm_policy_decision() -> None:
+    """M14-T03: LLMPolicyEngine이 CODING Role에 opus 모델 정책을 주면,
+    실제로 model="opus"가 engine_runtime.run()에 전달된다."""
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="완료"))
+    policy_engine = InMemoryLLMPolicyEngine(
+        {
+            AgentRole.CODING: LLMPolicyDecision(
+                LLMModel(LLMProvider.ANTHROPIC, "opus"), LLMEffort.HIGH
+            )
+        }
+    )
+    _agent, event_bus, task_engine = build_coding_agent(
+        engine_runtime, llm_policy_engine=policy_engine
+    )
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=MISSION_PLANNED, payload={"task_id": task.task_id})
+    )
+
+    assert engine_runtime.received_models == ["opus"]
+
+
+def test_coding_agent_passes_no_model_when_no_policy_engine() -> None:
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="완료"))
+    _agent, event_bus, task_engine = build_coding_agent(engine_runtime)
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=MISSION_PLANNED, payload={"task_id": task.task_id})
+    )
+
+    assert engine_runtime.received_models == [None]
 
 
 def test_coding_agent_ignores_mission_planned_when_not_selected_by_scheduler() -> None:

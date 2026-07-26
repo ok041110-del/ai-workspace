@@ -7,7 +7,7 @@ from ai_workspace.agents.events import CODE_COMPLETED, MISSION_PLANNED
 from ai_workspace.agents.scheduling import is_agent_selected
 from ai_workspace.domain.agent import AgentCapability, AgentRole
 from ai_workspace.domain.development_context import DevelopmentContext
-from ai_workspace.domain.llm_policy import required_capabilities
+from ai_workspace.domain.llm_policy import model_name, required_capabilities
 from ai_workspace.domain.task import TaskStatus
 from ai_workspace.interfaces.agent_registry import AgentRegistry
 from ai_workspace.interfaces.agent_scheduler import AgentScheduler
@@ -34,7 +34,11 @@ class CodingAgent:
     (M5-T02)을 `required_capabilities()`로 변환해 `engine_runtime.run()`에
     전달한다 — 여러 `EngineAdapter`가 등록되어 있으면(M6-T01) 실제로 이
     Role에 배정된 Provider의 Adapter가 선택되어 실행된다. 정책이 없으면
-    빈 집합이 되어 기존 동작(제약 없음)과 하위 호환된다.
+    빈 집합이 되어 기존 동작(제약 없음)과 하위 호환된다. **Model 라우팅
+    (M14-T03)**: 같은 `llm_policy_decision`을 `model_name()`으로 변환해
+    함께 전달한다 — `ClaudeCodeEngineAdapter`가 실제 `--model` 실행
+    인자에 반영한다(M14-T02). 정책이 없으면 `None`이 되어 각 Adapter의
+    기본 모델을 그대로 쓴다.
 
     **Multi-Agent Collaboration(M13)**: `agent_registry`/`agent_scheduler`
     를 둘 다 주입하면, 같은 CODING Capability를 가진 다른 `CodingAgent`
@@ -86,6 +90,7 @@ class CodingAgent:
         result = self._engine_runtime.run(
             replace(task, title=context.to_prompt()),
             required_capabilities=required_capabilities(self._session.llm_policy_decision),
+            model=model_name(self._session.llm_policy_decision),
         )
         self._task_engine.transition(task, TaskStatus.REVIEW)
         self._event_bus.publish(

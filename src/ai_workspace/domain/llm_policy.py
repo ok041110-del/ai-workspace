@@ -58,3 +58,13 @@ def required_capabilities(decision: LLMPolicyDecision | None) -> frozenset[str]:
     if decision is None:
         return frozenset()
     return frozenset({_PROVIDER_ENGINE_CAPABILITY[decision.model.provider]})
+
+
+def model_name(decision: LLMPolicyDecision | None) -> str | None:
+    """M14-T03: `LLMPolicyDecision`을 `EngineRuntime.run()`에 넘길
+    `model`로 변환한다. 정책이 없으면(Role에 규칙이 없거나
+    LLMPolicyEngine이 아예 주입되지 않은 경우) `None`을 반환해 "제약
+    없음"이라는 기존 동작과 완전히 하위 호환된다."""
+    if decision is None:
+        return None
+    return decision.model.name

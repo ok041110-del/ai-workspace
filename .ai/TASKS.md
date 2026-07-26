@@ -4440,7 +4440,24 @@ haiku)이 `ClaudeCodeEngineAdapter`의 실제 `--model` 실행 인자까지
   일치함을 증명하는 통합 테스트를 추가한다(M6-T03/M13-T03과 동일한
   "실제 정책 파일" 검증 방식).
 - 완료 조건(DoD): Milestone DoD 4번이 통합 테스트로 직접 증명된다.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `domain/llm_policy.py`에 `model_name()`
+  추가(`required_capabilities()`와 나란히 두는 순수 함수). `CodingAgent`/
+  `ReviewAgent`/`DocumentationAgent` 3개 Agent가
+  `engine_runtime.run(..., model=model_name(self._session.
+  llm_policy_decision))`을 전달하도록 갱신. 세 Agent 테스트가 공유하는
+  `tests/agents/test_coding_agent.py`의 `RecordingEngineRuntime`에
+  `received_models` 기록 추가(cross-import로 Review/Documentation
+  테스트도 함께 갱신됨). 3개 Agent 전부에 대해 "정책 있으면 model
+  전달/정책 없으면 None" 단위 테스트 추가(6개). `domain/llm_policy.py`
+  의 `model_name()` 자체도 2개 단위 테스트로 검증.
+  `tests/integration/test_m14_llm_model_routing.py` 신규 — M6의
+  `test_m6_policy_routing.assemble()`(실제 `docs/llm_policy.example.yaml`
+  로드, 6-Agent 실제 파이프라인)을 그대로 재사용해, CODING Role 정책
+  (anthropic/opus)에 따라 `ClaudeCodeEngineAdapter`가 실제로 조립한
+  명령에 `--model opus`가 포함됨을 증명(Milestone DoD 4번 직접 증명).
+  `ruff check src tests`, `mypy src`, `pytest`(489개, 기존 482개 +
+  신규 7개) 모두 통과. 다음 Task: **M14-T04**(문서화 + Milestone 14
+  Review).
 - 의존성: M14-T02.
 
 #### M14-T04: 문서화 + Milestone 14 Review

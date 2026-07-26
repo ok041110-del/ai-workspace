@@ -121,6 +121,30 @@ def test_documentation_agent_passes_required_capabilities_from_llm_policy_decisi
     assert engine_runtime.received_required_capabilities == [frozenset({"gemini"})]
 
 
+def test_documentation_agent_passes_model_from_llm_policy_decision() -> None:
+    """M14-T03: DOCUMENTATION Role에 gemini 모델 정책이 있으면 실제로
+    model="gemini"가 전달된다."""
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="문서화 완료"))
+    policy_engine = InMemoryLLMPolicyEngine(
+        {
+            AgentRole.DOCUMENTATION: LLMPolicyDecision(
+                LLMModel(LLMProvider.GOOGLE, "gemini"), LLMEffort.LOW
+            )
+        }
+    )
+    _agent, event_bus, task_engine, _context_manager, _workspace_session = (
+        build_documentation_agent(engine_runtime, llm_policy_engine=policy_engine)
+    )
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+    _advance_to_review(task_engine, task)
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=REVIEW_COMPLETED, payload={"task_id": task.task_id})
+    )
+
+    assert engine_runtime.received_models == ["gemini"]
+
+
 def test_documentation_agent_publishes_documentation_completed() -> None:
     engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="문서화 완료"))
     _agent, event_bus, task_engine, _context_manager, _workspace_session = (

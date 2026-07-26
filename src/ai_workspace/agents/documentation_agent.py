@@ -4,7 +4,7 @@ import uuid
 
 from ai_workspace.agents.events import DOCUMENTATION_COMPLETED, REVIEW_COMPLETED
 from ai_workspace.domain.agent import AgentCapability, AgentRole
-from ai_workspace.domain.llm_policy import required_capabilities
+from ai_workspace.domain.llm_policy import model_name, required_capabilities
 from ai_workspace.domain.session import WorkspaceSession
 from ai_workspace.domain.task import TaskStatus
 from ai_workspace.interfaces.context_manager import ContextManager
@@ -22,7 +22,8 @@ class DocumentationAgent:
 
     **Policy→Execution 라우팅(M6-T02)**: `CodingAgent`와 동일하게
     `AgentSession.llm_policy_decision`을 `required_capabilities()`로
-    변환해 `engine_runtime.run()`에 전달한다.
+    변환해 `engine_runtime.run()`에 전달한다. **Model 라우팅(M14-T03)**:
+    같은 방식으로 `model_name()`도 함께 전달한다.
 
     **Memory 요약(M7-T02)**: `engine_runtime.run()`의 결과(`output`)를
     그대로 Memory 요약으로 재활용해 `create_snapshot()`에 전달한다 —
@@ -62,7 +63,9 @@ class DocumentationAgent:
         task_id = event.payload["task_id"]
         task = self._task_engine.get_task(task_id)
         result = self._engine_runtime.run(
-            task, required_capabilities=required_capabilities(self._session.llm_policy_decision)
+            task,
+            required_capabilities=required_capabilities(self._session.llm_policy_decision),
+            model=model_name(self._session.llm_policy_decision),
         )
         self._task_engine.transition(task, TaskStatus.DONE)
         snapshot_id = self._context_manager.create_snapshot(

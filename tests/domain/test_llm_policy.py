@@ -4,6 +4,7 @@ from ai_workspace.domain.llm_policy import (
     LLMModel,
     LLMPolicyDecision,
     LLMProvider,
+    model_name,
     required_capabilities,
 )
 
@@ -59,3 +60,15 @@ def test_required_capabilities_maps_all_providers_without_error() -> None:
         decision = LLMPolicyDecision(LLMModel(provider, "model"), LLMEffort.LOW)
 
         assert len(required_capabilities(decision)) == 1
+
+
+def test_model_name_returns_none_when_no_decision() -> None:
+    """M14-T03: 정책이 없으면 None을 반환해 EngineRuntime.run()의 기존
+    동작(제약 없음)과 하위 호환된다."""
+    assert model_name(None) is None
+
+
+def test_model_name_returns_the_decisions_model_name() -> None:
+    decision = LLMPolicyDecision(LLMModel(LLMProvider.ANTHROPIC, "opus"), LLMEffort.HIGH)
+
+    assert model_name(decision) == "opus"
