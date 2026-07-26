@@ -2762,7 +2762,7 @@ memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새
 | Task | 내용 | 근거/출처 |
 |---|---|---|
 | M8-T01 | `ContextManager`에 `latest_snapshot_id(project_id)` 신규 메서드 추가(계약+구현) — project별 최신 snapshot 포인터 — **완료** | M7 Review 이월 갭 |
-| M8-T02 | `DocumentationAgent`가 Mission 종료 시 `workspace_session.memory_snapshot_id`를 새 snapshot_id로 갱신 | Milestone DoD |
+| M8-T02 | `DocumentationAgent`가 Mission 종료 시 `workspace_session.memory_snapshot_id`를 새 snapshot_id로 갱신 — **완료** | Milestone DoD |
 | M8-T03 | `PlanningAgent`가 Mission 시작 시 `memory_snapshot_id`가 없으면 `latest_snapshot_id(project_id)`로 자동 복원 | Milestone DoD |
 | M8-T04 | End-to-End 검증(같은 세션 내 연속 Mission + 새 세션에서도 이전 요약을 자동으로 이어받음을 증명) | Milestone DoD |
 | M8-T05 | Milestone 8 Review | 관례 |
@@ -2822,7 +2822,7 @@ memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새
    라우팅, Adapter 계열 통합 등은 이번 Milestone 범위 밖으로 유지된다.
 
 **상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). M8-T01 완료, 다음 Task는 M8-T02.
+사용자 확정). M8-T01/M8-T02 완료, 다음 Task는 M8-T03.
 
 #### M8-T01: `ContextManager.latest_snapshot_id(project_id)` 신규 메서드
 - 목적: "project별 최신 snapshot"을 안정적으로 찾을 수 있는 계약을
@@ -2849,6 +2849,28 @@ memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새
   + 신규 8개) 전부 통과, `ruff check src tests`/`mypy src` 클린. Agent가
   실제로 이 메서드를 호출해 세션을 갱신/복원하는 것은 M8-T02/T03 범위.
 - 의존성: 없음(M8 Task List 첫 Task)
+
+#### M8-T02: `DocumentationAgent`가 Mission 종료 시 세션에 최신 snapshot_id 기록
+- 목적: `create_snapshot()`이 반환하는 snapshot_id를 실제로 세션에
+  되먹여 같은 세션 안에서 이어지는 Mission이 자동으로 최신 Snapshot을
+  참조하게 한다 — "세션 연속성"의 쓰기 측.
+- 작업 내용: `_on_review_completed()`에서 `create_snapshot()`의 반환값을
+  `snapshot_id` 변수로 캡처(이전에는 완전히 버려짐), `self._workspace_session
+  .memory_snapshot_id = snapshot_id`로 대입하는 2줄 변경.
+- 완료 조건(DoD): Mission이 끝나면 `workspace_session.memory_snapshot_id`
+  가 새 snapshot_id로 갱신됨, 연속된 두 번째 Mission이 끝나면 최신 것
+  하나로 덮어써짐(누적 아님). `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — `tests/agents/test_documentation_agent.py`
+  의 `build_documentation_agent()`가 `workspace_session`도 반환하도록
+  확장(기존 5개 호출부 갱신). 신규 테스트 2개:
+  `test_documentation_agent_writes_new_snapshot_id_back_to_session`
+  (세션에 실제로 기록됨 + `restore_snapshot()`으로 그 내용 확인),
+  `test_documentation_agent_second_mission_overwrites_session_snapshot_id`
+  (두 번째 Mission이 끝나면 다른 snapshot_id로 덮어써짐). `pytest`
+  435개(M8-T01 종료 시점 433개 + 신규 2개) 전부 통과, `ruff check src
+  tests`/`mypy src` 클린. `PlanningAgent`가 이 값을 실제로 읽어 Mission
+  시작 시 복원하는 것은 M8-T03 범위.
+- 의존성: M8-T01
 
 ---
 

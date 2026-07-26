@@ -50,7 +50,9 @@ def build_documentation_agent(
     engine_runtime: RecordingEngineRuntime,
     *,
     llm_policy_engine: LLMPolicyEngine | None = None,
-) -> tuple[DocumentationAgent, InMemoryEventBus, FakeTaskEngine, SpyContextManager]:
+) -> tuple[
+    DocumentationAgent, InMemoryEventBus, FakeTaskEngine, SpyContextManager, WorkspaceSession
+]:
     agent_runtime = AgentRuntime(
         agent_manager=FakeAgentManager(),
         agent_registry=FakeAgentRegistry(),
@@ -59,15 +61,16 @@ def build_documentation_agent(
     event_bus = InMemoryEventBus()
     task_engine = FakeTaskEngine()
     context_manager = SpyContextManager()
+    workspace_session = WorkspaceSession(session_id="s1", current_project_id="p1")
     agent = DocumentationAgent(
         agent_runtime=agent_runtime,
         event_bus=event_bus,
         task_engine=task_engine,
         engine_runtime=engine_runtime,
         context_manager=context_manager,
-        workspace_session=WorkspaceSession(session_id="s1", current_project_id="p1"),
+        workspace_session=workspace_session,
     )
-    return agent, event_bus, task_engine, context_manager
+    return agent, event_bus, task_engine, context_manager, workspace_session
 
 
 def _advance_to_review(task_engine: FakeTaskEngine, task: Task) -> None:
@@ -81,7 +84,9 @@ def _advance_to_review(task_engine: FakeTaskEngine, task: Task) -> None:
 
 def test_documentation_agent_passes_no_required_capabilities_when_no_policy_engine() -> None:
     engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="문서화 완료"))
-    _agent, event_bus, task_engine, _context_manager = build_documentation_agent(engine_runtime)
+    _agent, event_bus, task_engine, _context_manager, _workspace_session = (
+        build_documentation_agent(engine_runtime)
+    )
     task = task_engine.create_task("p1", "로그인 기능 구현하기")
     _advance_to_review(task_engine, task)
 
@@ -103,8 +108,8 @@ def test_documentation_agent_passes_required_capabilities_from_llm_policy_decisi
             )
         }
     )
-    _agent, event_bus, task_engine, _context_manager = build_documentation_agent(
-        engine_runtime, llm_policy_engine=policy_engine
+    _agent, event_bus, task_engine, _context_manager, _workspace_session = (
+        build_documentation_agent(engine_runtime, llm_policy_engine=policy_engine)
     )
     task = task_engine.create_task("p1", "로그인 기능 구현하기")
     _advance_to_review(task_engine, task)
@@ -118,7 +123,9 @@ def test_documentation_agent_passes_required_capabilities_from_llm_policy_decisi
 
 def test_documentation_agent_publishes_documentation_completed() -> None:
     engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="문서화 완료"))
-    _agent, event_bus, task_engine, _context_manager = build_documentation_agent(engine_runtime)
+    _agent, event_bus, task_engine, _context_manager, _workspace_session = (
+        build_documentation_agent(engine_runtime)
+    )
     task = task_engine.create_task("p1", "로그인 기능 구현하기")
     _advance_to_review(task_engine, task)
     received: list[Event] = []
@@ -137,7 +144,9 @@ def test_documentation_agent_passes_engine_result_output_as_summary() -> None:
     engine_runtime = RecordingEngineRuntime(
         EngineResult(success=True, output="로그인 기능 구현 및 검토 완료")
     )
-    _agent, event_bus, task_engine, context_manager = build_documentation_agent(engine_runtime)
+    _agent, event_bus, task_engine, context_manager, _workspace_session = build_documentation_agent(
+        engine_runtime
+    )
     task = task_engine.create_task("p1", "로그인 기능 구현하기")
     _advance_to_review(task_engine, task)
 
@@ -154,7 +163,9 @@ def test_documentation_agent_summary_is_retrievable_via_context_manager() -> Non
     engine_runtime = RecordingEngineRuntime(
         EngineResult(success=True, output="로그인 기능 구현 및 검토 완료")
     )
-    _agent, event_bus, task_engine, context_manager = build_documentation_agent(engine_runtime)
+    _agent, event_bus, task_engine, context_manager, _workspace_session = build_documentation_agent(
+        engine_runtime
+    )
     task = task_engine.create_task("p1", "로그인 기능 구현하기")
     _advance_to_review(task_engine, task)
 
@@ -163,3 +174,48 @@ def test_documentation_agent_summary_is_retrievable_via_context_manager() -> Non
     )
 
     assert context_manager.find_snapshots("로그인 기능 구현 및 검토 완료") != []
+
+
+def test_documentation_agent_writes_new_snapshot_id_back_to_session() -> None:
+    """M8-T02: create_snapshot()의 반환값이 이전에는 버려졌지만, 이제
+    workspace_session.memory_snapshot_id에 되먹여진다 — 같은 세션에서
+    이어지는 Mission이 이 Snapshot을 자동으로 이어받을 수 있게 된다."""
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="문서화 완료"))
+    _agent, event_bus, task_engine, context_manager, workspace_session = build_documentation_agent(
+        engine_runtime
+    )
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+    _advance_to_review(task_engine, task)
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=REVIEW_COMPLETED, payload={"task_id": task.task_id})
+    )
+
+    assert workspace_session.memory_snapshot_id is not None
+    assert context_manager.restore_snapshot(workspace_session.memory_snapshot_id)["summary"] == (
+        "문서화 완료"
+    )
+
+
+def test_documentation_agent_second_mission_overwrites_session_snapshot_id() -> None:
+    """연속된 두 번째 Mission이 끝나면 세션은 그 두 번째 Snapshot을
+    가리킨다(누적이 아니라 최신 하나만 유지 — 사전 Architecture Review에서
+    이미 확정된 단순화)."""
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="완료"))
+    _agent, event_bus, task_engine, _context_manager, workspace_session = (
+        build_documentation_agent(engine_runtime)
+    )
+    first_task = task_engine.create_task("p1", "첫 번째 작업")
+    _advance_to_review(task_engine, first_task)
+    event_bus.publish(
+        Event(event_id="e1", event_type=REVIEW_COMPLETED, payload={"task_id": first_task.task_id})
+    )
+    first_snapshot_id = workspace_session.memory_snapshot_id
+
+    second_task = task_engine.create_task("p1", "두 번째 작업")
+    _advance_to_review(task_engine, second_task)
+    event_bus.publish(
+        Event(event_id="e2", event_type=REVIEW_COMPLETED, payload={"task_id": second_task.task_id})
+    )
+
+    assert workspace_session.memory_snapshot_id != first_snapshot_id

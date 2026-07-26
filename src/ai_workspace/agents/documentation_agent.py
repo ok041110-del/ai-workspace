@@ -28,7 +28,13 @@ class DocumentationAgent:
     그대로 Memory 요약으로 재활용해 `create_snapshot()`에 전달한다 —
     이전에는 이 결과를 그대로 버렸다. 신규 LLM 호출을 추가하지 않는다
     (YAGNI). 성공/실패 여부와 무관하게 `output`을 저장한다 — 실패 시
-    출력이 유의미한 요약이 아닐 수 있다는 점은 알려진 단순화다."""
+    출력이 유의미한 요약이 아닐 수 있다는 점은 알려진 단순화다.
+
+    **세션 연속성(M8-T02)**: `create_snapshot()`이 반환하는 snapshot_id를
+    `workspace_session.memory_snapshot_id`에 되먹인다 — 이전에는 반환값
+    자체가 버려져 다음 Mission이 이번 Snapshot을 전혀 알지 못했다. 같은
+    세션에서 이어지는 Mission은 이제 `assemble_context()`가 자동으로
+    이 Snapshot을 반영한다."""
 
     def __init__(
         self,
@@ -59,7 +65,10 @@ class DocumentationAgent:
             task, required_capabilities=required_capabilities(self._session.llm_policy_decision)
         )
         self._task_engine.transition(task, TaskStatus.DONE)
-        self._context_manager.create_snapshot(self._workspace_session, summary=result.output)
+        snapshot_id = self._context_manager.create_snapshot(
+            self._workspace_session, summary=result.output
+        )
+        self._workspace_session.memory_snapshot_id = snapshot_id
         self._event_bus.publish(
             Event(
                 event_id=str(uuid.uuid4()),
