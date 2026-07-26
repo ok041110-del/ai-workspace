@@ -2132,7 +2132,7 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
 
 | Task | 내용 | 근거/출처 |
 |---|---|---|
-| M6-T01 | `ManagedEngineRuntime` 다중 Adapter 등록 지원(`register_engine`의 "정확히 1개" 제한 해제, name 기준 dict 저장, `required_capabilities` 만족 후보 중 선택) | M5 Review 이월 갭 #1 |
+| M6-T01 | `ManagedEngineRuntime` 다중 Adapter 등록 지원(`register_engine`의 "정확히 1개" 제한 해제, name 기준 dict 저장, `required_capabilities` 만족 후보 중 선택) — **완료** | M5 Review 이월 갭 #1 |
 | M6-T02 | `LLMProvider` → Engine Capability 태그 매핑 + `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가 `llm_policy_decision`을 `required_capabilities`로 변환해 `engine_runtime.run()`에 전달 | RULES §7 M4 단계(자동 선택) |
 | M6-T03 | 다중 Adapter 조립 + End-to-End 검증(정책에 따라 실제로 다른 Adapter가 선택·실행됨을 통합 테스트로 증명) | Milestone DoD |
 | M6-T04 | Milestone 6 Review | 관례 |
@@ -2181,7 +2181,43 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
    확정 참고).
 
 **상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). 착수 대기 — 다음 Task는 M6-T01.
+사용자 확정). M6-T01 완료, 다음 Task는 M6-T02.
+
+#### M6-T01: `ManagedEngineRuntime` 다중 Adapter 등록 지원
+- 목적: `EngineRuntime` 인터페이스가 이미 계약해 둔 "다중 엔진 등록·
+  Capability 기준 선택"을 프로덕션 구현체 `ManagedEngineRuntime`이
+  따라잡게 한다 — M3-T01에서 의도적으로 "Adapter 정확히 1개만 등록
+  가능"으로 좁혀 뒀던 것을 M6에서 해제한다.
+- 작업 내용: `register_engine()`이 같은 이름을 재등록할 때만
+  `DuplicateEngineError`를 던지도록 변경(내부 저장을 `EngineAdapter |
+  None` 단일 필드에서 `dict[str, EngineAdapter]`로 교체). `_require_adapter()`
+  가 등록된 여러 어댑터 중 `required_capabilities.issubset(capabilities())`
+  를 만족하는 첫 어댑터(등록 순서 기준)를 선택하도록 변경. `cancel()`이
+  task_id별로 실제 실행에 쓰인 어댑터를 정확히 찾아 취소를 전달하도록
+  `_task_adapters: dict[str, EngineAdapter]` 신규 추가(여러 어댑터가
+  섞여 있을 때도 잘못된 어댑터에 취소가 전달되지 않도록).
+  `tests/interfaces/fakes.py`의 `FakeEngineRuntime`이 이미 이 방식(이름
+  기준 dict + 첫 매칭)으로 구현되어 있어 그대로 참고했다.
+- 완료 조건(DoD): 서로 다른 이름으로 2개 이상 Adapter 등록 성공, 같은
+  이름 재등록은 여전히 `DuplicateEngineError`, `required_capabilities`로
+  올바른 Adapter가 선택되어 실행됨(다른 Adapter는 호출되지 않음),
+  매칭 실패 시 `NoSuitableEngineError`. `EngineRuntime`/`EngineAdapter`
+  인터페이스 변경 없음. `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — `register_engine_twice_raises_duplicate_error`
+  테스트를 "같은 이름 재등록 시에만 에러"로 의미를 명확히 갱신
+  (`test_register_engine_same_name_twice_raises_duplicate_error`), 신규
+  테스트 3개(`test_register_engine_with_different_names_both_succeed`,
+  `test_run_selects_matching_adapter_among_multiple_registered` —
+  실행 횟수를 기록하는 `RecordingEngineAdapter`로 실제 선택된 어댑터만
+  호출됐음을 증명, `test_run_no_matching_adapter_among_multiple_raises_no_suitable_engine`)
+  추가. `run_parallel()`의 `supports_parallel()` 필터링 신설은 기존에도
+  없던 동작이라 이번 Task 범위에 포함하지 않았다(YAGNI, 범위 이탈
+  방지). `docs/ARCHITECTURE.md` §3.9에 다중 Adapter 등록·선택 방식
+  반영. `pytest` 401개(M5 종료 시점 398개 + 신규 3개) 전부 통과,
+  `ruff check src tests`/`mypy src` 클린. Agent(Coding/Review/
+  Documentation)가 실제로 `required_capabilities`를 넘기도록 반영하는
+  것은 M6-T02 범위.
+- 의존성: 없음(M6 Task List 첫 Task)
 
 ---
 

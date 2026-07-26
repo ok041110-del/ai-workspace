@@ -23,12 +23,15 @@ _DEFAULT_TIMEOUT_SECONDS = 30.0
 
 
 class ManagedEngineRuntime(EngineRuntime):
-    """단일 EngineAdapter의 Task 실행을 생명주기(Running/Completed/Failed/
+    """EngineAdapter의 Task 실행을 생명주기(Running/Completed/Failed/
     Cancelled) 관리·Timeout·Event 발행과 함께 운영하는 프로덕션 Engine
-    Runtime(ARCHITECTURE.md §3.9, ADR-0016, M3-T01). 여러 엔진 등록·
-    Capability 기반 선택(Engine Registry, T2-05의 `InMemoryEngineRuntime`이
-    이미 담당)은 범위 밖이며, 이 구현은 정확히 하나의 EngineAdapter만
-    등록할 수 있다.
+    Runtime(ARCHITECTURE.md §3.9, ADR-0016, M3-T01/M6-T01). 여러 개의
+    EngineAdapter를 이름별로 등록할 수 있으며(M6-T01), `run()`/
+    `run_parallel()`은 `required_capabilities`를 만족하는 등록된 어댑터 중
+    하나를 선택해 실행한다(등록 순서상 첫 매칭 — 복수 매칭 시 우선순위
+    정책은 필요성이 증명되지 않아 도입하지 않음, YAGNI). 이 선택 방식은
+    `tests/interfaces/fakes.py`의 `FakeEngineRuntime`이 이미 계약 검증용으로
+    구현해 둔 것과 동일하다.
 
     기존 `EngineAdapter`/`EngineRuntime` 계약은 동기(synchronous)이므로,
     Timeout은 `adapter.run()` 호출을 별도 스레드에서 실행하고
@@ -52,14 +55,15 @@ class ManagedEngineRuntime(EngineRuntime):
     ) -> None:
         self._event_bus = event_bus
         self._default_timeout_seconds = default_timeout_seconds
-        self._adapter: EngineAdapter | None = None
+        self._engines: dict[str, EngineAdapter] = {}
         self._task_status: dict[str, EngineSessionStatus] = {}
         self._task_sessions: dict[str, str] = {}
+        self._task_adapters: dict[str, EngineAdapter] = {}
 
     def register_engine(self, name: str, adapter: EngineAdapter) -> None:
-        if self._adapter is not None:
+        if name in self._engines:
             raise DuplicateEngineError(name)
-        self._adapter = adapter
+        self._engines[name] = adapter
 
     def run(
         self,
@@ -70,6 +74,7 @@ class ManagedEngineRuntime(EngineRuntime):
         adapter = self._require_adapter(required_capabilities)
         session_id = adapter.create_session()
         self._task_sessions[task.task_id] = session_id
+        self._task_adapters[task.task_id] = adapter
         self._task_status[task.task_id] = EngineSessionStatus.RUNNING
         self._publish("engine_task_started", task.task_id, session_id)
 
@@ -113,9 +118,10 @@ class ManagedEngineRuntime(EngineRuntime):
             raise EngineTaskNotFoundError(task_id)
         self._task_status[task_id] = EngineSessionStatus.CANCELLED
         session_id = self._task_sessions.get(task_id)
-        if session_id is not None and self._adapter is not None:
+        adapter = self._task_adapters.get(task_id)
+        if session_id is not None and adapter is not None:
             try:
-                self._adapter.cancel(session_id)
+                adapter.cancel(session_id)
             except SessionNotFoundError:
                 pass
 
@@ -125,11 +131,10 @@ class ManagedEngineRuntime(EngineRuntime):
         return self._task_status[task_id]
 
     def _require_adapter(self, required_capabilities: frozenset[str]) -> EngineAdapter:
-        if self._adapter is None or not required_capabilities.issubset(
-            self._adapter.capabilities()
-        ):
-            raise NoSuitableEngineError(required_capabilities)
-        return self._adapter
+        for adapter in self._engines.values():
+            if required_capabilities.issubset(adapter.capabilities()):
+                return adapter
+        raise NoSuitableEngineError(required_capabilities)
 
     def _finish_as_completed(
         self, task_id: str, session_id: str, adapter: EngineAdapter, result: EngineResult

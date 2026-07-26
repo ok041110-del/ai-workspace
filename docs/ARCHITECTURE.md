@@ -258,6 +258,15 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   `ThreadPoolExecutor` 기반, M4-T06) — 3.4 Agent Scheduler의 "후보 선택"
   과는 다른 층위다: Scheduler는 누구를 동시에 활동시킬지 고르고,
   Engine Runtime은 실제로 여러 실행을 동시에 수행한다.
+- **다중 Adapter 등록·선택(M6-T01)**: `ManagedEngineRuntime`은 이름별로
+  여러 `EngineAdapter`를 동시에 등록할 수 있다(`register_engine`은 같은
+  이름을 재등록할 때만 `DuplicateEngineError`). `run()`/`run_parallel()`은
+  `required_capabilities`를 만족하는 등록된 어댑터 중 하나(등록 순서상 첫
+  매칭)를 선택해 실행한다 — 복수 매칭 시 우선순위 정책(비용 기반 선택
+  등)은 필요성이 증명되지 않아 도입하지 않는다(YAGNI). 이 방식으로
+  `LLMPolicyDecision.model.provider`에 따라 Agent가 서로 다른 등록된
+  Adapter(예: `claude_code`/`codex`/`gemini_cli`)를 실행 시점에 고를 수
+  있는 기반이 마련된다(실제 매핑·Agent 반영은 M6-T02).
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
