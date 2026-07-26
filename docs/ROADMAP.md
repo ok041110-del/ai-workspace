@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.13.0 |
 | 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1~6 완료, v0.5.0 아키텍처 기준선 선언, Milestone 7 목표/DoD/Task List 미정) |
+| 상태 | Draft (Milestone 1~6 완료, v0.5.0 아키텍처 기준선 선언, Milestone 7 목표/Task List/DoD 확정 — 착수 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -50,6 +50,7 @@ Roadmap
 | M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | **완료 (2026-07-26 사용자 승인)** — v0.5.0 아키텍처 기준선 선언(ADR-0024) |
 | M5. 실제 개발 수행 (Real Development Execution) | LLM Policy Engine, DevelopmentContext+Agent 강화, ShellAgent, Multi-Engine(Codex/Gemini), Workflow 조건부 분기 | **완료 (2026-07-26 사용자 승인)** |
 | M6. Policy 기반 실행 라우팅 (Policy-Driven Engine Routing) | `LLMPolicyDecision`에 따라 실제 등록된 `EngineAdapter`(Claude Code/Codex/Gemini CLI)를 자동 선택해 실행 — RULES §7 로드맵의 "Policy Engine 자동 선택" 단계 완성 | **완료 (2026-07-26 사용자 승인)** |
+| M7. Memory 요약 (Memory Summarization) | `DocumentationAgent`의 Engine 실행 결과를 Memory Snapshot 요약으로 저장 — PRD 7.4 "검색/요약" 갭 완성 | **계획 확정 (2026-07-26) — 착수 대기** |
 
 ---
 
@@ -323,7 +324,42 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
 **진행 상태**: M6-T01~T04 전체 완료. **2026-07-26 사용자 승인으로
 Milestone 6 종료.** Retrospective(Model/Effort 수준 라우팅 미완성을
 M7+ 논의 대상으로 명시)는 `.ai/TASKS.md`의 "Milestone 6 Review" 참고.
-다음은 Milestone 7 목표/DoD 확정 후 `M7-01`부터 착수.
+
+---
+
+## Milestone 7 — Memory 요약 (Memory Summarization)
+
+**목표**: PRD 7.4(장기 메모리)와 M4 DoD가 원래 요구했던 "검색/요약" 중
+"요약"만 M4-T08에서 "LLM 없이는 구현 불가"로 이관됐던 항목을 완성한다.
+M6에서 실제 LLM 호출 인프라(`EngineRuntime`→`EngineAdapter`)가 완성되어
+이 차단 사유가 해소됐다.
+
+> **2026-07-26 사용자 확정**: 요약 트리거는 **파이프라인 종료
+> 시점**(`DocumentationAgent`)으로 좁힌다. 온디맨드 트리거는 범위 제외.
+
+**Milestone Definition of Done**
+1. `DocumentationAgent`가 `engine_runtime.run()` 결과를 캡처해
+   `context_manager.create_snapshot(session, summary=...)`로 전달한다.
+2. `ContextManager.create_snapshot()`이 선택적 `summary` 파라미터를 받아
+   Snapshot에 포함시키며, 기존 무인자 호출과 하위 호환된다.
+3. 저장된 요약을 `restore_snapshot()`/`assemble_context()`로 조회,
+   `find_snapshots(query)`로 검색할 수 있다(PRD 7.4 완전 충족).
+4. `MemoryEngine` 인터페이스는 변경되지 않는다(ADR-0017 경계 유지).
+5. 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린.
+6. Adapter 통합/CLI 실제 재검증/Model·Effort 라우팅/소규모 이월 부채는
+   범위 밖으로 유지된다.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 7" 참고)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M7-T01 | `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가 | PRD 7.4 갭 |
+| M7-T02 | `DocumentationAgent`가 버려지던 engine 결과를 요약으로 전달 | PRD 7.4 갭 |
+| M7-T03 | End-to-End 검증 | Milestone DoD |
+| M7-T04 | Milestone 7 Review | 관례 |
+
+**진행 상태**: 목표/DoD/Task List/사전 Architecture Review 확정
+(2026-07-26 사용자 확정). 착수 대기 — 다음은 `M7-T01`부터 착수.
 
 ---
 

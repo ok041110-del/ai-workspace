@@ -2448,6 +2448,87 @@ M2~M6가 그래왔듯).
 
 ---
 
+## Milestone 7 — Memory 요약 (Memory Summarization)
+
+**목표**: PRD 7.4(장기 메모리)와 M4 DoD가 원래 요구했던 "검색/**요약**" 중
+"요약"만 M4-T08에서 "LLM 없이는 구현 불가"로 M5 Router 준비 이후로
+이관됐던 항목을 완성한다. M6에서 처음으로 실제 LLM 호출 인프라
+(`EngineRuntime`→`EngineAdapter`가 실제 claude/codex/gemini CLI를
+호출)가 완성되어, 이 차단 사유가 이제 해소 가능하다.
+
+> **2026-07-26 사용자 확정**: 요약 트리거 시점은 **파이프라인 종료
+> 시점**(`DocumentationAgent`)으로 좁힌다. 온디맨드(사용자/CLI 요청)
+> 트리거는 이번 범위에서 제외.
+
+**Analysis 요약(Repository-Analysis 결과)**:
+- `DocumentationAgent._on_review_completed()`가 이미 `engine_runtime.
+  run(task, ...)`을 호출하고 있지만, **반환된 `EngineResult`를 캡처하지
+  않고 그대로 버린다** — 이 결과(`output`)를 요약으로 재활용하면 신규
+  LLM 호출을 추가하지 않고도(YAGNI) 요약을 만들 수 있다.
+- `ContextManager.create_snapshot(session)`은 현재 `assemble_context()`
+  결과(project_id/mission_id 등 작은 key-value)만 JSON으로 저장한다.
+  요약 문자열을 저장할 필드가 없다.
+- `MemoryEngine`(ADR-0017)은 "저장/검색만" 담당하며 Snapshot·요약
+  개념을 전혀 모른다 — 이 경계를 지키려면 요약 생성·저장 책임은
+  `ContextManager`/`Agent` 층에 있어야 하고, `MemoryEngine`은 손대지
+  않아야 한다.
+- `MemoryEngine.search()`/`ContextManager.find_snapshots()`(M4-T08)는
+  이미 구현되어 있으므로, 요약이 Snapshot JSON에 포함되기만 하면
+  **추가 구현 없이 요약 검색이 자동으로 동작**한다.
+
+**Task List**(2026-07-26 확정, 상세 스펙은 각 Task 착수 시점에 이 문서에 추가)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M7-T01 | `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가(인터페이스 확장, 하위 호환) | PRD 7.4 갭 |
+| M7-T02 | `DocumentationAgent`가 기존에 버려지던 `engine_runtime.run()` 결과를 캡처해 요약으로 전달 | PRD 7.4 갭 |
+| M7-T03 | End-to-End 검증(파이프라인 실행 후 요약이 저장·검색·복원됨을 통합 테스트로 증명) | Milestone DoD |
+| M7-T04 | Milestone 7 Review | 관례 |
+
+**Architecture Review(사전 검토, 착수 전)**:
+- **컴포넌트 경계**: `ContextManager`(§3.8)의 **인터페이스 확장**(신규
+  메서드가 아니라 기존 `create_snapshot()`에 선택적 파라미터 추가)과
+  `DocumentationAgent`(§3.6) 내부 변경으로 한정된다. `MemoryEngine` 계약은
+  변경 없음(ADR-0017의 "저장/검색만" 경계 유지 — 여전히 요약이 뭔지
+  모른다).
+- **의존성 방향(DIP)**: Agent → Context Manager → Memory Engine 방향
+  그대로 유지. 요약은 Agent가 이미 소유한 `EngineResult.output`을
+  Context Manager에 "전달"만 할 뿐, Context Manager나 Memory Engine이
+  EngineRuntime을 알거나 호출하지 않는다 — 역류 없음.
+- **Interface First**: `MemoryEngine` 인터페이스 변경 0건. `ContextManager.
+  create_snapshot()`에 `summary: str | None = None`(기본값 있음) 추가는
+  기존 호출부(`test_pipeline.py`, `tests/memory/test_context_manager.py`
+  등 무인자 호출) 전부 하위 호환. 새 최상위 Interface 추가 없음.
+- **YAGNI 점검**: 요약 전용 새 EngineRuntime 호출을 만들지 않는다 —
+  `DocumentationAgent`가 이미 하던 호출의 결과를 재활용한다(중복 LLM
+  호출 방지). 여러 Snapshot에 걸친 "요약의 요약"(누적 압축)은 필요성이
+  증명되지 않아 만들지 않는다 — 매 Snapshot마다 최신 요약 하나만
+  저장한다.
+- **리스크**: (1) `result.success=False`(요약 생성 실패/에러)여도 그
+  출력을 그대로 저장하는 단순한 정책을 쓴다 — 실패 감지·재시도·필터링은
+  범위 밖(단순성 우선, 필요성 증명 시 다음 Milestone에서 재검토). (2)
+  기존에 버려지던 반환값을 캡처하는 것뿐이라 회귀 위험이 낮다.
+
+**Definition of Done**
+1. `DocumentationAgent`가 실제로 `engine_runtime.run()`의 결과(`output`)를
+   캡처해 `context_manager.create_snapshot(session, summary=...)`로
+   전달한다(기존에는 버려졌음).
+2. `ContextManager.create_snapshot()`이 선택적 `summary` 파라미터를 받아
+   Snapshot 내용에 포함시키며, 기존 무인자 호출(하위 호환)은 그대로
+   동작한다.
+3. `restore_snapshot()`/`assemble_context()`로 저장된 요약을 다시 조회할
+   수 있고, `find_snapshots(query)`로 요약 내용을 검색할 수 있다(PRD 7.4
+   "검색/요약" 완전 충족 — M4-T08이 미룬 항목 해소).
+4. `MemoryEngine` 인터페이스는 변경되지 않는다(ADR-0017 경계 유지).
+5. 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린.
+6. Adapter 계열 통합, Codex/Gemini CLI 실제 재검증, Model/Effort 수준
+   라우팅, 그 외 소규모 이월 부채는 이번 Milestone 범위 밖으로 유지된다.
+
+**상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
+사용자 확정). 착수 대기 — 다음 Task는 M7-T01.
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |
