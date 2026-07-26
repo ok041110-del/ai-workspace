@@ -1816,6 +1816,43 @@ Event ID 생성 방식 불일치(M2 이월 부채 #3)를 정리하려 `src/ai_wo
   신규 8개) 모두 통과.
 - 의존성: T2-06
 
+#### M5-T04: ShellAgent 신규
+- 목적: 실제 쉘 명령을 실행할 수 있는 새 Agent 종류를 추가해 "Agent가
+  실제 개발 작업을 수행"하는 M5 목표를 확장한다(테스트/린트 실행).
+- 작업 내용: `AgentRole.SHELL`/`AgentCapability.SHELL` 신규,
+  `ShellAgent` 구현(`ProcessRunner` 재사용, 명령어 삽입 방지 설계).
+- 완료 조건(DoD): 고정 화이트리스트 명령만 실행됨(이벤트 payload가 명령
+  선택에 전혀 영향 없음을 테스트로 증명), `SHELL_COMPLETED` Event에
+  stdout/stderr/exit_code/success 포함, `pytest`/`ruff`/`mypy` 통과.
+  Review 이전 조건부 분기 연결은 범위 밖(M5-T06).
+- 상태: **DONE (2026-07-26)** — **보안 설계가 핵심**: 명령어를 Task
+  제목이나 LLM 출력(`DevelopmentContext`, `EngineResult.output`)에서
+  절대 유도하지 않음 — 사용자 지시로 4가지 반영: (1) 고정 명령 +
+  화이트리스트 유지(`_WHITELISTED_COMMANDS = {"test": ["pytest"],
+  "lint": ["ruff", "check", "."]}`), (2) `ShellAgent` 생성자는 명령
+  배열이 아니라 화이트리스트 키(`command_kind: str`, 필수·기본값 없음 —
+  암묵적 선택 방지)만 받고 실제 명령 배열은 클래스 내부에만 존재(외부
+  비노출), 알 수 없는 키는 `UnknownShellCommandKindError`, (3)
+  `SHELL_COMPLETED` payload에 `stdout`/`stderr`/`exit_code`/`success`
+  전부 포함(M5-T06 Workflow 조건부 분기가 재사용 가능하도록), (4) Effort는
+  Medium 유지(사용자 판단 — 보안 위험이 화이트리스트로 충분히 제한되어
+  구현 복잡도 자체는 높지 않음). `ProcessRunner`(M3-T03)를 새 Interface
+  없이 concrete class로 그대로 재사용(점진적 확장 — 이번이 딱 2번째
+  실제 사용처, 3번째 사례가 나오면 추상화 재검토). `EngineRuntime`/
+  `EngineAdapter`는 사용하지 않음(쉘 실행은 LLM 엔진 호출이 아님).
+  `CODE_COMPLETED`를 구독해 반응하되, **`ReviewAgent`의 트리거는
+  바꾸지 않음**(Shell 결과에 따른 조건부 재작업 연결은 명시적으로
+  M5-T06 범위로 남김). `agents/events.py`에 `SHELL_COMPLETED` 신규.
+  `tests/agents/test_shell_agent.py`에 7개 테스트 — 미등록 키 거부,
+  test/lint 화이트리스트 명령 검증, **이벤트 payload에 악의적 문자열이
+  있어도 명령이 절대 바뀌지 않음을 직접 검증**(명령어 삽입 방지
+  증명), 성공/실패 payload 필드 검증, 무관한 Event 타입 무시. 기존
+  4-Agent 파이프라인 테스트(`test_pipeline.py` 등)는 수정 없이 그대로
+  통과(ShellAgent를 파이프라인에 아직 연결하지 않았으므로 영향 없음).
+  `ruff check src tests`, `mypy src`, `pytest`(360개, 기존 353개 +
+  신규 7개) 모두 통과.
+- 의존성: M3-T03, T2-06
+
 ---
 
 ## 진행 로그

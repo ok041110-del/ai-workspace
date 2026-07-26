@@ -2,5 +2,6 @@
 
 MISSION_PLANNED = "mission_planned"
 CODE_COMPLETED = "code_completed"
+SHELL_COMPLETED = "shell_completed"
 REVIEW_COMPLETED = "review_completed"
 DOCUMENTATION_COMPLETED = "documentation_completed"

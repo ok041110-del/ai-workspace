@@ -11,6 +11,7 @@ class AgentRole(Enum):
     REVIEWER = "reviewer"
     DOCUMENTATION = "documentation"
     RESEARCH = "research"
+    SHELL = "shell"
 
 
 class AgentCapability(Enum):
@@ -24,6 +25,7 @@ class AgentCapability(Enum):
     VOICE = "voice"
     GIT = "git"
     MCP = "mcp"
+    SHELL = "shell"
 
 
 class AgentStatus(Enum):

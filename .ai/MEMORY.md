@@ -246,8 +246,20 @@
   payload에 `output`+`success`를 함께 실음(사용자 지시 — `success`는
   M5-T06 Workflow 조건부 분기가 재사용할 수 있도록 미리 포함).
   `DocumentationAgent`/실패 처리 강화/ContextManager 연동은 범위 밖으로
-  명시 유지. 전체 353개 테스트 통과. 다음은 **M5-T04**(`ShellAgent`
-  신규).
+  명시 유지. 전체 353개 테스트 통과.
+- **M5-T04 완료(2026-07-26)**: `ShellAgent` 신규 — 실제 쉘 명령 실행
+  능력. **보안 설계 핵심**: 명령어를 Task 제목/LLM 출력에서 절대 유도
+  하지 않음. 생성자는 명령 배열이 아니라 화이트리스트 키(`command_kind`,
+  기본값 없음)만 받고, 실제 명령(`_WHITELISTED_COMMANDS = {"test":
+  ["pytest"], "lint": ["ruff", "check", "."]}`)은 클래스 내부에만 존재.
+  `SHELL_COMPLETED` payload에 `stdout`/`stderr`/`exit_code`/`success`
+  전부 포함(M5-T06 재사용 대비). `ProcessRunner`(M3-T03)를 새 Interface
+  없이 그대로 재사용(2번째 실제 사용처, 3번째 나오면 추상화 재검토).
+  `CODE_COMPLETED`를 구독하되 `ReviewAgent` 트리거는 바꾸지 않음 —
+  조건부 재작업 연결은 M5-T06으로 명시 이월. 이벤트 payload에 악의적
+  문자열이 있어도 명령이 절대 바뀌지 않음을 테스트로 직접 증명(명령어
+  삽입 방지). 전체 360개 테스트 통과. 다음은 **M5-T05**(Codex/Gemini
+  CLI Engine Adapter, 가능한 범위).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
