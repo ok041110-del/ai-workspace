@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~10 완료, v0.5.0 아키텍처 기준선 선언, Milestone 11 구현 완료 — 사용자 승인 대기) |
+| 상태 | Draft (Milestone 1~11 완료, v0.5.0 아키텍처 기준선 선언, Milestone 12 목표 미정) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -530,8 +530,7 @@ Debt 후보 제시)는 `.ai/TASKS.md`의 "Milestone 9 Review" 참고.
 | M11-T04 | 문서화 + Milestone 11 Review | **완료** |
 
 **진행 상태**: M11-T01~T04 전체 완료. Milestone DoD 1~6번 전부 충족
-확인됨. Milestone 11 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 11
-Review" 참고) — 사용자 승인 대기.
+확인됨. **Milestone 11 완료 — 2026-07-26 사용자 승인.**
 
 ---
 

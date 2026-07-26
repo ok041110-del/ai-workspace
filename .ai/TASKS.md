@@ -3788,6 +3788,8 @@ Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 2/
 
 **사용자 승인을 조건으로 Milestone 11 Completed를 선언한다.**
 
+**Milestone 11 종료 — 2026-07-26 사용자 승인.**
+
 **Milestone 12 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
 누적 Technical Debt(5절 참고) 중 어느 것을 다음으로 다룰지, 또는
 `docs/ROADMAP.md`가 원래 그려둔 M12(Workflow Automation) 방향을 그대로
