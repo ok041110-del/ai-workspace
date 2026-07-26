@@ -3544,12 +3544,12 @@ Claude API 기반 EngineAdapter, Model/Effort 수준 라우팅(M6 Review 최초
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M11-T01 | `ExecutionEnvironment` Interface 정의 | TODO |
-| M11-T02 | `LocalExecutionEnvironment` 구현 | TODO |
-| M11-T03 | `EngineAdapter`가 `ExecutionEnvironment`를 사용하도록 전환 | TODO |
-| M11-T04 | 문서화 + Milestone 11 Review | TODO |
+| M11-T01 | `ExecutionEnvironment` Interface 정의 | **완료** |
+| M11-T02 | `LocalExecutionEnvironment` 구현 | **완료** |
+| M11-T03 | `EngineAdapter`가 `ExecutionEnvironment`를 사용하도록 전환 | **완료** |
+| M11-T04 | 문서화 + Milestone 11 Review | **완료** |
 
-**진행 상태**: 계획 확정, 착수 대기.
+**진행 상태**: M11-T01~T04 전체 완료. 아래 "Milestone 11 Review" 참고.
 
 #### M11-T01: `ExecutionEnvironment` Interface 정의
 - 목적: EngineAdapter가 실행 환경에 의존할 수 있는 추상 계약을 확정한다
@@ -3656,8 +3656,144 @@ Claude API 기반 EngineAdapter, Model/Effort 수준 라우팅(M6 Review 최초
   `docs/ROADMAP.md`/`.ai/MEMORY.md` 갱신, 전체 테스트 결과 정리 및
   제시.
 - 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `docs/ARCHITECTURE.md` v0.13.0 §3.10
+  (ExecutionEnvironment 협력자 설명 신규), §7(Interfaces 17종→18종,
+  `ExecutionEnvironment` 행 추가), §9(디렉터리 매핑에
+  `interfaces/execution_environment.py`/`adapters/
+  local_execution_environment.py` 반영), 문서 헤더(버전/상태) 갱신.
+  `.ai/DECISIONS.md`에 **ADR-0025**(ExecutionEnvironment를 새 최상위
+  Layer 대신 EngineAdapter 하위 인터페이스로 도입 — 배경/결정/대안/
+  이유/결과 전문) 신규 작성. `docs/ROADMAP.md` Milestone 11 절 Task
+  List 상태 갱신. 아래 "Milestone 11 Review" 절 참고.
 - 의존성: M11-T01~T03.
+
+---
+
+## Milestone 11 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `ExecutionEnvironment` 인터페이스 정의 + 계약 테스트 통과 | ✅ (M11-T01) |
+| 2 | `LocalExecutionEnvironment`가 `ProcessRunner`와 동일한 3가지 동작을 회귀 없이 제공 | ✅ (M11-T02) |
+| 3 | `ClaudeCodeEngineAdapter`/`CLIEngineAdapter`가 DI로 `ExecutionEnvironment`에만 의존 | ✅ (M11-T03) |
+| 4 | 새 `ExecutionEnvironment` 구현체 추가 시 기존 `EngineAdapter` 코드 무변경으로 확장 가능(OCP) | ✅ (M11-T03, 전용 테스트로 직접 증명) |
+| 5 | `docs/ARCHITECTURE.md`(§3.10, §9)가 새 구조를 반영 | ✅ (M11-T04) |
+| 6 | 전체 `pytest`/`ruff`/`mypy` 통과 | ✅ (아래 4절) |
+
+Task List(M11-T01~T04) 전체 완료. 사용자 최종 승인 조건 4개
+(M11-T01~T04 순서 진행 / 각 Task마다 구현→테스트→문서화 / YAGNI로
+`LocalExecutionEnvironment`만 구현 / DI 기본 방향 + OCP DoD 포함)
+모두 충족됨.
+
+**2. Architecture Review**
+
+- **신규 컴포넌트**: `interfaces/execution_environment.py`
+  (`ExecutionEnvironment`, `ExecutionResult`, `ExecutionNotFoundError`),
+  `adapters/local_execution_environment.py`(`LocalExecutionEnvironment`).
+- **변경된 기존 컴포넌트**: `ClaudeCodeEngineAdapter`/`CLIEngineAdapter`
+  (생성자 매개변수 교체 + 내부 호출 변경), `CLIProvider`/`CodexProvider`/
+  `GeminiCliProvider`(`parse_result()` 시그니처를 `ProcessResult` →
+  `ExecutionResult`로, 같은 이유로 함께 변경되는 강결합).
+- **손대지 않은 것**: `ProcessRunner`(M3-T03, `LocalExecutionEnvironment`
+  가 그대로 감싸기만 함), `ShellAgent`의 `ProcessRunner` 경로(M5-T04,
+  `EngineAdapter`와 무관한 완전히 다른 실행 경로), `EngineRuntime`/
+  `EngineAdapter`의 기존 세션 생명주기 계약(ADR-0015, 시그니처 무변경 —
+  `run()`의 내부 구현만 바뀜).
+- **핵심 설계 결정**: `ExecutionEnvironment`를 Task→Agent→Engine
+  사이의 새 최상위 Layer로 만들지 않고 `EngineAdapter` 하위(내부)
+  인터페이스로 뒀다(ADR-0025). Agent/Engine Runtime은 이 인터페이스의
+  존재를 전혀 모른다 — `docs/ARCHITECTURE.md` §2의 최상위 흐름은
+  그대로 유지된다.
+
+`git diff --stat`(M11 착수 시점 대비)로 확인한 결과 신규 소스 파일
+2개(`execution_environment.py`, `local_execution_environment.py`),
+기존 소스 파일 5개 수정(`claude_code_engine_adapter.py`,
+`cli_engine_adapter.py`, `cli_provider.py`, `codex_provider.py`,
+`gemini_cli_provider.py`) — M5(6개 신규)보다는 좁고 M9(1개)보다는
+넓은, 중간 규모의 범위였다.
+
+**3. Interface First 원칙 검토**
+
+**M11은 새 최상위 Interface를 1개 추가했다**(`ExecutionEnvironment`,
+17종→18종). M5(`LLMPolicyEngine`) 이후 두 번째 신규 최상위 Interface
+추가 사례이며, M2/M3/M4/M6/M7/M8/M9/M10처럼 "기존 계약 위에서만
+작업"하지 않은 예외적인 Milestone이다. 다만 이 Interface는 처음부터
+"`EngineAdapter` 하위(내부) 협력자"로 설계되어, `EngineAdapter`/
+`EngineRuntime` 등 기존 보호 자산(`.ai/RULES.md` §1.2)의 계약은 단
+한 글자도 바뀌지 않았다 — `EngineAdapter.run()`의 시그니처, Engine
+Runtime이 Adapter를 호출하는 방식 모두 M11 이전과 동일하다.
+
+**4. 테스트 결과**
+
+- `pytest`: **460개 전부 통과**(M10 완료 시점 449개 → M11에서 11개
+  신규: M11-T01 +5, M11-T02 +5, M11-T03 +1(순증가 — 기존 테스트
+  다수를 `ExecutionEnvironment` 계약 기준으로 재작성했지만 신규
+  테스트 파일은 만들지 않음, `test_new_execution_environment_extends_
+  adapter_without_code_changes` 1개만 순증가))
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(84개 소스 파일, 신규 2개)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M11에서 새로 발견해 즉시 해소한 것*
+- `test_cancel_marks_status_cancelled_and_notifies_process_runner`가
+  로컬 duck-typing `FakeProcessRunner`의 "cancel은 절대 예외를 던지지
+  않는다"는 우연한 동작에 암묵적으로 의존하고 있었음(M11-T01에서
+  `ExecutionEnvironment.cancel()`이 미실행 id에 대해
+  `ExecutionNotFoundError`를 던지는 명시적 계약을 정의하면서 발견).
+  `test_cancel_before_execution_marks_status_cancelled`로 재작성해
+  "Adapter가 예외를 삼키고 상태만 전이시킨다"는 실제 계약을 정확히
+  검증하도록 정정(M11-T03).
+
+*M11 범위 밖으로 명시적으로 제외한 것(YAGNI, 계속 이월)*
+- `CodespacesExecutionEnvironment`/`ReplitExecutionEnvironment`/
+  `DockerExecutionEnvironment` 등 원격/컨테이너 실행 환경 — 실제
+  요구사항이 생기기 전까지 구현하지 않는다.
+- `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임워크 통합(M5-T05
+  최초 이월, M10 재분석에서 "기능 이득 없는 순수 리팩토링"으로 확인) —
+  이번에도 손대지 않음.
+
+*계속 이월되는 기존 항목*
+- Model/Effort 수준 라우팅(M6 Review 최초 이월)
+- Codex/Gemini CLI 실제 바이너리 미검증(이 세션 환경엔 CLI 없음)
+- `MemoryEngine.search()` 선형 스캔(M4-T08 최초 이월)
+- Retry Backoff/Persistent Runtime Recovery/Approval 비동기 처리/
+  Process Timeout 정책 고도화(M3-T08 최초 이월), `ShellAgent`
+  화이트리스트가 코드에 고정(M5-T04 최초 이월)
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M11-T01~T04 상세 섹션) / `docs/ROADMAP.md`
+(M11 Task List·목표·DoD 반영) / `docs/ARCHITECTURE.md`(v0.13.0, §3.10/
+§7/§9 갱신) / `.ai/DECISIONS.md`(ADR-0025 신규) 완료.
+`pyproject.toml` 버전은 v0.5.0 그대로 유지한다(ADR-0024 기준선은
+"기존 16→18종 Interface·계층 구조를 기본값으로 유지"를 전제하며,
+`ExecutionEnvironment`는 최상위 흐름을 바꾸지 않는 하위 협력자이므로
+기준선 재선언이 필요한 변경이 아니다). `.ai/MEMORY.md`는 이 Review
+승인 직후 M1~M10과 동일한 방식으로 압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 2/
+수정 5 소스 파일, "새 최상위 Layer 대신 EngineAdapter 하위 인터페이스"
+설계 결정 명시), Interface First 검토 완료(3절, 새 Interface 1개 추가를
+투명하게 보고하되 기존 보호 자산 무변경임을 확인), 테스트 결과 문서화
+완료(4절), Technical Debt 정리 완료(5절, 테스트 하나가 우연한 동작에
+의존하던 것을 발견·수정한 것 포함), 문서 갱신 완료(6절) — 6개 조건
+모두 만족. Review 중 코드 변경이 필요한 치명적 문제(버그·계약 위반)는
+발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 11 Completed를 선언한다.**
+
+**Milestone 12 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
+누적 Technical Debt(5절 참고) 중 어느 것을 다음으로 다룰지, 또는
+`docs/ROADMAP.md`가 원래 그려둔 M12(Workflow Automation) 방향을 그대로
+따를지는 사전 논의 없이 확정된 것이 아니며, Milestone 12는 착수
+시점에 이 문서에 목표/DoD/Task List를 새로 정의한다(Task Driven
+Development 원칙, M2~M11이 그래왔듯).
 
 ---
 

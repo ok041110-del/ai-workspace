@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.12.0 |
-| 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1~3 완료, Milestone 4 진행 중 — ADR-0023으로 §3.4/§3.9 병렬 실행 책임 경계 명시) |
+| 문서 버전 | v0.13.0 |
+| 작성일 | 2026-07-26 |
+| 상태 | Draft (Milestone 1~10 완료, Milestone 11 진행 중 — ADR-0025로 §3.10에 ExecutionEnvironment 추가) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -343,6 +343,24 @@ CLI 등 여러 CLI 기반 엔진이 공유하는 프레임워크 — `CLIEngineA
 를 이 프레임워크로 통합하는 것은 의도적으로 미룸(기존 안정성 유지) —
 `CLIEngineAdapter`가 충분히 검증된 뒤 재검토(M6+).
 
+**ExecutionEnvironment (Milestone 11, ADR-0025)**: `EngineAdapter`가
+"무엇을 실행할지"(엔진별 명령 조립·결과 파싱)와 "어디서 실행할지"(로컬
+프로세스/향후 원격 컨테이너)를 분리하기 위한 `EngineAdapter` 하위(내부)
+인터페이스. `ClaudeCodeEngineAdapter`/`CLIEngineAdapter` 둘 다 구체
+구현체를 직접 생성하지 않고 생성자 주입(Dependency Injection)으로
+`ExecutionEnvironment`를 받는다(기본값 `LocalExecutionEnvironment`).
+`execute(execution_id, command, ...)`/`cancel(execution_id)` 계약이며,
+`execution_id`는 특정 실행 방식(OS 프로세스 등)을 가정하지 않는
+이름이다. 현재는 기존 `ProcessRunner`(M3-T03)를 그대로 감싸는
+`LocalExecutionEnvironment`만 구현되어 있다. `CodespacesExecutionEnvironment`
+/`ReplitExecutionEnvironment`/`DockerExecutionEnvironment` 등은 실제
+요구사항이 생길 때까지 구현하지 않는다(YAGNI) — 새 구현체를 추가할 때
+`EngineAdapter` 코드를 전혀 수정할 필요가 없도록 설계되었다(OCP).
+`ExecutionEnvironment`는 `CLIProvider`처럼 `adapters/`·`interfaces/`
+내부에서만 쓰이는 협력자이며, Agent/Engine Runtime은 이 인터페이스의
+존재를 알지 못한다 — Task→Agent→Engine Runtime→Engine Adapter라는
+기존 최상위 흐름(§2)은 그대로 유지된다.
+
 ### 3.11 Implementation Engines (외부)
 Claude Code · Codex · Gemini CLI 등.
 
@@ -396,7 +414,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentCapability` | Coordination/Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP … |
 | `AgentStatus` | 생명주기 상태 |
 
-## 7. Interfaces (추상 계약, 총 17종)
+## 7. Interfaces (추상 계약, 총 18종)
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
@@ -417,6 +435,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
 | `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행 | Milestone 1 (T1-19) | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
+| `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 
 > **참고**: "완료(계약)"은 Interface 정의와 Fake 기반 계약 테스트만 존재하고
 > 실제 서비스에 쓰일 구체 구현체는 아직 없다는 뜻이다(각 컴포넌트의 계획된
@@ -449,7 +468,7 @@ src/ai_workspace/
 ├── domain/            # Project, Mission, Workflow, Task, Step,
 │                       #   WorkspaceSession, Agent, AgentRole, AgentCapability, AgentStatus
 │                       #   (구현됨, T1-14~T1-17)
-├── interfaces/         # 추상 계약 (16종, §7) (구현됨, T1-15~T1-21)
+├── interfaces/         # 추상 계약 (18종, §7) (구현됨, T1-15~T1-21, M11-T01)
 ├── core/              # Workspace Core (WorkspaceSession 관리, Runtime 초기화)
 │                       #   (구현됨, T1-22)
 ├── runtime/           # (Milestone 2 이후)
@@ -461,6 +480,8 @@ src/ai_workspace/
 ├── events/            # Event Bus + Event Store 구현 (Milestone 2 이후)
 ├── interaction/        # Interaction Layer 구현 (Milestone 3 이후)
 ├── adapters/          # EngineAdapter 구현 (Milestone 3: claude_code.py, codex.py, gemini_cli.py)
+│                       #   + local_execution_environment.py (ExecutionEnvironment
+│                       #   구현, Milestone 11)
 ├── storage/           # FileProjectRepository/FileAgentRepository/FileEventStore
 │                       #   (구현됨, T1-23)
 └── cli/               # CLI 진입점 (UI Surface의 하나) — main.py (구현됨, T1-24)

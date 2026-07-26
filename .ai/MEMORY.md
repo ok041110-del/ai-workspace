@@ -357,6 +357,43 @@
   이월. 그 외 이월 부채(Model/Effort 라우팅, Retry Backoff/Persistent
   Runtime Recovery/Approval 비동기 처리/Process Timeout 고도화,
   `ShellAgent` 화이트리스트 고정)는 그대로 유지.
+- **Milestone 11(Execution Environment) 완료 — 2026-07-26 사용자 승인.**
+  주제는 "Claude Code/API/App, GitHub Codespaces, Replit, Codex/Gemini
+  CLI, Copilot 등을 어디에 배치할지"였다. 설계 검토 결과 두 축이 뒤섞여
+  있었음을 확인: **엔진**(무엇으로 작업을 시킬지 — Claude Code/Codex
+  CLI/Gemini CLI/Copilot, 이미 `EngineAdapter`가 담당)과 **실행
+  환경**(어디서 실행되는지 — 로컬/Codespaces/Replit/Docker, 담당 계층
+  없었음)이 그것이다. Task→Agent→Engine Runtime→Engine Adapter라는
+  기존 최상위 흐름에 새 Layer를 추가하지 않고, `ExecutionEnvironment`
+  를 **`EngineAdapter` 하위(내부) 인터페이스**로 두기로 사용자가 최종
+  승인(ADR-0025) — Agent/Engine Runtime은 실행 환경을 알 필요가 없고,
+  `EngineAdapter`가 이미 세션 생명주기 계약(ADR-0015)을 갖고 있어 그
+  경계 안이 자연스럽다는 것이 근거. `interfaces/execution_environment.py`
+  에 `ExecutionEnvironment`(execute/cancel, M1 이후 두 번째 신규 최상위
+  Interface, 총 18종, M11-T01) → `adapters/local_execution_environment.py`
+  의 `LocalExecutionEnvironment`가 새 프로세스 로직 없이 기존
+  `ProcessRunner`(M3-T03)를 그대로 감싸 구현(M11-T02) →
+  `ClaudeCodeEngineAdapter`/`CLIEngineAdapter`가 `ProcessRunner`를 직접
+  생성하던 것을 생성자 **주입(DI)**으로 전환(기본값
+  `LocalExecutionEnvironment()`, M11-T03) — 새 실행 환경(예: 향후
+  Codespaces)을 추가해도 `EngineAdapter` 코드를 전혀 수정하지 않고
+  확장 가능함을 전용 테스트로 직접 증명(OCP). Codespaces/Replit/Docker
+  실행 환경은 실제 요구사항이 생길 때까지 구현하지 않는다(YAGNI,
+  `LocalExecutionEnvironment`만 존재). **신규 소스 파일 2개, 수정 5개**
+  (`ClaudeCodeEngineAdapter`/`CLIEngineAdapter`/`CLIProvider`/
+  `CodexProvider`/`GeminiCliProvider` — Provider들의 `parse_result()`
+  시그니처도 `ExecutionResult` 기준으로 함께 갱신). Claude API/App은
+  프로그램적으로 제어할 API가 없거나(App) 로컬 프로세스가 필요 없어
+  (API) 이 구조에 아예 들어오지 않는다는 점도 함께 정리됨. 전체
+  `pytest` 460개(M10 완료 449개 → M11에서 11개 신규) 통과, `ruff`/
+  `mypy` 클린.
+  **Milestone Review 결론**(전문은 `.ai/TASKS.md` "Milestone 11
+  Review" 참고): M5 이후 두 번째로 새 최상위 Interface 1개를 추가했지만
+  기존 보호 자산(`EngineAdapter`/`EngineRuntime` 등)의 계약은 전혀
+  바뀌지 않음. 이월 부채는 M10과 동일하게 유지(Model/Effort 라우팅,
+  Adapter 계열 통합, Codex/Gemini CLI 실검증, `MemoryEngine.search`
+  성능, Retry Backoff 등, `ShellAgent` 화이트리스트 고정) — M11은 새
+  부채를 남기지 않았다.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -421,13 +458,18 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
   이 계층에 붙는 표면.
 - **Engine Adapter**: per-engine 세션 생명주기 계약 create_session/run/cancel/
   status/destroy_session/capabilities/supports_parallel/estimate_cost (ADR-0015).
+  실제 명령을 어디서 실행할지는 하위 인터페이스 **ExecutionEnvironment**
+  (execute/cancel, ADR-0025, Milestone 11)에 DI로 위임 — Agent/Engine
+  Runtime은 이 인터페이스를 모른다. 현재 구현체는 `LocalExecutionEnvironment`
+  뿐(Codespaces/Replit/Docker는 YAGNI로 미구현).
 - **도메인**: Project · **Mission→Workflow→Task→Step** · **WorkspaceSession** ·
   Agent/AgentRole/AgentCapability(**Coordination 포함**)/AgentStatus.
-- **Interfaces (총 16종, Milestone 1에서 계약 정의)**: ProjectRepository,
+- **Interfaces (총 18종, Milestone 1에서 16종 계약 정의 + Milestone 5
+  `LLMPolicyEngine` + Milestone 11 `ExecutionEnvironment`)**: ProjectRepository,
   WorkflowEngine, TaskEngine, MemoryEngine(저장/검색), ApprovalEngine,
   AutomationEngine, EngineAdapter + AgentManager, AgentRepository, AgentRegistry,
-  AgentScheduler, InteractionEngine, EventBus, EventStore, **EngineRuntime,
-  ContextManager**.
+  AgentScheduler, InteractionEngine, EventBus, EventStore, EngineRuntime,
+  ContextManager, **LLMPolicyEngine, ExecutionEnvironment**.
 - 의존 방향은 항상 위(UI)에서 아래(구현 엔진)로만 향한다. Agent 협업만 Event
   Bus를 통한 수평 결합이며, Event Store는 Bus의 독립 구독자다.
 
@@ -486,6 +528,9 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR-0020 | Task에 `workflow_id`(선택 필드) 추가 — Task-Workflow 관계 보완 | 승인됨 |
 | ADR-0021 | **Phase 계층 폐지**, `Milestone → Task` 2단 체계로 전환 | 승인됨 |
 | ADR-0022 | **Task 분해 원칙**: 아키텍처 책임 경계로 Task 분해, 정의·구현·테스트는 한 Task 내 완결 | 승인됨 |
+| ADR-0023 | `run_parallel()` 병렬 실행 책임 경계: AgentScheduler(선택) vs EngineRuntime(실행) | 승인됨 |
+| ADR-0024 | v0.5.0 아키텍처 기준선(Baseline) 선언 (`pyproject.toml` 버전 상향) | 승인됨 |
+| ADR-0025 | **ExecutionEnvironment**를 새 최상위 Layer 대신 `EngineAdapter` 하위 인터페이스로 도입, DI 기본 방향 | 승인됨 |
 
 기술 스택(Python, dataclasses, 파일 기반 저장, CLI, 인메모리 Event Bus+파일
 Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
@@ -523,14 +568,15 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-26)**: Milestone 1~10 전체 완료(사용자 승인),
-  버전 v0.5.0 유지(ADR-0024 기준선, M6~M10은 구조 변경 없이 그 위에
-  기능만 얹음). `pytest` 449개, `ruff`/`mypy` 클린. Milestone 11은
-  아직 목표/DoD/Task List 미정의(Task Driven Development 원칙).
+- **현재 상태(2026-07-26)**: Milestone 1~11 전체 완료(사용자 승인),
+  버전 v0.5.0 유지(ADR-0024 기준선 — `ExecutionEnvironment`는 최상위
+  흐름을 바꾸지 않는 `EngineAdapter` 하위 협력자라 기준선 재선언 대상이
+  아님). `pytest` 460개, `ruff`/`mypy` 클린. Milestone 12는 아직
+  목표/DoD/Task List 미정의(Task Driven Development 원칙).
 - **이 환경의 제약(2026-07-26 확인)**: `claude` CLI만 설치되어 있고
   `codex`/`gemini` CLI는 설치되어 있지 않다(`which` 확인). Codex/Gemini
   관련 Task는 이 세션에서 실행 불가 — 실제 CLI가 설치된 환경이 필요하다.
-- **누적 Technical Debt(2026-07-26 기준, M10 완료 후)**: (1)
+- **누적 Technical Debt(2026-07-26 기준, M11 완료 후)**: (1)
   **Model/Effort 수준 라우팅 미완성** — M6에서 완성한 것은 Provider
   단위뿐, `EngineAdapter.run()`이 Model/Effort를 인자로 받지 않아 같은
   Provider 안에서도 opus/sonnet/haiku나 Effort를 실제 실행에 반영

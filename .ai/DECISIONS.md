@@ -757,3 +757,64 @@
   `docs/ROADMAP.md`/`README.md`는 이 ADR을 참고해 M4 완료 상태와 함께
   갱신한다. 소스 코드(`src/`, `tests/`) 변경 없음(문서·버전 메타데이터
   변경만).
+
+## ADR-0025: ExecutionEnvironment를 EngineAdapter 하위(내부) 인터페이스로 도입
+
+- 상태: 승인됨 (2026-07-26, 사용자 최종 승인)
+- 날짜: 2026-07-26
+- 배경: `ClaudeCodeEngineAdapter`/`CLIEngineAdapter`가 명령을 "무엇을
+  실행할지"(엔진별 명령 조립·결과 파싱)뿐 아니라 "어디서 실행할지"까지
+  떠안고 있었다 — 둘 다 생성자에서 `ProcessRunner`(M3-T03, 로컬 프로세스
+  실행 전용 구체 클래스)를 직접 생성해 사용했다. GitHub Codespaces,
+  Replit, Docker 같은 원격/컨테이너 실행 환경을 지원해야 할 때 이
+  구조로는 매 Adapter 코드를 직접 고쳐야 한다. 설계 검토 단계에서
+  두 가지 선택지를 비교했다: (1) Task→Agent→Engine 사이에
+  `ExecutionEnvironment`를 새로운 최상위 Layer로 추가, (2)
+  `EngineAdapter` 하위(내부) 인터페이스로 두고 DI로 주입.
+- 결정:
+  1. `ExecutionEnvironment`를 새 최상위 Layer로 만들지 않는다. Agent나
+     Engine Runtime이 "어디서 실행되는지"를 알아야 할 이유가 없고,
+     `EngineAdapter`가 이미 세션 생명주기 계약(ADR-0015)을 갖고 있어
+     그 내부 협력자로 두는 것이 최소 복잡성 원칙(§4.2)에 맞는다.
+  2. `interfaces/execution_environment.py`에 `ExecutionEnvironment`
+     (ABC, `execute`/`cancel`), `ExecutionResult`, `ExecutionNotFoundError`
+     를 신규 정의한다(총 18종 Interface). `execution_id`는 특정 실행
+     방식(OS 프로세스 등)을 가정하지 않는 이름으로, 로컬 프로세스든
+     향후 원격 컨테이너 세션이든 동일하게 다룰 수 있게 한다.
+  3. `adapters/local_execution_environment.py`에 `LocalExecutionEnvironment`
+     를 구현한다 — 새 프로세스 관리 로직을 만들지 않고 기존
+     `ProcessRunner`(M3-T03)를 그대로 감싸는 얇은 위임 클래스로 둔다
+     (Surgical Changes, `ProcessRunner`는 무변경).
+  4. `ClaudeCodeEngineAdapter`/`CLIEngineAdapter`는 이제 구체 구현체를
+     직접 생성하지 않고 **생성자 주입(Dependency Injection)**으로
+     `ExecutionEnvironment`를 받는다(기본값 `LocalExecutionEnvironment()`
+     — 호출자가 아무것도 지정하지 않아도 기존과 동일하게 동작하되,
+     항상 다른 구현체로 교체 가능하다).
+  5. Codespaces/Replit/Docker 실행 환경은 실제 요구사항이 생길 때까지
+     구현하지 않는다(YAGNI) — 지금은 `LocalExecutionEnvironment`만
+     존재한다.
+- 대안:
+  - 새 최상위 Layer(Task→Agent→Engine→EngineAdapter→ExecutionEnvironment
+    →LLM)로 도입 — Agent/Engine Runtime이 실행 환경을 알아야 할
+    이유가 없는데도 의존 경로에 계층이 하나 더 늘어나 오히려 책임
+    경계가 흐려짐 (기각).
+  - 아무 추상화도 두지 않고 필요할 때 리팩터링 — `ClaudeCodeEngineAdapter`
+    와 `CLIEngineAdapter` 두 곳에 이미 같은 로직(`ProcessRunner` 직접
+    생성)이 중복돼 있어, 나중에 실행 환경이 늘어나면 두 곳을 동시에
+    고쳐야 하는 문제를 지금 막을 수 있음에도 방치하는 셈 (기각).
+- 이유: `EngineAdapter`의 세션 생명주기 계약(ADR-0015)은 이미 "이
+  Adapter가 실행을 어떻게 관리하는가"를 캡슐화하는 경계였다.
+  `ExecutionEnvironment`를 그 경계 안쪽에 두면 Open-Closed Principle을
+  만족한다 — 새 실행 환경이 추가되어도 `EngineAdapter`/`Agent`/`Engine
+  Runtime` 어느 코드도 수정할 필요가 없다. DI를 기본 방향으로 삼은
+  것은 Adapter가 협력자를 스스로 생성(`new`)하지 않아야 테스트 가능성과
+  교체 가능성이 함께 확보되기 때문이다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.13.0 §3.10/§7/§9에 반영.
+  `CLIProvider.parse_result()`(및 `CodexProvider`/`GeminiCliProvider`)
+  시그니처도 `ProcessResult` → `ExecutionResult`로 함께 갱신(같은 이유로
+  항상 함께 바뀌는 강결합). `ShellAgent`가 쓰는 `ProcessRunner`
+  (M5-T04, EngineAdapter와 무관한 별도 경로)는 이번 변경 범위 밖.
+  새 `ExecutionEnvironment` 구현체(예: 향후 Codespaces) 추가 시
+  `EngineAdapter` 코드를 전혀 수정하지 않고 확장 가능함을
+  `test_new_execution_environment_extends_adapter_without_code_changes`
+  로 직접 증명(M11-T03).
