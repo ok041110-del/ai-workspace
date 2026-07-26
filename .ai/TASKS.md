@@ -4089,12 +4089,12 @@ Test/문서화+Review 4단계 패턴, 이후 Milestone에도 동일 패턴 적�
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M13-T01 | `is_agent_selected()` 헬퍼 정의 | TODO |
-| M13-T02 | `CodingAgent`에 선택적 Scheduler 가드 적용 | TODO |
-| M13-T03 | End-to-End 통합 테스트 | TODO |
-| M13-T04 | 문서화 + Milestone 13 Review | TODO |
+| M13-T01 | `is_agent_selected()` 헬퍼 정의 | **완료** |
+| M13-T02 | `CodingAgent`에 선택적 Scheduler 가드 적용 | **완료** |
+| M13-T03 | End-to-End 통합 테스트 | **완료** |
+| M13-T04 | 문서화 + Milestone 13 Review | **완료** |
 
-**진행 상태**: 계획 확정, 착수 대기.
+**진행 상태**: M13-T01~T04 전체 완료. 아래 "Milestone 13 Review" 참고.
 
 #### M13-T01: `is_agent_selected()` 헬퍼 정의
 - 목적: "이 Agent가 이번에 Scheduler에게 선택됐는가"를 판별하는 순수
@@ -4179,8 +4179,116 @@ Test/문서화+Review 4단계 패턴, 이후 Milestone에도 동일 패턴 적�
   `docs/ROADMAP.md`/`.ai/MEMORY.md` 갱신, 전체 테스트 결과 정리 및
   제시.
 - 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `docs/ARCHITECTURE.md` v0.15.0 §3.4
+  (Agent Scheduler 소절에 "선택이 실제로 개입을 가르는 자가 확인
+  가드" 서술 추가 — `is_agent_selected()` 메커니즘, `CodingAgent`가
+  최초 채택), 문서 헤더(버전/상태) 갱신. §9는 신규 파일/디렉터리가
+  없어(기존 `agents/scheduling.py`, `agents/coding_agent.py`만 수정)
+  변경하지 않음. `docs/ROADMAP.md` Milestone 13 절 Task List 상태
+  갱신. 새 최상위 Interface를 추가하지 않아(`is_agent_selected()`는
+  순수 함수, `CodingAgent`는 선택적 매개변수만 추가) 신규 ADR은
+  작성하지 않음(M6~M10/M12와 동일 패턴). 아래 "Milestone 13 Review"
+  절 참고.
 - 의존성: M13-T01~T03.
+
+---
+
+## Milestone 13 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `agent_registry`/`agent_scheduler` 미주입 시 `CodingAgent` 기존과 완전히 동일 | ✅ (M13-T02, 기존 6개 테스트 무변경 통과) |
+| 2 | 같은 CODING Capability의 `CodingAgent` 2개 중 Scheduler가 고른 1개만 처리 | ✅ (M13-T02 단위 테스트, M13-T03 E2E) |
+| 3 | 실제 `AgentRegistry`/`AgentScheduler` 구현체(Fake 아님)로 통합 테스트 증명 | ✅ (M13-T03) |
+| 4 | 기존 `EventBus`/`AgentRegistry`/`AgentScheduler`/`CodingAgent` 다른 계약 무변경 | ✅ (아래 2절) |
+| 5 | 전체 `pytest`/`ruff`/`mypy` 통과 | ✅ (아래 4절) |
+
+Task List(M13-T01~T04) 전체 완료. 사용자 승인 조건("Scheduler가 실제로
+Agent를 고른다", 4단계 Task 패턴) 그대로 충족됨.
+
+**2. Architecture Review**
+
+- **신규 컴포넌트**: 없음 — `is_agent_selected()`는 기존
+  `agents/scheduling.py`에 함수 하나만 추가됐다.
+- **변경된 기존 컴포넌트**: `CodingAgent`(생성자에 `agent_registry`/
+  `agent_scheduler` 선택적 매개변수 추가, `_on_mission_planned()`
+  맨 앞에 가드 3줄 추가) 하나뿐. `AgentRegistry`/`AgentScheduler`
+  계약, `EventBus` 계약, `find_agent_by_capability()` 모두 M1~M12
+  그대로 무변경.
+- **핵심 설계 결정**: 새로운 중앙 디스패처 없이 "자가 확인 가드"
+  패턴을 택했다 — `AgentScheduler.select()`가 결정적이라는 전제 하에,
+  같은 후보 목록으로 같은 질문을 하는 모든 Agent 인스턴스가 항상
+  같은 결론에 도달한다는 성질을 이용했다. 이 덕분에 Event/payload
+  계약을 전혀 바꾸지 않고(예: "선택된 agent_id"를 payload에 싣는
+  방식은 채택하지 않음) 기존 Event 기반 협업 구조(§5)를 그대로
+  유지하면서 Scheduler 선택을 실제로 의미 있게 만들었다.
+
+`git diff --stat`(M12 종료 커밋 대비)로 확인한 결과 신규 소스 파일
+0개, 기존 소스 파일 수정 2개(`agents/scheduling.py`,
+`agents/coding_agent.py`) — M12(신규 1개)보다도 좁고, M9(수정 1개)에
+버금가는 M1 이후 가장 작은 변경 폭 중 하나였다.
+
+**3. Interface First 원칙 검토**
+
+**M13은 새 최상위 Interface를 추가하지 않았다**(M6/M7/M8/M9/M10/M12와
+동일 패턴, M5/M11만 예외). `is_agent_selected()`는 ABC가 아닌 순수
+함수이고, `CodingAgent`의 새 매개변수는 둘 다 기본값 `None`이라 기존
+호출부(수십 곳) 시그니처 호환성이 100% 유지된다.
+
+**4. 테스트 결과**
+
+- `pytest`: **472개 전부 통과**(M12 완료 시점 465개 → M13에서 7개
+  신규: M13-T01 +4, M13-T02 +1, M13-T03 +2)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(86개 소스 파일, 신규 소스 파일 0개)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M13 범위 밖으로 명시적으로 제외한 것(사용자 확정, 계속 이월)*
+- Provider/Model Routing(이미 M6에서 다룸, M13과 무관)
+- 병렬 실행
+- Scheduler 선택 정책 고도화(우선순위/부하 기반 — 기존 "첫 매치" 그대로)
+- `CodingAgent` 외 다른 Agent(Review/Documentation 등)로의 확장 —
+  이번 MVP가 검증한 패턴은 재사용 가능하지만, 실제 다중 인스턴스
+  요구가 생기기 전까지 확장하지 않는다(YAGNI).
+
+*계속 이월되는 기존 항목*
+- Model/Effort 수준 라우팅(M6 Review 최초 이월)
+- `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임워크 미통합
+- Codex/Gemini CLI 실제 바이너리 미검증(이 세션 환경엔 CLI 없음)
+- `MemoryEngine.search()` 선형 스캔
+- Retry Backoff/Persistent Runtime Recovery/Approval 비동기 처리/
+  Process Timeout 정책 고도화, `ShellAgent` 화이트리스트가 코드에 고정
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M13-T01~T04 상세 섹션) / `docs/ROADMAP.md`
+(M13 Task List·목표·DoD 반영) / `docs/ARCHITECTURE.md`(v0.15.0, §3.4
+갱신) 완료. 새 Interface가 없어 `.ai/DECISIONS.md`에 신규 ADR을
+추가하지 않았다. `pyproject.toml` 버전은 v0.5.0 그대로 유지(ADR-0024
+기준선 — `CodingAgent`의 선택적 매개변수 추가는 기존 계약을 바꾸지
+않아 기준선 재선언 대상이 아님). `.ai/MEMORY.md`는 이 Review 승인
+직후 M1~M12와 동일한 방식으로 압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 소스
+0개·수정 2개, "자가 확인 가드" 설계 결정 명시), Interface First 검토
+완료(3절, 새 Interface 0개·기존 호출부 100% 호환), 테스트 결과 문서화
+완료(4절), Technical Debt 정리 완료(5절), 문서 갱신 완료(6절) — 6개
+조건 모두 만족. Review 중 코드 변경이 필요한 치명적 문제(버그·계약
+위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 13 Completed를 선언한다.**
+
+**Milestone 14 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
+`docs/ROADMAP.md`가 원래 그려둔 다음 단계는 M14(LLM Routing)이지만,
+이는 사전 논의 없이 확정된 것이 아니며 Milestone 14는 착수 시점에 이
+문서에 목표/DoD/Task List를 새로 정의한다(Task Driven Development
+원칙, M2~M13이 그래왔듯).
 
 ---
 

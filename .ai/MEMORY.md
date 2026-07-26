@@ -417,6 +417,29 @@
   전체 `pytest` 465개(M11 완료 460개 → M12에서 5개 신규) 통과,
   `ruff`/`mypy` 클린. 새 Interface가 없어 신규 ADR은 작성하지 않음.
   이월 부채는 M11과 동일하게 유지.
+- **Milestone 13(Multi-Agent Collaboration) 완료 — 문서화 완료, 사용자
+  승인 대기.** 목표는 "같은 Capability의 Agent가 여러 개 등록돼 있을
+  때 `AgentScheduler.select()`가 실제로 하나만 고르고 나머지는 개입
+  하지 않는다"는 것을 실제로 증명(MVP, 사용자 확정). **핵심 발견**:
+  `AgentScheduler`는 M1부터 정의만 되어 있었고 실제 협업 흐름에서
+  한 번도 쓰인 적이 없었다 — 각 Agent가 Event를 구독하면 무조건
+  처리하는 고정 배선 구조였기 때문. 새 중앙 디스패처를 만들지 않고,
+  `agents/scheduling.py`에 `is_agent_selected()`를 추가해 각 Agent가
+  처리 직전 스스로 "내가 선택됐나"를 확인하는 **자가 확인 가드**
+  패턴을 채택(`AgentScheduler.select()`가 결정적이라는 성질을 이용 —
+  같은 후보로 같은 질문을 하면 모든 인스턴스가 같은 결론에 도달).
+  `CodingAgent`에 `agent_registry`/`agent_scheduler`를 **선택적**
+  (기본값 `None`) 매개변수로 추가해 기존 호출부(수십 곳)를 전혀
+  건드리지 않음. 실제 `InMemoryAgentManager`/`InMemoryAgentRegistry`/
+  `InMemoryAgentScheduler`(Fake 아님)로 같은 CODING Capability의
+  `CodingAgent` 2개를 등록해도 `MissionPlanned` 하나에 `CodeCompleted`
+  가 정확히 1번만 발행됨을 통합 테스트로 증명(M13-T03). **신규 소스
+  파일 0개, 기존 파일 수정 2개, 새 Interface 0개** — M1 이후 가장
+  작은 변경 폭 중 하나. 전체 `pytest` 472개(M12 완료 465개 → M13에서
+  7개 신규) 통과, `ruff`/`mypy` 클린. 새 Interface가 없어 신규 ADR은
+  작성하지 않음. MVP는 `CodingAgent` 하나에만 적용(Review/Documentation
+  등으로 확장은 후속 Milestone, YAGNI). 이월 부채는 M12와 동일하게
+  유지.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -466,7 +489,10 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
   Agent Runtime·Engine Runtime 초기화, Workflow 시작, 종료**. Task는 Agent
   Runtime에 위임 (ADR-0010).
 - **Agent Runtime**: Registry(등록/조회/제거) · Scheduler(Capability 기준 선택/
-  병렬/우선순위) · Manager(생성/생명주기/상태) · Event Bus.
+  병렬/우선순위) · Manager(생성/생명주기/상태) · Event Bus. **Scheduler 선택이
+  실제로 개입을 가르는 자가 확인 가드**(`is_agent_selected()`, Milestone 13)를
+  `CodingAgent`가 최초 채택 — 새 디스패처 없이 각 Agent가 스스로
+  "내가 선택됐나"를 확인한다.
 - **Event Store**: Event Bus의 **독립 구독자**로 이벤트 기록. 전달 게이팅 없음.
   Replay/Audit/복구 (ADR-0014, ADR-0018).
 - **Agents**: **Capability 중심**(엔진 비종속). **Coordination Capability**로
@@ -594,11 +620,13 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-26)**: Milestone 1~12 전체 완료(사용자 승인).
+- **현재 상태(2026-07-26)**: Milestone 1~12 완료(사용자 승인), Milestone
+  13(Multi-Agent Collaboration)은 구현+문서화 완료·사용자 승인 대기.
   버전 v0.5.0 유지(ADR-0024 기준선 — `ExecutionEnvironment`/
-  `WorkflowRunner` 둘 다 최상위 흐름이나 기존 Interface 계약을 바꾸지
-  않는 추가라 기준선 재선언 대상이 아님). `pytest` 465개, `ruff`/`mypy`
-  클린. Milestone 13은 아직 목표/DoD/Task List 미정의(Task Driven
+  `WorkflowRunner`/`CodingAgent`의 자가 확인 가드 모두 최상위 흐름이나
+  기존 Interface 계약을 바꾸지 않는 추가라 기준선 재선언 대상이 아님).
+  `pytest` 472개, `ruff`/`mypy` 클린. Milestone 14는 아직 목표/DoD/
+  Task List 미정의(Task Driven
   Development 원칙).
 - **이 환경의 제약(2026-07-26 확인)**: `claude` CLI만 설치되어 있고
   `codex`/`gemini` CLI는 설치되어 있지 않다(`which` 확인). Codex/Gemini

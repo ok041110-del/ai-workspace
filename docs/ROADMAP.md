@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~12 완료, v0.5.0 아키텍처 기준선 선언, Milestone 13 계획 확정 — 착수 대기) |
+| 상태 | Draft (Milestone 1~12 완료, v0.5.0 아키텍처 기준선 선언, Milestone 13 구현 완료 — 사용자 승인 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -600,12 +600,14 @@ Scheduler에게 선택됐나?"를 스스로 확인하는 자가 확인 가드를
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M13-T01 | `is_agent_selected()` 헬퍼 정의 | TODO |
-| M13-T02 | `CodingAgent`에 선택적 Scheduler 가드 적용 | TODO |
-| M13-T03 | End-to-End 통합 테스트 | TODO |
-| M13-T04 | 문서화 + Milestone 13 Review | TODO |
+| M13-T01 | `is_agent_selected()` 헬퍼 정의 | **완료** |
+| M13-T02 | `CodingAgent`에 선택적 Scheduler 가드 적용 | **완료** |
+| M13-T03 | End-to-End 통합 테스트 | **완료** |
+| M13-T04 | 문서화 + Milestone 13 Review | **완료** |
 
-**진행 상태**: 계획 확정, 착수 대기.
+**진행 상태**: M13-T01~T04 전체 완료. Milestone DoD 1~5번 전부 충족
+확인됨. Milestone 13 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 13
+Review" 참고) — 사용자 승인 대기.
 
 ---
 

@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.14.0 |
+| 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~11 완료, Milestone 12 진행 중 — §3.12에 WorkflowRunner 추가, §3.7 Workflow Engine 책임 범위 명확화) |
+| 상태 | Draft (Milestone 1~12 완료, Milestone 13 진행 중 — §3.4에 Agent Scheduler 자가 확인 가드 메커니즘 추가) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -204,6 +204,18 @@ Agent의 실행을 담당하는 계층.
   활동할 Agent 후보를 최대 max_count개 선택**하는 정책 결정만 한다 —
   선택된 Agent를 실제로 동시에 실행시키는 메커니즘은 갖지 않는다(그
   메커니즘은 3.9 Engine Runtime의 `run_parallel()` 책임).
+  **선택이 실제로 개입을 가르는 자가 확인 가드(Milestone 13)**: M1~M12
+  내내 `select()`는 정의만 되어 있고 실제 협업 흐름에서 "선택되지 않은
+  Agent는 개입하지 않는다"가 실제로 검증된 적이 없었다. 새 중앙
+  디스패처를 두지 않고, `agents/scheduling.py`의
+  `is_agent_selected(agent_registry, agent_scheduler, capability,
+  agent_id)`로 각 Agent가 처리 직전 스스로 "내가 선택됐나"를 확인하는
+  방식을 택했다 — `select()`가 결정적(같은 candidates에 항상 같은 결과)
+  이라는 전제 하에, 같은 Capability의 Agent가 여러 개 Event를
+  구독하고 있어도 전부 같은 결론에 도달해 실제로는 선택된 하나만
+  일한다. `CodingAgent`가 이 가드를 최초로 채택했다(생성자에
+  `agent_registry`/`agent_scheduler`를 **선택적**으로 주입 — 기본값
+  `None`이면 이 확인을 건너뛰어 기존 동작과 완전히 동일).
 - **Agent Manager** (`AgentManager`): Agent 생성/생명주기/상태 관리.
 - **Event Bus** (`EventBus`): Event 발행/구독/Agent 간 통신.
 
