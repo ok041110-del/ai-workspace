@@ -191,107 +191,34 @@
   16종 Interface·계층 구조를 기본값으로 유지하고 새 기능은 그 위에
   조립하며, 구조 변경이 필요하면 지금까지처럼 "Interface 변경 여부
   우선 검토" 절차를 거친다.
-- **Milestone 5(실제 개발 수행) Task List 확정(2026-07-26)**: M5-T01
-  (Rule 기반 `LLMPolicyEngine`) → M5-T02(Agent가 Policy Engine을 통해
-  Model/Effort·Engine 선택) → M5-T03(`DevelopmentContext` 도입 + Coding/
-  Review Agent 강화) → M5-T04(`ShellAgent` 신규) → M5-T05(Codex/Gemini
-  CLI Adapter, 가능한 범위) → M5-T06(Workflow 조건부 분기 + 필요 범위
-  `Step` Domain 반영) → M5-T07(Milestone 5 Review). **사전 조사로 발견한
-  것**: `.ai/RULES.md` §7의 LLM Policy 로드맵("M2 Rule 기반 선택 → M3
-  Agent Policy 참조 → M4 Policy Engine 자동 선택 → M5 Self Optimizer")이
-  M2~M4 내내 전혀 진행되지 않음(T1-16 Domain 정의 이후 실제 선택 로직
-  없음) — M5-T01/T02가 M2/M3 단계를 소급 구현하고, Self Optimizer는 M6
-  이후로 이관. PRD 대비 추가 확인한 갭: 7.8 Multi-Engine(Claude Code만
-  존재), 7.3 Workflow 조건부 분기 없음. **M5 착수 전 사전 정리 결과**:
-  Event ID 생성 방식 불일치(M2 이월 부채 #3)를 조사한 결과 `src/
-  ai_workspace/` 전체의 모든 `Event(...)` 생성 지점이 이미 `str(uuid.
-  uuid4())`로 일관되어 있어(M3의 `ManagedEngineRuntime`/
-  `EngineApprovalPipeline` 구현 때 자연스럽게 해소됨) **코드 변경 없이
-  부채 항목만 해소로 종결**. Task ID는 부여하지 않음(ADR-0021로 P0/P1
-  접두어 폐지 — 조사만으로 끝난 사안이라 애초에 불필요했음).
-- **M5-T01 완료(2026-07-26)**: `LLMPolicyEngine`(M1 이후 첫 신규 최상위
-  Interface, 총 17종) + `InMemoryLLMPolicyEngine` + `storage/
-  llm_policy_loader.py`의 `load_llm_policy_rules()`. 사용자 지시로
-  PolicyLoader 계층을 분리해 Engine은 PyYAML을 전혀 모름. 프로젝트 최초
-  외부 런타임 의존성(`pyyaml`, 순수 stdlib 기조 이탈)을 사용자 승인 하에
-  추가, `mypy` strict용 `types-PyYAML`도 dev 의존성에 추가.
-  `docs/llm_policy.example.yaml`의 key를 `AgentRole.value`와 정확히
-  일치하도록 수정(이제부터 실제로 파싱되는 설정 파일). 알 수 없는
-  role/provider/effort는 `InvalidLLMPolicyRuleError`로 명확히 실패.
-  전체 341개 테스트 통과.
-- **M5-T02 완료(2026-07-26)**: 착수 전 사용자가 "`PolicyNotFoundError`
-  예외 대신 `None`을 정상 결과로 반환하도록 설계하라"고 제안 —
-  **M5-T01에서 이미 커밋된 `LLMPolicyEngine.select()`를 즉시 정정**
-  (`PolicyNotFoundError` 완전 제거, `LLMPolicyDecision | None` 반환).
-  같은 Milestone 내 하루 안에 나온 설계 개선이라 "M2/M3 완료 기능 수정
-  금지" 원칙과 무관하게 바로 반영. **연결**: `AgentSession`에
-  `llm_policy_decision: LLMPolicyDecision | None = None` 필드 추가(상태와
-  달리 시작 시 한 번 결정되는 값이라 세션에 직접 캐싱해도 "status 중복
-  보관 금지" 원칙과 무충돌). `AgentRuntime`이 선택적
-  `llm_policy_engine`을 주입받아 `start_agent()` 시점에 정책을 조회·
-  기록(기존 호출부는 전부 하위 호환). **실제 `docs/llm_policy.example.
-  yaml`을 로드한 진짜 `InMemoryLLMPolicyEngine`으로 전체 조립해 검증하는
-  통합 테스트**로 "연결"을 실증. **아직 하지 않은 것(M5-T05로 이월)**:
-  실제 Adapter의 model이 이 정책을 따라 바뀌지는 않음 —
-  `ManagedEngineRuntime`이 Adapter를 하나만 등록할 수 있어 여러 Adapter가
-  실제로 생기기 전까지는 의미가 없음. 전체 345개 테스트 통과.
-- **M5-T03 완료(2026-07-26)**: `ReviewAgent`가 `CodingAgent`의 실행
-  결과를 전혀 모른 채 같은 `task.title`을 재실행하던 정보 단절을 발견해
-  해소. `domain/development_context.py`에 `DevelopmentContext(task_id,
-  instructions, prior_output)` + `to_prompt()` 신규 — 사용자 지시로
-  필드 자체가 진실의 원천, `to_prompt()`는 여러 렌더링 방식 중 하나로
-  위치. `EngineAdapter.run()` 계약은 무변경 — `dataclasses.replace()`로
-  Engine 호출 전용 임시 사본을 만들어 원본 Task는 그대로 보존.
-  `CodingAgent`/`ReviewAgent`가 `CODE_COMPLETED`/`REVIEW_COMPLETED`
-  payload에 `output`+`success`를 함께 실음(사용자 지시 — `success`는
-  M5-T06 Workflow 조건부 분기가 재사용할 수 있도록 미리 포함).
-  `DocumentationAgent`/실패 처리 강화/ContextManager 연동은 범위 밖으로
-  명시 유지. 전체 353개 테스트 통과.
-- **M5-T04 완료(2026-07-26)**: `ShellAgent` 신규 — 실제 쉘 명령 실행
-  능력. **보안 설계 핵심**: 명령어를 Task 제목/LLM 출력에서 절대 유도
-  하지 않음. 생성자는 명령 배열이 아니라 화이트리스트 키(`command_kind`,
-  기본값 없음)만 받고, 실제 명령(`_WHITELISTED_COMMANDS = {"test":
-  ["pytest"], "lint": ["ruff", "check", "."]}`)은 클래스 내부에만 존재.
-  `SHELL_COMPLETED` payload에 `stdout`/`stderr`/`exit_code`/`success`
-  전부 포함(M5-T06 재사용 대비). `ProcessRunner`(M3-T03)를 새 Interface
-  없이 그대로 재사용(2번째 실제 사용처, 3번째 나오면 추상화 재검토).
-  `CODE_COMPLETED`를 구독하되 `ReviewAgent` 트리거는 바꾸지 않음 —
-  조건부 재작업 연결은 M5-T06으로 명시 이월. 이벤트 payload에 악의적
-  문자열이 있어도 명령이 절대 바뀌지 않음을 테스트로 직접 증명(명령어
-  삽입 방지). 전체 360개 테스트 통과.
-- **M5-T05 완료(2026-07-26)**: 착수 직전 사용자가 "Codex/Gemini 각각
-  구현"보다 "CLI LLM Adapter Framework + Provider" 구조를 제안(향후
-  Qwen CLI/Aider 등도 Provider 하나만 추가하면 되도록) — 채택.
-  `adapters/cli_provider.py`의 `CLIProvider`(ABC, `adapters/` 내부
-  협력자 — `interfaces/` 보호 자산 목록에는 미포함) + `adapters/
-  cli_engine_adapter.py`의 `CLIEngineAdapter` 신규. **`ClaudeCodeEngineAdapter`
-  (M3-T02)는 사용자 지시로 이번엔 리팩터링하지 않고 그대로 유지** —
-  2단계 전략: 이번엔 Codex/Gemini만 새 프레임워크 사용, Claude Code
-  통합은 프레임워크가 검증된 뒤 M6+로 이월(두 어댑터 사이 로직 중복을
-  의도적으로 감수). `codex`/`gemini` CLI가 이 환경에 설치되어 있지
-  않아(`command not found` 확인) 실제 검증 불가 — WebSearch로 공개
-  문서를 조사해 `CodexProvider`/`GeminiCliProvider` 구성, 두 클래스
-  docstring에 "미검증 경고"를 명시. 전부 Fake 기반 테스트라 실제 CLI
-  없이도 안전하게 통과. 전체 380개 테스트 통과.
-- **M5-T06 완료(2026-07-26, Effort High 승인)**: `ReviewAgent`가 여전히
-  `CODE_COMPLETED`를 직접 구독 중이라 Shell 테스트 결과와 무관하게
-  Review가 이미 실행되던 것을 발견 — 이번에 실제로 재배선.
-  `CoordinatorAgent` 신규(**ADR-0019 Coordination Capability 최초
-  구현체** — M1부터 존재했으나 지금까지 어떤 Agent도 쓴 적 없었음):
-  `SHELL_COMPLETED`를 구독해 성공 시 `CODE_VERIFIED` 발행(Review를
-  깨움), 실패 시 `MISSION_PLANNED`를 재발행해 Coding으로 되돌림(
-  `max_rework_attempts` 초과 시 `REWORK_EXHAUSTED`로 중단, 무한 루프
-  방지). **사용자 지시로 Step의 소유권을 CoordinatorAgent 내부 리스트가
-  아니라 실행 컨텍스트(TaskEngine)에 둠** — `TaskEngine.record_step()`/
-  `get_steps()` 신규(Repository/StepEngine은 만들지 않음, M2 이월 부채
-  #6 최소 범위로 해소). `ShellAgent`가 코드 출력을 `code_output`으로
-  전달하도록 보강(이전엔 유실). `CodingAgent`는 `rework_reason`을
-  `DevelopmentContext.prior_output`으로 반영. 기존 `test_pipeline.py`
-  (T2-06)와 `test_coding_agent_runtime_integration.py`(M4-T04)는
-  ReviewAgent 트리거 변경으로 실질적 동작이 바뀌어 6-Agent 구성으로
-  갱신(정확한 전체 Event 순서 재검증 포함). 전체 398개 테스트 통과.
-  **Milestone 5의 7개 Task 중 6개(M5-T01~T06) 완료, 다음은
-  M5-T07(Milestone Review)뿐**.
+- **Milestone 5(실제 개발 수행) 완료 — 2026-07-26 사용자 승인.**
+  `M5-T01`~`M5-T07` 전체 DONE. `LLMPolicyEngine`(M1 이후 첫 신규 최상위
+  Interface, 총 17종, `.ai/RULES.md` §7 로드맵의 M2~M3 단계를 소급
+  구현) → `AgentRuntime`이 `start_agent()` 시점에 정책을 조회해
+  `AgentSession.llm_policy_decision`에 기록(M5-T02, 실제 Adapter 전환은
+  아직 없음 — 여러 Adapter가 실제로 생기기 전까지 의미 없음) →
+  `DevelopmentContext`로 Coding→Review 사이 실제 산출물이 이어짐(M5-T03,
+  `EngineAdapter.run()` 계약 무변경) → `ShellAgent`(실제 쉘 실행,
+  화이트리스트+고정 명령으로 명령어 삽입 방지, M5-T04) →
+  `CLIProvider`+`CLIEngineAdapter` 프레임워크로 Codex/Gemini 지원(M5-T05,
+  `ClaudeCodeEngineAdapter`는 별도 유지·2단계 전략, CLI 미설치로 검증은
+  WebSearch 공개 문서 기반) → `CoordinatorAgent`(ADR-0019 Coordination
+  Capability 최초 구현체)가 테스트 결과에 따라 `ReviewAgent`(트리거를
+  `CODE_COMPLETED`→`CODE_VERIFIED`로 재배선)로 보내거나 `CodingAgent`로
+  재작업시킴(M5-T06, `max_rework_attempts`로 무한 루프 방지, Step 이력은
+  `TaskEngine.record_step()`으로 실행 컨텍스트가 소유 — M2 이월 부채 #6
+  해소). 파이프라인이 Planning→Coding→Shell→Coordinator→Review→
+  Documentation 6-Agent 구성으로 확장됨. 전체 398개 테스트 통과(M4
+  완료 시점 331개 → M5에서 67개 신규), `ruff`/`mypy` 클린. 프로젝트
+  최초 외부 런타임 의존성(`pyyaml`) 추가.
+  **Milestone Review 결론**(전문은 `.ai/TASKS.md` M5-T07 참고): M5-T01~06
+  6개 Task 전부 완료, PRD 7.8/7.3 갭 해소. **M2~M4와 달리 새 최상위
+  Interface 1개(`LLMPolicyEngine`) 추가** — RULES §7이 애초에 예정해둔
+  계약이 실현된 것으로 Interface First 원칙 위반은 아님. 신규 부채:
+  정책→실행 자동 연결 미완성(라우팅 로직 없음), Codex/Gemini CLI 실사용
+  미검증, `ClaudeCodeEngineAdapter`/`CLIEngineAdapter` 미통합, Memory
+  요약은 여전히 차단(정책 결정≠실제 LLM 호출 서비스). M2 이월 부채
+  #1/#2/#4/#5/#6 모두 해소, #3(EventBus 재귀 발행 순서)만 그대로 유지.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

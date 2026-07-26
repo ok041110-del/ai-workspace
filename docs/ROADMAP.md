@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.12.0 |
+| 문서 버전 | v0.13.0 |
 | 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1~4 완료, v0.5.0 아키텍처 기준선 선언, Milestone 5 Task List 확정) |
+| 상태 | Draft (Milestone 1~4 완료, v0.5.0 아키텍처 기준선 선언, Milestone 5 구현 완료 — 사용자 승인 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -48,7 +48,7 @@ Roadmap
 | M2. 멀티 에이전트 코어 (Multi-Agent Core) | Agent Runtime·Event Store·기본 Agent, Core Engines & Context Manager 구현 | **완료 (2026-07-25 사용자 승인)** |
 | M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Engine Runtime & Engine Adapter(Claude Code 우선) 구현 | **완료 (2026-07-25 사용자 승인)** — Interaction Layer·Coding Agent 실제 경로 통합은 M4로 공식 이관 |
 | M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | **완료 (2026-07-26 사용자 승인)** — v0.5.0 아키텍처 기준선 선언(ADR-0024) |
-| M5. 실제 개발 수행 (Real Development Execution) | LLM Policy Engine, DevelopmentContext+Agent 강화, ShellAgent, Multi-Engine(Codex/Gemini), Workflow 조건부 분기 | Task List 확정(M5-T01~T07, 2026-07-26) — 착수 예정 |
+| M5. 실제 개발 수행 (Real Development Execution) | LLM Policy Engine, DevelopmentContext+Agent 강화, ShellAgent, Multi-Engine(Codex/Gemini), Workflow 조건부 분기 | **완료 (2026-07-26 사용자 승인)** |
 
 ---
 
@@ -259,6 +259,10 @@ Review" 7절 참고).
 > 이후 실제 선택 로직이 전혀 구현되지 않았다. M5-T01/T02가 M2/M3 단계를
 > 소급 구현하며, Self Optimizer(M5 원래 목표)는 M6 이후로 미룬다.
 
+**진행 상태**: M5-T01(LLM Policy Engine)~M5-T07(Milestone Review) **완료
+(2026-07-26 사용자 승인)**. Milestone 6는 아직 목표/DoD/Task List가
+정의되지 않았다(`.ai/TASKS.md`의 "Milestone 5 Review" 참고).
+
 **Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 5" 참고)
 
 | Task | 내용 | 근거/출처 |
@@ -269,10 +273,10 @@ Review" 7절 참고).
 | M5-T04 | `ShellAgent` 신규(실제 쉘 명령 실행 능력) — **완료**: 화이트리스트 고정 명령, 명령어 삽입 방지 | 사용자 지시 — M5 핵심 목표 |
 | M5-T05 | Codex/Gemini CLI Engine Adapter(가능한 범위) — **완료**: `CLIEngineAdapter`+`CLIProvider` 프레임워크 신규, ClaudeCodeEngineAdapter는 별도 유지(M6+ 통합 검토) | PRD 7.8 Multi-Engine 지원 |
 | M5-T06 | Workflow 조건부 분기 + 필요 범위의 `Step` Domain 반영(M2 이월 부채 #6) — **완료**: `CoordinatorAgent`(ADR-0019 최초 구현) 신규, `ReviewAgent` 트리거 재배선, `TaskEngine`에 Step 이력 추가 | PRD 7.3 갭 + M2 이월 부채 #6 |
-| M5-T07 | Milestone 5 Review | 관례 |
+| M5-T07 | Milestone 5 Review — **완료**: 새 Interface 1개(`LLMPolicyEngine`) 추가를 투명하게 보고, 정책→실행 연결 미완성을 부채로 기록 | 관례 |
 
 **M5 착수 전 사전 정리 — 조사 결과 조치 불필요로 종결**: Event ID 생성
-방식 불일치(M2 이월 부채 #3)를 조사한 결과, `src/ai_workspace/`의 모든
+방식 불일치(M2 이월 부채 #4)를 조사한 결과, `src/ai_workspace/`의 모든
 Event 생성 지점이 이미 `uuid.uuid4()`로 일관되어 있어(M3에서 자연히
 해소됨) 코드 변경 없이 부채 항목만 해소로 종결했다.
 

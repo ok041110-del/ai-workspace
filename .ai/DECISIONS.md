@@ -709,6 +709,14 @@
 
 ## ADR-0024: v0.5.0 아키텍처 기준선(Baseline) 선언
 
+> **표기 주의(M5-T07 Review에서 발견)**: 이 ADR의 "v0.5.0"은
+> `pyproject.toml`의 **프로젝트 패키지 버전**을 가리킨다.
+> `docs/ARCHITECTURE.md` 등 개별 문서 자체의 "문서 버전"(예:
+> ARCHITECTURE.md는 현재 v0.12.0)과는 별개의 숫자 체계이며, 우연히
+> ADR-0006~0012 시절 ARCHITECTURE.md의 문서 버전이 "v0.5.0"이었던
+> 적이 있어 `.ai/DECISIONS.md`의 오래된 ADR 본문에도 같은 문자열이
+> 등장하지만 서로 무관하다(과거 기록이라 수정하지 않음).
+
 - 상태: 승인됨 (2026-07-26, 사용자 지시로 확정)
 - 날짜: 2026-07-26
 - 배경: M4-T09(Milestone 4 Review) 진행 중, 사용자가 "M4는 AI Workspace가

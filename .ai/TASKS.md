@@ -1510,7 +1510,8 @@ Review" 절 참고.
   테스트 결과 문서화, Technical Debt 정리, v0.5.0 기준선 선언, 문서
   갱신, Milestone 종료 선언.
 - 완료 조건(DoD): 위 항목 모두 완료 + 사용자 승인.
-- 상태: **DONE (2026-07-26) — 아래 Review 제출, 사용자 승인 대기**
+- 상태: **DONE (2026-07-26 사용자 승인 — Milestone 4 완료, v0.5.0
+  아키텍처 기준선 선언)**
 
 ---
 
@@ -1678,7 +1679,7 @@ T02로 압축해 소급 구현한다 — Self Optimizer(실행 결과 피드백 
 | M5-T07 | Milestone 5 Review | 관례 |
 
 **M5 착수 전 사전 정리(공식 Task 아님) — 조사 결과 조치 불필요로 종결**:
-Event ID 생성 방식 불일치(M2 이월 부채 #3)를 정리하려 `src/ai_workspace/`
+Event ID 생성 방식 불일치(M2 이월 부채 #4)를 정리하려 `src/ai_workspace/`
 전체에서 `Event(...)`를 생성하는 모든 지점(4개 Agent, `ManagedEngineRuntime`,
 `EngineApprovalPipeline`)을 조사한 결과, **이미 전부 `str(uuid.uuid4())`로
 일관되어 있었다** — M3에서 `ManagedEngineRuntime`/`EngineApprovalPipeline`
@@ -1687,7 +1688,8 @@ Event ID 생성 방식 불일치(M2 이월 부채 #3)를 정리하려 `src/ai_wo
 에만 쓰이고 Event ID 생성에는 전혀 관여하지 않는다. 코드 변경 없이 이
 부채 항목을 해소로 종결한다(아래 5절 각주 참고).
 
-상태: M5-T01 DONE, 나머지 TODO(사전 정리는 완료).
+상태: M5-T01~T07 전체 DONE. Milestone 5 Review는 아래 "Milestone 5
+Review" 절 참고.
 
 #### M5-T01: Rule 기반 LLMPolicyEngine 구현
 - 목적: `.ai/RULES.md` §7이 정의한 LLM Policy 로드맵의 M2 단계(Rule
@@ -1944,6 +1946,147 @@ Event ID 생성 방식 불일치(M2 이월 부채 #3)를 정리하려 `src/ai_wo
   src tests`, `mypy src`, `pytest`(398개, 기존 380개 + 신규 18개) 모두
   통과.
 - 의존성: M5-T03, M5-T04
+
+#### M5-T07: Milestone 5 Review
+- 목적: Approval Required 원칙에 따라 Milestone 5 산출물을 검토받는다.
+- 작업 내용: DoD 체크리스트, Architecture Review, Interface First 검토,
+  테스트 결과 문서화, Technical Debt 정리, 문서 갱신, Milestone 종료
+  선언.
+- 완료 조건(DoD): 위 항목 모두 완료 + 사용자 승인.
+- 상태: **DONE (2026-07-26 사용자 승인 — Milestone 5 완료)**
+
+---
+
+## Milestone 5 Review
+
+**1. Definition of Done 체크리스트**
+
+M5는 M3/M4와 달리 ROADMAP에 별도 DoD 문구가 없고 Task List(M5-T01~T06)
+자체가 DoD다.
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M5-T01 | Rule 기반 `LLMPolicyEngine` | ✅ |
+| M5-T02 | Agent Runtime이 `LLMPolicyEngine`을 통해 정책 조회·기록 | ✅(실제 Adapter 전환은 아래 5절에서 갭으로 기록) |
+| M5-T03 | `DevelopmentContext` + Coding/Review Agent 강화 | ✅ |
+| M5-T04 | `ShellAgent` 신규 | ✅ |
+| M5-T05 | Codex/Gemini CLI Engine Adapter(가능한 범위) | ✅(실제 CLI 미검증, 아래 명시) |
+| M5-T06 | Workflow 조건부 분기 + Step Domain 반영 | ✅ |
+
+6개 Task 전부 완료. PRD 7.8(Multi-Engine)·7.3(Workflow 조건부 분기) 갭도
+이번에 해소됨.
+
+**2. Architecture Review**
+
+M5에서 실제로 바뀐 구조:
+- **정책 결정 계층 신규**: `LLMPolicyEngine`(M5-T01) → `AgentRuntime`이
+  `start_agent()` 시점에 조회해 `AgentSession.llm_policy_decision`에
+  기록(M5-T02).
+- **Agent 간 정보 전달 구조화**: `DevelopmentContext`(M5-T03)로 Coding→
+  Review 사이 실제 산출물이 이어짐. `EngineAdapter.run()` 계약은
+  건드리지 않고 `dataclasses.replace()`로 임시 사본만 사용.
+- **Agent 파이프라인 확장**: Planning→Coding→**Shell→Coordinator**→
+  Review→Documentation(M5-T04/T06) — `ShellAgent`(실제 쉘 실행,
+  화이트리스트 기반)와 `CoordinatorAgent`(ADR-0019 Coordination
+  Capability 최초 구현, 조건부 분기)가 추가됨. `ReviewAgent`의 트리거가
+  `CODE_COMPLETED`→`CODE_VERIFIED`로 재배선되어 테스트를 통과한 코드만
+  검토 대상이 됨.
+- **Multi-Engine 프레임워크 신규**: `CLIProvider`+`CLIEngineAdapter`
+  (M5-T05) — `ClaudeCodeEngineAdapter`(M3-T02)는 의도적으로 별도 유지,
+  Codex/Gemini만 이 프레임워크 사용(2단계 전략, M6+에서 통합 검토).
+- **Step 실행 이력 반영**: `TaskEngine.record_step()`/`get_steps()`
+  (M5-T06) — Step의 소유권은 Agent가 아니라 Task 실행 컨텍스트에
+  둠(M2 이월 부채 #6 해소).
+
+`docs/ARCHITECTURE.md`는 각 Task 완료 시점마다 즉시 갱신되어(§3.6
+Coordination, §4 Step, §7 Interfaces 표, §3.10~3.11 CLI 계열) 구현과
+문서 사이 괴리가 없음을 확인했다.
+
+**3. Interface First 원칙 검토**
+
+**M5는 M2~M4와 달리 새 최상위 Interface를 1개(`LLMPolicyEngine`) 추가했다**
+— M1 이후 처음이다. 다만 이 추가는 사전 계획 없이 즉흥적으로 이뤄진 것이
+아니라, `.ai/RULES.md` §7이 애초에 "Policy Engine"이라는 이름으로 이
+계약의 등장을 예정해 두었던 것이 M5-T01에서 실현된 것이다 — Interface
+First 원칙의 "필요성이 실제로 증명된 뒤에 계약을 도입한다"는 정신에
+부합한다. `interfaces/task_engine.py`는 기존 계약에 `record_step`/
+`get_steps`를 순수 추가(기존 메서드 무변경). `CLIProvider`(M5-T05)는
+의도적으로 `interfaces/`에 넣지 않고 `adapters/` 내부 협력자로 유지했다
+(Agent/WorkspaceCore가 이를 알 필요가 없어서) — "무엇이든 Interface로
+만들지 않는다"는 판단도 함께 실증되었다.
+
+**4. 테스트 결과**
+
+- `pytest`: **398개 전부 통과**(M4 완료 시점 331개 → M5에서 67개 신규)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(82개 소스 파일)
+- M4 완료 커밋(`7b28391`) 대비 소스 10개 파일 신규, 36개 파일 변경,
+  약 1,840줄 순증가(src+tests 합산)
+- 프로젝트 최초 외부 런타임 의존성(`pyyaml`) 추가(M5-T01)
+
+**5. Technical Debt 정리**
+
+*M5에서 의도적으로 범위를 좁히거나 이월한 것*
+- **정책→실행 연결 미완성**: `LLMPolicyEngine`이 결정을 내려도 실제로
+  어떤 Adapter/Model을 쓸지는 아직 자동 전환되지 않는다 —
+  `ManagedEngineRuntime`이 Adapter 하나만 등록 가능하고, Agent가
+  `LLMPolicyDecision.model.provider`에 따라 `ClaudeCodeEngineAdapter`/
+  `CLIEngineAdapter(CodexProvider)`/`CLIEngineAdapter(GeminiCliProvider)`
+  중 하나를 실제로 선택하는 라우팅 로직은 아직 없다(M5-T02에서 이미
+  예견된 갭).
+- **Codex/Gemini CLI 미검증**: 이 환경에 두 CLI가 설치되어 있지 않아
+  실제 실행으로 검증하지 못함(M5-T05). 실제 CLI 확보 시 `--help`로
+  재확인 필요.
+- **`ClaudeCodeEngineAdapter`와 `CLIEngineAdapter` 프레임워크 미통합**:
+  두 어댑터 계열 사이 로직 중복을 의도적으로 감수(M6+에서 재검토, 사용자
+  2단계 전략).
+- **Memory Engine 요약 여전히 미구현**: M4-T08에서 "LLM Router 준비
+  이후"로 이관했으나, M5가 만든 건 "정책 결정"(어떤 모델/effort를 쓸지)
+  이지 "실제로 LLM을 호출해 텍스트를 처리하는 범용 서비스"가 아니다 —
+  전제 조건이 완전히 충족되지 않았음을 재확인.
+- **Automation Engine 조건 평가 여전히 호출자 책임**(M4-T07에서 이미
+  기록, 이번에도 미해결).
+- **`ShellAgent` 화이트리스트가 코드에 고정**: `command_kind`를 CLI나
+  설정 파일로 노출하는 기능은 없음(현재는 프로그램적 구성만 가능).
+
+*M2/M3/M4에서 이월된 항목 중 M5 범위 밖이라 여전히 미해결*
+- `RecoveringEngineRuntime.run_parallel()`이 병렬 배치 내 개별 Task
+  재시도 미지원(M4-T06)
+- `MemoryEngine.search()` 선형 스캔(M4-T08)
+- Retry Backoff, Persistent Runtime Recovery, Approval 비동기 처리,
+  Process Timeout 정책 고도화(M3-T08)
+- M2 이월 부채 #4(Event ID 생성 방식 불일치)는 M5 착수 전 사전 정리에서
+  조사해 이미 해소로 종결(M5 착수 시점에는 "#3"으로 잘못 표기했으나 이
+  Review에서 정정 — 원래 M2 Retrospective 번호는 #3이 EventBus 재귀
+  발행 순서, #4가 Event ID 방식임). `Step` 도메인(#6)도 이번에 실질
+  반영됨(M5-T06). 결과적으로 M2 이월 부채(#1/#2/#4/#5/#6)는 모두 해소
+  또는 종결되었고, **#3(EventBus 재귀 발행 시 수신 순서 뒤집힘)만
+  기능적 문제 없음으로 그대로 유지**(M2 Retrospective 당시 판단 그대로).
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review) / `.ai/MEMORY.md`(M1~M4와 동일하게 압축) /
+`docs/ROADMAP.md`(M5 완료 표시) / `docs/ARCHITECTURE.md`(각 Task 진행
+중 이미 갱신됨) 갱신 완료. `pyproject.toml`은 M5-T01에서 이미 의존성을
+반영했으므로 버전 추가 상향은 필요 없음(v0.5.0 유지 — 구조적 기준선은
+그대로, 이번 Milestone은 그 위에 기능을 얹은 것).
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절), Interface
+First 검토 완료(3절, 새 Interface 1개 추가를 투명하게 보고), 테스트 결과
+문서화 완료(4절), Technical Debt 정리 완료(5절), 문서 갱신 완료(6절) —
+6개 조건 모두 만족. Review 중 코드 변경이 필요한 치명적 문제(버그·계약
+위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 5 Completed를 선언한다.**
+
+**Milestone 6 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
+`.ai/RULES.md` §7 로드맵상 다음 단계는 "Self Optimizer 자동 최적화"이지만,
+이는 M5-T01/T02가 이미 대신 처리한 M2/M3 단계 소급 구현 이후의 후속
+논의 대상이며 확정된 것은 아니다. Milestone 6는 착수 시점에 이 문서에
+목표/DoD/Task List를 새로 정의한다(Task Driven Development 원칙,
+M2/M3/M4/M5가 그래왔듯).
 
 ---
 
