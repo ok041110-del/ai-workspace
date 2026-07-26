@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-from tests.interfaces.fakes import FakeAgentManager, FakeAgentRegistry, FakeTaskEngine
+from tests.interfaces.fakes import (
+    FakeAgentManager,
+    FakeAgentRegistry,
+    FakeAgentScheduler,
+    FakeTaskEngine,
+)
 
 from ai_workspace.agents.coding_agent import CodingAgent
 from ai_workspace.agents.events import CODE_COMPLETED, MISSION_PLANNED
 from ai_workspace.domain.agent import AgentRole
 from ai_workspace.domain.llm_policy import LLMEffort, LLMModel, LLMPolicyDecision, LLMProvider
-from ai_workspace.domain.task import Task
+from ai_workspace.domain.task import Task, TaskStatus
 from ai_workspace.engines.llm_policy_engine import InMemoryLLMPolicyEngine
 from ai_workspace.events.event_bus import InMemoryEventBus
 from ai_workspace.interfaces.engine_adapter import EngineResult
@@ -163,3 +168,52 @@ def test_coding_agent_passes_required_capabilities_from_llm_policy_decision() ->
     )
 
     assert engine_runtime.received_required_capabilities == [frozenset({"claude_code"})]
+
+
+def test_coding_agent_ignores_mission_planned_when_not_selected_by_scheduler() -> None:
+    """M13-T02: 같은 CODING Capability를 가진 다른 CodingAgent 인스턴스가
+    Scheduler에게 선택되면, 선택되지 않은 인스턴스는 Task/Event 어느
+    쪽도 건드리지 않는다."""
+    shared_registry = FakeAgentRegistry()
+    shared_manager = FakeAgentManager()
+    shared_scheduler = FakeAgentScheduler()
+    event_bus = InMemoryEventBus()
+    task_engine = FakeTaskEngine()
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="완료"))
+
+    # 두 AgentRuntime이 같은 agent_manager/agent_registry를 공유해야
+    # agent_id가 서로 겹치지 않고, Scheduler도 두 Agent를 모두 후보로 본다.
+    selected_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    CodingAgent(
+        agent_runtime=selected_agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
+        engine_runtime=engine_runtime,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+    )
+    # FakeAgentScheduler는 candidates 목록의 첫 매치를 고른다(결정적) —
+    # 먼저 등록된 selected_agent가 항상 선택된다.
+    unselected_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    CodingAgent(
+        agent_runtime=unselected_agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
+        engine_runtime=engine_runtime,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+    )
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=MISSION_PLANNED, payload={"task_id": task.task_id})
+    )
+
+    # 두 인스턴스 모두 같은 Event를 구독하지만, 실제 실행은 한 번만
+    # 일어난다(선택되지 않은 인스턴스는 조용히 return).
+    assert len(engine_runtime.received_tasks) == 1
+    assert task_engine.get_task(task.task_id).status == TaskStatus.REVIEW

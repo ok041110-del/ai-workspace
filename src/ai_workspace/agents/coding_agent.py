@@ -4,10 +4,13 @@ import uuid
 from dataclasses import replace
 
 from ai_workspace.agents.events import CODE_COMPLETED, MISSION_PLANNED
+from ai_workspace.agents.scheduling import is_agent_selected
 from ai_workspace.domain.agent import AgentCapability, AgentRole
 from ai_workspace.domain.development_context import DevelopmentContext
 from ai_workspace.domain.llm_policy import required_capabilities
 from ai_workspace.domain.task import TaskStatus
+from ai_workspace.interfaces.agent_registry import AgentRegistry
+from ai_workspace.interfaces.agent_scheduler import AgentScheduler
 from ai_workspace.interfaces.engine_runtime import EngineRuntime
 from ai_workspace.interfaces.event_bus import Event, EventBus
 from ai_workspace.interfaces.task_engine import TaskEngine
@@ -31,7 +34,15 @@ class CodingAgent:
     (M5-T02)을 `required_capabilities()`로 변환해 `engine_runtime.run()`에
     전달한다 — 여러 `EngineAdapter`가 등록되어 있으면(M6-T01) 실제로 이
     Role에 배정된 Provider의 Adapter가 선택되어 실행된다. 정책이 없으면
-    빈 집합이 되어 기존 동작(제약 없음)과 하위 호환된다."""
+    빈 집합이 되어 기존 동작(제약 없음)과 하위 호환된다.
+
+    **Multi-Agent Collaboration(M13)**: `agent_registry`/`agent_scheduler`
+    를 둘 다 주입하면, 같은 CODING Capability를 가진 다른 `CodingAgent`
+    인스턴스가 함께 등록돼 있어도 `AgentScheduler`가 선택한 인스턴스만
+    실제로 처리한다(`is_agent_selected()`로 자가 확인). 새로운 중앙
+    디스패처는 없다 — 선택이 결정적이라는 전제 하에 모든 인스턴스가
+    같은 질문에 같은 답을 얻는다. 둘 중 하나라도 주어지지 않으면(기본값
+    `None`) 이 확인을 건너뛰어 기존 동작과 완전히 동일하다."""
 
     def __init__(
         self,
@@ -40,10 +51,14 @@ class CodingAgent:
         event_bus: EventBus,
         task_engine: TaskEngine,
         engine_runtime: EngineRuntime,
+        agent_registry: AgentRegistry | None = None,
+        agent_scheduler: AgentScheduler | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._task_engine = task_engine
         self._engine_runtime = engine_runtime
+        self._agent_registry = agent_registry
+        self._agent_scheduler = agent_scheduler
         self._session = agent_runtime.start_agent(
             AgentRole.CODING, frozenset({AgentCapability.CODING})
         )
@@ -52,6 +67,14 @@ class CodingAgent:
     def _on_mission_planned(self, event: Event) -> None:
         if event.event_type != MISSION_PLANNED:
             return
+        if self._agent_registry is not None and self._agent_scheduler is not None:
+            if not is_agent_selected(
+                self._agent_registry,
+                self._agent_scheduler,
+                AgentCapability.CODING,
+                self._session.agent_id,
+            ):
+                return
         task_id = event.payload["task_id"]
         task = self._task_engine.get_task(task_id)
         self._task_engine.transition(task, TaskStatus.IN_PROGRESS)

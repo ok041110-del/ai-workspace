@@ -4131,7 +4131,21 @@ Test/문서화+Review 4단계 패턴, 이후 Milestone에도 동일 패턴 적�
 - 완료 조건(DoD): (a) 둘 다 주지 않으면 기존 테스트 전부 회귀 없이
   통과(Milestone DoD 1번), (b) 선택되지 않은 인스턴스는 Task 상태도
   Event도 건드리지 않음을 단위 테스트로 확인.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `CodingAgent.__init__`에
+  `agent_registry: AgentRegistry | None = None`, `agent_scheduler:
+  AgentScheduler | None = None` 추가. `_on_mission_planned()` 맨
+  앞에서 둘 다 주어졌을 때만 `is_agent_selected(...)`를 확인해 False면
+  즉시 return. 기존 6개 테스트(모두 `agent_registry`/`agent_scheduler`
+  미지정)가 전혀 손대지 않은 채로 그대로 통과해 회귀 없음을 실증
+  (Milestone DoD 1번). `tests/agents/test_coding_agent.py`에
+  `test_coding_agent_ignores_mission_planned_when_not_selected_by_
+  scheduler` 신규 — 같은 `agent_manager`/`agent_registry`를 공유하는
+  `CodingAgent` 2개를 등록하고(agent_id 충돌 방지를 위해
+  `FakeAgentManager`도 공유), `MissionPlanned` 발행 후
+  `engine_runtime.received_tasks`가 1개뿐임과 Task 상태가 `REVIEW`로
+  정확히 한 번만 전이됐음을 확인. `ruff check src tests`, `mypy src`,
+  `pytest`(470개, 기존 469개 + 신규 1개) 모두 통과. 다음 Task:
+  **M13-T03**(End-to-End 통합 테스트).
 - 의존성: M13-T01.
 
 #### M13-T03: End-to-End 통합 테스트
