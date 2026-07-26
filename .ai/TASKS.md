@@ -4157,7 +4157,19 @@ Test/문서화+Review 4단계 패턴, 이후 Milestone에도 동일 패턴 적�
   호출하고 Task를 전이시키며 `CodeCompleted`를 발행함을, 나머지 1개는
   아무 것도 하지 않음을 증명한다.
 - 완료 조건(DoD): Milestone DoD 2·3번이 통합 테스트로 직접 증명된다.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `tests/integration/
+  test_m13_multi_agent_collaboration.py` 신규. `InMemoryAgentManager`/
+  `InMemoryAgentRegistry`/`InMemoryAgentScheduler`(전부 프로덕션
+  구현체, Fake 아님)를 공유하는 `CodingAgent` 2개를 등록하고
+  `MissionPlanned` 1회 발행 후 `CodeCompleted`가 정확히 1번만
+  발행되고 Task가 `REVIEW`로 전이됨을 확인
+  (`test_only_scheduler_selected_coding_agent_processes_mission_
+  planned`). 가드가 켜져 있어도 등록된 Agent가 1개뿐이면 항상 자기
+  자신이 선택돼 정상 동작함도 함께 확인
+  (`test_single_registered_coding_agent_still_works_with_guard_
+  enabled`). `ruff check src tests`, `mypy src`, `pytest`(472개,
+  기존 470개 + 신규 2개) 모두 통과. 다음 Task: **M13-T04**(문서화 +
+  Milestone 13 Review).
 - 의존성: M13-T02.
 
 #### M13-T04: 문서화 + Milestone 13 Review
