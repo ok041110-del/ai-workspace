@@ -4286,11 +4286,129 @@ Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 소스
 
 **Milestone 13 종료 — 2026-07-26 사용자 승인.**
 
-**Milestone 14 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
-`docs/ROADMAP.md`가 원래 그려둔 다음 단계는 M14(LLM Routing)이지만,
-이는 사전 논의 없이 확정된 것이 아니며 Milestone 14는 착수 시점에 이
-문서에 목표/DoD/Task List를 새로 정의한다(Task Driven Development
-원칙, M2~M13이 그래왔듯).
+**Milestone 14 상태**: 착수 확정. 아래 "Milestone 14" 절 참고.
+
+---
+
+## Milestone 14 — LLM Routing (Model 수준 라우팅)
+
+**목표**: `AgentSession.llm_policy_decision`의 `model`(예: opus/sonnet/
+haiku)이 `ClaudeCodeEngineAdapter`의 실제 `--model` 실행 인자까지
+전달되게 한다(MVP, 2026-07-26 사용자 확정).
+
+> **설계 검토에서 발견한 사실**: M6에서 완성한 것은 **Provider 단위**
+> 라우팅(Claude Code/Codex/Gemini 중 어떤 CLI를 쓸지)뿐이었다.
+> `LLMPolicyDecision`은 `model`(opus/sonnet/haiku 등)과 `effort`(low/
+> medium/high)도 담고 있지만, `EngineAdapter.run(session_id, task)`와
+> `EngineRuntime.run(task, required_capabilities)` 어디에도 이 값을
+> 전달할 자리가 없어 지금까지 한 번도 실제 실행에 반영된 적이 없었다
+> (M6 Review 최초 이월, M10에서도 "Interface 변경이 필요한 무거운
+> 작업"으로 재확인·재이월).
+
+**범위(사용자 확정)**: **Model만** 다루고 **Effort는 이번 범위에서
+뺀다** — `ClaudeCodeEngineAdapter`는 이미 `--model` CLI 플래그와
+연결된 `model` 생성자 필드가 있어(M3-T02) 실제로 연결할 지점이
+있지만, `effort`는 Claude Code CLI에 대응하는 플래그가 없어 지금
+연결하면 검증 불가능한 상태가 된다. **적용 대상은
+`ClaudeCodeEngineAdapter`만** — Codex/Gemini(`CLIProvider` 계열)는
+이 환경에 CLI가 없어 검증이 불가능해(M5-T05/M10에서 반복 확인) 계약만
+만족하도록(받되 무시) 남겨둔다.
+
+**설계 방향**: `EngineAdapter.run()`/`EngineRuntime.run()`(둘 다
+인터페이스) 시그니처에 `model: str | None = None`을 선택적으로
+추가한다. 기존 호출부는 `model`을 안 주면 100% 그대로 동작한다.
+`ClaudeCodeEngineAdapter`는 `run()`에 전달된 `model`을 생성자의 고정
+`model`보다 우선 사용한다. `ManagedEngineRuntime`/
+`RecoveringEngineRuntime`(둘 다 `EngineRuntime` 구현체)은 이 값을
+그대로 다음 계층에 전달만 한다(새 로직 없음). `CodingAgent`/
+`ReviewAgent`/`DocumentationAgent` 3개 Agent가
+`llm_policy_decision.model.name`을 `engine_runtime.run()`에 함께
+전달하도록 연결한다.
+
+**Non-goal(범위 밖)**: Effort 라우팅, Codex/Gemini 실연동, Scheduler
+정책 고도화, Provider 단위 라우팅 재작업(M6에서 이미 완료).
+
+**Milestone Definition of Done**
+1. `model`을 넘기지 않으면 기존과 완전히 동일하게 동작한다(회귀 없음).
+2. `ClaudeCodeEngineAdapter`가 `run()`에 전달된 `model`을 생성자
+   기본값보다 우선 사용해 실제 명령에 반영한다.
+3. `ManagedEngineRuntime`/`RecoveringEngineRuntime`이 `model`을 그대로
+   다음 계층에 전달한다(새 선택 로직 없음).
+4. `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가 정책의
+   `model.name`을 실제로 `engine_runtime.run()`에 전달함이 통합
+   테스트로 증명된다.
+5. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-26 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M14-T01 | `EngineAdapter`/`EngineRuntime` 계약에 `model` 선택적 파라미터 확장 | TODO |
+| M14-T02 | 구현체 갱신(`ClaudeCodeEngineAdapter` 실제 반영, Runtime들은 전달만) | TODO |
+| M14-T03 | Agent 3종 연결 + End-to-End 통합 테스트 | TODO |
+| M14-T04 | 문서화 + Milestone 14 Review | TODO |
+
+**진행 상태**: 계획 확정, 착수 대기.
+
+#### M14-T01: `EngineAdapter`/`EngineRuntime` 계약에 `model` 선택적 파라미터 확장
+- 목적: Model을 실행 계층까지 전달할 수 있는 통로를 계약에 마련한다
+  (Interface First).
+- 작업 내용: `interfaces/engine_adapter.py`의 `run(self, session_id:
+  str, task: Task) -> EngineResult`에 `model: str | None = None` 추가.
+  `interfaces/engine_runtime.py`의 `run(self, task, required_
+  capabilities=frozenset()) -> EngineResult`와 `run_parallel(...)`에도
+  동일하게 `model: str | None = None` 추가(대칭성 유지, 병렬 경로도
+  계약상 빠지지 않도록). `tests/interfaces/fakes.py`의
+  `FakeEngineAdapter`/`FailingFakeEngineAdapter`/`FakeEngineRuntime`을
+  새 시그니처에 맞게 갱신(받되 무시 — 이번 Task는 계약만 확장, 실제
+  사용은 M14-T02~T03).
+- 완료 조건(DoD): 기존 계약 테스트가 시그니처 갱신 후에도 회귀 없이
+  통과한다. `model`을 생략해도 기존과 동일하게 동작함을 계약 테스트로
+  확인한다(Milestone DoD 1번 착수).
+- 상태: TODO
+- 의존성: 없음.
+
+#### M14-T02: 구현체 갱신
+- 목적: `ClaudeCodeEngineAdapter`가 `model`을 실제로 반영하고,
+  `EngineRuntime` 구현체들은 이를 다음 계층까지 그대로 전달한다.
+- 작업 내용: `ClaudeCodeEngineAdapter.run()`이 인자로 받은 `model`이
+  있으면 `_build_command()`에서 생성자 `self._model`보다 우선
+  사용하도록 변경. `CLIEngineAdapter`/`MockEngineAdapter`는 `model`을
+  받되 무시(범위 밖, docstring에 명시). `ManagedEngineRuntime`/
+  `RecoveringEngineRuntime`/`InMemoryEngineRuntime`의 `run()`/
+  `run_parallel()`이 `model`을 받아 내부 `adapter.run()`/`inner.run()`
+  호출에 그대로 전달(새 선택·우선순위 로직 없음).
+- 완료 조건(DoD): `ClaudeCodeEngineAdapter`에 대해 `run()`에 전달된
+  `model`이 생성자 `model`보다 우선함을 단위 테스트로 확인.
+  `ManagedEngineRuntime`/`RecoveringEngineRuntime`이 `model`을
+  내부 Adapter 호출까지 정확히 전달함을 단위 테스트로 확인.
+- 상태: TODO
+- 의존성: M14-T01.
+
+#### M14-T03: Agent 3종 연결 + End-to-End 통합 테스트
+- 목적: Policy가 정한 Model이 실제로 Agent 실행 경로를 통해
+  Adapter까지 도달함을 증명한다.
+- 작업 내용: `domain/llm_policy.py`에 `model_name(decision)` 헬퍼
+  추가(기존 `required_capabilities()`와 나란히 두는 순수 함수 — `None`
+  이면 `None` 반환). `CodingAgent`/`ReviewAgent`/`DocumentationAgent`
+  가 `engine_runtime.run(..., model=model_name(self._session.
+  llm_policy_decision))`을 전달하도록 갱신. `tests/integration/`에
+  실제 `docs/llm_policy.example.yaml` 기반 정책으로 `CodingAgent`가
+  `ClaudeCodeEngineAdapter`에 전달한 `model`이 정책이 지정한 값과
+  일치함을 증명하는 통합 테스트를 추가한다(M6-T03/M13-T03과 동일한
+  "실제 정책 파일" 검증 방식).
+- 완료 조건(DoD): Milestone DoD 4번이 통합 테스트로 직접 증명된다.
+- 상태: TODO
+- 의존성: M14-T02.
+
+#### M14-T04: 문서화 + Milestone 14 Review
+- 목적: 문서와 구현을 일치시키고 Milestone 종료 승인을 받는다.
+- 작업 내용: `docs/ARCHITECTURE.md` §3.9(Engine Runtime)/§3.10(Engine
+  Adapter)에 `model` 파라미터 반영, `docs/ROADMAP.md`/`.ai/MEMORY.md`
+  갱신, 전체 테스트 결과 정리 및 제시.
+- 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
+- 상태: TODO
+- 의존성: M14-T01~T03.
 
 ---
 

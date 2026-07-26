@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~13 완료, v0.5.0 아키텍처 기준선 선언, Milestone 14 목표 미정) |
+| 상태 | Draft (Milestone 1~13 완료, v0.5.0 아키텍처 기준선 선언, Milestone 14 계획 확정 — 착수 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -607,6 +607,42 @@ Scheduler에게 선택됐나?"를 스스로 확인하는 자가 확인 가드를
 
 **진행 상태**: M13-T01~T04 전체 완료. Milestone DoD 1~5번 전부 충족
 확인됨. **Milestone 13 완료 — 2026-07-26 사용자 승인.**
+
+---
+
+## Milestone 14 — LLM Routing (Model 수준 라우팅)
+
+**목표**: `AgentSession.llm_policy_decision`의 `model`(예: opus/sonnet/
+haiku)이 `ClaudeCodeEngineAdapter`의 실제 `--model` 실행 인자까지
+전달되게 한다(MVP). Effort 라우팅, Codex/Gemini 실연동, Scheduler
+정책 고도화는 범위 밖.
+
+**설계 방향**: `EngineAdapter.run()`/`EngineRuntime.run()`에 `model:
+str | None = None`을 선택적으로 추가. `ClaudeCodeEngineAdapter`만 실제
+반영(Codex/Gemini는 계약만 만족, 무시). `CodingAgent`/`ReviewAgent`/
+`DocumentationAgent`가 정책의 `model.name`을 전달하도록 연결.
+
+**Milestone Definition of Done**
+1. `model` 미전달 시 기존과 완전히 동일하게 동작한다(회귀 없음).
+2. `ClaudeCodeEngineAdapter`가 `run()`에 전달된 `model`을 생성자
+   기본값보다 우선 사용한다.
+3. `ManagedEngineRuntime`/`RecoveringEngineRuntime`이 `model`을
+   그대로 다음 계층에 전달한다(새 선택 로직 없음).
+4. Agent 3종이 정책의 `model.name`을 실제로 전달함이 통합 테스트로
+   증명된다.
+5. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 14"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M14-T01 | `EngineAdapter`/`EngineRuntime` 계약에 `model` 선택적 파라미터 확장 | TODO |
+| M14-T02 | 구현체 갱신 | TODO |
+| M14-T03 | Agent 3종 연결 + End-to-End 통합 테스트 | TODO |
+| M14-T04 | 문서화 + Milestone 14 Review | TODO |
+
+**진행 상태**: 계획 확정, 착수 대기.
 
 ---
 
