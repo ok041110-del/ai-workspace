@@ -4109,7 +4109,15 @@ Test/문서화+Review 4단계 패턴, 이후 Milestone에도 동일 패턴 적�
 - 완료 조건(DoD): 후보가 여러 개일 때 선택된 것만 True, 나머지는
   False임을 확인하는 단위 테스트(Fake `AgentRegistry`/`AgentScheduler`
   사용)가 통과한다.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `agents/scheduling.py`에
+  `is_agent_selected()` 추가. 새 로직을 만들지 않고 기존
+  `find_agent_by_capability()`를 그대로 재사용해 "선택된 Agent의
+  agent_id와 같은가"만 비교(Surgical Changes). `tests/agents/
+  test_scheduling.py` 신규 — 후보 2개 중 선택된 것만 True/나머지
+  False, Capability를 만족하는 후보가 아예 없을 때 False, 후보가
+  1개뿐일 때 True(항상 선택됨) 4개 테스트. `ruff check src tests`,
+  `mypy src`, `pytest`(469개, 기존 465개 + 신규 4개) 모두 통과. 다음
+  Task: **M13-T02**(`CodingAgent`에 선택적 Scheduler 가드 적용).
 - 의존성: 없음(기존 Interface만 사용).
 
 #### M13-T02: `CodingAgent`에 선택적 Scheduler 가드 적용
