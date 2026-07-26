@@ -57,9 +57,12 @@ class EngineAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         """
-        입력: session_id (create_session()이 반환한 값), task (실행할 Task)
+        입력: session_id (create_session()이 반환한 값), task (실행할 Task),
+              model (선택적, 이번 실행에 쓸 모델 이름 — 예: "opus". 생략
+              시 이 Adapter의 기본 모델을 그대로 쓴다. 모델별 실행을
+              지원하지 않는 Adapter는 이 값을 무시할 수 있다)
         출력: EngineResult(success, output, error)
         예외: session_id가 유효하지 않으면 SessionNotFoundError. 구현 엔진을
               호출하는 과정 자체가 실패하면(예: 실행 파일을 찾을 수 없음,
@@ -68,6 +71,8 @@ class EngineAdapter(ABC):
               반환한다.
         보장: 예외 없이 반환되었다면 EngineResult.success로 성공/실패를 항상
               판별할 수 있으며, success=False일 때 error는 None이 아니다.
+              model을 생략하면 이전 계약(Milestone 14 이전)과 동일하게
+              동작한다.
         """
         raise NotImplementedError
 

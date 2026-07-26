@@ -25,6 +25,27 @@ def test_create_session_then_run_returns_success_result() -> None:
     assert adapter.status(session_id) == EngineSessionStatus.COMPLETED
 
 
+def test_run_without_model_behaves_like_before_milestone_14() -> None:
+    """Milestone 14 DoD 1번: model을 생략하면 기존과 완전히 동일하게
+    동작한다."""
+    adapter = FakeEngineAdapter()
+    session_id = adapter.create_session()
+
+    result = adapter.run(session_id, make_task())
+
+    assert result.success is True
+    assert adapter.received_models == [None]
+
+
+def test_run_records_the_model_passed_in() -> None:
+    adapter = FakeEngineAdapter()
+    session_id = adapter.create_session()
+
+    adapter.run(session_id, make_task(), model="opus")
+
+    assert adapter.received_models == ["opus"]
+
+
 def test_run_with_unknown_session_raises_session_not_found() -> None:
     adapter = FakeEngineAdapter()
 

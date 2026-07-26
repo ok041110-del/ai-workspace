@@ -68,7 +68,7 @@ class ClaudeCodeEngineAdapter(EngineAdapter):
         self._sessions[session_id] = EngineSessionStatus.RUNNING
         return session_id
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         if session_id not in self._sessions:
             raise SessionNotFoundError(session_id)
 

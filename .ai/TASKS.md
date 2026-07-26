@@ -4365,7 +4365,26 @@ haiku)이 `ClaudeCodeEngineAdapter`의 실제 `--model` 실행 인자까지
 - 완료 조건(DoD): 기존 계약 테스트가 시그니처 갱신 후에도 회귀 없이
   통과한다. `model`을 생략해도 기존과 동일하게 동작함을 계약 테스트로
   확인한다(Milestone DoD 1번 착수).
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `interfaces/engine_adapter.py`의
+  `run()`, `interfaces/engine_runtime.py`의 `run()`/`run_parallel()`에
+  `model: str | None = None`(키워드 전용) 추가. `EngineAdapter`
+  구현체 4종(`MockEngineAdapter`/`ClaudeCodeEngineAdapter`/
+  `CLIEngineAdapter`/`FakeEngineAdapter`/`FailingFakeEngineAdapter`)과
+  `EngineRuntime` 구현체 3종(`InMemoryEngineRuntime`/
+  `ManagedEngineRuntime`/`RecoveringEngineRuntime`/`FakeEngineRuntime`)
+  모두 새 시그니처를 받도록 갱신했으나, **이번 Task는 계약 확장까지만**
+  — 실제 `model` 사용/전달 로직은 아직 넣지 않았다(`Fake` 계열만 예외
+  — 계약 테스트에서 전달 여부를 확인할 수 있도록 `FakeEngineAdapter`가
+  `received_models`에 기록하고 `FakeEngineRuntime`이 선택된 Adapter에
+  그대로 전달하도록 함). `tests/interfaces/test_engine_adapter.py`/
+  `test_engine_runtime.py`에 4개 신규 테스트(model 생략 시 `None`
+  기록/명시적 model 기록, Runtime→Adapter 전달 확인) — Milestone DoD
+  1번을 Fake 계층에서 먼저 증명. `tests/interfaces/test_engine_runtime.py`
+  의 로컬 `SelectivelyFailingAdapter` 테스트 더블도 새 시그니처에 맞춰
+  갱신(기존 M10-T01 테스트 회귀 없음 확인). `ruff check src tests`,
+  `mypy src`, `pytest`(476개, 기존 472개 + 신규 4개) 모두 통과. 다음
+  Task: **M14-T02**(구현체 갱신 — `ClaudeCodeEngineAdapter` 실제 반영,
+  프로덕션 Runtime들의 실제 전달 로직).
 - 의존성: 없음.
 
 #### M14-T02: 구현체 갱신

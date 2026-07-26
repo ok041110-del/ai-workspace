@@ -35,7 +35,7 @@ class SelectivelyFailingAdapter(EngineAdapter):
     def create_session(self) -> str:
         return f"session-{next(self._id_generator)}"
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         if task.task_id == self._failing_task_id:
             raise EngineExecutionError(f"{task.task_id} 실행 실패")
         return EngineResult(success=True, output=f"{task.task_id} 완료")
@@ -74,6 +74,28 @@ def test_run_selects_engine_matching_required_capabilities() -> None:
     result = runtime.run(make_task(), required_capabilities=frozenset({"code_generation"}))
 
     assert result.success is True
+
+
+def test_run_forwards_model_to_the_selected_adapter() -> None:
+    """Milestone 14 DoD 1번 착수: model을 지정하면 선택된 Adapter까지
+    그대로 전달된다."""
+    runtime = FakeEngineRuntime()
+    adapter = FakeEngineAdapter(frozenset({"code_generation"}))
+    runtime.register_engine("claude_code", adapter)
+
+    runtime.run(make_task(), required_capabilities=frozenset({"code_generation"}), model="opus")
+
+    assert adapter.received_models == ["opus"]
+
+
+def test_run_without_model_forwards_none() -> None:
+    runtime = FakeEngineRuntime()
+    adapter = FakeEngineAdapter(frozenset({"code_generation"}))
+    runtime.register_engine("claude_code", adapter)
+
+    runtime.run(make_task(), required_capabilities=frozenset({"code_generation"}))
+
+    assert adapter.received_models == [None]
 
 
 def test_run_raises_no_suitable_engine_when_capability_unmatched() -> None:

@@ -235,15 +235,17 @@ class FakeEngineAdapter(EngineAdapter):
         self._parallel = parallel
         self._sessions: dict[str, EngineSessionStatus] = {}
         self._id_generator = itertools.count(1)
+        self.received_models: list[str | None] = []
 
     def create_session(self) -> str:
         session_id = f"session-{next(self._id_generator)}"
         self._sessions[session_id] = EngineSessionStatus.RUNNING
         return session_id
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         if session_id not in self._sessions:
             raise SessionNotFoundError(session_id)
+        self.received_models.append(model)
         self._sessions[session_id] = EngineSessionStatus.COMPLETED
         return EngineResult(success=True, output=f"{task.task_id} 완료")
 
@@ -276,7 +278,7 @@ class FailingFakeEngineAdapter(EngineAdapter):
     def create_session(self) -> str:
         return "session-failing"
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         raise EngineExecutionError("구현 엔진 프로세스를 실행할 수 없습니다.")
 
     def cancel(self, session_id: str) -> None:
@@ -359,11 +361,15 @@ class FakeEngineRuntime(EngineRuntime):
         raise NoSuitableEngineError(required_capabilities)
 
     def run(
-        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
     ) -> EngineResult:
         adapter = self._select(required_capabilities)
         session_id = adapter.create_session()
-        result = adapter.run(session_id, task)
+        result = adapter.run(session_id, task, model=model)
         adapter.destroy_session(session_id)
         self._task_status[task.task_id] = (
             EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED
@@ -371,14 +377,18 @@ class FakeEngineRuntime(EngineRuntime):
         return result
 
     def run_parallel(
-        self, tasks: list[Task], required_capabilities: frozenset[str] = frozenset()
+        self,
+        tasks: list[Task],
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
     ) -> list[EngineResult]:
         adapter = self._select(required_capabilities, require_parallel=True)
         results: list[EngineResult] = []
         for task in tasks:
             try:
                 session_id = adapter.create_session()
-                result = adapter.run(session_id, task)
+                result = adapter.run(session_id, task, model=model)
                 adapter.destroy_session(session_id)
             except BaseException as exc:
                 self._task_status[task.task_id] = EngineSessionStatus.FAILED

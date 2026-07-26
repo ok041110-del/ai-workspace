@@ -41,7 +41,11 @@ class RecoveringEngineRuntime(EngineRuntime):
         self._inner.register_engine(name, adapter)
 
     def run(
-        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
     ) -> EngineResult:
         last_exception: BaseException | None = None
         last_result: EngineResult | None = None
@@ -61,7 +65,11 @@ class RecoveringEngineRuntime(EngineRuntime):
         return last_result
 
     def run_parallel(
-        self, tasks: list[Task], required_capabilities: frozenset[str] = frozenset()
+        self,
+        tasks: list[Task],
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
     ) -> list[EngineResult]:
         first_pass = self._inner.run_parallel(tasks, required_capabilities)
         final: list[EngineResult] = []

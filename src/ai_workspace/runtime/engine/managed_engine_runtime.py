@@ -78,6 +78,8 @@ class ManagedEngineRuntime(EngineRuntime):
         task: Task,
         required_capabilities: frozenset[str] = frozenset(),
         timeout_seconds: float | None = None,
+        *,
+        model: str | None = None,
     ) -> EngineResult:
         adapter = self._require_adapter(required_capabilities)
         session_id = adapter.create_session()
@@ -113,7 +115,11 @@ class ManagedEngineRuntime(EngineRuntime):
         return self._finish_as_completed(task.task_id, session_id, adapter, result_box["result"])
 
     def run_parallel(
-        self, tasks: list[Task], required_capabilities: frozenset[str] = frozenset()
+        self,
+        tasks: list[Task],
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
     ) -> list[EngineResult]:
         if not tasks:
             return []
