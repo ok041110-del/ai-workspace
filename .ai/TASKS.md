@@ -2483,7 +2483,7 @@ M2~M6가 그래왔듯).
 | M7-T01 | `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가(인터페이스 확장, 하위 호환) — **완료** | PRD 7.4 갭 |
 | M7-T02 | `DocumentationAgent`가 기존에 버려지던 `engine_runtime.run()` 결과를 캡처해 요약으로 전달 — **완료** | PRD 7.4 갭 |
 | M7-T03 | End-to-End 검증(파이프라인 실행 후 요약이 저장·검색·복원됨을 통합 테스트로 증명) — **완료** | Milestone DoD |
-| M7-T04 | Milestone 7 Review | 관례 |
+| M7-T04 | Milestone 7 Review — **완료** | 관례 |
 
 **Architecture Review(사전 검토, 착수 전)**:
 - **컴포넌트 경계**: `ContextManager`(§3.8)의 **인터페이스 확장**(신규
@@ -2525,7 +2525,8 @@ M2~M6가 그래왔듯).
    라우팅, 그 외 소규모 이월 부채는 이번 Milestone 범위 밖으로 유지된다.
 
 **상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). M7-T01~T03 완료, 다음 Task는 M7-T04(Milestone Review).
+사용자 확정). M7-T01~T04 전체 DONE. **2026-07-26 사용자 승인으로
+Milestone 7 종료.** Review 전문은 아래 "Milestone 7 Review" 절 참고.
 
 #### M7-T01: `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가
 - 목적: Memory 요약을 저장할 최소 계약을 마련한다 — `MemoryEngine`은
@@ -2605,7 +2606,7 @@ M2~M6가 그래왔듯).
   테스트 결과 문서화, Technical Debt 정리, 문서 갱신, Milestone 종료
   선언.
 - 완료 조건(DoD): 위 항목 모두 완료 + 사용자 승인.
-- 상태: 리뷰 작성 완료(2026-07-26) — **사용자 승인 대기**
+- 상태: **DONE (2026-07-26 사용자 승인 — Milestone 7 완료)**
 
 ---
 
@@ -2720,7 +2721,7 @@ Technical Debt 정리 완료(5절, `WorkspaceSession.memory_snapshot_id`
 — 6개 조건 모두 만족. Review 중 코드 변경이 필요한 치명적 문제(버그·계약
 위반)는 발견되지 않았다.
 
-**사용자 승인을 조건으로 Milestone 7 Completed를 선언한다.**
+**2026-07-26 사용자 승인으로 Milestone 7 Completed 확정.**
 
 **Milestone 8 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
 이번 Review에서 드러난 두 후보는 (1) M6 Review가 이월한 "Model/Effort

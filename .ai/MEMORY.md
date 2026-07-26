@@ -249,6 +249,37 @@
   통합, Codex/Gemini CLI 실검증, `run_parallel` 개별 재시도,
   `MemoryEngine.search` 성능, `ShellAgent` 화이트리스트 고정, Memory
   Engine 요약 미구현)는 사용자 확정대로 전부 그대로 이월.
+- **Milestone 7(Memory 요약) 완료 — 2026-07-26 사용자 승인.** 목표는
+  PRD 7.4(장기 메모리)와 M4 DoD가 원래 요구했던 "검색/요약" 중 "요약"만
+  M4-T08에서 "LLM 없이는 구현 불가"로 미뤄뒀던 것을 완성. M6에서 실제
+  LLM 호출 인프라(`EngineRuntime`→`EngineAdapter`)가 완성되어 이 차단
+  사유가 해소됨. 핵심 설계 발견: `DocumentationAgent`가 이미
+  `engine_runtime.run()`을 호출하고 있었지만 **반환값을 캡처하지 않고
+  그대로 버리고 있었다** — 이 결과를 재활용하면 신규 LLM 호출 없이도
+  요약을 만들 수 있음(YAGNI). `interfaces/context_manager.py`의
+  `create_snapshot()`에 `summary: str | None = None`(기본값 있음, 하위
+  호환) 파라미터만 추가(M7-T01) — `MemoryEngine`은 여전히 저장/검색만
+  담당하고 요약이 뭔지 전혀 모름(ADR-0017 경계 그대로 유지).
+  `DocumentationAgent`가 `result = engine_runtime.run(...)`으로 캡처한
+  `output`을 `create_snapshot(session, summary=result.output)`으로
+  전달(M7-T02, 2줄 변경). 저장된 요약은 기존 `MemoryEngine.search()`
+  (M4-T08)로 그대로 검색되어 별도 구현 없이 PRD 7.4 "검색/요약"을 함께
+  충족. `tests/agents/test_pipeline.py`의 기존 `build_pipeline()` 헬퍼를
+  재사용해 전체 파이프라인 실행 후 요약이 검색·복원됨을 E2E로 증명
+  (M7-T03, 새 테스트 픽스처 없이 기존 것 재사용). **소스 파일 3개만
+  수정, 신규 소스 파일 0개, 새 Interface 0개 추가**(M6보다도 더 작은
+  변경 폭). 전체 `pytest` 425개(M6 완료 416개 → M7에서 9개 신규) 통과,
+  `ruff`/`mypy` 클린.
+  **Milestone Review 결론**(전문은 `.ai/TASKS.md` M7-T04 참고): 실패해도
+  결과를 그대로 저장하는 단순화, 누적 압축("요약의 요약") 없음은 사전
+  승인된 의도된 단순화. **이번에 새로 드러난 것**:
+  `WorkspaceSession.memory_snapshot_id`가 어디서도 자동 갱신되지 않아
+  — 검색(`find_snapshots`)은 완전히 동작하지만 새 세션이 이전 세션의
+  요약을 자동으로 이어받는 "세션 연속성"은 아직 수동으로만 가능함을
+  **M8+ 논의 대상으로 명시적으로 이월**. 그 외 이월 부채(Model/Effort
+  라우팅, Adapter 계열 통합, Codex/Gemini CLI 실검증, `run_parallel`
+  개별 재시도, `MemoryEngine.search` 성능, `ShellAgent` 화이트리스트
+  고정)는 사용자 확정대로 전부 그대로 이월.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
