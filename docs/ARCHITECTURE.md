@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.15.0 |
+| 문서 버전 | v0.16.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~12 완료, Milestone 13 진행 중 — §3.4에 Agent Scheduler 자가 확인 가드 메커니즘 추가) |
+| 상태 | Draft (Milestone 1~13 완료, Milestone 14 진행 중 — ADR-0026으로 §3.9/§3.10에 model 라우팅 반영) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -332,6 +332,14 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   새 재시도 로직 없이 재사용). 요구 Capability를 만족하는 엔진이 아예
   없는 경우(`NoSuitableEngineError`)는 이 격리 대상이 아니라 여전히
   Task 실행 전에 즉시 전파되는 Runtime 자체의 치명적 오류다.
+- **Model 라우팅(M14, ADR-0026)**: `run(task, required_capabilities, *,
+  model=None)`/`run_parallel(...)`이 `model`을 새 선택 로직 없이 다음
+  계층까지 그대로 전달한다(`ManagedEngineRuntime`/
+  `RecoveringEngineRuntime`/`InMemoryEngineRuntime` 전부 동일). Provider
+  선택(M6, `required_capabilities`)과 달리 **Model은 어떤 Adapter를
+  고를지에 관여하지 않고**, 이미 선택된 Adapter에 "이번 호출에서 어떤
+  모델을 쓸지"만 전달한다 — 두 축(Provider 선택 vs Model 지정)은 서로
+  다른 층위다.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -341,7 +349,7 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
 | 메서드 | 의미 |
 |---|---|
 | `create_session()` | 엔진 세션 생성 |
-| `run(...)` | 세션 위 실행 요청 |
+| `run(..., model=None)` | 세션 위 실행 요청(Milestone 14: 선택적 model 파라미터) |
 | `cancel(...)` | 실행 취소 |
 | `status(...)` | 실행 상태 조회 |
 | `destroy_session()` | 세션 정리/종료 |
@@ -377,6 +385,17 @@ CLI 등 여러 CLI 기반 엔진이 공유하는 프레임워크 — `CLIEngineA
 내부에서만 쓰이는 협력자이며, Agent/Engine Runtime은 이 인터페이스의
 존재를 알지 못한다 — Task→Agent→Engine Runtime→Engine Adapter라는
 기존 최상위 흐름(§2)은 그대로 유지된다.
+
+**Model 라우팅(Milestone 14, ADR-0026)**: `run()`의 `model` 인자는
+Provider 선택(위 M6-T02 라우팅)과 다른 층위다 — Provider는 "어떤
+Adapter를 쓸지"를 정하고, Model은 "이미 정해진 Adapter에게 어떤
+모델을 쓰라고 지시할지"를 정한다. 지금은 `ClaudeCodeEngineAdapter`만
+`model`을 실제로 `--model` 실행 인자에 반영한다(`run()`에 전달된
+값이 생성자의 고정 `model`보다 우선) — `MockEngineAdapter`/
+`CLIEngineAdapter`(Codex/Gemini)는 받되 사용하지 않는다(Codex/Gemini
+는 이 환경에 CLI가 없어 검증 불가, M5-T05/M10에서 반복 확인). Effort
+(low/medium/high)는 대응하는 실제 실행 지점이 아직 없어 이번
+Milestone 범위에서 뺐다 — 실제 대응 지점이 생기면 재검토한다.
 
 ### 3.11 Implementation Engines (외부)
 Claude Code · Codex · Gemini CLI 등.

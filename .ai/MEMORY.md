@@ -440,6 +440,35 @@
   작성하지 않음. MVP는 `CodingAgent` 하나에만 적용(Review/Documentation
   등으로 확장은 후속 Milestone, YAGNI). 이월 부채는 M12와 동일하게
   유지.
+- **Milestone 14(LLM Routing, Model 수준 라우팅) 완료 — 문서화 완료,
+  사용자 승인 대기.** 목표는 "Policy가 정한 Model(opus/sonnet/haiku
+  등)이 실제 실행까지 전달되게 한다"는 것(MVP, 사용자 확정). **핵심
+  발견**: M6이 완성한 것은 **Provider 단위** 라우팅(어떤 CLI를 쓸지)
+  뿐이었고, `LLMPolicyDecision`의 `model`/`effort`는 `EngineAdapter.
+  run()`/`EngineRuntime.run()` 어디에도 전달할 자리가 없어 한 번도
+  실제 실행에 반영된 적이 없었다(M6 Review 최초 이월, M10에서
+  "Interface 변경이 필요한 무거운 작업"으로 재확인·재이월). **범위를
+  Model만으로 좁힘**(Effort는 Claude Code CLI에 대응 플래그가 없어
+  검증 불가능해 제외) — `EngineAdapter`/`EngineRuntime`(둘 다 RULES
+  §1.2 보호 자산 또는 그 인접 계약) `run()`에 `model: str | None =
+  None`(키워드 전용, 신규 **ADR-0026**)을 추가했다. 새 선택 로직 없이
+  `ManagedEngineRuntime`/`RecoveringEngineRuntime`/
+  `InMemoryEngineRuntime`은 전달만 하고, **`ClaudeCodeEngineAdapter`
+  만** 실제로 `--model` 실행 인자에 반영(Codex/Gemini는 이 환경에
+  CLI가 없어 검증 불가, 계약만 만족). `domain/llm_policy.py`에
+  `model_name()` 신규(기존 `required_capabilities()`와 동일 패턴) —
+  `CodingAgent`/`ReviewAgent`/`DocumentationAgent` 3개 Agent가 함께
+  전달하도록 연결. 실제 `docs/llm_policy.example.yaml`(coding→
+  anthropic/opus) 기반 6-Agent 파이프라인에서 `ClaudeCodeEngineAdapter`
+  가 조립한 실제 명령에 `--model opus`가 포함됨을 통합 테스트로 증명
+  (M14-T03). 새 소스 파일 0개, 기존 파일 수정 11개(Interface 2·
+  Adapter 4·Runtime 3·Agent 3·domain 1, 일부 중복 집계) — M11(신규 2)
+  보다 넓지만 M5(신규 6)보다는 좁은 폭. 전체 `pytest` 489개(M13 완료
+  472개 → M14에서 17개 신규) 통과, `ruff`/`mypy` 클린. **새 최상위
+  Interface는 0개이나 기존 `EngineAdapter`/`EngineRuntime` 계약을
+  확장(ADR-0009/0015와 동일 계열)** — ADR-0026으로 정식 기록. 이월
+  부채는 M13과 동일하게 유지(Effort 라우팅 신규 이월, Codex/Gemini
+  실연동 계속 이월).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -513,7 +542,9 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
   실제 명령을 어디서 실행할지는 하위 인터페이스 **ExecutionEnvironment**
   (execute/cancel, ADR-0025, Milestone 11)에 DI로 위임 — Agent/Engine
   Runtime은 이 인터페이스를 모른다. 현재 구현체는 `LocalExecutionEnvironment`
-  뿐(Codespaces/Replit/Docker는 YAGNI로 미구현).
+  뿐(Codespaces/Replit/Docker는 YAGNI로 미구현). `run()`은 선택적
+  **`model`**도 받는다(ADR-0026, Milestone 14) — `ClaudeCodeEngineAdapter`
+  만 실제로 `--model`에 반영, Codex/Gemini는 받되 무시(검증 불가 환경).
 - **도메인**: Project · **Mission→Workflow→Task→Step** · **WorkspaceSession** ·
   Agent/AgentRole/AgentCapability(**Coordination 포함**)/AgentStatus.
 - **Interfaces (총 18종, Milestone 1에서 16종 계약 정의 + Milestone 5
@@ -583,6 +614,7 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR-0023 | `run_parallel()` 병렬 실행 책임 경계: AgentScheduler(선택) vs EngineRuntime(실행) | 승인됨 |
 | ADR-0024 | v0.5.0 아키텍처 기준선(Baseline) 선언 (`pyproject.toml` 버전 상향) | 승인됨 |
 | ADR-0025 | **ExecutionEnvironment**를 새 최상위 Layer 대신 `EngineAdapter` 하위 인터페이스로 도입, DI 기본 방향 | 승인됨 |
+| ADR-0026 | `EngineAdapter`/`EngineRuntime`에 `model` 파라미터 확장(Model 라우팅, `ClaudeCodeEngineAdapter`만 적용) | 승인됨 |
 
 기술 스택(Python, dataclasses, 파일 기반 저장, CLI, 인메모리 Event Bus+파일
 Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
@@ -620,31 +652,33 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-26)**: Milestone 1~13 전체 완료(사용자 승인).
-  버전 v0.5.0 유지(ADR-0024 기준선 — `ExecutionEnvironment`/
-  `WorkflowRunner`/`CodingAgent`의 자가 확인 가드 모두 최상위 흐름이나
-  기존 Interface 계약을 바꾸지 않는 추가라 기준선 재선언 대상이 아님).
-  `pytest` 472개, `ruff`/`mypy` 클린. Milestone 14는 아직 목표/DoD/
-  Task List 미정의(Task Driven
+- **현재 상태(2026-07-26)**: Milestone 1~13 완료(사용자 승인), Milestone
+  14(LLM Routing)는 구현+문서화 완료·사용자 승인 대기. 버전 v0.5.0
+  유지(ADR-0024 기준선 — `ExecutionEnvironment`/`WorkflowRunner`/
+  `CodingAgent`의 자가 확인 가드/`model` 파라미터 확장 모두 새 최상위
+  Interface나 계층 구조 변경이 아니라 기존 계약 위에서의 추가·확장이라
+  기준선 재선언 대상이 아님). `pytest` 489개, `ruff`/`mypy` 클린.
+  Milestone 15는 아직 목표/DoD/Task List 미정의(Task Driven
   Development 원칙).
 - **이 환경의 제약(2026-07-26 확인)**: `claude` CLI만 설치되어 있고
   `codex`/`gemini` CLI는 설치되어 있지 않다(`which` 확인). Codex/Gemini
   관련 Task는 이 세션에서 실행 불가 — 실제 CLI가 설치된 환경이 필요하다.
-- **누적 Technical Debt(2026-07-26 기준, M11 완료 후)**: (1)
-  **Model/Effort 수준 라우팅 미완성** — M6에서 완성한 것은 Provider
-  단위뿐, `EngineAdapter.run()`이 Model/Effort를 인자로 받지 않아 같은
-  Provider 안에서도 opus/sonnet/haiku나 Effort를 실제 실행에 반영
-  못함(M6 Review 최초 이월, Interface 변경 필요 여부부터 설계 검토
-  필요 — M10에서도 재분석 후 "무거운 작업"으로 재확인, 다시 이월).
+- **누적 Technical Debt(2026-07-26 기준, M14 완료 후)**: (1)
+  **Effort 수준 라우팅 미완성** — Model은 M14에서 해소됐지만(opus/
+  sonnet/haiku가 `--model`까지 반영됨), Effort(low/medium/high)는
+  Claude Code CLI에 대응하는 플래그가 없어 검증 불가능한 상태가 되는
+  것을 피하려 의도적으로 제외(M14 신규 이월 — 이전에는 "Model/Effort
+  수준 라우팅 미완성"으로 함께 묶여 있었으나 Model만 먼저 해소).
   (2) `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임워크 미통합
   (M5-T05 최초 이월, M10 재분석에서 "기능 이득 없는 순수 리팩토링"으로
   재확인). (3) Codex/Gemini CLI 실제 바이너리 미검증(M5-T05 최초 이월,
-  M10 재분석에서 이 환경엔 실행 자체가 불가능함을 확인). (4)
+  M10 재분석에서 이 환경엔 실행 자체가 불가능함을 확인 — M14도 같은
+  이유로 Model 라우팅을 `ClaudeCodeEngineAdapter`에만 적용). (4)
   `MemoryEngine.search()` 선형 스캔(M4-T08 최초 이월, 성능 — M10
   재분석에서 PRD §11이 "필요해지면"으로 이미 유보한 항목임을 재확인,
   조사 우선 접근 권장). (5) Retry Backoff/Persistent Runtime Recovery/
   Approval 비동기 처리/Process Timeout 정책 고도화(M3-T08 최초 이월),
   `ShellAgent` 화이트리스트가 코드에 고정(M5-T04 최초 이월). M9-T01
   (동시성 경쟁 조건)·M9-T03(세션 리셋)·M10-T02/T03(run_parallel 개별
-  실패 격리+재시도, M4-T06 이월 부채)은 해소되어 더 이상 부채 목록에
-  없다.
+  실패 격리+재시도, M4-T06 이월 부채)·M14(Model 라우팅)은 해소되어
+  더 이상 부채 목록에 없다.

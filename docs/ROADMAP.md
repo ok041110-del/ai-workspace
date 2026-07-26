@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~13 완료, v0.5.0 아키텍처 기준선 선언, Milestone 14 계획 확정 — 착수 대기) |
+| 상태 | Draft (Milestone 1~13 완료, v0.5.0 아키텍처 기준선 선언, Milestone 14 구현 완료 — 사용자 승인 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -637,12 +637,14 @@ str | None = None`을 선택적으로 추가. `ClaudeCodeEngineAdapter`만 실�
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M14-T01 | `EngineAdapter`/`EngineRuntime` 계약에 `model` 선택적 파라미터 확장 | TODO |
-| M14-T02 | 구현체 갱신 | TODO |
-| M14-T03 | Agent 3종 연결 + End-to-End 통합 테스트 | TODO |
-| M14-T04 | 문서화 + Milestone 14 Review | TODO |
+| M14-T01 | `EngineAdapter`/`EngineRuntime` 계약에 `model` 선택적 파라미터 확장 | **완료** |
+| M14-T02 | 구현체 갱신 | **완료** |
+| M14-T03 | Agent 3종 연결 + End-to-End 통합 테스트 | **완료** |
+| M14-T04 | 문서화 + Milestone 14 Review | **완료** |
 
-**진행 상태**: 계획 확정, 착수 대기.
+**진행 상태**: M14-T01~T04 전체 완료. Milestone DoD 1~5번 전부 충족
+확인됨. Milestone 14 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 14
+Review" 참고) — 사용자 승인 대기.
 
 ---
 

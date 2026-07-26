@@ -818,3 +818,71 @@
   `EngineAdapter` 코드를 전혀 수정하지 않고 확장 가능함을
   `test_new_execution_environment_extends_adapter_without_code_changes`
   로 직접 증명(M11-T03).
+
+## ADR-0026: EngineAdapter/EngineRuntime 계약에 `model` 파라미터 확장 (Milestone 14)
+
+- 상태: 승인됨 (2026-07-26, 사용자 승인)
+- 날짜: 2026-07-26
+- 배경: M6(ADR 미부여, M6-T01/T02)에서 완성한 것은 **Provider 단위**
+  라우팅(Claude Code/Codex/Gemini 중 어떤 CLI를 쓸지)뿐이었다.
+  `LLMPolicyDecision`은 `model`(opus/sonnet/haiku 등)과 `effort`(low/
+  medium/high)도 담고 있었지만, `EngineAdapter.run(session_id, task)`
+  와 `EngineRuntime.run(task, required_capabilities)` 어디에도 이 값을
+  전달할 자리가 없어 지금까지 한 번도 실제 실행에 반영된 적이 없었다
+  (M6 Review 최초 이월, M10에서 "Interface 변경이 필요한 무거운
+  작업"으로 재확인·재이월). `EngineAdapter`는 `.ai/RULES.md` §1.2가
+  명시하는 핵심 아키텍처 보호 자산이라, 계약을 확장하는 이번 결정을
+  ADR-0009/ADR-0015(과거 `EngineAdapter` 계약 확장)와 동일하게
+  정식 기록한다.
+- 결정:
+  1. `interfaces/engine_adapter.py`의 `run(session_id, task)`에
+     `model: str | None = None`(키워드 전용)을 추가한다.
+  2. `interfaces/engine_runtime.py`의 `run(task, required_capabilities)`
+     와 `run_parallel(tasks, required_capabilities)`에도 동일하게
+     `model: str | None = None`을 추가한다.
+  3. **Model만** 다루고 **Effort는 이번 범위에서 뺀다** —
+     `ClaudeCodeEngineAdapter`는 이미 `--model` CLI 플래그와 연결된
+     `model` 생성자 필드가 있어(M3-T02) 실제로 연결할 지점이 있지만,
+     `effort`는 Claude Code CLI에 대응하는 플래그가 없어 지금 연결하면
+     검증 불가능한 상태가 된다.
+  4. **적용 대상은 `ClaudeCodeEngineAdapter`만** — Codex/Gemini
+     (`CLIProvider` 계열)는 이 환경에 CLI가 없어 검증이 불가능해
+     (M5-T05/M10에서 반복 확인) 계약만 만족하도록(받되 무시) 남겨둔다.
+     `MockEngineAdapter`도 동일하게 무시한다(실제 엔진을 호출하지
+     않아 모델 구분이 의미 없음).
+  5. `ManagedEngineRuntime`/`RecoveringEngineRuntime`/
+     `InMemoryEngineRuntime`은 `model`에 대해 새로운 선택·우선순위
+     로직을 두지 않고 다음 계층까지 그대로 전달만 한다.
+  6. `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가
+     `domain/llm_policy.py`의 신규 `model_name()`(기존
+     `required_capabilities()`와 동일한 패턴)으로 정책의 model을
+     꺼내 `engine_runtime.run()`에 함께 전달한다.
+- 대안:
+  - Effort까지 함께 라우팅 — 기각. 대응하는 실행 지점이 없어
+    "정책 결정은 있으나 검증할 방법이 없는" 상태가 되고, 이는
+    M5-T02/T07 Review가 이미 경계했던 문제("정책 결정≠실제 LLM 호출
+    서비스")를 반복하는 것이다.
+  - Codex/Gemini까지 함께 적용 — 기각. 이 환경에 CLI 바이너리가 없어
+    실제 검증이 불가능하고(M5-T05/M10 재확인), 검증 없이 "구현됨"으로
+    표시하는 것은 프로젝트 관례(Repository-Analysis SOP의 "1차 자료
+    확인")에 어긋난다.
+  - `create_session()`이 model을 받는 방식(세션 단위 고정) — 기각.
+    `run()`이 세션 단위로 model을 매번 다르게 지정할 수 있는 유연성이
+    없어지고(예: 같은 세션에서 재시도 시 다른 모델로 재시도하는
+    미래 시나리오를 막음), 기존 세션 생명주기 계약(ADR-0015)의 의미도
+    "세션=고정 모델"로 좁아진다.
+- 이유: `model`을 `run()` 호출 단위로 전달하면 세션 생성 이후에도
+  호출마다 다른 모델을 지정할 수 있어 유연하고, 새 선택 로직 없이
+  기존 데코레이터 체인(`RecoveringEngineRuntime`→`ManagedEngineRuntime`
+  →`EngineAdapter`)을 그대로 통과시키기만 하면 되어 최소 복잡성
+  원칙에도 맞는다. 새 최상위 Interface를 추가하지 않고 기존 두
+  Interface(`EngineAdapter`/`EngineRuntime`)의 계약만 확장해
+  Interface First 원칙(불필요한 신규 컴포넌트 지양)을 지켰다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.16.0 §3.9/§3.10에 반영.
+  `EngineAdapter` 구현체 4종, `EngineRuntime` 구현체 3종 전부 새
+  시그니처를 받도록 갱신(M14-T01). `ClaudeCodeEngineAdapter`만 실제
+  반영, 나머지는 받되 무시(M14-T02). `CodingAgent`/`ReviewAgent`/
+  `DocumentationAgent` 3개 Agent가 정책의 model을 실제로 전달함을
+  실제 `docs/llm_policy.example.yaml` 기반 통합 테스트로 증명
+  (M14-T03). 이월 부채(Effort 라우팅, Codex/Gemini 실연동)는
+  실제 대응 지점이 생기기 전까지 계속 이월한다.

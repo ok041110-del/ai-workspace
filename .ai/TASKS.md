@@ -4343,12 +4343,12 @@ haiku)이 `ClaudeCodeEngineAdapter`의 실제 `--model` 실행 인자까지
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M14-T01 | `EngineAdapter`/`EngineRuntime` 계약에 `model` 선택적 파라미터 확장 | TODO |
-| M14-T02 | 구현체 갱신(`ClaudeCodeEngineAdapter` 실제 반영, Runtime들은 전달만) | TODO |
-| M14-T03 | Agent 3종 연결 + End-to-End 통합 테스트 | TODO |
-| M14-T04 | 문서화 + Milestone 14 Review | TODO |
+| M14-T01 | `EngineAdapter`/`EngineRuntime` 계약에 `model` 선택적 파라미터 확장 | **완료** |
+| M14-T02 | 구현체 갱신(`ClaudeCodeEngineAdapter` 실제 반영, Runtime들은 전달만) | **완료** |
+| M14-T03 | Agent 3종 연결 + End-to-End 통합 테스트 | **완료** |
+| M14-T04 | 문서화 + Milestone 14 Review | **완료** |
 
-**진행 상태**: 계획 확정, 착수 대기.
+**진행 상태**: M14-T01~T04 전체 완료. 아래 "Milestone 14 Review" 참고.
 
 #### M14-T01: `EngineAdapter`/`EngineRuntime` 계약에 `model` 선택적 파라미터 확장
 - 목적: Model을 실행 계층까지 전달할 수 있는 통로를 계약에 마련한다
@@ -4466,8 +4466,114 @@ haiku)이 `ClaudeCodeEngineAdapter`의 실제 `--model` 실행 인자까지
   Adapter)에 `model` 파라미터 반영, `docs/ROADMAP.md`/`.ai/MEMORY.md`
   갱신, 전체 테스트 결과 정리 및 제시.
 - 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `docs/ARCHITECTURE.md` v0.16.0 §3.9
+  (Model 라우팅 — Provider 선택과 다른 층위임을 명시), §3.10(`run()`
+  메서드 표에 `model` 반영, Model 라우팅 소절 신규 — 적용 대상/제외
+  대상/Effort 범위 제외 이유), 문서 헤더(버전/상태) 갱신. `.ai/
+  DECISIONS.md`에 **ADR-0026**(EngineAdapter는 RULES §1.2 보호 자산이라
+  계약 확장을 ADR-0009/0015와 동일하게 정식 기록 — 배경/결정 6개 항목/
+  대안 3개/이유/결과) 신규 작성. `docs/ROADMAP.md` Milestone 14 절
+  Task List 상태 갱신. 아래 "Milestone 14 Review" 절 참고.
 - 의존성: M14-T01~T03.
+
+---
+
+## Milestone 14 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `model` 미전달 시 기존과 완전히 동일하게 동작(회귀 없음) | ✅ (M14-T01, 기존 테스트 전부 무변경 통과) |
+| 2 | `ClaudeCodeEngineAdapter`가 `run()`의 `model`을 생성자 기본값보다 우선 사용 | ✅ (M14-T02) |
+| 3 | `ManagedEngineRuntime`/`RecoveringEngineRuntime`이 `model`을 그대로 전달(새 선택 로직 없음) | ✅ (M14-T02) |
+| 4 | Agent 3종이 정책의 `model.name`을 실제로 전달함이 통합 테스트로 증명 | ✅ (M14-T03) |
+| 5 | 전체 `pytest`/`ruff`/`mypy` 통과 | ✅ (아래 4절) |
+
+Task List(M14-T01~T04) 전체 완료. 사용자 승인 조건("Model만, Effort
+제외", "ClaudeCodeEngineAdapter만 적용") 그대로 충족됨.
+
+**2. Architecture Review**
+
+- **신규 컴포넌트**: 없음.
+- **변경된 기존 컴포넌트**: `interfaces/engine_adapter.py`/
+  `interfaces/engine_runtime.py`(계약 확장) + `EngineAdapter` 구현체
+  4종(`ClaudeCodeEngineAdapter`만 실제 반영, 나머지 3종은 받되 무시) +
+  `EngineRuntime` 구현체 3종(전부 전달만) + Agent 3종
+  (`CodingAgent`/`ReviewAgent`/`DocumentationAgent`) + `domain/
+  llm_policy.py`(`model_name()` 신규 함수 1개).
+- **핵심 설계 결정**: `model`을 `run()` 호출 단위로 전달하는 방식을
+  택해(`create_session()` 단위 고정 방식은 기각), 세션 생명주기
+  계약(ADR-0015)의 의미를 "세션=고정 모델"로 좁히지 않았다. Provider
+  선택(M6, 어떤 Adapter를 쓸지)과 Model 지정(M14, 그 Adapter에 어떤
+  모델을 쓰라고 할지)이 서로 다른 층위임을 문서로도 명확히 구분했다.
+
+`git diff --stat`(M13 종료 커밋 대비)로 확인한 결과 신규 소스 파일
+0개, 기존 소스 파일 수정 11개(Interface 2개, Adapter 4개, Runtime
+3개, Agent 3개, domain 1개 — 일부 중복 집계 있음, 실제로는 총 11개
+파일) — M11(신규 2/수정 5)보다 넓은, 이번까지 중 두 번째로 넓은 변경
+폭이었다(가장 넓은 것은 M5의 6개 신규 파일).
+
+**3. Interface First 원칙 검토**
+
+**M14는 새 최상위 Interface를 추가하지 않았다**(M6/M7/M8/M9/M10/M12/
+M13과 동일 패턴, M5/M11만 예외). 다만 **기존 두 Interface
+(`EngineAdapter`/`EngineRuntime`)의 계약을 확장**했다는 점에서
+M6~M13과는 다르다 — ADR-0009/ADR-0015가 과거 `EngineAdapter` 계약을
+확장했던 것과 같은 종류의 결정이라 ADR-0026으로 정식 기록했다
+(RULES §1.2가 `EngineAdapter`를 핵심 보호 자산으로 명시하기 때문).
+새 매개변수는 전부 기본값이 있는 키워드 전용 인자라 기존 호출부
+(수십 곳) 시그니처 호환성은 100% 유지된다.
+
+**4. 테스트 결과**
+
+- `pytest`: **489개 전부 통과**(M13 완료 시점 472개 → M14에서 17개
+  신규: M14-T01 +4, M14-T02 +6, M14-T03 +7)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(86개 소스 파일, 신규 소스 파일 0개)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M14 범위 밖으로 명시적으로 제외한 것(사용자 확정, 계속 이월)*
+- **Effort 라우팅** — Claude Code CLI에 대응하는 플래그가 없어 검증
+  불가능한 상태가 되는 것을 피하기 위해 의도적으로 제외. 실제 대응
+  지점이 생기면 재검토.
+- **Codex/Gemini 실연동** — 이 세션 환경에 CLI 바이너리가 없어 계속
+  이월(M5-T05/M10과 동일 사유).
+
+*계속 이월되는 기존 항목*
+- `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임워크 미통합
+- `MemoryEngine.search()` 선형 스캔
+- Retry Backoff/Persistent Runtime Recovery/Approval 비동기 처리/
+  Process Timeout 정책 고도화, `ShellAgent` 화이트리스트가 코드에 고정
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M14-T01~T04 상세 섹션) / `docs/ROADMAP.md`
+(M14 Task List·목표·DoD 반영) / `docs/ARCHITECTURE.md`(v0.16.0, §3.9/
+§3.10 갱신) / `.ai/DECISIONS.md`(ADR-0026 신규) 완료. `pyproject.toml`
+버전은 v0.5.0 그대로 유지(ADR-0024 기준선 — 새 최상위 Interface나
+계층 구조 변경이 아니라 기존 두 Interface의 계약 확장이라 기준선
+재선언 대상이 아님). `.ai/MEMORY.md`는 이 Review 승인 직후 M1~M13과
+동일한 방식으로 압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 0/
+수정 11 소스 파일, "run() 호출 단위 model 전달" 설계 결정 명시),
+Interface First 검토 완료(3절, 새 Interface는 0개이나 기존 2개 계약
+확장을 ADR로 투명하게 기록), 테스트 결과 문서화 완료(4절), Technical
+Debt 정리 완료(5절), 문서 갱신 완료(6절) — 6개 조건 모두 만족. Review
+중 코드 변경이 필요한 치명적 문제(버그·계약 위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 14 Completed를 선언한다.**
+
+**Milestone 15 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
+`docs/ROADMAP.md`가 원래 그려둔 다음 단계는 M15(Token/Cost
+Optimization)이지만, 이는 사전 논의 없이 확정된 것이 아니며 Milestone
+15는 착수 시점에 이 문서에 목표/DoD/Task List를 새로 정의한다(Task
+Driven Development 원칙, M2~M14가 그래왔듯).
 
 ---
 
