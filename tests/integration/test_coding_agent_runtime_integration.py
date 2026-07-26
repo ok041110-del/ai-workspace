@@ -3,20 +3,25 @@ from __future__ import annotations
 from typing import Any
 
 from tests.adapters.test_claude_code_engine_adapter import error_result, success_result
+from tests.agents.test_shell_agent import FakeProcessRunner as FakeShellProcessRunner
 from tests.interfaces.fakes import FakeAgentManager, FakeAgentRegistry
 
 from ai_workspace.adapters.claude_code_engine_adapter import ClaudeCodeEngineAdapter
 from ai_workspace.adapters.process_runner import ProcessResult
 from ai_workspace.agents.coding_agent import CodingAgent
+from ai_workspace.agents.coordinator_agent import CoordinatorAgent
 from ai_workspace.agents.documentation_agent import DocumentationAgent
 from ai_workspace.agents.events import (
     CODE_COMPLETED,
+    CODE_VERIFIED,
     DOCUMENTATION_COMPLETED,
     MISSION_PLANNED,
     REVIEW_COMPLETED,
+    SHELL_COMPLETED,
 )
 from ai_workspace.agents.planning_agent import PlanningAgent
 from ai_workspace.agents.review_agent import ReviewAgent
+from ai_workspace.agents.shell_agent import ShellAgent
 from ai_workspace.domain.retry_policy import RetryPolicy
 from ai_workspace.domain.session import WorkspaceSession
 from ai_workspace.domain.task import TaskStatus
@@ -61,7 +66,10 @@ def build_pipeline() -> dict[str, Any]:
     `MockEngineAdapter`가 아니라 M3의 실제 Engine 스택(`ClaudeCodeEngineAdapter`
     + `ManagedEngineRuntime` + `RecoveringEngineRuntime`)으로 조립한다.
     Coding 단계의 첫 실행만 실패시켜(`FlakyProcessRunner`) 재시도가 실제로
-    발생하고 복구됨을 증명한다."""
+    발생하고 복구됨을 증명한다. M5-T06으로 `ShellAgent`(항상 성공하는
+    `FakeShellProcessRunner` 주입)+`CoordinatorAgent`가 Coding과 Review
+    사이에 추가되었다 — `ClaudeCodeEngineAdapter`용 `FlakyProcessRunner`와는
+    완전히 별개의 프로세스 실행 경로다."""
     process_runner = FlakyProcessRunner(
         [
             error_result("일시 오류"),
@@ -92,6 +100,19 @@ def build_pipeline() -> dict[str, Any]:
         event_bus=event_bus,
         task_engine=task_engine,
         engine_runtime=engine_runtime,
+    )
+    ShellAgent(
+        agent_runtime=agent_runtime,
+        event_bus=event_bus,
+        command_kind="test",
+        process_runner=FakeShellProcessRunner(
+            ProcessResult(returncode=0, stdout="1 passed", stderr="")
+        ),
+    )
+    CoordinatorAgent(
+        agent_runtime=agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
     )
     ReviewAgent(
         agent_runtime=agent_runtime,
@@ -145,9 +166,12 @@ def test_retry_actually_recovers_a_failed_first_attempt() -> None:
 def test_engine_and_agent_events_interleave_in_expected_nested_order() -> None:
     """`InMemoryEventBus`는 핸들러 내부에서 재귀적으로 publish()가 호출되면
     가장 안쪽에서 발행된 이벤트를 먼저 관측한다(M2 Retrospective
-    Implementation Observation #3). 이번 파이프라인은 Coding→Review→
-    Documentation이 서로의 핸들러 안에서 중첩 호출되므로, 이 특성이 정확히
-    아래 순서를 만들어낸다는 것까지 명시적으로 검증한다."""
+    Implementation Observation #3). 이번 파이프라인은 Coding→Shell→
+    Coordinator→Review→Documentation이 서로의 핸들러 안에서 중첩
+    호출되므로(M5-T06으로 Shell/Coordinator 추가), 이 특성이 정확히 아래
+    순서를 만들어낸다는 것까지 명시적으로 검증한다. `ShellAgent`는
+    `EngineRuntime`을 쓰지 않아 자체적으로는 `engine_task_*` Event를
+    발행하지 않는다."""
     pipeline = build_pipeline()
     received: list[Event] = []
     pipeline["event_bus"].subscribe(received.append)
@@ -166,6 +190,8 @@ def test_engine_and_agent_events_interleave_in_expected_nested_order() -> None:
         "engine_task_completed",
         DOCUMENTATION_COMPLETED,  # 가장 안쪽(Documentation)이 가장 먼저 관측됨
         REVIEW_COMPLETED,
+        CODE_VERIFIED,
+        SHELL_COMPLETED,
         CODE_COMPLETED,
         MISSION_PLANNED,  # 가장 바깥쪽 트리거가 가장 마지막에 관측됨
     ]

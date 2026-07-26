@@ -1896,6 +1896,55 @@ Event ID 생성 방식 불일치(M2 이월 부채 #3)를 정리하려 `src/ai_wo
   `pytest`(380개, 기존 360개 + 신규 20개) 모두 통과.
 - 의존성: M3-T02, M3-T03
 
+#### M5-T06: Workflow 조건부 분기 + Step Domain 반영
+- 목적: 테스트 실패 시 자동으로 재작업 Task를 만들어 되돌리는 조건부
+  분기를 구현해 M5를 "실제 개발 수행" Milestone으로 완성하고, M2 이월
+  부채 #6(Step 도메인 미반영)을 해소한다.
+- 작업 내용: `CoordinatorAgent` 신규(ADR-0019 Coordination Capability
+  최초 구현), `ReviewAgent` 트리거 재배선(`CODE_COMPLETED`→
+  `CODE_VERIFIED`), `TaskEngine`에 Step 실행 이력 추가.
+- 완료 조건(DoD): 테스트 통과 시 Review로 진행, 실패 시 재작업 Task로
+  되돌아감(무한 루프 방지 포함), Step에 시도 이력이 기록됨,
+  `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26, Effort High 승인)** — **핵심 발견**:
+  `ReviewAgent`가 여전히 `CODE_COMPLETED`를 직접 구독하고 있어(M5-T04에서
+  "조건부 연결은 M5-T06으로 이월"이라 명시한 지점), Shell 테스트 결과와
+  무관하게 Review가 이미 실행되고 있었음 — 이번 Task에서 실제로 트리거를
+  재배선함. **`AgentRole.COORDINATOR`/`AgentCapability.COORDINATION`은
+  ADR-0019(M1)부터 존재했지만 지금까지 어떤 Agent도 쓴 적이 없었음** —
+  `CoordinatorAgent`가 최초 구현체. **사용자가 설계 검토 후 2가지 반영**:
+  (1) Step의 소유권을 `CoordinatorAgent` 내부 리스트가 아니라 실행
+  컨텍스트에 둠 — `TaskEngine`(Task를 실제로 소유하는 컴포넌트)에
+  `record_step()`/`get_steps()`를 추가하고 `CoordinatorAgent`는 자체
+  상태 없이 이를 호출만 함(Repository/StepEngine은 만들지 않음, YAGNI).
+  (2) Effort를 Medium→High로 상향(이벤트 흐름+재시도 로직을 포함하는
+  첫 Workflow 오케스트레이션 구현이라 M5에서 가장 복잡한 Task 중 하나).
+  **파이프라인 재구성**: `agents/events.py`에 `CODE_VERIFIED`/
+  `REWORK_EXHAUSTED` 신규. `CoordinatorAgent`는 `SHELL_COMPLETED`를
+  구독 — 성공하면 `CODE_VERIFIED` 발행(ReviewAgent를 깨움), 실패하면
+  `TaskEngine.record_step()`으로 시도를 기록하고 `max_rework_attempts`
+  (기본 3) 이내면 같은 task_id로 `MISSION_PLANNED`를 재발행(payload에
+  `rework_reason`)해 `CodingAgent`로 되돌리며, 초과하면 `REWORK_EXHAUSTED`
+  발행 후 중단(무한 루프 방지). `ShellAgent`가 `CODE_COMPLETED`의
+  `output`(코드)을 자신의 `SHELL_COMPLETED` payload에 `code_output`으로
+  전달하도록 보강(이전엔 유실되고 있었음). `CodingAgent`는 `rework_reason`
+  이 있으면 `DevelopmentContext.prior_output`으로 반영해 재작업 시 이전
+  실패 내용을 알고 실행. `Task`의 기존 상태 전이 규칙(REVIEW→IN_PROGRESS
+  허용)이 이미 재작업 시나리오를 정확히 지원하고 있음을 확인(도메인
+  모델 변경 불필요). **기존 테스트 갱신 필요성**: `ReviewAgent`의 트리거
+  변경은 실질적 동작 변경이라, T2-06의 `test_pipeline.py`(4-Agent)와
+  M4-T04의 `test_coding_agent_runtime_integration.py`가 `ShellAgent`/
+  `CoordinatorAgent` 없이는 더 이상 Review까지 도달하지 못하게 됨 — 두
+  파일 모두 6-Agent 구성으로 갱신(M4-T04에서 확립한 "정확한 전체 Event
+  순서 재유도" 방식 그대로 재검증, 새로 도출한 순서가 실제 실행과 정확히
+  일치함을 확인). 신규 `tests/agents/test_coordinator_agent.py`(5개,
+  성공/실패/Step 기록/재작업 소진/무관 이벤트 무시) + `tests/interfaces/`
+  `tests/engines/`의 `test_task_engine.py`에 Step 테스트 각 6개 +
+  `test_coding_agent.py`에 rework_reason 테스트 1개 추가. `ruff check
+  src tests`, `mypy src`, `pytest`(398개, 기존 380개 + 신규 18개) 모두
+  통과.
+- 의존성: M5-T03, M5-T04
+
 ---
 
 ## 진행 로그

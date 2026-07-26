@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.11.0 |
+| 문서 버전 | v0.12.0 |
 | 작성일 | 2026-07-25 |
 | 상태 | Draft (Milestone 1~3 완료, Milestone 4 진행 중 — ADR-0023으로 §3.4/§3.9 병렬 실행 책임 경계 명시) |
 
@@ -220,7 +220,12 @@ Agent의 실행을 담당하는 계층.
   Agent Scheduler는 엔진 종류가 아니라 Capability로 Agent를 선택한다.
 - **Coordination Capability (ADR-0019)**: 여러 Agent의 협업을 조정하는 역할을
   명시한다. Coordination 능력을 가진 Agent(Coordinator)는 Event 흐름을 조율하되,
-  다른 Agent를 직접 호출하지 않고 Event 기반 협업 규칙을 따른다.
+  다른 Agent를 직접 호출하지 않고 Event 기반 협업 규칙을 따른다. **M5-T06에서
+  `CoordinatorAgent`로 최초 구현됨** — `ShellCompleted`(테스트 결과)를 보고
+  `ReviewAgent`로 진행시키거나(`CodeVerified`) 실패 시 `CodingAgent`로 되돌리는
+  (`MissionPlanned` 재발행) 조건부 분기를 담당한다. Task의 실행 이력(Step,
+  ADR-0011)은 Coordinator가 직접 보관하지 않고 `TaskEngine.record_step()`을
+  통해 실행 컨텍스트(TaskEngine)에 기록한다.
 - **협업**: Agent끼리 직접 호출하지 않고 Event 기반으로 협업(§5).
 - **실행**: 실제 일은 **Engine Runtime**을 통해 구현 엔진에 위임하고, Context는
   **Context Manager**로, 도메인 작업은 **Core Engines**로 처리한다.
@@ -290,6 +295,12 @@ Claude Code · Codex · Gemini CLI 등.
 Mission (사용자 목표) → Workflow (협업 흐름) → Task (Agent 할당 작업) → Step (세부 실행)
 ```
 
+**Step의 실질 반영(M5-T06)**: `Step`은 T1-16에서 도메인만 정의된 채 오래
+쓰이지 않았으나(M2 Retrospective 이월 부채 #6), 이제 `TaskEngine.
+record_step()`/`get_steps()`로 Task의 실행 시도 이력(예: 재작업 시도)을
+기록하는 데 실제로 쓰인다. 별도 StepEngine/Repository는 두지 않고(YAGNI),
+Task를 소유하는 `TaskEngine`이 Step도 함께 관리한다.
+
 ## 5. Agent 협업 구조 (Event Driven)
 
 Agent는 직접 호출하지 않고 Event로 협업한다. Event Store는 Bus의 독립 구독자로
@@ -335,7 +346,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `LLMPolicyEngine` | AgentRole별 LLM Provider/Model/Effort Rule 기반 결정 | Milestone 5 (M5-T01) | **완료(계약+구현)** |
 | `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 (T1-15 계약, T1-23 `FileProjectRepository` 구현) | **완료(계약+구현)** |
 | `WorkflowEngine` | Mission→…→Step 협업 흐름 | 이후 | 기존 |
-| `TaskEngine` | Task 생성/상태 전이 | 이후 | 기존 |
+| `TaskEngine` | Task 생성/상태 전이 + Step 실행 이력(M5-T06) | 이후 | 기존 |
 | `MemoryEngine` | Memory 저장/검색 (Snapshot 제외) | Milestone 1 (T1-15, T1-20 재확인) | 기존(축소, 변경 없음) |
 | `ApprovalEngine` | 승인 대상 판별/차단 | 이후 | 기존 |
 | `AutomationEngine` | 조건/일정 트리거 | 이후 | 기존 |

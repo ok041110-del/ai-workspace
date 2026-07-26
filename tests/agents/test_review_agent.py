@@ -3,7 +3,7 @@ from __future__ import annotations
 from tests.agents.test_coding_agent import RecordingEngineRuntime
 from tests.interfaces.fakes import FakeAgentManager, FakeAgentRegistry, FakeTaskEngine
 
-from ai_workspace.agents.events import CODE_COMPLETED, REVIEW_COMPLETED
+from ai_workspace.agents.events import CODE_VERIFIED, REVIEW_COMPLETED
 from ai_workspace.agents.review_agent import ReviewAgent
 from ai_workspace.events.event_bus import InMemoryEventBus
 from ai_workspace.interfaces.engine_adapter import EngineResult
@@ -36,7 +36,7 @@ def test_review_agent_includes_coding_output_as_prior_output_in_prompt() -> None
     event_bus.publish(
         Event(
             event_id="e1",
-            event_type=CODE_COMPLETED,
+            event_type=CODE_VERIFIED,
             payload={"task_id": task.task_id, "output": "def login(): ...", "success": True},
         )
     )
@@ -48,14 +48,14 @@ def test_review_agent_includes_coding_output_as_prior_output_in_prompt() -> None
 
 
 def test_review_agent_handles_missing_prior_output() -> None:
-    """CodingAgent 없이 CodeCompleted가 직접 발행되는 등, output이 없는
-    경우에도 예외 없이 동작해야 한다(prior_output=None으로 처리)."""
+    """CoordinatorAgent 없이 CodeVerified가 직접 발행되는 등, output이
+    없는 경우에도 예외 없이 동작해야 한다(prior_output=None으로 처리)."""
     engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="검토 완료"))
     _agent, event_bus, task_engine = build_review_agent(engine_runtime)
     task = task_engine.create_task("p1", "로그인 기능 구현하기")
 
     event_bus.publish(
-        Event(event_id="e1", event_type=CODE_COMPLETED, payload={"task_id": task.task_id})
+        Event(event_id="e1", event_type=CODE_VERIFIED, payload={"task_id": task.task_id})
     )
 
     assert engine_runtime.received_tasks[0].title == "로그인 기능 구현하기"
@@ -71,7 +71,7 @@ def test_review_agent_publishes_output_and_success_in_event_payload() -> None:
     event_bus.publish(
         Event(
             event_id="e1",
-            event_type=CODE_COMPLETED,
+            event_type=CODE_VERIFIED,
             payload={"task_id": task.task_id, "output": "def login(): ...", "success": True},
         )
     )

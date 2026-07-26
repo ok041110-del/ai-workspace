@@ -3,5 +3,7 @@
 MISSION_PLANNED = "mission_planned"
 CODE_COMPLETED = "code_completed"
 SHELL_COMPLETED = "shell_completed"
+CODE_VERIFIED = "code_verified"
+REWORK_EXHAUSTED = "rework_exhausted"
 REVIEW_COMPLETED = "review_completed"
 DOCUMENTATION_COMPLETED = "documentation_completed"

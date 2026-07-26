@@ -272,8 +272,26 @@
   않아(`command not found` 확인) 실제 검증 불가 — WebSearch로 공개
   문서를 조사해 `CodexProvider`/`GeminiCliProvider` 구성, 두 클래스
   docstring에 "미검증 경고"를 명시. 전부 Fake 기반 테스트라 실제 CLI
-  없이도 안전하게 통과. 전체 380개 테스트 통과. 다음은 **M5-T06**
-  (Workflow 조건부 분기 + `Step` Domain 반영).
+  없이도 안전하게 통과. 전체 380개 테스트 통과.
+- **M5-T06 완료(2026-07-26, Effort High 승인)**: `ReviewAgent`가 여전히
+  `CODE_COMPLETED`를 직접 구독 중이라 Shell 테스트 결과와 무관하게
+  Review가 이미 실행되던 것을 발견 — 이번에 실제로 재배선.
+  `CoordinatorAgent` 신규(**ADR-0019 Coordination Capability 최초
+  구현체** — M1부터 존재했으나 지금까지 어떤 Agent도 쓴 적 없었음):
+  `SHELL_COMPLETED`를 구독해 성공 시 `CODE_VERIFIED` 발행(Review를
+  깨움), 실패 시 `MISSION_PLANNED`를 재발행해 Coding으로 되돌림(
+  `max_rework_attempts` 초과 시 `REWORK_EXHAUSTED`로 중단, 무한 루프
+  방지). **사용자 지시로 Step의 소유권을 CoordinatorAgent 내부 리스트가
+  아니라 실행 컨텍스트(TaskEngine)에 둠** — `TaskEngine.record_step()`/
+  `get_steps()` 신규(Repository/StepEngine은 만들지 않음, M2 이월 부채
+  #6 최소 범위로 해소). `ShellAgent`가 코드 출력을 `code_output`으로
+  전달하도록 보강(이전엔 유실). `CodingAgent`는 `rework_reason`을
+  `DevelopmentContext.prior_output`으로 반영. 기존 `test_pipeline.py`
+  (T2-06)와 `test_coding_agent_runtime_integration.py`(M4-T04)는
+  ReviewAgent 트리거 변경으로 실질적 동작이 바뀌어 6-Agent 구성으로
+  갱신(정확한 전체 Event 순서 재검증 포함). 전체 398개 테스트 통과.
+  **Milestone 5의 7개 Task 중 6개(M5-T01~T06) 완료, 다음은
+  M5-T07(Milestone Review)뿐**.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

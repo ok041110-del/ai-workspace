@@ -66,6 +66,27 @@ def test_coding_agent_passes_task_title_as_instructions_when_no_prior_context() 
     assert engine_runtime.received_tasks[0].title == "로그인 기능 구현하기"
 
 
+def test_coding_agent_includes_rework_reason_as_prior_output() -> None:
+    """M5-T06: `CoordinatorAgent`가 테스트 실패 후 재발행한 MissionPlanned
+    (payload에 rework_reason 포함)을 받으면, 이전에 무엇이 실패했는지
+    프롬프트에 반영한다."""
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="완료"))
+    _agent, event_bus, task_engine = build_coding_agent(engine_runtime)
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+
+    event_bus.publish(
+        Event(
+            event_id="e1",
+            event_type=MISSION_PLANNED,
+            payload={"task_id": task.task_id, "rework_reason": "AssertionError: 로그인 실패"},
+        )
+    )
+
+    prompt = engine_runtime.received_tasks[0].title
+    assert "로그인 기능 구현하기" in prompt
+    assert "AssertionError: 로그인 실패" in prompt
+
+
 def test_coding_agent_does_not_mutate_original_task_title() -> None:
     engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="완료"))
     _agent, event_bus, task_engine = build_coding_agent(engine_runtime)

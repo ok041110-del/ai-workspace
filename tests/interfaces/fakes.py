@@ -7,6 +7,7 @@ from ai_workspace.domain.agent import Agent, AgentCapability, AgentRole, AgentSt
 from ai_workspace.domain.llm_policy import LLMPolicyDecision
 from ai_workspace.domain.project import Project
 from ai_workspace.domain.session import WorkspaceSession
+from ai_workspace.domain.step import Step
 from ai_workspace.domain.task import Task, TaskStatus
 from ai_workspace.domain.workflow import Workflow
 from ai_workspace.interfaces.agent_manager import AgentManager, InvalidAgentTransitionError
@@ -115,6 +116,8 @@ class FakeTaskEngine(TaskEngine):
     def __init__(self) -> None:
         self._tasks: dict[str, Task] = {}
         self._id_generator = itertools.count(1)
+        self._steps: dict[str, list[Step]] = {}
+        self._step_id_generator = itertools.count(1)
 
     def create_task(self, project_id: str, title: str) -> Task:
         if not project_id or not title:
@@ -132,6 +135,22 @@ class FakeTaskEngine(TaskEngine):
         if task_id not in self._tasks:
             raise TaskNotFoundError(task_id)
         return self._tasks[task_id]
+
+    def record_step(self, task_id: str, description: str) -> Step:
+        if task_id not in self._tasks:
+            raise TaskNotFoundError(task_id)
+        step = Step(
+            step_id=f"step-{next(self._step_id_generator)}",
+            task_id=task_id,
+            description=description,
+        )
+        self._steps.setdefault(task_id, []).append(step)
+        return step
+
+    def get_steps(self, task_id: str) -> list[Step]:
+        if task_id not in self._tasks:
+            raise TaskNotFoundError(task_id)
+        return list(self._steps.get(task_id, []))
 
 
 class FakeMemoryEngine(MemoryEngine):

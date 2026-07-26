@@ -62,6 +62,7 @@ class ShellAgent:
                 event_type=SHELL_COMPLETED,
                 payload={
                     "task_id": task_id,
+                    "code_output": event.payload.get("output"),
                     "stdout": result.stdout,
                     "stderr": result.stderr,
                     "exit_code": result.returncode,

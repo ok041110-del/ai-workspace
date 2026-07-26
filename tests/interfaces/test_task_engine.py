@@ -46,3 +46,54 @@ def test_get_unknown_task_raises_not_found() -> None:
 
     with pytest.raises(TaskNotFoundError):
         engine.get_task("unknown")
+
+
+def test_record_step_appears_in_get_steps() -> None:
+    engine = FakeTaskEngine()
+    task = engine.create_task(project_id="p1", title="Task")
+
+    step = engine.record_step(task.task_id, "1차 시도 실패")
+
+    assert engine.get_steps(task.task_id) == [step]
+
+
+def test_get_steps_preserves_recording_order() -> None:
+    engine = FakeTaskEngine()
+    task = engine.create_task(project_id="p1", title="Task")
+
+    first = engine.record_step(task.task_id, "1차")
+    second = engine.record_step(task.task_id, "2차")
+
+    assert engine.get_steps(task.task_id) == [first, second]
+
+
+def test_get_steps_returns_empty_list_when_no_steps_recorded() -> None:
+    engine = FakeTaskEngine()
+    task = engine.create_task(project_id="p1", title="Task")
+
+    assert engine.get_steps(task.task_id) == []
+
+
+def test_record_step_unknown_task_raises_not_found() -> None:
+    engine = FakeTaskEngine()
+
+    with pytest.raises(TaskNotFoundError):
+        engine.record_step("unknown", "설명")
+
+
+def test_get_steps_unknown_task_raises_not_found() -> None:
+    engine = FakeTaskEngine()
+
+    with pytest.raises(TaskNotFoundError):
+        engine.get_steps("unknown")
+
+
+def test_get_steps_returns_defensive_copy() -> None:
+    engine = FakeTaskEngine()
+    task = engine.create_task(project_id="p1", title="Task")
+    engine.record_step(task.task_id, "1차")
+
+    steps = engine.get_steps(task.task_id)
+    steps.clear()
+
+    assert len(engine.get_steps(task.task_id)) == 1

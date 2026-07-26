@@ -101,11 +101,18 @@ def test_publishes_success_event_with_stdout_stderr_exit_code() -> None:
     received: list[Event] = []
     event_bus.subscribe(received.append)
 
-    event_bus.publish(Event(event_id="e1", event_type=CODE_COMPLETED, payload={"task_id": "t1"}))
+    event_bus.publish(
+        Event(
+            event_id="e1",
+            event_type=CODE_COMPLETED,
+            payload={"task_id": "t1", "output": "def f(): ..."},
+        )
+    )
 
     shell_completed = next(e for e in received if e.event_type == SHELL_COMPLETED)
     assert shell_completed.payload == {
         "task_id": "t1",
+        "code_output": "def f(): ...",
         "stdout": "3 passed",
         "stderr": "",
         "exit_code": 0,
