@@ -2135,7 +2135,7 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
 | M6-T01 | `ManagedEngineRuntime` 다중 Adapter 등록 지원(`register_engine`의 "정확히 1개" 제한 해제, name 기준 dict 저장, `required_capabilities` 만족 후보 중 선택) — **완료** | M5 Review 이월 갭 #1 |
 | M6-T02 | `LLMProvider` → Engine Capability 태그 매핑 + `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가 `llm_policy_decision`을 `required_capabilities`로 변환해 `engine_runtime.run()`에 전달 — **완료** | RULES §7 M4 단계(자동 선택) |
 | M6-T03 | 다중 Adapter 조립 + End-to-End 검증(정책에 따라 실제로 다른 Adapter가 선택·실행됨을 통합 테스트로 증명) — **완료** | Milestone DoD |
-| M6-T04 | Milestone 6 Review — **리뷰 작성 완료, 사용자 승인 대기** | 관례 |
+| M6-T04 | Milestone 6 Review — **완료** | 관례 |
 
 **Architecture Review(사전 검토, 착수 전)**:
 - **컴포넌트 경계**: 이번 변경은 `EngineRuntime`(§3.9)의 **구체 구현체**
@@ -2180,10 +2180,8 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
    이번 Milestone 범위에서 명시적으로 제외되며 계속 이월된다(위 사용자
    확정 참고).
 
-**상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). M6-T01~T03 전체 DONE, M6-T04(Milestone 6 Review)는 리뷰
-작성 완료·사용자 승인 대기. Milestone 6 Review는 아래 "Milestone 6
-Review" 절 참고.
+**상태**: M6-T01~T04 전체 DONE. **2026-07-26 사용자 승인으로 Milestone 6
+종료.** Review 전문은 아래 "Milestone 6 Review" 절 참고.
 
 #### M6-T01: `ManagedEngineRuntime` 다중 Adapter 등록 지원
 - 목적: `EngineRuntime` 인터페이스가 이미 계약해 둔 "다중 엔진 등록·
@@ -2303,7 +2301,7 @@ Review" 절 참고.
   테스트 결과 문서화, Technical Debt 정리, 문서 갱신, Milestone 종료
   선언.
 - 완료 조건(DoD): 위 항목 모두 완료 + 사용자 승인.
-- 상태: 리뷰 작성 완료(2026-07-26) — **사용자 승인 대기**
+- 상태: **DONE (2026-07-26 사용자 승인 — Milestone 6 완료)**
 
 ---
 
@@ -2438,7 +2436,7 @@ Definition of Done 충족(1절), Architecture Review 완료(2절, 소스 5개
 조건 모두 만족. Review 중 코드 변경이 필요한 치명적 문제(버그·계약
 위반)는 발견되지 않았다.
 
-**사용자 승인을 조건으로 Milestone 6 Completed를 선언한다.**
+**2026-07-26 사용자 승인으로 Milestone 6 Completed 확정.**
 
 **Milestone 7 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
 이번 Review에서 드러난 가장 뚜렷한 후속 논의 대상은 "Model/Effort 수준

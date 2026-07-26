@@ -219,20 +219,36 @@
   미검증, `ClaudeCodeEngineAdapter`/`CLIEngineAdapter` 미통합, Memory
   요약은 여전히 차단(정책 결정≠실제 LLM 호출 서비스). M2 이월 부채
   #1/#2/#4/#5/#6 모두 해소, #3(EventBus 재귀 발행 순서)만 그대로 유지.
-- **Milestone 6 계획 확정(2026-07-26, 착수 대기)**: 목표는 "Policy→Execution
-  라우팅 완성" — RULES §7 로드맵의 "M4 단계"(Policy Engine 자동 선택)를
-  완성해 `LLMPolicyDecision`에 따라 `CodingAgent`/`ReviewAgent`/
-  `DocumentationAgent`가 실제로 다른 `EngineAdapter`(Claude Code/Codex/
-  Gemini CLI)를 골라 실행하게 한다. 근본 원인은 `ManagedEngineRuntime`이
-  Adapter를 정확히 1개만 등록 가능하도록 M3-T01에서 의도적으로 좁혀 둔
-  것 — `EngineRuntime` 인터페이스 자체는 이미 다중 등록·Capability 기준
-  선택을 계약해 두었으므로 인터페이스 변경 없이 구현체만 갱신하면 된다.
-  Task List: M6-T01(다중 Adapter 등록 지원)/M6-T02(Provider→Capability
-  매핑+Agent 3종 라우팅 반영)/M6-T03(조립+E2E 검증)/M6-T04(Milestone
-  Review). **사용자가 명시적으로 범위에서 제외한 것**: Adapter 계열
-  통합(`ClaudeCodeEngineAdapter`↔`CLIEngineAdapter`), Codex/Gemini CLI
-  실제 재검증, 소규모 이월 부채(`run_parallel` 개별 재시도 등) — 계속
-  이월. 상세는 `.ai/TASKS.md`/`docs/ROADMAP.md`의 "Milestone 6" 참고.
+- **Milestone 6(Policy 기반 실행 라우팅) 완료 — 2026-07-26 사용자 승인.**
+  목표는 "Policy→Execution 라우팅 완성" — RULES §7 로드맵의 "M4 단계"
+  (Policy Engine 자동 선택)를 완성해 `LLMPolicyDecision`에 따라
+  `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가 실제로 다른
+  `EngineAdapter`(Claude Code/Codex/Gemini CLI)를 골라 실행하게 함.
+  근본 원인은 `ManagedEngineRuntime`이 Adapter를 정확히 1개만 등록
+  가능하도록 M3-T01에서 의도적으로 좁혀 둔 것이었다 — `EngineRuntime`
+  인터페이스 자체는 이미 다중 등록·Capability 기준 선택을 계약해
+  두었으므로 **인터페이스 변경 없이 구현체만 갱신**(M6-T01: `dict[str,
+  EngineAdapter]`로 교체 + `_task_adapters`로 task별 실행 어댑터 추적).
+  `domain/llm_policy.py`에 `LLMProvider→capability` 태그 매핑(ANTHROPIC→
+  `claude_code`/OPENAI→`codex`/GOOGLE→`gemini`)과 `required_capabilities()`
+  순수 함수를 추가해 Agent 3종이 이를 `engine_runtime.run()`에 전달(M6-T02,
+  정책 없으면 빈 집합으로 하위 호환). `tests/integration/
+  test_m6_policy_routing.py`(M6-T03)로 3개 Adapter를 동시 등록하고 저장소의
+  실제 `docs/llm_policy.example.yaml`을 로드해 Coding/Review/Documentation이
+  각각 claude/codex/gemini CLI를 실제로 호출함을 E2E로 증명. **소스 파일
+  5개만 수정, 신규 소스 파일 0개, 새 Interface 0개 추가**(M2/M3/M4와 동일
+  패턴). 전체 `pytest` 416개(M5 완료 398개 → M6에서 18개 신규) 통과,
+  `ruff`/`mypy` 클린. `poetry.lock`을 이번 Milestone에서 최초로 커밋함
+  (재현 가능한 의존성 고정, 코드 변경 아님).
+  **Milestone Review 결론**(전문은 `.ai/TASKS.md` M6-T04 참고): 완성한
+  것은 **Provider 단위** 라우팅(어느 CLI를 쓸지)뿐이고, 같은 Provider
+  안의 **Model/Effort**(opus vs sonnet, low vs high)는 실제 실행에
+  아직 반영되지 않음 — `EngineAdapter.run()`이 Model/Effort를 인자로
+  받지 않기 때문. `EngineAdapter` 계약 확장이 필요한 더 큰 결정이라
+  **M7+ 논의 대상으로 명시적으로 이월**. 그 외 이월 부채(Adapter 계열
+  통합, Codex/Gemini CLI 실검증, `run_parallel` 개별 재시도,
+  `MemoryEngine.search` 성능, `ShellAgent` 화이트리스트 고정, Memory
+  Engine 요약 미구현)는 사용자 확정대로 전부 그대로 이월.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
