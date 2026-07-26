@@ -93,7 +93,7 @@ class ManagedEngineRuntime(EngineRuntime):
 
         def _execute() -> None:
             try:
-                result_box["result"] = adapter.run(session_id, task)
+                result_box["result"] = adapter.run(session_id, task, model=model)
             except BaseException as exc:
                 error_box["error"] = exc
 
@@ -125,7 +125,10 @@ class ManagedEngineRuntime(EngineRuntime):
             return []
         self._require_adapter(required_capabilities)
         with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
-            futures = [executor.submit(self.run, task, required_capabilities) for task in tasks]
+            futures = [
+                executor.submit(self.run, task, required_capabilities, model=model)
+                for task in tasks
+            ]
             results: list[EngineResult] = []
             for future in futures:
                 try:

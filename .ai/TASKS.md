@@ -4401,7 +4401,30 @@ haiku)이 `ClaudeCodeEngineAdapter`의 실제 `--model` 실행 인자까지
   `model`이 생성자 `model`보다 우선함을 단위 테스트로 확인.
   `ManagedEngineRuntime`/`RecoveringEngineRuntime`이 `model`을
   내부 Adapter 호출까지 정확히 전달함을 단위 테스트로 확인.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `ClaudeCodeEngineAdapter._build_command()`
+  가 `model` 매개변수를 받아 `effective_model = model if model is not
+  None else self._model`로 우선순위를 정하도록 변경(`run()`이 이를
+  전달). `MockEngineAdapter`/`CLIEngineAdapter`는 `model`을 받되
+  사용하지 않음을 docstring에 명시(범위 밖, Codex/Gemini는 이 환경에서
+  검증 불가). `InMemoryEngineRuntime`/`ManagedEngineRuntime`(`_execute()`
+  내부 `adapter.run()` 호출과 `run_parallel()`의 `executor.submit()`
+  둘 다)/`RecoveringEngineRuntime`(`run()`의 재시도 루프와
+  `run_parallel()`의 첫 병렬 패스·개별 재시도 둘 다) 전부 `model`을
+  새 선택 로직 없이 다음 계층까지 그대로 전달하도록 수정. 로컬
+  duck-typing 테스트 더블(`SelectivelyFailingAdapter`,
+  `test_managed_engine_runtime.py`/`test_recovering_engine_runtime.py`
+  의 4+2개 어댑터, `ScriptedEngineRuntime`)도 새 시그니처에 맞춰
+  일괄 갱신(회귀 없음 확인 목적). `tests/adapters/
+  test_claude_code_engine_adapter.py`에 2개(run() model이 생성자
+  model보다 우선/model 생략 시 생성자 model로 폴백),
+  `tests/runtime/engine/test_managed_engine_runtime.py`에
+  `RecordingModelEngineAdapter` 신규 테스트 더블 + 2개(run/run_parallel
+  전달 확인), `tests/runtime/engine/test_recovering_engine_runtime.py`
+  에 2개(위 더블을 cross-file import해 내부 Runtime까지 전달됨을
+  실제 `ManagedEngineRuntime` 조합으로 확인) — 총 6개 신규 테스트.
+  `ruff check src tests`, `mypy src`, `pytest`(482개, 기존 476개 +
+  신규 6개) 모두 통과. 다음 Task: **M14-T03**(Agent 3종 연결 +
+  End-to-End 통합 테스트).
 - 의존성: M14-T01.
 
 #### M14-T03: Agent 3종 연결 + End-to-End 통합 테스트

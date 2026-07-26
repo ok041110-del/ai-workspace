@@ -4,7 +4,10 @@ import itertools
 
 import pytest
 from tests.interfaces.fakes import FakeEngineRuntime
-from tests.runtime.engine.test_managed_engine_runtime import SelectivelyFailingEngineAdapter
+from tests.runtime.engine.test_managed_engine_runtime import (
+    RecordingModelEngineAdapter,
+    SelectivelyFailingEngineAdapter,
+)
 
 from ai_workspace.adapters.mock_engine_adapter import MockEngineAdapter
 from ai_workspace.domain.retry_policy import InvalidRetryPolicyError, RetryPolicy
@@ -36,7 +39,7 @@ class EventuallySucceedingEngineAdapter(EngineAdapter):
     def create_session(self) -> str:
         return f"eventual-session-{next(self._id_generator)}"
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         if task.task_id == self._flaky_task_id:
             attempts = self._attempts.get(task.task_id, 0) + 1
             self._attempts[task.task_id] = attempts
@@ -76,7 +79,7 @@ class MixedOutcomeEngineAdapter(EngineAdapter):
     def create_session(self) -> str:
         return f"mixed-session-{next(self._id_generator)}"
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         if task.task_id == self._permanently_failing_task_id:
             raise EngineExecutionError(f"{task.task_id} 영구 실패")
         if task.task_id == self._flaky_task_id:
@@ -116,7 +119,11 @@ class ScriptedEngineRuntime(EngineRuntime):
         raise NotImplementedError
 
     def run(
-        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
     ) -> EngineResult:
         outcome = self._outcomes[self.call_count]
         self.call_count += 1
@@ -128,7 +135,11 @@ class ScriptedEngineRuntime(EngineRuntime):
         return outcome
 
     def run_parallel(
-        self, tasks: list[Task], required_capabilities: frozenset[str] = frozenset()
+        self,
+        tasks: list[Task],
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
     ) -> list[EngineResult]:
         raise NotImplementedError
 
@@ -287,6 +298,30 @@ def test_run_parallel_end_to_end_mixed_outcomes_across_full_stack() -> None:
     )
 
     assert [result.success for result in results] == [True, True, False, True]
+
+
+def test_run_forwards_model_through_inner_runtime_to_the_adapter() -> None:
+    """Milestone 14 DoD 3번: RecoveringEngineRuntime이 model을 새로운
+    선택 로직 없이 내부 Runtime까지 그대로 전달한다."""
+    adapter = RecordingModelEngineAdapter()
+    managed = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    managed.register_engine("mock", adapter)
+    runtime = RecoveringEngineRuntime(inner=managed, retry_policy=RetryPolicy())
+
+    runtime.run(make_task(), model="opus")
+
+    assert adapter.received_models == ["opus"]
+
+
+def test_run_parallel_forwards_model_through_inner_runtime_to_the_adapter() -> None:
+    adapter = RecordingModelEngineAdapter()
+    managed = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    managed.register_engine("mock", adapter)
+    runtime = RecoveringEngineRuntime(inner=managed, retry_policy=RetryPolicy())
+
+    runtime.run_parallel([make_task("t1"), make_task("t2")], model="opus")
+
+    assert adapter.received_models == ["opus", "opus"]
 
 
 def test_retry_policy_defaults_to_three_attempts() -> None:

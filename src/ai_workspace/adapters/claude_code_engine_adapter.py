@@ -39,6 +39,11 @@ class ClaudeCodeEngineAdapter(EngineAdapter):
     (Milestone 11)에 위임한다 — `cancel()`이 실제 실행을 종료할 수 있다.
     이 Adapter는 구체 구현체를 직접 생성하지 않고 생성자로 주입받는다
     (Dependency Injection).
+
+    **Model 라우팅(Milestone 14)**: `run()`에 전달된 `model`이 있으면
+    생성자의 고정 `model`보다 우선해 `--model` 플래그에 반영한다(예:
+    Policy가 이번 호출만 다른 모델을 지정한 경우). 둘 다 없으면 `--model`
+    플래그 자체를 생략한다(claude CLI 기본 모델 사용).
     """
 
     def __init__(
@@ -72,7 +77,7 @@ class ClaudeCodeEngineAdapter(EngineAdapter):
         if session_id not in self._sessions:
             raise SessionNotFoundError(session_id)
 
-        command = self._build_command(session_id, task)
+        command = self._build_command(session_id, task, model=model)
         try:
             execution_result = self._execution_environment.execute(
                 session_id, command, cwd=self._cwd, timeout=self._subprocess_timeout_seconds
@@ -129,7 +134,7 @@ class ClaudeCodeEngineAdapter(EngineAdapter):
         estimated_tokens = max(1, len(task.title) // 4)
         return CostEstimate(estimated_tokens=estimated_tokens, estimated_cost_usd=0.0)
 
-    def _build_command(self, session_id: str, task: Task) -> list[str]:
+    def _build_command(self, session_id: str, task: Task, *, model: str | None = None) -> list[str]:
         command = [
             "claude",
             "-p",
@@ -141,8 +146,9 @@ class ClaudeCodeEngineAdapter(EngineAdapter):
             "--permission-mode",
             self._permission_mode,
         ]
-        if self._model is not None:
-            command.extend(["--model", self._model])
+        effective_model = model if model is not None else self._model
+        if effective_model is not None:
+            command.extend(["--model", effective_model])
         return command
 
     def _parse_result(self, execution_result: ExecutionResult) -> EngineResult:

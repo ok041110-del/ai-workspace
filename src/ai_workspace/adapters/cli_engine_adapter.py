@@ -34,7 +34,13 @@ class CLIEngineAdapter(EngineAdapter):
     존재함을 의도적으로 감수함). 충분히 검증된 뒤 M6+에서 통합을
     재검토한다. 실제 명령을 어디서 실행할지는 `ExecutionEnvironment`
     (Milestone 11)에 위임하며, 이 Adapter는 구체 구현체를 직접 생성하지
-    않고 생성자로 주입받는다(Dependency Injection)."""
+    않고 생성자로 주입받는다(Dependency Injection).
+
+    `run()`의 `model`(Milestone 14)은 받되 사용하지 않는다 — Codex/
+    Gemini는 이 환경에 CLI가 없어 실제 검증이 불가능해(M5-T05/M10)
+    Model 라우팅 적용 대상에서 의도적으로 제외했다(`ClaudeCodeEngineAdapter`
+    만 실제로 반영). `CLIProvider`가 생성 시점에 받은 고정 모델은 그대로
+    유지된다."""
 
     def __init__(
         self,

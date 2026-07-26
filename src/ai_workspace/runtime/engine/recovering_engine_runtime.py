@@ -51,7 +51,7 @@ class RecoveringEngineRuntime(EngineRuntime):
         last_result: EngineResult | None = None
         for _ in range(self._retry_policy.max_attempts):
             try:
-                last_result = self._inner.run(task, required_capabilities)
+                last_result = self._inner.run(task, required_capabilities, model=model)
             except BaseException as exc:
                 last_exception = exc
                 last_result = None
@@ -71,14 +71,14 @@ class RecoveringEngineRuntime(EngineRuntime):
         *,
         model: str | None = None,
     ) -> list[EngineResult]:
-        first_pass = self._inner.run_parallel(tasks, required_capabilities)
+        first_pass = self._inner.run_parallel(tasks, required_capabilities, model=model)
         final: list[EngineResult] = []
         for task, result in zip(tasks, first_pass):
             if result.success:
                 final.append(result)
                 continue
             try:
-                final.append(self.run(task, required_capabilities))
+                final.append(self.run(task, required_capabilities, model=model))
             except BaseException as exc:
                 final.append(EngineResult(success=False, output="", error=str(exc)))
         return final

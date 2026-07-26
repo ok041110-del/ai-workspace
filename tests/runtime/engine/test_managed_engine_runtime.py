@@ -40,7 +40,7 @@ class SlowEngineAdapter(EngineAdapter):
         self._sessions[session_id] = EngineSessionStatus.RUNNING
         return session_id
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         time.sleep(self._delay_seconds)
         self._sessions[session_id] = EngineSessionStatus.COMPLETED
         return EngineResult(success=True, output="완료")
@@ -79,7 +79,7 @@ class SlowParallelEngineAdapter(EngineAdapter):
         self._sessions[session_id] = EngineSessionStatus.RUNNING
         return session_id
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         time.sleep(self._delay_seconds)
         self._sessions[session_id] = EngineSessionStatus.COMPLETED
         return EngineResult(success=True, output="완료")
@@ -118,7 +118,7 @@ class SelectivelyFailingEngineAdapter(EngineAdapter):
         self._sessions[session_id] = EngineSessionStatus.RUNNING
         return session_id
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         if task.task_id == self._failing_task_id:
             self._sessions[session_id] = EngineSessionStatus.FAILED
             raise EngineExecutionError(f"{task.task_id} 실행 실패")
@@ -161,7 +161,7 @@ class RecordingEngineAdapter(EngineAdapter):
         self._sessions[session_id] = EngineSessionStatus.RUNNING
         return session_id
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         self.run_count += 1
         self._sessions[session_id] = EngineSessionStatus.COMPLETED
         return EngineResult(success=True, output=f"{task.task_id} 완료(Recording)")
@@ -187,6 +187,40 @@ class RecordingEngineAdapter(EngineAdapter):
 
 def make_task(task_id: str = "t1") -> Task:
     return Task(task_id=task_id, project_id="p1", title="구현하기", status=TaskStatus.TODO)
+
+
+class RecordingModelEngineAdapter(MockEngineAdapter):
+    """`run()`에 전달된 model을 기록하는 테스트 전용 Adapter(M14-T02) —
+    `ManagedEngineRuntime`이 model을 그대로 전달만 하는지 확인하는 데
+    쓰인다."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.received_models: list[str | None] = []
+
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
+        self.received_models.append(model)
+        return super().run(session_id, task, model=model)
+
+
+def test_run_forwards_model_to_the_adapter() -> None:
+    adapter = RecordingModelEngineAdapter()
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("mock", adapter)
+
+    runtime.run(make_task(), model="opus")
+
+    assert adapter.received_models == ["opus"]
+
+
+def test_run_parallel_forwards_model_to_the_adapter() -> None:
+    adapter = RecordingModelEngineAdapter()
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("mock", adapter)
+
+    runtime.run_parallel([make_task("t1"), make_task("t2")], model="opus")
+
+    assert adapter.received_models == ["opus", "opus"]
 
 
 def test_run_executes_task_via_mock_adapter_and_returns_success() -> None:

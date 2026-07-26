@@ -216,6 +216,31 @@ def test_build_command_includes_model_when_given() -> None:
     assert "sonnet" in fake.executed_commands[0]
 
 
+def test_run_model_argument_overrides_constructor_model() -> None:
+    """Milestone 14 DoD 2번: run()에 전달된 model이 생성자의 고정 model
+    보다 우선한다."""
+    fake = FakeExecutionEnvironment()
+    fake.result = success_result()
+    adapter = ClaudeCodeEngineAdapter(model="sonnet", execution_environment=fake)
+    session_id = adapter.create_session()
+
+    adapter.run(session_id, make_task(), model="opus")
+
+    assert "opus" in fake.executed_commands[0]
+    assert "sonnet" not in fake.executed_commands[0]
+
+
+def test_run_falls_back_to_constructor_model_when_not_given() -> None:
+    fake = FakeExecutionEnvironment()
+    fake.result = success_result()
+    adapter = ClaudeCodeEngineAdapter(model="sonnet", execution_environment=fake)
+    session_id = adapter.create_session()
+
+    adapter.run(session_id, make_task())
+
+    assert "sonnet" in fake.executed_commands[0]
+
+
 def test_build_command_never_uses_manual_permission_mode() -> None:
     fake = FakeExecutionEnvironment()
     fake.result = success_result()

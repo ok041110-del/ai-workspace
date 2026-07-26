@@ -44,7 +44,7 @@ class InMemoryEngineRuntime(EngineRuntime):
     ) -> EngineResult:
         adapter = self._select(required_capabilities)
         session_id = adapter.create_session()
-        result = adapter.run(session_id, task)
+        result = adapter.run(session_id, task, model=model)
         adapter.destroy_session(session_id)
         self._task_status[task.task_id] = (
             EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED
@@ -62,7 +62,7 @@ class InMemoryEngineRuntime(EngineRuntime):
         results: list[EngineResult] = []
         for task in tasks:
             session_id = adapter.create_session()
-            result = adapter.run(session_id, task)
+            result = adapter.run(session_id, task, model=model)
             adapter.destroy_session(session_id)
             self._task_status[task.task_id] = (
                 EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED
