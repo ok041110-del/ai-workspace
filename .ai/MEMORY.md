@@ -417,8 +417,8 @@
   전체 `pytest` 465개(M11 완료 460개 → M12에서 5개 신규) 통과,
   `ruff`/`mypy` 클린. 새 Interface가 없어 신규 ADR은 작성하지 않음.
   이월 부채는 M11과 동일하게 유지.
-- **Milestone 13(Multi-Agent Collaboration) 완료 — 문서화 완료, 사용자
-  승인 대기.** 목표는 "같은 Capability의 Agent가 여러 개 등록돼 있을
+- **Milestone 13(Multi-Agent Collaboration) 완료 — 2026-07-26 사용자
+  승인.** 목표는 "같은 Capability의 Agent가 여러 개 등록돼 있을
   때 `AgentScheduler.select()`가 실제로 하나만 고르고 나머지는 개입
   하지 않는다"는 것을 실제로 증명(MVP, 사용자 확정). **핵심 발견**:
   `AgentScheduler`는 M1부터 정의만 되어 있었고 실제 협업 흐름에서
@@ -620,8 +620,7 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-26)**: Milestone 1~12 완료(사용자 승인), Milestone
-  13(Multi-Agent Collaboration)은 구현+문서화 완료·사용자 승인 대기.
+- **현재 상태(2026-07-26)**: Milestone 1~13 전체 완료(사용자 승인).
   버전 v0.5.0 유지(ADR-0024 기준선 — `ExecutionEnvironment`/
   `WorkflowRunner`/`CodingAgent`의 자가 확인 가드 모두 최상위 흐름이나
   기존 Interface 계약을 바꾸지 않는 추가라 기준선 재선언 대상이 아님).

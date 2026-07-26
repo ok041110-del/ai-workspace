@@ -4284,6 +4284,8 @@ Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 소스
 
 **사용자 승인을 조건으로 Milestone 13 Completed를 선언한다.**
 
+**Milestone 13 종료 — 2026-07-26 사용자 승인.**
+
 **Milestone 14 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
 `docs/ROADMAP.md`가 원래 그려둔 다음 단계는 M14(LLM Routing)이지만,
 이는 사전 논의 없이 확정된 것이 아니며 Milestone 14는 착수 시점에 이
