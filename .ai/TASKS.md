@@ -2134,7 +2134,7 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
 |---|---|---|
 | M6-T01 | `ManagedEngineRuntime` 다중 Adapter 등록 지원(`register_engine`의 "정확히 1개" 제한 해제, name 기준 dict 저장, `required_capabilities` 만족 후보 중 선택) — **완료** | M5 Review 이월 갭 #1 |
 | M6-T02 | `LLMProvider` → Engine Capability 태그 매핑 + `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가 `llm_policy_decision`을 `required_capabilities`로 변환해 `engine_runtime.run()`에 전달 — **완료** | RULES §7 M4 단계(자동 선택) |
-| M6-T03 | 다중 Adapter 조립 + End-to-End 검증(정책에 따라 실제로 다른 Adapter가 선택·실행됨을 통합 테스트로 증명) | Milestone DoD |
+| M6-T03 | 다중 Adapter 조립 + End-to-End 검증(정책에 따라 실제로 다른 Adapter가 선택·실행됨을 통합 테스트로 증명) — **완료** | Milestone DoD |
 | M6-T04 | Milestone 6 Review | 관례 |
 
 **Architecture Review(사전 검토, 착수 전)**:
@@ -2181,7 +2181,8 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
    확정 참고).
 
 **상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). M6-T01/M6-T02 완료, 다음 Task는 M6-T03.
+사용자 확정). M6-T01/M6-T02/M6-T03 완료, 다음 Task는 M6-T04(Milestone
+Review).
 
 #### M6-T01: `ManagedEngineRuntime` 다중 Adapter 등록 지원
 - 목적: `EngineRuntime` 인터페이스가 이미 계약해 둔 "다중 엔진 등록·
@@ -2255,6 +2256,45 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
   무변경이므로 최소 갱신). 실제로 여러 Adapter를 등록해 이 라우팅이
   End-to-End로 동작하는지 증명하는 것은 M6-T03 범위.
 - 의존성: M6-T01
+
+#### M6-T03: 다중 Adapter 조립 + End-to-End 검증
+- 목적: M6-T01(다중 등록)/M6-T02(Provider→Capability 매핑·Agent 라우팅)이
+  실제로 하나의 파이프라인 안에서 맞물려 동작하는지 End-to-End로
+  증명한다 — Milestone DoD 1번의 직접적인 검증 대상.
+- 작업 내용: `tests/integration/test_m6_policy_routing.py` 신규.
+  `ManagedEngineRuntime`에 `ClaudeCodeEngineAdapter`+`CLIEngineAdapter`
+  (`CodexProvider`)+`CLIEngineAdapter`(`GeminiCliProvider`) 3개를 각각
+  `"claude_code"`/`"codex"`/`"gemini"` 이름으로 동시 등록하고, 저장소의
+  실제 `docs/llm_policy.example.yaml`을 로드한 진짜
+  `InMemoryLLMPolicyEngine`을 `AgentRuntime`에 주입해 전체 6-Agent
+  파이프라인(Planning→Coding→Shell→Coordinator→Review→Documentation)을
+  조립했다. 세 Adapter 모두 실제 CLI 프로세스 대신 `SwitchingFakeProcessRunner`
+  (신규 테스트 더블)를 공유 주입받는다 — `command[0]`(실행 파일 이름)에
+  따라 다른 stdout을 반환해, 여러 어댑터가 하나의 ProcessRunner를
+  공유해도 실제로 어느 CLI가 호출됐는지 구분할 수 있게 했다.
+- 완료 조건(DoD): 기존 파이프라인(M5-T06 DoD)이 다중 Adapter 등록 상태에서도
+  회귀 없이 완주(Task DONE, 6개 Event 타입 전부 발행). `docs/
+  llm_policy.example.yaml`의 실제 정책(coding→anthropic, reviewer→
+  openai, documentation→google)에 따라 Coding/Review/Documentation이
+  각각 claude/codex/gemini CLI 명령을 실제로 조립해 호출했음이
+  `command[0]` 기준으로 증명됨. Engine 실행 결과(`output`)가 올바른
+  Adapter의 응답으로 Event payload까지 그대로 흘러감. `pytest`/`ruff`/
+  `mypy` 통과.
+- 상태: **DONE (2026-07-26)** — 테스트 4개 추가:
+  `test_full_pipeline_completes_with_multiple_registered_adapters`(회귀
+  없음 확인 — `ManagedEngineRuntime`은 `InMemoryEngineRuntime`(T2-05)과
+  달리 `engine_task_started`/`engine_task_completed` 자체 Event도
+  발행하므로 Event 타입 비교를 정확히 일치가 아니라 부분집합 포함으로
+  조정), `test_policy_routes_each_role_to_distinct_registered_engine_adapter`
+  (claude/codex/gemini 3개 CLI가 각각 정확히 1번씩 호출됨을 증명),
+  `test_coding_agent_result_reflects_claude_code_adapter_output`/
+  `test_review_agent_result_reflects_codex_adapter_output`(선택된
+  Adapter의 실제 실행 결과가 Event payload까지 정확히 전달됨을 증명).
+  `pytest` 416개(M6-T02 종료 시점 412개 + 신규 4개) 전부 통과, `ruff
+  check src tests`/`mypy src` 클린. Codex/Gemini CLI 실제 바이너리
+  검증, `ClaudeCodeEngineAdapter`/`CLIEngineAdapter` 프레임워크 통합은
+  이번 Milestone 범위 밖으로 확정된 대로 손대지 않았다.
+- 의존성: M6-T01, M6-T02
 
 ---
 

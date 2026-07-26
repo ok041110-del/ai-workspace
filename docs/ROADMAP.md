@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.13.0 |
 | 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1~5 완료, v0.5.0 아키텍처 기준선 선언, Milestone 6 목표/Task List/DoD 확정 — 착수 대기) |
+| 상태 | Draft (Milestone 1~5 완료, v0.5.0 아키텍처 기준선 선언, Milestone 6 구현 완료 — Milestone Review 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -49,7 +49,7 @@ Roadmap
 | M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Engine Runtime & Engine Adapter(Claude Code 우선) 구현 | **완료 (2026-07-25 사용자 승인)** — Interaction Layer·Coding Agent 실제 경로 통합은 M4로 공식 이관 |
 | M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | **완료 (2026-07-26 사용자 승인)** — v0.5.0 아키텍처 기준선 선언(ADR-0024) |
 | M5. 실제 개발 수행 (Real Development Execution) | LLM Policy Engine, DevelopmentContext+Agent 강화, ShellAgent, Multi-Engine(Codex/Gemini), Workflow 조건부 분기 | **완료 (2026-07-26 사용자 승인)** |
-| M6. Policy 기반 실행 라우팅 (Policy-Driven Engine Routing) | `LLMPolicyDecision`에 따라 실제 등록된 `EngineAdapter`(Claude Code/Codex/Gemini CLI)를 자동 선택해 실행 — RULES §7 로드맵의 "Policy Engine 자동 선택" 단계 완성 | **계획 확정 (2026-07-26) — 착수 대기** |
+| M6. Policy 기반 실행 라우팅 (Policy-Driven Engine Routing) | `LLMPolicyDecision`에 따라 실제 등록된 `EngineAdapter`(Claude Code/Codex/Gemini CLI)를 자동 선택해 실행 — RULES §7 로드맵의 "Policy Engine 자동 선택" 단계 완성 | **구현 완료 (2026-07-26) — Milestone Review 대기** |
 
 ---
 
@@ -315,13 +315,14 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
 
 | Task | 내용 | 근거/출처 |
 |---|---|---|
-| M6-T01 | `ManagedEngineRuntime` 다중 Adapter 등록 지원 | M5 Review 이월 갭 #1 |
-| M6-T02 | `LLMProvider` → Engine Capability 매핑 + Agent 3종(Coding/Review/Documentation) 라우팅 반영 | RULES §7 M4 단계(자동 선택) |
-| M6-T03 | 다중 Adapter 조립 + End-to-End 검증 | Milestone DoD |
+| M6-T01 | `ManagedEngineRuntime` 다중 Adapter 등록 지원 — **완료** | M5 Review 이월 갭 #1 |
+| M6-T02 | `LLMProvider` → Engine Capability 매핑 + Agent 3종(Coding/Review/Documentation) 라우팅 반영 — **완료** | RULES §7 M4 단계(자동 선택) |
+| M6-T03 | 다중 Adapter 조립 + End-to-End 검증 — **완료** | Milestone DoD |
 | M6-T04 | Milestone 6 Review | 관례 |
 
-**진행 상태**: 목표/DoD/Task List/사전 Architecture Review 확정
-(2026-07-26 사용자 확정). 착수 대기 — 다음은 `T6-01`부터 착수.
+**진행 상태**: M6-T01~T03 전체 완료(2026-07-26). Milestone DoD 1~4번
+충족 확인됨(5번은 범위 제외 확정 그대로 유지). 다음은 `M6-T04`(Milestone
+Review).
 
 ---
 
