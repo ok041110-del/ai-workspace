@@ -2732,6 +2732,100 @@ Development 원칙, M2~M7이 그래왔듯).
 
 ---
 
+## Milestone 8 — 세션 연속성 (Session Continuity)
+
+**목표**: M7 Review에서 새로 드러난 갭을 해소한다 — `WorkspaceSession.
+memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새 엔진
+호출 시 관련 메모리를 불러와 컨텍스트로 제공")가 요구하는 "자동 이어받기"
+가 아직 수동(직접 검색/명시적 지정)으로만 가능하다. M8은 이를 완성한다.
+
+**Analysis 요약(Repository-Analysis 결과)**:
+- `WorkspaceCore.update_session()`은 이미 `memory_snapshot_id`를 갱신하는
+  파라미터를 갖고 있지만(T1-22부터 존재), 파이프라인의 어떤 Agent도 이를
+  호출하지 않는다 — `DocumentationAgent`는 `create_snapshot()`의 반환값
+  (snapshot_id)을 여전히 버린다.
+- `MemoryEngine.search()`/`ContextManager.find_snapshots()`(M4-T08)는
+  "일치하는 모든 snapshot_id"를 반환할 뿐 **정렬 순서를 계약하지 않는다**
+  (`interfaces/memory_engine.py` 계약 문서에 명시) — "가장 최근 것"을
+  안정적으로 찾으려면 별도의 "project별 최신 snapshot 포인터"가 필요하다.
+- **아키텍처 상 중요한 발견**: `docs/ARCHITECTURE.md` §8 규칙 7("Memory
+  접근은 Agent → Context Manager → Memory Engine 순서로만")에 따라
+  **Workspace Core는 Context Manager에 의존할 수 없다** — `WorkspaceCore.
+  start_session()`이 새 세션 생성 시 자동으로 `memory_snapshot_id`를
+  채우게 하려면 이 규칙을 어겨야 한다. 대신 **Agent 계층(Rule 5: Agent →
+  Context Manager)에서 해결**하면 기존 의존성 규칙을 전혀 건드리지 않고도
+  같은 효과를 낼 수 있다 — `PlanningAgent`(파이프라인 진입점)가 Mission
+  시작 시 `context_manager`를 통해 최신 snapshot을 복원하면 된다.
+
+**Task List**(2026-07-26 확정, 상세 스펙은 각 Task 착수 시점에 이 문서에 추가)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M8-T01 | `ContextManager`에 `latest_snapshot_id(project_id)` 신규 메서드 추가(계약+구현) — project별 최신 snapshot 포인터 | M7 Review 이월 갭 |
+| M8-T02 | `DocumentationAgent`가 Mission 종료 시 `workspace_session.memory_snapshot_id`를 새 snapshot_id로 갱신 | Milestone DoD |
+| M8-T03 | `PlanningAgent`가 Mission 시작 시 `memory_snapshot_id`가 없으면 `latest_snapshot_id(project_id)`로 자동 복원 | Milestone DoD |
+| M8-T04 | End-to-End 검증(같은 세션 내 연속 Mission + 새 세션에서도 이전 요약을 자동으로 이어받음을 증명) | Milestone DoD |
+| M8-T05 | Milestone 8 Review | 관례 |
+
+**Architecture Review(사전 검토, 착수 전)**:
+- **컴포넌트 경계**: `ContextManager`(§3.8)에 메서드 1개 추가(새 Interface
+  아님). `PlanningAgent`/`DocumentationAgent`(§3.6) 내부 변경. `WorkspaceCore`
+  (§3.3)·`MemoryEngine` 계약은 변경 없음.
+  `PlanningAgent`가 `workspace_session`/`context_manager`를 신규
+  생성자 의존성으로 받는다(§8 Rule 5 "Agent는 Context Manager에
+  의존"이 이미 허용) — 지금까지 Planning/Coding/Review 3개 Agent는
+  Session/ContextManager를 몰랐고 `DocumentationAgent`만 알고 있었는데,
+  이번에 `PlanningAgent`도 알게 된다.
+- **의존성 방향(DIP)**: `WorkspaceCore`는 여전히 Context Manager를
+  전혀 모른다(§8 Rule 3·7 무변경, ADR 추가 불필요) — "세션 연속성"을
+  Workspace Core가 아니라 Agent 계층(Rule 5)에서 해결하는 설계 선택이
+  핵심이다.
+- **SRP 점검**: `PlanningAgent`에 "이어받기" 책임이 추가되는 것이 단일
+  책임 원칙에 어긋나는지 검토했다 — Mission을 시작하기 전에 이전
+  컨텍스트를 복원하는 것은 "Mission 계획"이라는 책임의 자연스러운
+  선행 조건이며, 이를 위해 별도 Agent(예: SessionContinuityAgent)를
+  새로 만드는 것은 지금 필요성이 증명되지 않은 과잉 설계(YAGNI 위반)로
+  판단해 배제한다.
+- **Interface First**: `ContextManager`에 메서드 1개 추가(M4-T08의
+  `search`/`find_snapshots` 추가, M5-T06의 `record_step`/`get_steps`
+  추가와 같은 패턴 — 필요성이 실제로 증명된 뒤 계약에 추가). `MemoryEngine`
+  인터페이스는 기존 `remember`/`recall`만으로 충분해 변경하지 않는다
+  (project별 포인터는 `ContextManager`가 내부적으로 `remember(f"...
+  {project_id}", snapshot_id)` 패턴으로 구현 — 이미 쓰던 방식 재사용).
+- **YAGNI 점검**: 여러 세션이 동시에 같은 project_id로 경쟁하는 상황의
+  동시성 안전은 다루지 않는다(현재 시스템에 검증된 동시 다중 세션
+  시나리오가 없음, 순차 실행 가정 유지) — 명시적 "세션 리셋" 옵션(항상
+  이어받지 않고 사용자가 새로 시작하고 싶은 경우)도 필요성이 증명되지
+  않아 만들지 않는다.
+- **리스크**: (1) 동시성 경쟁 조건은 명시적으로 범위 밖(위 YAGNI 참고).
+  (2) 지금은 Mission이 시작될 때마다 항상 최신 요약을 이어받는데, 이
+  동작이 항상 바람직한지(예: 완전히 새로운 작업을 시작하고 싶은 경우)는
+  검증되지 않았다 — 다음 Milestone에서 필요성이 드러나면 재검토.
+
+**Definition of Done**
+1. `ContextManager.latest_snapshot_id(project_id)`가 그 project_id로
+   가장 최근에 생성된 snapshot_id를 반환(없으면 `None`)한다.
+2. `DocumentationAgent`가 매 Mission 종료 시 `workspace_session.
+   memory_snapshot_id`를 새로 생성된 snapshot_id로 갱신한다.
+3. `PlanningAgent`가 `plan_mission()` 호출 시 `workspace_session.
+   memory_snapshot_id`가 비어 있으면 `latest_snapshot_id(project_id)`로
+   자동 복원한 뒤 Mission을 시작한다.
+4. 같은 세션에서 두 번째 Mission을 실행하면 첫 번째 Mission이 만든
+   요약이 `assemble_context()`에 자동으로 포함됨이 통합 테스트로
+   증명된다. 별도의 새 `WorkspaceSession`(같은 project_id,
+   `memory_snapshot_id=None`)으로도 이전 요약을 자동으로 이어받음이
+   증명된다("세션 연속성"의 핵심).
+5. `WorkspaceCore`/`MemoryEngine` 인터페이스는 변경되지 않는다(§8
+   의존성 규칙 3·7 유지, ADR 추가 불필요).
+6. 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린.
+7. 동시성 경쟁 조건 안전, 명시적 세션 리셋 옵션, Model/Effort 수준
+   라우팅, Adapter 계열 통합 등은 이번 Milestone 범위 밖으로 유지된다.
+
+**상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
+사용자 확정). 착수 대기 — 다음 Task는 M8-T01.
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |
