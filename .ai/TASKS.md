@@ -3060,6 +3060,205 @@ Milestone 9는 착수 시점에 이 문서에 목표/DoD/Task List를 새로 정
 
 ---
 
+## Milestone 9 — 세션 견고성 (Session Robustness)
+
+**목표**: M8 Review가 명시적으로 범위 밖에 둔 두 갭 — 세션 리셋 옵션 없음,
+동시 Project Session 경쟁 조건 — 을 해소한다. M8 Review가 제시한 3개 후보
+(Model/Effort 라우팅, 세션 견고성, Adapter 계열 통합) 중 **세션 견고성**을
+선택했다 — Interface 변경이 필요 없어 M9 하나로 완결 가능하고, 외부 CLI
+바이너리 의존이 없다(2026-07-26 사용자 확정, 설계 검토 대화 참고).
+
+**Task List**
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M9-T01 | 동시 Project Session 시나리오 조사(설계 검토) — **완료, 조치 불필요로 종결** | M8 Review 이월 갭 |
+| M9-T02 | (M9-T01 결과에 따라 조건부) 동시성 경쟁 조건 해소 — **스킵(M9-T01에서 불필요 확인)** | M8 Review 이월 갭 |
+| M9-T03 | `PlanningAgent` 세션 리셋 옵션(`reset=True`) — **완료** | M8 Review 이월 갭 |
+| M9-T04 | End-to-End 검증 — **완료** | Milestone DoD |
+| M9-T05 | Milestone 9 Review — 본 절 | 관례 |
+
+**진행 상태**: M9-T01(조사, 불필요로 종결)~M9-T04(검증) 완료. M9-T05(본
+Review)로 Milestone을 마감한다.
+
+#### M9-T01: 동시 Project Session 시나리오 조사
+- 목적: `InMemoryContextManager._latest_snapshot_by_project`가 락 없는
+  plain dict인 것이 실제로 문제가 되는 지원 시나리오가 있는지 확인한다.
+  없다면 락을 추가하는 것 자체가 존재하지 않는 문제를 위한 과설계
+  (YAGNI 위반)다.
+- 작업 내용: `WorkspaceCore`/CLI/Agent 파이프라인 전체에서 같은
+  `project_id`로 두 Mission이 실제로 동시 실행될 수 있는 경로가 있는지
+  추적.
+- 조사 결과(**조치 불필요로 종결**, M2 Event ID 부채 처리와 동일 패턴):
+  1. `cli/main.py`에는 Mission을 시작하는 명령이 아예 없다
+     (`project create/show/list`뿐) — `PlanningAgent.plan_mission()`은
+     현재 테스트 코드에서만 호출된다.
+  2. `InMemoryEventBus.publish()`(`events/event_bus.py`)는 완전히
+     동기(synchronous)다 — 구독자를 같은 스레드에서 순차 호출한다.
+     Planning→Coding→Shell→Coordinator→Review→Documentation 전체
+     체인이 한 스레드의 한 호출 스택 안에서 끝난다.
+  3. 저장소 전체에서 유일한 스레딩은 `ManagedEngineRuntime`의 per-Task
+     timeout 스레드와 `run_parallel()`의 `ThreadPoolExecutor`(M4-T06)뿐이며,
+     둘 다 `EngineAdapter`/`Task` 실행 층위에서만 동작하고
+     `ContextManager`/`WorkspaceSession`은 전혀 건드리지 않는다.
+  4. 따라서 `InMemoryContextManager._latest_snapshot_by_project`에
+     두 스레드가 동시에 쓰는 경로가 현재 코드베이스에 **존재하지
+     않는다** — "동시 Project Session 경쟁 조건"은 아직 시스템이
+     지원하지 않는 시나리오(동시 Mission 실행 자체가 진입점이 없음)에
+     대한 이론적 우려였다.
+- 결론: 코드 변경 없이 이 갭을 조사 완료로 종결한다. 향후 동시 Mission
+  실행 진입점(예: 병렬 CLI 호출, 웹 API)이 실제로 추가되는 시점에
+  재검토한다.
+- 상태: **DONE (2026-07-26)**
+
+#### M9-T02: 동시성 경쟁 조건 해소
+- M9-T01 조사 결과 실제 재현 경로가 없어 **스킵**한다. Technical Debt로
+  남기지 않는다 — "문제가 없음"이 조사의 정당한 결론이다.
+- 상태: **SKIPPED (M9-T01 결과에 따름)**
+
+#### M9-T03: `PlanningAgent` 세션 리셋 옵션
+- 목적: 사용자가 이전 세션 요약을 이어받지 않고 완전히 새로 시작할 수
+  있게 한다(M8 Review §5 "명시적 세션 리셋 옵션 없음").
+- 작업 내용: `plan_mission()`에 `reset: bool = False` 키워드 전용
+  파라미터 추가. `reset=True`면 M8-T03의 자동 복원(`memory_snapshot_id`가
+  비어 있을 때 `latest_snapshot_id()`로 채우는 로직)을 건너뛴다. 기본값
+  `False`로 기존 M8 동작과 완전히 하위 호환. 같은 세션에 이미 있는
+  `memory_snapshot_id`(이어지는 Mission)는 건드리지 않는다 — 이번 갭과
+  다른 문제라 범위에 포함하지 않는다(범위를 좁게 유지, YAGNI).
+- 완료 조건(DoD): `reset=True` → 새 세션이 이전 프로젝트 요약을 이어받지
+  않음, `reset=False`(기본) → 기존 M8 동작 그대로, 기존 + 신규 테스트
+  전부 통과.
+- 상태: **DONE (2026-07-26)** — `agents/planning_agent.py` 3줄 변경
+  (파라미터 추가 + 가드 조건에 `not reset` 추가). 새 Interface/기존
+  Interface 변경 없음(`PlanningAgent`는 구체 클래스). CLI에 `--reset`
+  플래그로 노출하는 것은 이번 범위에서 제외했다 — 현재 CLI가 Mission
+  시작 자체를 노출하지 않아(M4-T02 범위), Agent 계층 기능부터 갖추고
+  CLI 노출은 실제 필요성이 확인되면 별도로 다룬다(YAGNI, 사용자 승인).
+  `tests/agents/test_planning_agent.py`에 2개 신규 테스트
+  (`test_plan_mission_with_reset_skips_snapshot_restoration`,
+  `test_plan_mission_reset_does_not_clear_existing_snapshot_id` — 범위
+  경계를 명시적으로 검증).
+
+#### M9-T04: End-to-End 검증
+- 목적: 리셋 옵션이 전체 파이프라인에서도 올바르게 동작함을 증명한다
+  (M6~M8과 동일 패턴).
+- 작업 내용: `tests/agents/test_pipeline.py`에
+  `test_reset_mission_does_not_inherit_previous_session_summary` 추가 —
+  첫 세션이 요약을 만든 뒤, 완전히 새로운 `WorkspaceSession`이
+  `reset=True`로 Mission을 시작하면 그 요약을 이어받지 않음을
+  `test_new_session_inherits_previous_session_summary_via_planning_agent`
+  (reset 없음, 자동 복원됨)와 대비해 검증.
+- 완료 조건(DoD): 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린.
+- 상태: **DONE (2026-07-26)** — `pytest`: **445개 전부 통과**(M8 완료
+  시점 442개 → M9에서 3개 신규: M9-T03 +2, M9-T04 +1). `ruff check src
+  tests`: 클린. `mypy src`: 클린(82개 소스 파일, 신규 소스 파일 0개).
+
+---
+
+## Milestone 9 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | 동시 Project Session 시나리오가 실제 재현 가능한지 조사·결론 | ✅ (M9-T01, 조치 불필요로 종결) |
+| 2 | `PlanningAgent.plan_mission(reset=True)`가 새 세션의 자동 복원을 건너뜀 | ✅ (M9-T03) |
+| 3 | `reset=False`(기본값)는 기존 M8 동작과 완전히 하위 호환 | ✅ (M9-T03) |
+| 4 | End-to-End로 리셋 시나리오가 전체 파이프라인에서 검증됨 | ✅ (M9-T04) |
+| 5 | `WorkspaceCore`/`ContextManager`/`MemoryEngine` 인터페이스 변경 없음 | ✅ (아래 3절) |
+| 6 | 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린 | ✅ (아래 4절) |
+
+Task List(M9-T01·T03·T04) 완료, M9-T02는 M9-T01 조사 결과에 따라
+스킵했다. M9-T05(본 Review)로 Milestone을 마감한다.
+
+**2. Architecture Review**
+
+M9에서 실제로 바뀐 구조는 **`PlanningAgent` 1곳뿐**이다 — `plan_mission()`
+시그니처에 키워드 전용 `reset: bool = False`를 추가하고 자동 복원 가드에
+`not reset` 조건을 더한 것이 전부다(`agents/planning_agent.py`). M8-T03이
+확정한 "세션 연속성은 Workspace Core가 아니라 Agent 계층(PlanningAgent)
+에서 해결한다"는 결정을 그대로 따랐다 — `WorkspaceCore.start_session()`
+은 이번에도 손대지 않았다. `ContextManager`/`MemoryEngine`도 무변경이다.
+
+M9-T01(조사)은 코드 변경이 없는 설계 검토 Task였다 — 조사 결과 "동시
+Mission 실행" 자체가 현재 시스템에 진입점이 없는(CLI에 Mission 시작
+명령 없음, `InMemoryEventBus.publish()`가 완전 동기) 시나리오임을
+확인하고, 존재하지 않는 문제를 위한 락 도입을 하지 않기로 한 것이
+M9-T01의 "구현"이다. 이는 §4.2 Simplicity First의 "실제 문제를
+해결하는가?" 자문 질문을 그대로 적용한 사례다.
+
+`git diff --stat`(M8 종료 커밋 대비)로 확인한 결과 **소스 파일 1개만
+수정**(`agents/planning_agent.py`, 문서 제외), 신규 소스 파일 0개 —
+M6(5개)·M8(4개)보다도 좁은 범위였다. `docs/ARCHITECTURE.md` §3.6은
+M9-T03 완료 시점에 즉시 갱신되어 구현과 문서 사이 괴리가 없다.
+
+**3. Interface First 원칙 검토**
+
+**M9는 새 최상위 Interface를 0개 추가했다**(M2/M3/M4/M6/M7/M8과 동일
+패턴, M5만 예외). `PlanningAgent.plan_mission()`은 Interface 메서드가
+아니라 구체 클래스의 공개 메서드이므로, 키워드 전용 파라미터를 기본값과
+함께 추가하는 것은 기존 호출자(`plan_mission("p1", "제목")` 형태)를 전혀
+깨지 않는다 — 이번 변경은 Interface 계약과 무관하다.
+
+**4. 테스트 결과**
+
+- `pytest`: **445개 전부 통과**(M8 완료 시점 442개 → M9에서 3개 신규)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(82개 소스 파일)
+- M8 완료 커밋 대비 소스 1개 파일 수정(신규 소스 파일 0개), 테스트
+  2개 파일 수정(신규 테스트 파일 0개)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M9에서 조사 후 "조치 불필요"로 종결한 것*
+- 동시 Project Session 경쟁 조건 — M9-T01 참고. 향후 동시 Mission 실행
+  진입점이 실제로 추가되면 재검토.
+
+*M9에서 의도적으로 범위를 좁힌 것*
+- CLI `--reset` 플래그 미노출 — 현재 CLI가 Mission 시작 자체를 노출하지
+  않아 Agent 계층 기능만 갖춤(M9-T03 참고). CLI에서 Mission을 시작하는
+  기능이 생기는 시점에 함께 재검토.
+
+*계속 이월되는 기존 항목*
+- Model/Effort 수준 라우팅(M6 Review 이월, 여전히 미착수)
+- Adapter 계열 통합(`ClaudeCodeEngineAdapter`↔`CLIEngineAdapter`),
+  Codex/Gemini CLI 실제 바이너리 재검증
+- `run_parallel` 개별 Task 재시도 미지원(M4-T06), `MemoryEngine.search()`
+  선형 스캔(M4-T08), Retry Backoff/Persistent Runtime Recovery/Approval
+  비동기 처리/Process Timeout 정책 고도화(M3-T08), `ShellAgent`
+  화이트리스트가 코드에 고정(M5-T04)
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M9-T01~T04 상세 섹션) / `docs/ROADMAP.md`(M9
+Task List·Milestone 개요 반영) / `docs/ARCHITECTURE.md`(§3.6 M9-T03
+완료 시점에 이미 갱신됨) 완료. `pyproject.toml` 버전은 v0.5.0 그대로
+유지한다(구조적 기준선은 그대로, M9도 그 위에 좁은 기능 하나를 얹은
+것). `.ai/MEMORY.md`는 이 Review 승인 직후 M1~M8과 동일한 방식으로
+압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 소스 1개
+파일 수정·신규 파일 0개, Workspace Core/ContextManager 무변경 원칙
+재확인), Interface First 검토 완료(3절, 새 Interface 0개), 테스트 결과
+문서화 완료(4절), Technical Debt 정리 완료(5절, 동시성 조사 결론을
+투명하게 명시), 문서 갱신 완료(6절) — 6개 조건 모두 만족. Review 중
+코드 변경이 필요한 치명적 문제(버그·계약 위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 9 Completed를 선언한다.**
+
+**Milestone 10 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
+M9 착수 전 설계 검토에서 논의된 나머지 두 후보 — (1) Model/Effort 수준
+라우팅(Interface 변경 여부부터 설계 검토 필요), (2) Adapter 계열 통합 +
+Codex/Gemini CLI 실기기 검증(외부 바이너리 설치 환경 필요) — 이 유력한
+다음 논의 대상이지만, 이는 사전 논의 없이 확정된 것이 아니며 Milestone 10은
+착수 시점에 이 문서에 목표/DoD/Task List를 새로 정의한다(Task Driven
+Development 원칙, M2~M9가 그래왔듯).
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |
