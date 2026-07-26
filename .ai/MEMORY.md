@@ -280,6 +280,51 @@
   라우팅, Adapter 계열 통합, Codex/Gemini CLI 실검증, `run_parallel`
   개별 재시도, `MemoryEngine.search` 성능, `ShellAgent` 화이트리스트
   고정)는 사용자 확정대로 전부 그대로 이월.
+- **Milestone 8(세션 연속성) 완료 — 2026-07-26 사용자 승인.** 목표는 M7
+  Review가 이월한 갭 — `WorkspaceSession.memory_snapshot_id`가 자동
+  갱신되지 않아 PRD 7.4 "자동 이어받기"가 수동으로만 가능하던 것을
+  완성. 핵심 설계 결정: §8 규칙 7("Memory 접근은 Agent → Context
+  Manager → Memory Engine")에 따라 **Workspace Core는 건드리지 않고
+  Agent 계층(PlanningAgent)에서 해결**. `ContextManager.
+  latest_snapshot_id(project_id)`(M8-T01, MemoryEngine을 거치지 않고
+  Context Manager 내부 dict로만 관리 — search() substring 오염 방지) →
+  `DocumentationAgent`가 `create_snapshot()` 반환값을
+  `workspace_session.memory_snapshot_id`에 되먹임(M8-T02) →
+  `PlanningAgent`가 Mission 시작 시 비어 있으면 자동 복원(M8-T03,
+  이미 값 있으면 덮어쓰지 않음). **소스 파일 4개만 수정, 신규 파일
+  0개, 새 Interface 0개**(`ContextManager`에 메서드 1개만 추가). 전체
+  `pytest` 442개(M7 완료 425개 → M8에서 17개 신규) 통과, `ruff`/`mypy`
+  클린.
+  **Milestone Review 결론**(전문은 `.ai/TASKS.md` M8-T05 참고): 동시성
+  경쟁 조건(여러 세션이 동시에 같은 project_id로 Mission 실행 시
+  `latest_snapshot_id` 갱신 레이스)과 세션 리셋 옵션 없음을 **M9+ 논의
+  대상으로 명시적으로 이월**. 그 외 이월 부채(Model/Effort 라우팅,
+  Adapter 계열 통합, Codex/Gemini CLI 실검증, `run_parallel` 개별
+  재시도, `MemoryEngine.search` 성능, `ShellAgent` 화이트리스트 고정)는
+  그대로 이월.
+- **Milestone 9(세션 견고성) 완료 — 2026-07-26 사용자 승인.** M8 Review가
+  제시한 3개 후보(Model/Effort 라우팅, 세션 견고성, Adapter 계열 통합)
+  중 Interface 변경이 필요 없고 외부 CLI 의존이 없는 **세션 견고성**을
+  선택(설계 검토 대화에서 사용자 확정). M9-T01(조사): `InMemoryContext
+  Manager._latest_snapshot_by_project`가 락 없는 dict인 것이 실제
+  문제인지 조사한 결과 — CLI에 Mission 시작 명령 자체가 없고,
+  `InMemoryEventBus.publish()`가 완전 동기이며, 유일한 스레딩
+  (`run_parallel`/timeout)이 `ContextManager`를 전혀 건드리지 않아
+  **재현 경로가 현재 코드베이스에 존재하지 않음을 확인, 조치 불필요로
+  종결**(M2 Event ID 부채와 동일 패턴 — "문제 없음"도 정당한 조사
+  결론). M9-T02(락 추가)는 이 결과에 따라 스킵. `PlanningAgent.
+  plan_mission(..., reset=True)`(M9-T03)로 세션 리셋 옵션 추가 — M8-T03
+  자동 복원을 건너뛴다. 같은 세션에 이미 있는 `memory_snapshot_id`는
+  건드리지 않아 범위를 좁게 유지. CLI `--reset` 플래그 노출은 범위
+  제외(CLI가 Mission 시작 자체를 아직 노출 안 함, YAGNI). **소스 파일
+  1개만 수정**(`agents/planning_agent.py`), 신규 파일 0개, 새 Interface
+  0개(M6~M8보다도 좁은 변경 폭). 전체 `pytest` 445개(M8 완료 442개 →
+  M9에서 3개 신규) 통과, `ruff`/`mypy` 클린.
+  **Milestone Review 결론**(전문은 `.ai/TASKS.md` M9-T05 참고): 이월
+  부채는 M8과 동일하게 유지(Model/Effort 라우팅, Adapter 계열 통합,
+  Codex/Gemini CLI 실검증, `run_parallel` 개별 재시도, `MemoryEngine.
+  search` 성능, `ShellAgent` 화이트리스트 고정) — M9는 새 부채를 남기지
+  않고 이월 항목 중 하나(세션 리셋)만 해소했다.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -446,3 +491,21 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
+- **현재 상태(2026-07-26)**: Milestone 1~9 전체 완료(사용자 승인),
+  버전 v0.5.0 유지(ADR-0024 기준선, M6~M9는 구조 변경 없이 그 위에
+  기능만 얹음). `pytest` 445개, `ruff`/`mypy` 클린. Milestone 10은
+  아직 목표/DoD/Task List 미정의(Task Driven Development 원칙).
+- **누적 Technical Debt(2026-07-26 기준, M10 착수 시 우선순위 검토
+  대상)**: (1) **Model/Effort 수준 라우팅 미완성** — M6에서 완성한 것은
+  Provider 단위뿐, `EngineAdapter.run()`이 Model/Effort를 인자로 받지
+  않아 같은 Provider 안에서도 opus/sonnet/haiku나 Effort를 실제 실행에
+  반영 못함(M6 Review 최초 이월, Interface 변경 필요 여부부터 설계
+  검토 필요). (2) `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임워크
+  미통합(M5-T05 최초 이월). (3) Codex/Gemini CLI 실제 바이너리 미검증
+  (M5-T05 최초 이월, 외부 CLI 설치 환경 필요). (4) `MemoryEngine.
+  search()` 선형 스캔(M4-T08 최초 이월, 성능). (5) `run_parallel` 개별
+  Task 재시도 미지원(M4-T06 최초 이월), Retry Backoff/Persistent
+  Runtime Recovery/Approval 비동기 처리/Process Timeout 정책 고도화
+  (M3-T08 최초 이월), `ShellAgent` 화이트리스트가 코드에 고정(M5-T04
+  최초 이월). M9-T01에서 조사 후 "조치 불필요로 종결"한 동시성 경쟁
+  조건과 M9-T03에서 해소한 세션 리셋은 더 이상 부채 목록에 없다.
