@@ -3866,7 +3866,22 @@ Task 입력으로 넘기는 것).
 - 완료 조건(DoD): 성공적으로 완주하는 경우, 중간에 실패해 중단되는
   경우 각각을 Mock/Fake `WorkflowEngine`/`EventBus`/`TaskEngine`으로
   검증하는 단위 테스트가 통과한다.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `runtime/workflow/workflow_runner.py`에
+  `WorkflowRunner`(`run(workflow) -> WorkflowRunResult`)와
+  `WorkflowRunResult`(completed_task_ids/failed_task_id/success)
+  구현. `AgentRuntime`/`AgentScheduler`는 전혀 import하지 않음(Agent가
+  아님을 코드로 증명). **구현 중 계획을 단순화하는 발견**: `EventBus.
+  publish()`는 계약상 "예외: 없음"(구독자 예외는 Bus 내부에서 격리됨,
+  `interfaces/event_bus.py`)이므로 애초 계획했던 try/except 기반 실패
+  감지는 죽은 코드가 되어 작성하지 않았다 — 실패 감지는 오직
+  `TaskEngine.get_task(task_id).status != TaskStatus.DONE` 하나로만
+  충분함을 확인(YAGNI, 불필요한 예외 처리 금지 원칙과 일치). `runtime/
+  workflow/`, `tests/runtime/workflow/` 신규 패키지.
+  `tests/runtime/workflow/test_workflow_runner.py` 3개 신규 테스트
+  (전체 완주/두 번째 Task가 DONE에 미도달 시 세 번째 Task 미실행까지
+  확인/단일 Task Workflow). `ruff check src tests`, `mypy src`,
+  `pytest`(463개, 기존 460개 + 신규 3개) 모두 통과. 다음 Task:
+  **M12-T02**(End-to-End 검증).
 - 의존성: 없음(기존 Interface만 사용).
 
 #### M12-T02: End-to-End 검증
