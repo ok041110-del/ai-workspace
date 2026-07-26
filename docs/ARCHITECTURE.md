@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.10.0 |
+| 문서 버전 | v0.11.0 |
 | 작성일 | 2026-07-25 |
 | 상태 | Draft (Milestone 1~3 완료, Milestone 4 진행 중 — ADR-0023으로 §3.4/§3.9 병렬 실행 책임 경계 명시) |
 
@@ -269,6 +269,17 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
 | `capabilities()` | 엔진 능력 목록 |
 | `supports_parallel()` | 병렬 실행 지원 여부 |
 | `estimate_cost(...)` | 실행 전 비용/토큰 추정 |
+
+**구현체 계열(M5-T05)**: `ClaudeCodeEngineAdapter`(M3-T02, Claude Code 전용,
+자체 명령 조립·파싱 보유)와 `CLIEngineAdapter`+`CLIProvider`(Codex/Gemini
+CLI 등 여러 CLI 기반 엔진이 공유하는 프레임워크 — `CLIEngineAdapter`가
+`EngineAdapter` 계약과 세션 생명주기를 담당하고, `CodexProvider`/
+`GeminiCliProvider`가 CLI별 명령 조립·결과 파싱만 다르게 구현) 두 계열이
+공존한다. `CLIProvider`는 `adapters/` 내부에서만 쓰이는 협력자로,
+`interfaces/`의 보호 자산 목록에는 포함되지 않는다(Agent/WorkspaceCore는
+`EngineAdapter`만 알고 `CLIProvider`를 알지 못함). `ClaudeCodeEngineAdapter`
+를 이 프레임워크로 통합하는 것은 의도적으로 미룸(기존 안정성 유지) —
+`CLIEngineAdapter`가 충분히 검증된 뒤 재검토(M6+).
 
 ### 3.11 Implementation Engines (외부)
 Claude Code · Codex · Gemini CLI 등.

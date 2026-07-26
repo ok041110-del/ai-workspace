@@ -258,8 +258,22 @@
   `CODE_COMPLETED`를 구독하되 `ReviewAgent` 트리거는 바꾸지 않음 —
   조건부 재작업 연결은 M5-T06으로 명시 이월. 이벤트 payload에 악의적
   문자열이 있어도 명령이 절대 바뀌지 않음을 테스트로 직접 증명(명령어
-  삽입 방지). 전체 360개 테스트 통과. 다음은 **M5-T05**(Codex/Gemini
-  CLI Engine Adapter, 가능한 범위).
+  삽입 방지). 전체 360개 테스트 통과.
+- **M5-T05 완료(2026-07-26)**: 착수 직전 사용자가 "Codex/Gemini 각각
+  구현"보다 "CLI LLM Adapter Framework + Provider" 구조를 제안(향후
+  Qwen CLI/Aider 등도 Provider 하나만 추가하면 되도록) — 채택.
+  `adapters/cli_provider.py`의 `CLIProvider`(ABC, `adapters/` 내부
+  협력자 — `interfaces/` 보호 자산 목록에는 미포함) + `adapters/
+  cli_engine_adapter.py`의 `CLIEngineAdapter` 신규. **`ClaudeCodeEngineAdapter`
+  (M3-T02)는 사용자 지시로 이번엔 리팩터링하지 않고 그대로 유지** —
+  2단계 전략: 이번엔 Codex/Gemini만 새 프레임워크 사용, Claude Code
+  통합은 프레임워크가 검증된 뒤 M6+로 이월(두 어댑터 사이 로직 중복을
+  의도적으로 감수). `codex`/`gemini` CLI가 이 환경에 설치되어 있지
+  않아(`command not found` 확인) 실제 검증 불가 — WebSearch로 공개
+  문서를 조사해 `CodexProvider`/`GeminiCliProvider` 구성, 두 클래스
+  docstring에 "미검증 경고"를 명시. 전부 Fake 기반 테스트라 실제 CLI
+  없이도 안전하게 통과. 전체 380개 테스트 통과. 다음은 **M5-T06**
+  (Workflow 조건부 분기 + `Step` Domain 반영).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

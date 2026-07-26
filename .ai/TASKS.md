@@ -1853,6 +1853,49 @@ Event ID 생성 방식 불일치(M2 이월 부채 #3)를 정리하려 `src/ai_wo
   신규 7개) 모두 통과.
 - 의존성: M3-T03, T2-06
 
+#### M5-T05: Codex/Gemini CLI Engine Adapter (가능한 범위)
+- 목적: Multi-Engine 지원(PRD 7.8)을 향해 Codex/Gemini CLI를 실제로
+  호출할 수 있는 Adapter를 추가한다.
+- 작업 내용: `CLIEngineAdapter`+`CLIProvider` 프레임워크 신규(사용자
+  제안 — 향후 Qwen CLI/Aider 등 추가 시 Provider 하나만 등록하면 되도록
+  확장 가능한 구조), `CodexProvider`/`GeminiCliProvider` 구현.
+- 완료 조건(DoD): `EngineAdapter` 계약 충족(Fake 기반 단위 테스트),
+  실제 CLI 미설치 상태에서도 안전하게 테스트 가능, `pytest`/`ruff`/
+  `mypy` 통과. `ClaudeCodeEngineAdapter` 리팩터링은 범위 밖.
+- 상태: **DONE (2026-07-26)** — **범위 확정 경위**: 원래 계획은
+  "Codex/Gemini Adapter 각각 구현"이었으나, 사용자가 착수 직전 "CLI
+  LLM Adapter Framework(공통) + Provider(개별)" 구조를 제안 — 향후
+  Qwen CLI/OpenCode/Aider 등이 추가되어도 Task 없이 Provider 하나만
+  등록하면 되는 확장성을 근거로 채택. **`ClaudeCodeEngineAdapter`(M3-T02,
+  이미 M3/M4/M5 여러 통합 테스트에서 사용 중)는 사용자 지시로 이번에
+  리팩터링하지 않고 그대로 유지** — 2단계 전략으로 확정: 이번 Task는
+  Codex/Gemini만 새 프레임워크로 구현하고, Claude Code까지 통합하는
+  것은 프레임워크가 충분히 검증된 뒤 M6+로 이월. **CLI 미설치로 인한
+  미검증 명시**: 이 환경에 `codex`/`gemini` CLI가 설치되어 있지 않아
+  (`command not found` 확인) M3-T02처럼 `--help`나 실제 호출로 검증할
+  방법이 없었음 — WebSearch로 공개 문서(OpenAI Developers `codex exec`/
+  Non-interactive mode, Gemini CLI Headless Mode/Configuration, 모두
+  2026-07 기준)를 조사해 구성했고, 두 Provider의 docstring에 "미검증
+  경고"와 근거 문서를 명시해 향후 실제 CLI 확보 시 재확인이 필요함을
+  분명히 함. `adapters/cli_provider.py`의 `CLIProvider`(ABC, `adapters/`
+  내부 협력자 — `interfaces/`의 보호 자산 목록에는 포함하지 않음,
+  Agent/WorkspaceCore는 이를 모르고 `EngineAdapter`만 상대함) +
+  `adapters/cli_engine_adapter.py`의 `CLIEngineAdapter`(`EngineAdapter`
+  구현체, 세션 생명주기·Timeout·Cancel 로직은 `ClaudeCodeEngineAdapter`
+  와 동일하게 검증된 패턴을 그대로 재현 — 두 어댑터 사이 일부 로직
+  중복을 의도적으로 감수함, 사용자 승인) 신규. `adapters/
+  codex_provider.py`(`codex exec ... --json --full-auto`, NDJSON 마지막
+  줄에서 텍스트 필드 추출, 실패 시 원문 폴백)/`adapters/
+  gemini_cli_provider.py`(`gemini -p ... --output-format json
+  --non-interactive --yolo`, `{"response": ...}` 파싱) 신규. `tests/
+  adapters/test_cli_engine_adapter.py`(8개, `FakeCLIProvider`+
+  `FakeProcessRunner`로 세션 생명주기·Timeout·Cancel·종단 상태 보존
+  전부 재검증) + `test_codex_provider.py`/`test_gemini_cli_provider.py`
+  (각 6개, 명령 조립·결과 파싱·폴백 검증) 신규 — 전부 Fake 기반이라
+  실제 CLI 없이도 안전하게 통과. `ruff check src tests`, `mypy src`,
+  `pytest`(380개, 기존 360개 + 신규 20개) 모두 통과.
+- 의존성: M3-T02, M3-T03
+
 ---
 
 ## 진행 로그

@@ -267,7 +267,7 @@ Review" 7절 참고).
 | M5-T02 | Agent Runtime이 `LLMPolicyEngine`을 통해 정책을 조회·기록하도록 연결 — **완료**(실제 Engine/Adapter 선택 반영은 M5-T05 이후) | RULES §7 M3 단계 소급 |
 | M5-T03 | `DevelopmentContext` 도입 + 기존 Coding/Review Agent 강화 — **완료**: Coding→Review 산출물 전달, 원본 Task 불변 | 사용자 지시 — M5 핵심 목표 |
 | M5-T04 | `ShellAgent` 신규(실제 쉘 명령 실행 능력) — **완료**: 화이트리스트 고정 명령, 명령어 삽입 방지 | 사용자 지시 — M5 핵심 목표 |
-| M5-T05 | Codex/Gemini CLI Engine Adapter(가능한 범위) | PRD 7.8 Multi-Engine 지원 |
+| M5-T05 | Codex/Gemini CLI Engine Adapter(가능한 범위) — **완료**: `CLIEngineAdapter`+`CLIProvider` 프레임워크 신규, ClaudeCodeEngineAdapter는 별도 유지(M6+ 통합 검토) | PRD 7.8 Multi-Engine 지원 |
 | M5-T06 | Workflow 조건부 분기 + 필요 범위의 `Step` Domain 반영(M2 이월 부채 #6) | PRD 7.3 갭 + M2 이월 부채 #6 |
 | M5-T07 | Milestone 5 Review | 관례 |
 
