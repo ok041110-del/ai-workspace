@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.13.0 |
+| 문서 버전 | v0.14.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~10 완료, Milestone 11 진행 중 — ADR-0025로 §3.10에 ExecutionEnvironment 추가) |
+| 상태 | Draft (Milestone 1~11 완료, Milestone 12 진행 중 — §3.12에 WorkflowRunner 추가, §3.7 Workflow Engine 책임 범위 명확화) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -244,7 +244,12 @@ Agent의 실행을 담당하는 계층.
 
 ### 3.7 Core Engines (Services)
 Task · Workflow · Approval · Automation Engine. Agent가 사용하는 능력 서비스.
-- **Workflow Engine**: Mission→Workflow→Task→Step 협업 흐름 계획/실행(§4).
+- **Workflow Engine**: Mission→Workflow→Task→Step 협업 흐름의 실행
+  **순서 계획만** 담당한다(`plan()`, side-effect 없는 순수 함수, §4).
+  **계획된 순서를 실제로 실행하는 책임은 이 Engine에 없다** — Core
+  Engine이 EventBus에 의존하면 Agent → Core Engine 의존 방향(§8)이
+  뒤집히기 때문이다. 실행은 §3.12 `WorkflowRunner`가 맡는다
+  (Milestone 12).
 - **Approval Engine**: 승인 대상 4행위 판별/차단.
 - **Automation Engine**: 조건/일정 트리거를 Workflow와 연결(bind)·발동
   (fire)한다(M4-T07). **연결 관리만** 담당하고 `WorkflowEngine`에
@@ -364,6 +369,28 @@ CLI 등 여러 CLI 기반 엔진이 공유하는 프레임워크 — `CLIEngineA
 ### 3.11 Implementation Engines (외부)
 Claude Code · Codex · Gemini CLI 등.
 
+### 3.12 Workflow Runner (Milestone 12, Workflow Automation)
+`Workflow`에 속한 여러 Task를 `WorkflowEngine.plan()`이 계산한 순서대로
+사람 개입 없이 순차 실행하는 조율자(`WorkflowRunner`). Agent도 아니고
+Core Engine도 아닌 별도 컴포넌트다.
+- **Agent가 아닌 이유**: Multi-Agent 선택/조정(ADR-0019 Coordination
+  Capability)과는 다른 관심사다 — `AgentRuntime`/`AgentScheduler`를
+  전혀 사용하지 않는다. 이번 Milestone은 의도적으로 Multi-Agent
+  선택·Routing·병렬 실행·Retry·Approval을 범위 밖에 둔다.
+- **Core Engine이 아닌 이유**: `WorkflowEngine`은 Agent보다 하위 계층
+  서비스라 EventBus를 알면 안 된다(§8). `WorkflowRunner`는 그 위에서
+  `WorkflowEngine.plan()` + `EventBus` + `TaskEngine` 세 Interface를
+  조합할 뿐인 조율자다(`EngineApprovalPipeline`, M3-T05와 같은 패턴).
+- **동작**: `plan()`이 반환한 순서대로 각 task_id에 `MissionPlanned`
+  Event를 발행한다. `EventBus.publish()`는 계약상 예외를 던지지 않으므로
+  (구독자 예외는 Bus가 내부에서 격리, §7), 실패 감지는 오직
+  `TaskEngine.get_task(task_id).status`가 `DONE`인지로만 판단한다 —
+  `DONE`에 도달하지 못하면(예: 재작업 소진) 그 자리에서 Workflow 실행을
+  중단하고 이후 Task는 실행하지 않는다.
+- **전제 조건**: `workflow.task_ids`의 모든 Task는 호출 전에 이미
+  `TaskEngine.create_task()`로 생성되어 있어야 한다 — `WorkflowRunner`
+  는 Task를 새로 만들지 않는다.
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -473,7 +500,8 @@ src/ai_workspace/
 │                       #   (구현됨, T1-22)
 ├── runtime/           # (Milestone 2 이후)
 │   ├── agent/         #   Agent Runtime: registry, scheduler, manager
-│   └── engine/        #   Engine Runtime: 선택/세션 풀/병렬
+│   ├── engine/        #   Engine Runtime: 선택/세션 풀/병렬
+│   └── workflow/      #   WorkflowRunner: Workflow 순차 자동 실행 (Milestone 12)
 ├── agents/            # 능력별 Agent 구현체 (Milestone 2 이후)
 ├── engines/           # Core Engines 구현 (Task/Workflow/Approval/Automation, Milestone 2 이후)
 ├── memory/            # Context Manager + Memory Engine 구현 (Milestone 2 이후)

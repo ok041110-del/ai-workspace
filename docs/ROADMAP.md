@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~11 완료, v0.5.0 아키텍처 기준선 선언, Milestone 12 계획 확정 — 착수 대기) |
+| 상태 | Draft (Milestone 1~11 완료, v0.5.0 아키텍처 기준선 선언, Milestone 12 구현 완료 — 사용자 승인 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -562,11 +562,13 @@ Debt 후보 제시)는 `.ai/TASKS.md`의 "Milestone 9 Review" 참고.
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M12-T01 | `WorkflowRunner` 구현 | TODO |
-| M12-T02 | End-to-End 검증 | TODO |
-| M12-T03 | 문서화 + Milestone 12 Review | TODO |
+| M12-T01 | `WorkflowRunner` 구현 | **완료** |
+| M12-T02 | End-to-End 검증 | **완료** |
+| M12-T03 | 문서화 + Milestone 12 Review | **완료** |
 
-**진행 상태**: 계획 확정, 착수 대기.
+**진행 상태**: M12-T01~T03 전체 완료. Milestone DoD 1~5번 전부 충족
+확인됨. Milestone 12 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 12
+Review" 참고) — 사용자 승인 대기.
 
 ---
 

@@ -394,6 +394,29 @@
   Adapter 계열 통합, Codex/Gemini CLI 실검증, `MemoryEngine.search`
   성능, Retry Backoff 등, `ShellAgent` 화이트리스트 고정) — M11은 새
   부채를 남기지 않았다.
+- **Milestone 12(Workflow Automation) 완료 — 문서화 완료, 사용자 승인
+  대기.** 목표는 "Workflow가 사람 개입 없이 순차적으로 Task를 실행하는
+  MVP"(Multi-Agent/Routing/병렬/Retry/Approval 범위 밖, 사용자 확정).
+  **핵심 발견**: `WorkspaceCore.start_workflow()`가 `WorkflowEngine.
+  plan()`으로 순서를 계산해왔지만, 그 순서를 실제로 실행하는 코드는
+  M1부터 지금까지 어디에도 없었다 — `plan()`은 순수 함수, Task 실행은
+  `PlanningAgent.plan_mission()`(Task 1개 생성+즉시 시작)뿐이었다.
+  `WorkflowEngine`(Core Engine)이나 새 Agent가 아니라, 기존 3개
+  Interface(`WorkflowEngine`/`EventBus`/`TaskEngine`)만 조합하는 독립
+  조율자 `runtime/workflow/workflow_runner.py`의 `WorkflowRunner`를
+  신설(M12-T01, `EngineApprovalPipeline`과 동일한 "조합형 조율자"
+  패턴). `EventBus.publish()`가 계약상 예외를 던지지 않는다는 사실을
+  재확인해(구독자 예외는 Bus 내부에서 격리), 계획했던 try/except
+  기반 실패 감지 대신 `TaskStatus.DONE` 여부만으로 단순화(불필요한
+  코드를 만들기 전에 걷어낸 사례). 실제 5-Agent 파이프라인(Coding→
+  Shell→Coordinator→Review→Documentation) 위에서 Task 2개짜리
+  Workflow가 사람 개입 없이 완주하는 시나리오와, 중간 Task가 재작업
+  소진으로 실패해 이후 Task가 아예 실행되지 않는(TODO 상태 그대로)
+  중단 시나리오를 통합 테스트로 증명(M12-T02). **신규 소스 파일 1개,
+  기존 파일 수정 0개, 새 Interface 0개**(M9 이후 가장 작은 변경 폭).
+  전체 `pytest` 465개(M11 완료 460개 → M12에서 5개 신규) 통과,
+  `ruff`/`mypy` 클린. 새 Interface가 없어 신규 ADR은 작성하지 않음.
+  이월 부채는 M11과 동일하게 유지.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -453,7 +476,10 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 - **Context Manager (ADR-0017)**: Context 조립 + Memory Snapshot 생명주기. 그 아래
   **Memory Engine은 저장/검색만**. Memory 접근은 Agent→Context Manager→Memory Engine.
 - **Core Engines(서비스)**: Task/Workflow/Approval/Automation. Memory/Automation은
-  Agent가 아니라 서비스(ADR-0012).
+  Agent가 아니라 서비스(ADR-0012). **Workflow Engine은 실행 순서
+  계획(`plan()`)만 담당** — 계획된 순서를 사람 개입 없이 실제로 순차
+  실행하는 것은 **`WorkflowRunner`**(Agent도 Core Engine도 아닌 독립
+  조율자, Milestone 12)의 책임이다.
 - **Interaction Layer**: UI 표면 입력을 표준 요청으로 정규화(ADR-0013). Voice는
   이 계층에 붙는 표면.
 - **Engine Adapter**: per-engine 세션 생명주기 계약 create_session/run/cancel/
@@ -568,11 +594,12 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-26)**: Milestone 1~11 전체 완료(사용자 승인),
-  버전 v0.5.0 유지(ADR-0024 기준선 — `ExecutionEnvironment`는 최상위
-  흐름을 바꾸지 않는 `EngineAdapter` 하위 협력자라 기준선 재선언 대상이
-  아님). `pytest` 460개, `ruff`/`mypy` 클린. Milestone 12는 아직
-  목표/DoD/Task List 미정의(Task Driven Development 원칙).
+- **현재 상태(2026-07-26)**: Milestone 1~11 완료(사용자 승인), Milestone
+  12(Workflow Automation)는 구현+문서화 완료·사용자 승인 대기. 버전
+  v0.5.0 유지(ADR-0024 기준선 — `ExecutionEnvironment`/`WorkflowRunner`
+  둘 다 최상위 흐름이나 기존 Interface 계약을 바꾸지 않는 추가라 기준선
+  재선언 대상이 아님). `pytest` 465개, `ruff`/`mypy` 클린. Milestone 13은
+  아직 목표/DoD/Task List 미정의(Task Driven Development 원칙).
 - **이 환경의 제약(2026-07-26 확인)**: `claude` CLI만 설치되어 있고
   `codex`/`gemini` CLI는 설치되어 있지 않다(`which` 확인). Codex/Gemini
   관련 Task는 이 세션에서 실행 불가 — 실제 CLI가 설치된 환경이 필요하다.

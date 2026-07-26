@@ -3844,11 +3844,11 @@ Task 입력으로 넘기는 것).
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M12-T01 | `WorkflowRunner` 구현 | TODO |
-| M12-T02 | End-to-End 검증 | TODO |
-| M12-T03 | 문서화 + Milestone 12 Review | TODO |
+| M12-T01 | `WorkflowRunner` 구현 | **완료** |
+| M12-T02 | End-to-End 검증 | **완료** |
+| M12-T03 | 문서화 + Milestone 12 Review | **완료** |
 
-**진행 상태**: 계획 확정, 착수 대기.
+**진행 상태**: M12-T01~T03 전체 완료. 아래 "Milestone 12 Review" 참고.
 
 #### M12-T01: `WorkflowRunner` 구현
 - 목적: Workflow의 Task 순차 자동 실행 책임을 가진 컴포넌트를 만든다.
@@ -3920,8 +3920,121 @@ Task 입력으로 넘기는 것).
   종류의 컴포넌트이므로 §3에 소절 신설 여부를 판단), `docs/ROADMAP.md`/
   `.ai/MEMORY.md` 갱신, 전체 테스트 결과 정리 및 제시.
 - 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `docs/ARCHITECTURE.md` v0.14.0 §3.7
+  (Workflow Engine 책임을 "계획만"으로 명확화 + §3.12 참조 추가),
+  §3.12(신규 소절 — `WorkflowRunner`가 Agent도 Core Engine도 아닌
+  이유, 동작, 전제 조건), §9(디렉터리 매핑에 `runtime/workflow/`
+  반영), 문서 헤더(버전/상태) 갱신. `docs/ROADMAP.md` Milestone 12
+  절 Task List 상태 갱신. 새 최상위 Interface를 추가하지 않아
+  (`WorkflowRunner`는 ABC가 아닌 구체 클래스) 신규 ADR은 작성하지
+  않음(M6~M10과 동일 패턴 — Task List 승인 시 이미 설계 방향까지
+  확정됨). 아래 "Milestone 12 Review" 절 참고.
 - 의존성: M12-T01~T02.
+
+---
+
+## Milestone 12 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `WorkflowRunner`가 `plan()` 순서대로 Task를 순차 실행 | ✅ (M12-T01) |
+| 2 | 앞 Task 실패 시 이후 Task 미실행·즉시 중단 | ✅ (M12-T01 단위 테스트, M12-T02 E2E) |
+| 3 | Task 2개 이상 + 의존관계 Workflow가 사람 개입 없이 완주(성공/중단 두 시나리오) | ✅ (M12-T02) |
+| 4 | 기존 `WorkflowEngine`/`EventBus`/`TaskEngine`/Agent 파이프라인 계약 무변경 | ✅ (아래 2절) |
+| 5 | 전체 `pytest`/`ruff`/`mypy` 통과 | ✅ (아래 4절) |
+
+Task List(M12-T01~T03) 전체 완료. 사용자 승인 조건("M12는 Workflow
+Automation, Multi-Agent/Routing/Parallel/Retry/Approval 제외") 그대로
+충족됨.
+
+**2. Architecture Review**
+
+- **신규 컴포넌트**: `runtime/workflow/workflow_runner.py`
+  (`WorkflowRunner`, `WorkflowRunResult`) 하나뿐. `AgentRuntime`/
+  `AgentScheduler`/`AgentCapability`를 전혀 import하지 않아 "Agent가
+  아님"이 코드로도 증명된다.
+- **변경된 기존 컴포넌트**: 소스 코드는 없음 — `docs/ARCHITECTURE.md`
+  §3.7의 `WorkflowEngine` 책임 서술("계획/실행"→"계획만")만 실제
+  계약(`plan()`이 처음부터 side-effect 없는 순수 함수로 정의돼 있었음,
+  M1)과 일치하도록 정정. 계약·시그니처는 M1부터 지금까지 한 번도
+  바뀌지 않았다.
+- **핵심 설계 결정**: `WorkflowEngine`(Core Engine)이나 신규 Agent가
+  아니라, `WorkflowEngine.plan()` + `EventBus` + `TaskEngine` 세
+  Interface를 조합하는 독립 조율자로 `WorkflowRunner`를 두었다
+  (`EngineApprovalPipeline`, M3-T05와 동일한 패턴 — "새 상태를 최소한만
+  갖는 조합형 조율자"). `EventBus.publish()`가 계약상 예외를 던지지
+  않는다는 사실(구독자 예외는 Bus 내부에서 격리, M1 계약)을 구현 중
+  재확인해, 애초 계획했던 try/except 기반 실패 감지를 걷어내고
+  `TaskStatus.DONE` 여부 하나로 단순화했다(M12-T01 "부가 발견").
+
+`git diff --stat`(M11 종료 커밋 대비)로 확인한 결과 신규 소스 파일
+1개(`workflow_runner.py`, `__init__.py` 2개는 빈 패키지 마커), 기존
+소스 파일 수정 0개 — M9(1개 수정)보다도 좁고, M1 이후 가장 작은 변경
+폭 중 하나였다.
+
+**3. Interface First 원칙 검토**
+
+**M12은 새 최상위 Interface를 추가하지 않았다**(M6/M7/M8/M9/M10과
+동일 패턴, M5/M11만 예외). `WorkflowRunner`는 기존 3개 Interface
+(`WorkflowEngine`/`EventBus`/`TaskEngine`)를 그대로 소비하는 구체
+클래스일 뿐이며, 세 Interface의 계약·시그니처는 전혀 바뀌지 않았다.
+
+**4. 테스트 결과**
+
+- `pytest`: **465개 전부 통과**(M11 완료 시점 460개 → M12에서 5개
+  신규: M12-T01 +3, M12-T02 +2)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(86개 소스 파일, 신규 1개)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M12에서 새로 발견해 즉시 반영한 것*
+- (버그 아님, 설계 단순화) `EventBus.publish()`가 예외를 던지지
+  않는다는 계약을 재확인해, 계획 단계의 try/except 기반 실패 감지를
+  실제 구현에서는 만들지 않음(M12-T01 참고) — 불필요한 코드를 미리
+  걷어낸 사례로 기록.
+
+*M12 범위 밖으로 명시적으로 제외한 것(사용자 확정, 계속 이월)*
+- Multi-Agent 선택/조정 로직 변경, Provider/Model Routing, 병렬 실행,
+  Workflow 레벨 Retry, Approval 게이트, Task 간 결과 전달.
+
+*계속 이월되는 기존 항목*
+- Model/Effort 수준 라우팅(M6 Review 최초 이월)
+- `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임워크 미통합
+- Codex/Gemini CLI 실제 바이너리 미검증(이 세션 환경엔 CLI 없음)
+- `MemoryEngine.search()` 선형 스캔
+- Retry Backoff/Persistent Runtime Recovery/Approval 비동기 처리/
+  Process Timeout 정책 고도화, `ShellAgent` 화이트리스트가 코드에 고정
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M12-T01~T03 상세 섹션) / `docs/ROADMAP.md`
+(M12 Task List·목표·DoD 반영) / `docs/ARCHITECTURE.md`(v0.14.0, §3.7/
+§3.12/§9 갱신) 완료. 새 Interface가 없어 `.ai/DECISIONS.md`에 신규
+ADR을 추가하지 않았다. `pyproject.toml` 버전은 v0.5.0 그대로 유지
+(ADR-0024 기준선 — `WorkflowRunner`는 기존 Interface만 조합하는
+구체 클래스라 기준선 재선언 대상이 아님). `.ai/MEMORY.md`는 이 Review
+승인 직후 M1~M11과 동일한 방식으로 압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 소스
+1개·수정 0개, "Core Engine/Agent가 아닌 독립 조율자" 설계 결정 명시),
+Interface First 검토 완료(3절, 새 Interface 0개), 테스트 결과 문서화
+완료(4절), Technical Debt 정리 완료(5절), 문서 갱신 완료(6절) — 6개
+조건 모두 만족. Review 중 코드 변경이 필요한 치명적 문제(버그·계약
+위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 12 Completed를 선언한다.**
+
+**Milestone 13 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
+`docs/ROADMAP.md`가 원래 그려둔 다음 단계는 M13(Multi-Agent
+Collaboration)이지만, 이는 사전 논의 없이 확정된 것이 아니며 Milestone
+13은 착수 시점에 이 문서에 목표/DoD/Task List를 새로 정의한다(Task
+Driven Development 원칙, M2~M12가 그래왔듯).
 
 ---
 
