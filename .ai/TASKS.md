@@ -3493,14 +3493,122 @@ Debt 정리 완료(5절, 재분석으로 제외한 3개 항목의 이유를 투�
 
 **사용자 승인을 조건으로 Milestone 10 Completed를 선언한다.**
 
-**Milestone 11 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
-M10 착수 전 재분석에서 확인한 후보 — (1) Model/Effort 수준 라우팅(설계
-검토부터 필요), (2) Memory 검색 성능 조사(M9-T01과 같은 "조사 우선"
-패턴, 실제 문제 없으면 조치 불필요로 종결될 수도 있음), (3) Adapter
-계열 통합/Codex·Gemini 실환경 검증(외부 도구·환경 필요) — 이 유력한
-다음 논의 대상이지만, 이는 사전 논의 없이 확정된 것이 아니며 Milestone
-11은 착수 시점에 이 문서에 목표/DoD/Task List를 새로 정의한다(Task
-Driven Development 원칙, M2~M10이 그래왔듯).
+**Milestone 11 상태**: 착수 확정. 아래 "Milestone 11" 절 참고.
+
+---
+
+## Milestone 11 — Execution Environment
+
+**목표**: `EngineAdapter`가 "무엇을 실행할지(엔진별 명령 조립·결과
+파싱)"와 "어디서 실행할지(로컬 프로세스/향후 원격 컨테이너)"를 분리하지
+못하고 있다 — `ClaudeCodeEngineAdapter`/`CLIEngineAdapter` 둘 다
+`ProcessRunner`(M3-T03, 로컬 프로세스 실행 전용 구체 클래스)를 생성자에서
+직접 생성해 사용한다. 이번 Milestone은 `ExecutionEnvironment` 인터페이스를
+새로 정의하고, 기존 `ProcessRunner`를 그 인터페이스의 첫 구현체
+(`LocalExecutionEnvironment`)로 승격해 두 Adapter가 구체 클래스가 아니라
+인터페이스에 의존하도록 전환한다.
+
+> **2026-07-26 설계 검토 결론(사용자 확정)**: `ExecutionEnvironment`를
+> Task→Agent→Engine 사이의 새로운 최상위 Layer로 두지 않는다 — Agent나
+> Engine Runtime이 "어디서 실행되는지"를 알아야 할 이유가 없고, 이미
+> Engine Adapter가 세션 생명주기 계약(ADR-0015)을 갖고 있어 그 내부
+> 협력자로 두는 것이 최소 복잡성 원칙에 맞는다. **`ExecutionEnvironment`는
+> `EngineAdapter`의 하위(내부) 인터페이스로 유지**하고, Adapter는 이를
+> **주입(Dependency Injection)받아** 사용한다(Adapter가 직접
+> `LocalExecutionEnvironment()`를 `new`하지 않고, 생성자 매개변수로
+> 받는다 — 편의상 기본값은 허용하되 항상 교체 가능해야 함).
+
+**Non-goal(범위 밖, YAGNI)**: `CodespacesExecutionEnvironment`/
+`ReplitExecutionEnvironment`/`DockerExecutionEnvironment` 실제 구현,
+Claude API 기반 EngineAdapter, Model/Effort 수준 라우팅(M6 Review 최초
+이월, 계속 이월).
+
+**Milestone Definition of Done**
+1. `ExecutionEnvironment` 인터페이스가 정의되고, Fake 구현체 기반 계약
+   테스트가 통과한다.
+2. `LocalExecutionEnvironment`가 이 계약을 만족하며, 기존 `ProcessRunner`
+   가 제공하던 3가지 동작(정상 실행/Timeout 강제 종료/Cancel)을 회귀
+   없이 그대로 제공함이 테스트로 증명된다.
+3. `ClaudeCodeEngineAdapter`·`CLIEngineAdapter`가 `ProcessRunner`를 더
+   이상 직접 생성하지 않고, 생성자 주입(DI)으로 `ExecutionEnvironment`
+   인터페이스에만 의존하도록 바뀌며, 기존 테스트 스위트가 회귀 없이
+   통과한다.
+4. **새 `ExecutionEnvironment` 구현체(예: 향후 Codespaces)를 추가할 때
+   기존 `EngineAdapter` 코드를 수정하지 않고 확장 가능함**이 테스트로
+   증명된다(예: `FakeExecutionEnvironment`를 주입해도 Adapter 코드
+   변경 없이 정상 동작 — Open-Closed Principle).
+5. `docs/ARCHITECTURE.md`(§3.10, §9)가 새 구조를 반영한다.
+6. 전체 `pytest`/`ruff`/`mypy`가 통과한다.
+
+**Task List**(2026-07-26 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M11-T01 | `ExecutionEnvironment` Interface 정의 | TODO |
+| M11-T02 | `LocalExecutionEnvironment` 구현 | TODO |
+| M11-T03 | `EngineAdapter`가 `ExecutionEnvironment`를 사용하도록 전환 | TODO |
+| M11-T04 | 문서화 + Milestone 11 Review | TODO |
+
+**진행 상태**: 계획 확정, 착수 대기.
+
+#### M11-T01: `ExecutionEnvironment` Interface 정의
+- 목적: EngineAdapter가 실행 환경에 의존할 수 있는 추상 계약을 확정한다
+  (Interface First).
+- 작업 내용: `interfaces/execution_environment.py`에 정의.
+  - `ExecutionResult`(dataclass): `returncode`, `stdout`, `stderr`,
+    `timed_out`, `cancelled` — 기존 `ProcessResult`와 동일한 필드.
+  - `ExecutionEnvironment`(ABC): `execute(execution_id, command, *,
+    cwd=None, timeout=None) -> ExecutionResult`, `cancel(execution_id)
+    -> None`. 메서드 docstring에 입력/출력/예외/보장사항 명시.
+  - `ExecutionNotFoundError`.
+  - 명명: 기존 `ProcessRunner`의 `process_id`를 `execution_id`로
+    바꾼다 — "OS 프로세스"를 가정하지 않는 환경 비종속 이름을 계약에
+    쓴다.
+- 완료 조건(DoD): `tests/interfaces/fakes.py`에 `FakeExecutionEnvironment`
+  추가 + 계약 테스트 통과.
+- 상태: TODO
+- 의존성: 없음.
+
+#### M11-T02: `LocalExecutionEnvironment` 구현
+- 목적: 로컬 프로세스를 실행하는 첫 실제 구현체를 제공한다.
+- 작업 내용: `adapters/local_execution_environment.py`에
+  `LocalExecutionEnvironment` 구현. 새 프로세스 관리 로직을 새로 만들지
+  않고, 이미 검증된 `ProcessRunner`(M3-T03)를 내부에서 그대로 사용하는
+  얇은 위임 클래스로만 구현한다(Surgical Changes — 기존 코드 존중,
+  `ProcessRunner`는 삭제·수정하지 않음).
+- 완료 조건(DoD): M11-T01의 계약 테스트 스위트를
+  `LocalExecutionEnvironment`에도 재사용해 통과 + 기존
+  `test_process_runner.py` 무변경 통과.
+- 상태: TODO
+- 의존성: M11-T01.
+
+#### M11-T03: `EngineAdapter`가 `ExecutionEnvironment`를 사용하도록 전환
+- 목적: `ClaudeCodeEngineAdapter`/`CLIEngineAdapter`가 구체 클래스가
+  아니라 인터페이스에 의존하게 한다(Interface First를 Engine Adapter
+  내부 의존성에도 적용, DI 기본 방향).
+- 작업 내용: 두 Adapter의 생성자 매개변수를 `process_runner:
+  ProcessRunner | None` → `execution_environment: ExecutionEnvironment
+  | None`(기본값 `LocalExecutionEnvironment()`)로 교체하고 내부 호출을
+  `execute()`/`cancel()`로 변경한다. 두 클래스는 같은 이유로 항상 함께
+  바뀌는 강결합 쌍이라 하나의 Task로 묶는다(ADR-0022 기준).
+- 완료 조건(DoD): `test_claude_code_engine_adapter.py`/
+  `test_cli_engine_adapter.py`가 (Fake 주입 대상만
+  `ExecutionEnvironment` 기준으로 갱신되어) 회귀 없이 통과. 신규
+  `FakeExecutionEnvironment` 주입만으로 Adapter 코드 변경 없이 동작함을
+  보이는 테스트 포함(Milestone DoD 4번 직접 증명).
+- 상태: TODO
+- 의존성: M11-T02.
+
+#### M11-T04: 문서화 + Milestone 11 Review
+- 목적: 문서와 구현을 일치시키고 Milestone 종료 승인을 받는다.
+- 작업 내용: `docs/ARCHITECTURE.md` §3.10(Engine Adapter 아래
+  ExecutionEnvironment 추가)/§9(디렉터리 매핑) 갱신, `.ai/DECISIONS.md`
+  에 신규 ADR(ExecutionEnvironment 도입 배경·대안·이유) 기록,
+  `docs/ROADMAP.md`/`.ai/MEMORY.md` 갱신, 전체 테스트 결과 정리 및
+  제시.
+- 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
+- 상태: TODO
+- 의존성: M11-T01~T03.
 
 ---
 

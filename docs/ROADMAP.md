@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~9 완료, v0.5.0 아키텍처 기준선 선언, Milestone 10 구현+Review 완료 — 사용자 승인 대기) |
+| 상태 | Draft (Milestone 1~10 완료, v0.5.0 아키텍처 기준선 선언, Milestone 11 계획 확정 — 착수 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -490,6 +490,46 @@ Debt 후보 제시)는 `.ai/TASKS.md`의 "Milestone 9 Review" 참고.
 **진행 상태**: M10-T01~T04 전체 완료. Milestone DoD 1~6번 충족
 확인됨(7번은 범위 제외 확정 그대로 유지). Milestone 10 Review 작성
 완료(`.ai/TASKS.md`의 "Milestone 10 Review" 참고) — 사용자 승인 대기.
+
+---
+
+## Milestone 11 — Execution Environment
+
+**목표**: `EngineAdapter`가 "무엇을 실행할지"와 "어디서 실행할지"를
+분리하지 못하고 있다(`ClaudeCodeEngineAdapter`/`CLIEngineAdapter`가
+로컬 프로세스 실행 전용 `ProcessRunner`를 직접 생성). `ExecutionEnvironment`
+인터페이스를 도입하고, 기존 `ProcessRunner`를 그 첫 구현체
+(`LocalExecutionEnvironment`)로 승격해 두 Adapter가 인터페이스에만
+의존하도록 전환한다.
+
+> **2026-07-26 설계 검토 결론(사용자 확정)**: `ExecutionEnvironment`를
+> Task→Agent→Engine 사이의 새 최상위 Layer로 두지 않는다. `EngineAdapter`
+> 하위(내부) 인터페이스로 유지하고, Adapter는 이를 생성자 주입(DI)으로
+> 받는다. Codespaces/Replit/Docker 실행 환경은 실제 요구사항이 생길 때까지
+> 구현하지 않는다(YAGNI) — `LocalExecutionEnvironment`만 지금 구현한다.
+
+**Milestone Definition of Done**
+1. `ExecutionEnvironment` 인터페이스가 정의되고 계약 테스트가 통과한다.
+2. `LocalExecutionEnvironment`가 기존 `ProcessRunner`의 동작(정상 실행/
+   Timeout 강제 종료/Cancel)을 회귀 없이 제공한다.
+3. `ClaudeCodeEngineAdapter`/`CLIEngineAdapter`가 `ProcessRunner`를
+   직접 생성하지 않고 `ExecutionEnvironment`를 주입받는다.
+4. 새 `ExecutionEnvironment` 구현체를 추가할 때 기존 `EngineAdapter`
+   코드를 수정하지 않고 확장 가능함이 테스트로 증명된다(OCP).
+5. `docs/ARCHITECTURE.md`(§3.10, §9)가 새 구조를 반영한다.
+6. 전체 `pytest`/`ruff`/`mypy`가 통과한다.
+
+**Task List**(2026-07-26 확정, 사용자 최종 승인, 상세는 `.ai/TASKS.md`의
+"Milestone 11" 참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M11-T01 | `ExecutionEnvironment` Interface 정의 | TODO |
+| M11-T02 | `LocalExecutionEnvironment` 구현 | TODO |
+| M11-T03 | `EngineAdapter`가 `ExecutionEnvironment`를 사용하도록 전환 | TODO |
+| M11-T04 | 문서화 + Milestone 11 Review | TODO |
+
+**진행 상태**: 계획 확정, 착수 대기.
 
 ---
 
