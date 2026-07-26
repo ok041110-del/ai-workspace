@@ -325,6 +325,38 @@
   Codex/Gemini CLI 실검증, `run_parallel` 개별 재시도, `MemoryEngine.
   search` 성능, `ShellAgent` 화이트리스트 고정) — M9는 새 부채를 남기지
   않고 이월 항목 중 하나(세션 리셋)만 해소했다.
+- **Milestone 10(실행 복원력) 완료 — 2026-07-26 사용자 승인.** 착수 전
+  사용자가 제시한 5개 Technical Debt 후보(Model/Effort 라우팅, Adapter
+  통합, Codex/Gemini 실환경 검증, Memory 최적화, run_parallel 복원력)를
+  PRD·코드와 재대조한 결과 3개를 제외(Codex/Gemini는 이 세션 환경에
+  CLI 바이너리 자체가 없어 실행 불가 — `which codex`/`which gemini`
+  둘 다 not found; Adapter 통합은 기능 이득 없는 순수 리팩토링; Memory
+  최적화는 PRD §11이 이미 "필요해지면"으로 유보한 항목)하고, 외부 의존
+  없이 확인 가능한 **run_parallel 복원력**을 선택. 착수 조사에서
+  `ManagedEngineRuntime.run_parallel()`이 `[future.result() for future
+  in futures]` 리스트 컴프리헨션 때문에 **Task 1개가 예외를 던지면 이미
+  완료된 다른 Task의 결과까지 전부 유실**되는 버그를 새로 확인(M4
+  Review가 "개별 재시도 미지원"이라고만 기록했던 것보다 심각한 문제).
+  `interfaces/engine_runtime.py`의 `run_parallel()` docstring에 4가지
+  보장(반환 길이=입력 길이/순서 보존/개별 예외→`EngineResult(success=
+  False)` 변환/개별 실패만으로는 예외 없음, `NoSuitableEngineError`는
+  예외)을 명시(M10-T01, 시그니처 불변) → `ManagedEngineRuntime`이
+  `future.result()`를 개별 try/except로 캐치해 버그 수정(M10-T02) →
+  `RecoveringEngineRuntime.run_parallel()`이 이전엔 `inner`에 단순
+  위임했던 것을, 첫 병렬 패스 후 실패한 Task만 기존 `self.run()`의
+  재시도 루프로 재실행하도록 변경(M10-T03, 새 재시도 로직 없이 재사용).
+  핵심 설계 원칙: "Runtime 자체의 치명적 오류(`NoSuitableEngineError`)"
+  는 여전히 즉시 전파하고, "개별 Task 실행 실패"만 격리한다 — 세
+  구현체·`docs/ARCHITECTURE.md` §3.9에 일관 반영. **소스 파일 3개만
+  수정, 신규 파일 0개, 새 Interface 0개**(시그니처 변경도 없음). 전체
+  `pytest` 449개(M9 완료 445개 → M10에서 4개 신규) 통과, `ruff`/`mypy`
+  클린.
+  **Milestone Review 결론**(전문은 `.ai/TASKS.md` M10-T05 참고): 재분석
+  으로 제외한 Codex/Gemini 실환경 검증(환경 의존)·Adapter 통합(ROI
+  낮음)·Memory 최적화(증거 없이 하면 YAGNI 위반 위험)는 이유와 함께
+  이월. 그 외 이월 부채(Model/Effort 라우팅, Retry Backoff/Persistent
+  Runtime Recovery/Approval 비동기 처리/Process Timeout 고도화,
+  `ShellAgent` 화이트리스트 고정)는 그대로 유지.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -491,21 +523,28 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-26)**: Milestone 1~9 전체 완료(사용자 승인),
-  버전 v0.5.0 유지(ADR-0024 기준선, M6~M9는 구조 변경 없이 그 위에
-  기능만 얹음). `pytest` 445개, `ruff`/`mypy` 클린. Milestone 10은
+- **현재 상태(2026-07-26)**: Milestone 1~10 전체 완료(사용자 승인),
+  버전 v0.5.0 유지(ADR-0024 기준선, M6~M10은 구조 변경 없이 그 위에
+  기능만 얹음). `pytest` 449개, `ruff`/`mypy` 클린. Milestone 11은
   아직 목표/DoD/Task List 미정의(Task Driven Development 원칙).
-- **누적 Technical Debt(2026-07-26 기준, M10 착수 시 우선순위 검토
-  대상)**: (1) **Model/Effort 수준 라우팅 미완성** — M6에서 완성한 것은
-  Provider 단위뿐, `EngineAdapter.run()`이 Model/Effort를 인자로 받지
-  않아 같은 Provider 안에서도 opus/sonnet/haiku나 Effort를 실제 실행에
-  반영 못함(M6 Review 최초 이월, Interface 변경 필요 여부부터 설계
-  검토 필요). (2) `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임워크
-  미통합(M5-T05 최초 이월). (3) Codex/Gemini CLI 실제 바이너리 미검증
-  (M5-T05 최초 이월, 외부 CLI 설치 환경 필요). (4) `MemoryEngine.
-  search()` 선형 스캔(M4-T08 최초 이월, 성능). (5) `run_parallel` 개별
-  Task 재시도 미지원(M4-T06 최초 이월), Retry Backoff/Persistent
-  Runtime Recovery/Approval 비동기 처리/Process Timeout 정책 고도화
-  (M3-T08 최초 이월), `ShellAgent` 화이트리스트가 코드에 고정(M5-T04
-  최초 이월). M9-T01에서 조사 후 "조치 불필요로 종결"한 동시성 경쟁
-  조건과 M9-T03에서 해소한 세션 리셋은 더 이상 부채 목록에 없다.
+- **이 환경의 제약(2026-07-26 확인)**: `claude` CLI만 설치되어 있고
+  `codex`/`gemini` CLI는 설치되어 있지 않다(`which` 확인). Codex/Gemini
+  관련 Task는 이 세션에서 실행 불가 — 실제 CLI가 설치된 환경이 필요하다.
+- **누적 Technical Debt(2026-07-26 기준, M10 완료 후)**: (1)
+  **Model/Effort 수준 라우팅 미완성** — M6에서 완성한 것은 Provider
+  단위뿐, `EngineAdapter.run()`이 Model/Effort를 인자로 받지 않아 같은
+  Provider 안에서도 opus/sonnet/haiku나 Effort를 실제 실행에 반영
+  못함(M6 Review 최초 이월, Interface 변경 필요 여부부터 설계 검토
+  필요 — M10에서도 재분석 후 "무거운 작업"으로 재확인, 다시 이월).
+  (2) `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임워크 미통합
+  (M5-T05 최초 이월, M10 재분석에서 "기능 이득 없는 순수 리팩토링"으로
+  재확인). (3) Codex/Gemini CLI 실제 바이너리 미검증(M5-T05 최초 이월,
+  M10 재분석에서 이 환경엔 실행 자체가 불가능함을 확인). (4)
+  `MemoryEngine.search()` 선형 스캔(M4-T08 최초 이월, 성능 — M10
+  재분석에서 PRD §11이 "필요해지면"으로 이미 유보한 항목임을 재확인,
+  조사 우선 접근 권장). (5) Retry Backoff/Persistent Runtime Recovery/
+  Approval 비동기 처리/Process Timeout 정책 고도화(M3-T08 최초 이월),
+  `ShellAgent` 화이트리스트가 코드에 고정(M5-T04 최초 이월). M9-T01
+  (동시성 경쟁 조건)·M9-T03(세션 리셋)·M10-T02/T03(run_parallel 개별
+  실패 격리+재시도, M4-T06 이월 부채)은 해소되어 더 이상 부채 목록에
+  없다.

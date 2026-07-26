@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.14.0 |
+| 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~8 완료, v0.5.0 아키텍처 기준선 선언, Milestone 9 구현+Review 완료 — 사용자 승인 대기) |
+| 상태 | Draft (Milestone 1~9 완료, v0.5.0 아키텍처 기준선 선언, Milestone 10 구현+Review 완료 — 사용자 승인 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -52,7 +52,8 @@ Roadmap
 | M6. Policy 기반 실행 라우팅 (Policy-Driven Engine Routing) | `LLMPolicyDecision`에 따라 실제 등록된 `EngineAdapter`(Claude Code/Codex/Gemini CLI)를 자동 선택해 실행 — RULES §7 로드맵의 "Policy Engine 자동 선택" 단계 완성 | **완료 (2026-07-26 사용자 승인)** |
 | M7. Memory 요약 (Memory Summarization) | `DocumentationAgent`의 Engine 실행 결과를 Memory Snapshot 요약으로 저장 — PRD 7.4 "검색/요약" 갭 완성 | **완료 (2026-07-26 사용자 승인)** |
 | M8. 세션 연속성 (Session Continuity) | `PlanningAgent`가 Mission 시작 시 project의 최신 Memory Snapshot을 자동 복원 — PRD 7.4 "자동 이어받기" 갭 완성 | **완료 (2026-07-26 사용자 승인)** |
-| M9. 세션 견고성 (Session Robustness) | `PlanningAgent`에 세션 리셋 옵션(`reset=True`) 추가, 동시 Project Session 경쟁 조건 조사 — M8 Review 이월 갭 완성 | **구현+Review 완료 (2026-07-26) — 사용자 승인 대기** |
+| M9. 세션 견고성 (Session Robustness) | `PlanningAgent`에 세션 리셋 옵션(`reset=True`) 추가, 동시 Project Session 경쟁 조건 조사 — M8 Review 이월 갭 완성 | **완료 (2026-07-26 사용자 승인)** |
+| M10. 실행 복원력 (Execution Resilience) | `run_parallel()`의 개별 Task 실패 격리(배치 전체 결과 유실 버그 수정) + 실패 Task만 개별 재시도 — M4 Review 이월 갭 완성 | **구현+Review 완료 (2026-07-26) — 사용자 승인 대기** |
 
 ---
 
@@ -441,9 +442,54 @@ M9+ 논의 대상으로 명시)는 `.ai/TASKS.md`의 "Milestone 8 Review" 참고
 | M9-T05 | Milestone 9 Review — **완료** | 관례 |
 
 **진행 상태**: M9-T01(조사, 조치 불필요로 종결)·M9-T03·M9-T04 완료,
-M9-T02는 M9-T01 결과에 따라 스킵. Milestone DoD 1~6번 충족 확인됨(7번은
-범위 제외 확정 그대로 유지). Milestone 9 Review 작성 완료
-(`.ai/TASKS.md`의 "Milestone 9 Review" 참고) — 사용자 승인 대기.
+M9-T02는 M9-T01 결과에 따라 스킵. **2026-07-26 사용자 승인으로
+Milestone 9 종료.** Retrospective(M10 착수 전 재분석 대상 5개 Technical
+Debt 후보 제시)는 `.ai/TASKS.md`의 "Milestone 9 Review" 참고.
+
+---
+
+## Milestone 10 — 실행 복원력 (Execution Resilience)
+
+**목표**: `run_parallel()`이 개별 Task 예외로 배치 전체 결과를 잃지 않게
+하고, 실패한 Task만 재시도되도록 한다.
+
+> **2026-07-26 사용자 확정**: M10 착수 전 제시된 5개 Technical Debt
+> 후보(Model/Effort 라우팅, Adapter 계열 통합, Codex/Gemini CLI 실환경
+> 검증, Memory Summary 최적화, run_parallel 개별 재시도/복원력) 중
+> Codex/Gemini 실환경 검증(이 세션 환경에 CLI 없음)·Adapter 통합(기능
+> 이득 없는 리팩토링)·Memory 최적화(PRD §11이 "필요해지면"으로 유보)는
+> 제외하고, 외부 의존이 없고 실제 확인된 버그가 있는 **실행 복원력**을
+> 선택했다.
+
+**Milestone Definition of Done**
+1. `EngineRuntime.run_parallel()` 계약에 개별 Task 실패 격리(반환
+   길이=입력 길이/순서 보존/개별 예외→`EngineResult(success=False)`
+   변환/개별 실패만으로는 예외 없음)를 명시한다. `NoSuitableEngineError`
+   는 이 격리 대상이 아니라 여전히 즉시 전파된다.
+2. `ManagedEngineRuntime.run_parallel()`이 위 계약을 실제로 만족한다
+   (확인된 버그 수정 — Task 1개 예외가 배치 전체 결과를 날리던 문제).
+3. `RecoveringEngineRuntime.run_parallel()`이 실패한 Task만 개별
+   재시도한다.
+4. 즉시 성공/일시 실패 후 성공/영구 실패 혼합 시나리오가 전체 스택으로
+   End-to-End 검증된다.
+5. `EngineRuntime`/`EngineAdapter` 메서드 시그니처는 변경되지 않는다.
+6. 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린.
+7. Model/Effort 라우팅, Adapter 계열 통합, Codex/Gemini 실환경 검증,
+   Memory Summary 최적화, Retry Backoff는 범위 밖으로 유지된다.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 10" 참고)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M10-T01 | `EngineRuntime.run_parallel()` 계약 명확화 + `FakeEngineRuntime` 반영 — **완료** | 사용자 지시(4가지 보장 명문화) |
+| M10-T02 | `ManagedEngineRuntime.run_parallel()` 개별 예외 캡처(버그 수정) — **완료** | 조사로 확인된 버그 |
+| M10-T03 | `RecoveringEngineRuntime.run_parallel()` 실패 Task만 개별 재시도 — **완료** | M4 Review 이월 갭 |
+| M10-T04 | End-to-End 검증 — **완료** | Milestone DoD |
+| M10-T05 | Milestone 10 Review — **완료** | 관례 |
+
+**진행 상태**: M10-T01~T04 전체 완료. Milestone DoD 1~6번 충족
+확인됨(7번은 범위 제외 확정 그대로 유지). Milestone 10 Review 작성
+완료(`.ai/TASKS.md`의 "Milestone 10 Review" 참고) — 사용자 승인 대기.
 
 ---
 

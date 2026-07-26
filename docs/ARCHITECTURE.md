@@ -304,6 +304,17 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   `AgentSession.llm_policy_decision`을 이 함수에 넘겨 `engine_runtime.
   run()`의 `required_capabilities`로 전달한다 — 정책이 없으면 빈 집합이
   되어 기존 동작과 하위 호환된다.
+- **`run_parallel()` 개별 Task 실패 격리 + 재시도(M10)**: `EngineRuntime.
+  run_parallel()` 계약에 "개별 Task 실패는 다른 Task 결과에 영향을 주지
+  않는다"는 보장이 명시됐다(M10-T01, 시그니처 불변·docstring 보강).
+  `ManagedEngineRuntime`은 `future.result()`를 개별적으로 캐치해 실패한
+  Task만 `EngineResult(success=False)`로 변환한다(M10-T02) — 이전에는
+  한 Task의 예외가 이미 완료된 다른 Task의 결과까지 통째로 날렸다.
+  `RecoveringEngineRuntime.run_parallel()`은 첫 병렬 패스 후 실패한
+  Task만 골라 `self.run()`의 기존 재시도 루프로 재실행한다(M10-T03,
+  새 재시도 로직 없이 재사용). 요구 Capability를 만족하는 엔진이 아예
+  없는 경우(`NoSuitableEngineError`)는 이 격리 대상이 아니라 여전히
+  Task 실행 전에 즉시 전파되는 Runtime 자체의 치명적 오류다.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 

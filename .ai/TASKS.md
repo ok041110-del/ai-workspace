@@ -3247,15 +3247,260 @@ Definition of Done 충족(1절), Architecture Review 완료(2절, 소스 1개
 투명하게 명시), 문서 갱신 완료(6절) — 6개 조건 모두 만족. Review 중
 코드 변경이 필요한 치명적 문제(버그·계약 위반)는 발견되지 않았다.
 
-**사용자 승인을 조건으로 Milestone 9 Completed를 선언한다.**
+**2026-07-26 사용자 승인으로 Milestone 9 Completed 확정.**
 
-**Milestone 10 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
-M9 착수 전 설계 검토에서 논의된 나머지 두 후보 — (1) Model/Effort 수준
-라우팅(Interface 변경 여부부터 설계 검토 필요), (2) Adapter 계열 통합 +
-Codex/Gemini CLI 실기기 검증(외부 바이너리 설치 환경 필요) — 이 유력한
-다음 논의 대상이지만, 이는 사전 논의 없이 확정된 것이 아니며 Milestone 10은
-착수 시점에 이 문서에 목표/DoD/Task List를 새로 정의한다(Task Driven
-Development 원칙, M2~M9가 그래왔듯).
+---
+
+## Milestone 10 — 실행 복원력 (Execution Resilience)
+
+**목표**: `run_parallel()`이 개별 Task 예외로 배치 전체 결과를 잃지 않게
+하고, 실패한 Task만 재시도되도록 한다. M10 착수 전 사용자가 제시한 5개
+Technical Debt 후보(Model/Effort 라우팅, Adapter 계열 통합, Codex/Gemini
+CLI 실환경 검증, Memory Summary 최적화, run_parallel 개별 재시도/복원력)
+를 PRD·코드와 대조 재분석한 결과: Codex/Gemini 실환경 검증은 이 세션
+환경에 CLI 바이너리 자체가 없어 실행 불가, Adapter 통합은 기능 이득
+없는 순수 리팩토링, Memory 최적화는 PRD §11이 이미 "필요해지면"으로
+유보해 둔 항목 — 이 세 후보를 제외하고 **외부 의존이 없고 확인된 실제
+버그가 있는 실행 복원력**을 M10으로 선택했다(2026-07-26 사용자 확정).
+
+코드 조사 결과 `ManagedEngineRuntime.run_parallel()`이
+`[future.result() for future in futures]` 리스트 컴프리헨션을 써서, Task
+하나가 예외를 던지면 **이미 완료된 다른 Task의 결과까지 전부 유실**되는
+버그를 확인했다 — M4 Review가 "개별 재시도 미지원"이라 기록한 것보다
+심각한 문제였다. `RecoveringEngineRuntime.run_parallel()`은 내부
+Runtime에 그대로 위임해 재시도가 전무했다.
+
+**Milestone Definition of Done**
+1. `EngineRuntime.run_parallel()` 계약에 개별 Task 실패 격리를 명시한다
+   (반환 길이=입력 길이, 순서 보존, 개별 예외→`EngineResult(success=False)`
+   변환, 개별 실패만으로는 `run_parallel()`이 예외를 던지지 않음).
+   `NoSuitableEngineError`(Runtime 자체의 치명적 오류)는 이 격리 대상이
+   아니라 여전히 즉시 전파된다.
+2. `ManagedEngineRuntime.run_parallel()`이 위 계약을 실제로 만족한다
+   (확인된 버그 수정).
+3. `RecoveringEngineRuntime.run_parallel()`이 첫 병렬 패스 후 실패한
+   Task만 기존 `self.run()`의 `RetryPolicy` 루프로 재시도한다.
+4. 즉시 성공/일시 실패 후 재시도로 성공/영구 실패가 한 배치에 섞인
+   시나리오가 전체 스택(`ManagedEngineRuntime`+`RecoveringEngineRuntime`,
+   실제 `ThreadPoolExecutor` 동시 실행 포함)으로 End-to-End 검증된다.
+5. `EngineRuntime`/`EngineAdapter` 메서드 시그니처는 변경되지 않는다
+   (docstring 보강만).
+6. 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린.
+7. Model/Effort 라우팅, Adapter 계열 통합, Codex/Gemini 실환경 검증,
+   Memory Summary 최적화, Retry Backoff는 범위 밖으로 유지된다.
+
+**Task List**(2026-07-26 확정)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M10-T01 | `EngineRuntime.run_parallel()` 계약 명확화 + `FakeEngineRuntime` 반영 — **완료** | 사용자 지시(4가지 보장 명문화) |
+| M10-T02 | `ManagedEngineRuntime.run_parallel()` 개별 예외 캡처(버그 수정) — **완료** | 조사로 확인된 버그 |
+| M10-T03 | `RecoveringEngineRuntime.run_parallel()` 실패 Task만 개별 재시도 — **완료** | M4 Review 이월 갭 |
+| M10-T04 | End-to-End 검증 — **완료** | Milestone DoD |
+| M10-T05 | Milestone 10 Review — 본 절 | 관례 |
+
+**진행 상태**: M10-T01~T04 전체 완료. M10-T05(본 Review)로 Milestone을
+마감한다.
+
+#### M10-T01: `EngineRuntime.run_parallel()` 계약 명확화
+- 목적/문제: 개별 Task 예외 시 동작이 계약에 정의되어 있지 않아
+  구현체마다 다르게 동작할 수 있었다(둘 다 전체 실패).
+- 작업 내용: `interfaces/engine_runtime.py`의 `run_parallel()` docstring에
+  사용자가 명문화를 요청한 4가지 보장을 추가 — (1) 반환 길이=입력 길이
+  (2) 순서 보존 (3) 개별 예외→`EngineResult(success=False)` 변환 (4)
+  개별 실패만으로는 예외를 던지지 않음(단, `NoSuitableEngineError`처럼
+  Runtime 자체의 치명적 오류는 예외 가능, 기존 예외 조항과 병기).
+  `tests/interfaces/fakes.py`의 `FakeEngineRuntime.run_parallel()`을 이
+  계약에 맞게 수정(개별 Task를 try/except로 캡처).
+- 완료 조건(DoD): 계약 테스트로 "Adapter 하나가 예외를 던져도 나머지
+  Task는 정상 결과를 반환하고 길이/순서가 유지됨"이 검증됨.
+- 상태: **DONE (2026-07-26)** — `interfaces/engine_runtime.py`(docstring만,
+  시그니처 불변), `tests/interfaces/fakes.py`의 `FakeEngineRuntime`,
+  `tests/interfaces/test_engine_runtime.py`에 `SelectivelyFailingAdapter`
+  +`test_run_parallel_converts_individual_task_exception_to_failed_result`
+  신규.
+
+#### M10-T02: `ManagedEngineRuntime.run_parallel()` 개별 예외 캡처
+- 목적/문제: 확인된 버그(Task 1개 예외 → 배치 전체 결과 유실) 수정.
+- 작업 내용: `run_parallel()`이 `required_capabilities`를 만족하는
+  Adapter가 있는지 Task 제출 전에 한 번 미리 확인(`_require_adapter()`,
+  `NoSuitableEngineError` fail-fast 유지)한 뒤, 각 `future.result()`를
+  개별 try/except로 캐치해 실패한 것만 `EngineResult(success=False)`로
+  변환.
+- 완료 조건(DoD): 3개 Task 중 1개가 예외를 던져도 나머지 2개는 정상
+  결과를 반환함이 단위 테스트로 검증됨.
+- 상태: **DONE (2026-07-26)** — `runtime/engine/managed_engine_runtime.py`
+  수정(클래스 docstring도 새 격리 보장으로 갱신).
+  `tests/runtime/engine/test_managed_engine_runtime.py`의
+  `test_run_parallel_independent_failure_does_not_block_others`(구
+  버그를 "정상 동작"으로 잘못 문서화하던 테스트)를
+  `test_run_parallel_independent_failure_does_not_lose_other_results`로
+  재작성 + `test_run_parallel_without_suitable_engine_raises_before_any_
+  execution` 신규(구조적 실패는 여전히 즉시 전파됨을 확인).
+
+#### M10-T03: `RecoveringEngineRuntime.run_parallel()` 실패 Task만 재시도
+- 목적/문제: M4 Review 이월 부채("개별 재시도 미지원") 해소 — 실제로는
+  "재시도 전무"였음을 M10 착수 조사에서 확인.
+- 작업 내용: 첫 병렬 패스(`inner.run_parallel()`, M10-T01/T02로 이미
+  개별 실패가 격리됨) 후 실패(`success=False`)한 Task만 골라 기존
+  `self.run()`의 `RetryPolicy` 루프로 재실행(새 재시도 로직 만들지
+  않고 재사용, YAGNI). 재시도도 소진해 `self.run()`이 예외를 던지면
+  그 Task만 `EngineResult(success=False)`로 변환 — `run()`은 단일
+  Task라 예외를 그대로 전파해도 되지만 `run_parallel()`은 배치 전체를
+  보호해야 하므로 의도적으로 다르게 처리(클래스 docstring에 근거 명시).
+- 완료 조건(DoD): (a) 일시 실패 후 재시도로 성공 (b) 재시도 소진 시
+  그 Task만 실패, 다른 Task는 영향 없음 — 두 시나리오 모두 단위
+  테스트로 검증됨.
+- 상태: **DONE (2026-07-26)** — `runtime/engine/recovering_engine_runtime.py`
+  수정(클래스 docstring 갱신 포함).
+  `tests/runtime/engine/test_recovering_engine_runtime.py`의
+  `test_run_parallel_does_not_retry_individual_task_failures`(구
+  동작을 "알려진 범위"로 문서화하던 테스트)를 제거하고
+  `test_run_parallel_retries_individual_task_failure_until_success`+
+  `test_run_parallel_exhausts_retries_and_isolates_permanent_failure`
+  신규(`EventuallySucceedingEngineAdapter` 테스트 전용 Adapter 추가).
+
+#### M10-T04: End-to-End 검증
+- 목적: 즉시 성공/일시 실패 후 회복/영구 실패가 한 배치에 섞여도 전체
+  스택(`ManagedEngineRuntime`+`RecoveringEngineRuntime`, 실제
+  `ThreadPoolExecutor` 동시 실행)에서 올바르게 수렴함을 증명.
+- 작업 내용: `test_run_parallel_end_to_end_mixed_outcomes_across_full_
+  stack`(`MixedOutcomeEngineAdapter` 신규) — 4개 Task(즉시 성공/일시
+  실패 후 성공/영구 실패/즉시 성공)가 한 배치에서 각각 `True, True,
+  False, True`로 올바르게 수렴함을 검증.
+- 완료 조건(DoD): 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린.
+- 상태: **DONE (2026-07-26)** — `pytest`: **449개 전부 통과**(M9 완료
+  시점 445개 → M10에서 4개 신규: M10-T01 +1, M10-T02 +1(순증가, 기존
+  1개 재작성), M10-T03 +1(순증가, 기존 1개 제거+2개 신규), M10-T04
+  +1). `ruff check src tests`: 클린. `mypy src`: 클린(82개 소스 파일,
+  신규 소스 파일 0개).
+
+---
+
+## Milestone 10 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `EngineRuntime.run_parallel()` 계약에 개별 Task 실패 격리 4가지 보장 명시 | ✅ (M10-T01) |
+| 2 | `ManagedEngineRuntime.run_parallel()`이 계약을 실제로 만족(버그 수정) | ✅ (M10-T02) |
+| 3 | `RecoveringEngineRuntime.run_parallel()`이 실패 Task만 재시도 | ✅ (M10-T03) |
+| 4 | 즉시 성공/일시 실패 후 성공/영구 실패 혼합 시나리오가 전체 스택으로 E2E 검증됨 | ✅ (M10-T04) |
+| 5 | `EngineRuntime`/`EngineAdapter` 시그니처 변경 없음 | ✅ (아래 3절) |
+| 6 | 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린 | ✅ (아래 4절) |
+| 7 | Model/Effort 라우팅 등 5개 항목 범위 밖 유지 | ✅ (아래 5절) |
+
+Task List(M10-T01~T04) 전체 완료. M10-T05(본 Review)로 Milestone을
+마감한다.
+
+**2. Architecture Review**
+
+M10에서 실제로 바뀐 구조는 `EngineRuntime` 3개 구현체뿐이다 — 새
+컴포넌트나 새 계층은 추가되지 않았다.
+- **`interfaces/engine_runtime.py`(M10-T01)**: `run_parallel()`
+  docstring에 4가지 보장 추가. 시그니처(`def run_parallel(self, tasks,
+  required_capabilities=frozenset()) -> list[EngineResult]`)는 전혀
+  바뀌지 않았다 — 이전에는 암묵적이던 계약을 명문화한 것뿐이다.
+- **`ManagedEngineRuntime`(M10-T02)**: `run_parallel()` 내부에서
+  `future.result()` 수집을 개별 try/except로 감쌌다. `_require_adapter()`
+  를 Task 제출 전에 한 번 호출해 "Runtime 자체의 치명적 오류(엔진
+  없음)"와 "개별 Task 실행 실패"를 구조적으로 분리했다 — 전자는 여전히
+  즉시 전파, 후자만 격리한다.
+- **`RecoveringEngineRuntime`(M10-T03)**: `run_parallel()`이 더 이상
+  `inner`에 단순 위임하지 않고, 첫 병렬 패스 후 실패한 Task만 기존
+  `self.run()`(이미 있는 재시도 루프)으로 재실행하는 조합(compose)
+  패턴으로 바뀌었다. 새 재시도 상태 저장소나 새 클래스를 만들지 않았다.
+
+**핵심 설계 결정**: 세 구현체 모두 "Runtime 자체의 치명적 오류
+(`NoSuitableEngineError`)"와 "개별 Task 실행 실패"를 다르게 취급한다 —
+전자는 Task를 하나도 실행하지 못하는 구조적 문제라 즉시 전파해야
+사용자가 원인을 바로 알 수 있고, 후자는 배치의 나머지 부분을 계속
+쓸모 있게 만들기 위해 격리해야 한다. 이 구분을 `docs/ARCHITECTURE.md`
+§3.9와 각 구현체 docstring에 일관되게 반영했다.
+
+`git diff --stat`(M9 종료 커밋 대비)로 확인한 결과 **소스 파일 3개만
+수정**(`interfaces/engine_runtime.py`, `managed_engine_runtime.py`,
+`recovering_engine_runtime.py`), 신규 소스 파일 0개 — M9(1개)보다는
+넓지만 M6(5개)보다는 좁다. `docs/ARCHITECTURE.md` §3.9는 M10 완료
+시점에 이미 갱신되어 구현과 문서 사이 괴리가 없다.
+
+**3. Interface First 원칙 검토**
+
+**M10은 새 최상위 Interface를 0개 추가했다**(M2/M3/M4/M6/M7/M8/M9와
+동일 패턴, M5만 예외). `EngineRuntime.run_parallel()`의 시그니처는
+전혀 바뀌지 않았다 — docstring에 이전부터 암묵적이어야 했던 계약을
+명문화했을 뿐이며, 이는 기존 호출자 누구도 깨지 않는다(반환 타입·
+개수·순서는 원래도 사실상 이랬어야 하는 것을 이제 문서로 강제한
+것). `FakeEngineRuntime`(Fake+계약 테스트) 갱신도 계약 테스트 대상만
+바뀌었을 뿐 `EngineRuntime` ABC 자체는 무변경이다.
+
+**4. 테스트 결과**
+
+- `pytest`: **449개 전부 통과**(M9 완료 시점 445개 → M10에서 4개 신규)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(82개 소스 파일)
+- M9 완료 커밋 대비 소스 3개 파일 수정(신규 소스 파일 0개), 테스트
+  3개 파일 수정(신규 테스트 파일 0개, 기존 테스트 2개를 새 계약에
+  맞게 재작성)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M10에서 조사 후 확인해 실제로 해소한 것*
+- `run_parallel()`이 개별 Task 예외로 배치 전체 결과를 잃는 버그
+  (M10 착수 조사에서 새로 확인, M10-T02로 해소)
+- `run_parallel` 개별 Task 재시도 미지원(M4-T06 이월, M10-T03으로 해소)
+
+*M10 착수 전 재분석으로 범위에서 명시적으로 제외한 것(계속 이월)*
+- Model/Effort 수준 라우팅(M6 Review 최초 이월) — `EngineAdapter.run()`
+  Interface 변경 여부부터 설계 검토 필요한 무거운 작업이라 별도
+  Milestone 필요
+- `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임워크 통합(M5-T05
+  최초 이월) — 기능 이득 없는 순수 리팩토링, 실제 유지보수 통증이
+  증명되기 전까지 계속 이월 권장
+- Codex/Gemini CLI 실제 바이너리 재검증(M5-T05 최초 이월) — **이 세션
+  환경에 두 CLI가 설치되어 있지 않아 실행 자체가 불가능**함을 확인
+  (`which codex`/`which gemini` 모두 not found). 실제 CLI가 설치된
+  환경에서만 착수 가능.
+- `MemoryEngine.search()` 선형 스캔(M4-T08 최초 이월) — PRD §11이 이미
+  "장기 메모리 비대화 시 요약/우선순위화 전략을 설계"라고 유보해 둔
+  항목. 실제 데이터 규모가 문제가 될 증거 없이 지금 최적화하면 YAGNI
+  위반 위험 — M9-T01처럼 "조사 우선" 접근이 필요.
+
+*계속 이월되는 기존 항목*
+- Retry Backoff/Persistent Runtime Recovery/Approval 비동기 처리/
+  Process Timeout 정책 고도화(M3-T08 최초 이월), `ShellAgent`
+  화이트리스트가 코드에 고정(M5-T04 최초 이월)
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M10-T01~T04 상세 섹션) / `docs/ROADMAP.md`
+(M10 Task List·Milestone 개요 반영) / `docs/ARCHITECTURE.md`(§3.9 M10
+완료 시점에 이미 갱신됨) 완료. `pyproject.toml` 버전은 v0.5.0 그대로
+유지한다. `.ai/MEMORY.md`는 이 Review 승인 직후 M1~M9와 동일한 방식으로
+압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 소스 3개
+파일 수정·신규 파일 0개, "Runtime 치명적 오류 vs 개별 Task 실패" 구분
+원칙을 세 구현체에 일관 적용), Interface First 검토 완료(3절, 새
+Interface 0개·시그니처 무변경), 테스트 결과 문서화 완료(4절), Technical
+Debt 정리 완료(5절, 재분석으로 제외한 3개 항목의 이유를 투명하게 명시),
+문서 갱신 완료(6절) — 6개 조건 모두 만족. Review 중 코드 변경이 필요한
+치명적 문제(버그·계약 위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 10 Completed를 선언한다.**
+
+**Milestone 11 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
+M10 착수 전 재분석에서 확인한 후보 — (1) Model/Effort 수준 라우팅(설계
+검토부터 필요), (2) Memory 검색 성능 조사(M9-T01과 같은 "조사 우선"
+패턴, 실제 문제 없으면 조치 불필요로 종결될 수도 있음), (3) Adapter
+계열 통합/Codex·Gemini 실환경 검증(외부 도구·환경 필요) — 이 유력한
+다음 논의 대상이지만, 이는 사전 논의 없이 확정된 것이 아니며 Milestone
+11은 착수 시점에 이 문서에 목표/DoD/Task List를 새로 정의한다(Task
+Driven Development 원칙, M2~M10이 그래왔듯).
 
 ---
 
