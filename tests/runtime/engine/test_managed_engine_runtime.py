@@ -409,21 +409,36 @@ def test_run_parallel_preserves_input_order_even_with_uneven_delays() -> None:
     assert len(results) == 3
 
 
-def test_run_parallel_independent_failure_does_not_block_others() -> None:
-    """한 Task의 실행이 실패(예외)해도 다른 Task는 이미 동시에 제출되어
-    독립적으로 실행이 끝난다 — `ThreadPoolExecutor`의 `with` 블록이
-    종료되며 모든 제출된 작업의 완료를 기다리기 때문에, 예외가 전파될
-    시점에는 다른 Task들도 이미 완료 상태다."""
+def test_run_parallel_independent_failure_does_not_lose_other_results() -> None:
+    """M10-T02: 한 Task의 실행이 실패(예외)해도 다른 Task의 결과는
+    유실되지 않는다 — 이전에는 예외가 run_parallel() 밖으로 그대로
+    전파되어 이미 완료된 다른 Task의 결과까지 전부 잃었다(M10 이전
+    버그). 이제는 실패한 Task만 EngineResult(success=False)로 변환되고
+    나머지는 정상 결과를 그대로 반환한다."""
     runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
     runtime.register_engine("selective", SelectivelyFailingEngineAdapter(failing_task_id="t2"))
     tasks = [make_task("t1"), make_task("t2"), make_task("t3")]
 
-    with pytest.raises(EngineExecutionError):
-        runtime.run_parallel(tasks)
+    results = runtime.run_parallel(tasks)
 
+    assert len(results) == 3
+    assert results[0].success is True
+    assert results[1].success is False
+    assert results[2].success is True
     assert runtime.status("t1") == EngineSessionStatus.COMPLETED
     assert runtime.status("t2") == EngineSessionStatus.FAILED
     assert runtime.status("t3") == EngineSessionStatus.COMPLETED
+
+
+def test_run_parallel_without_suitable_engine_raises_before_any_execution() -> None:
+    """M10-T01 계약: 개별 Task 실패는 삼키지만, Runtime 자체의 치명적
+    오류(요구 Capability를 만족하는 엔진이 아예 없음)는 여전히
+    NoSuitableEngineError로 즉시 전파된다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("mock", MockEngineAdapter(frozenset({"claude_code"})))
+
+    with pytest.raises(NoSuitableEngineError):
+        runtime.run_parallel([make_task()], required_capabilities=frozenset({"codex"}))
 
 
 def test_run_parallel_empty_list_returns_empty_list() -> None:
