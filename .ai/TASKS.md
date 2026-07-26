@@ -2090,6 +2090,101 @@ M2/M3/M4/M5가 그래왔듯).
 
 ---
 
+## Milestone 6 — Policy 기반 실행 라우팅 (Policy-Driven Engine Routing)
+
+**목표**: `.ai/RULES.md` §7(Temporary LLM Policy) 로드맵의 "M4 단계: Policy
+Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M5-T01/T02가
+정책을 "조회·기록"하는 데까지만 연결했던 것을, 이번에는 실제로
+`LLMPolicyDecision`에 따라 서로 다른 등록된 `EngineAdapter`
+(`ClaudeCodeEngineAdapter`/`CLIEngineAdapter`+`CodexProvider`/
+`CLIEngineAdapter`+`GeminiCliProvider`)가 선택되어 실행되도록 만든다 —
+정책→실행 연결을 완성하는 것이 M5 Review가 남긴 가장 핵심적인 미해결 갭이다.
+
+> **2026-07-26 사용자 확정**: 핵심 목표를 "Policy→Execution 라우팅 완성"으로
+> 좁게 유지한다. Adapter 계열 통합(`ClaudeCodeEngineAdapter`↔
+> `CLIEngineAdapter` 흡수), Codex/Gemini CLI 실제 재검증, 소규모 이월
+> 부채(`run_parallel` 개별 재시도/`MemoryEngine.search` 성능/`ShellAgent`
+> 화이트리스트 외부화 등) 3가지는 사용자가 명시적으로 이번 범위에서
+> 제외했다 — 계속 이월.
+
+**Analysis 요약(Repository-Analysis 결과)**:
+- `EngineRuntime` 인터페이스(§3.9)는 이미 `register_engine(name, adapter)` +
+  `run(task, required_capabilities)` 형태로 **다중 엔진 등록·Capability
+  기준 선택을 계약으로 예정**해 두었다(M2/T2-05 `InMemoryEngineRuntime`이
+  이미 이렇게 동작). 실제 갭은 인터페이스가 아니라, M3-T01에서 의도적으로
+  범위를 좁힌 프로덕션 구현 `ManagedEngineRuntime`에 있다 —
+  `register_engine()`이 두 번째 호출부터 무조건 `DuplicateEngineError`를
+  던져 **정확히 1개 Adapter만 등록 가능**하다
+  (`runtime/engine/managed_engine_runtime.py`).
+- `AgentSession.llm_policy_decision`(M5-T02)은 `CodingAgent`/`ReviewAgent`/
+  `DocumentationAgent` 3개 Agent가 이미 `self._session`으로 갖고 있지만,
+  셋 다 `engine_runtime.run(task)` 호출 시 `required_capabilities`를 전혀
+  넘기지 않는다(기본값 `frozenset()`) — 정책이 기록만 되고 실행에는 전혀
+  반영되지 않는다.
+- `LLMProvider`(도메인, ANTHROPIC/OPENAI/GOOGLE/XAI)와 Adapter의
+  `capabilities()` 태그(`ClaudeCodeEngineAdapter`→`"claude_code"`,
+  `CLIEngineAdapter`→`CLIProvider.capabilities()`) 사이에는 아직 매핑이 없다.
+- `cli/main.py`는 실행이 필요한 명령이 아직 없어 의도적으로 어떤 Adapter도
+  등록하지 않는다(지연 초기화) — 이번 Milestone은 CLI 명령 추가를 목표로
+  하지 않으므로 이 상태를 그대로 둔다.
+
+**Task List**(2026-07-26 확정, 상세 스펙은 각 Task 착수 시점에 이 문서에 추가)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M6-T01 | `ManagedEngineRuntime` 다중 Adapter 등록 지원(`register_engine`의 "정확히 1개" 제한 해제, name 기준 dict 저장, `required_capabilities` 만족 후보 중 선택) | M5 Review 이월 갭 #1 |
+| M6-T02 | `LLMProvider` → Engine Capability 태그 매핑 + `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가 `llm_policy_decision`을 `required_capabilities`로 변환해 `engine_runtime.run()`에 전달 | RULES §7 M4 단계(자동 선택) |
+| M6-T03 | 다중 Adapter 조립 + End-to-End 검증(정책에 따라 실제로 다른 Adapter가 선택·실행됨을 통합 테스트로 증명) | Milestone DoD |
+| M6-T04 | Milestone 6 Review | 관례 |
+
+**Architecture Review(사전 검토, 착수 전)**:
+- **컴포넌트 경계**: 이번 변경은 `EngineRuntime`(§3.9)의 **구체 구현체**
+  (`ManagedEngineRuntime`)와 `Agent`(§3.6) 계층에 한정된다. `EngineAdapter`
+  (§3.10) 계약, `LLMPolicyEngine`(§7 Interfaces) 계약 모두 변경 없음.
+- **의존성 방향(DIP)**: Agent는 여전히 구체 Adapter를 모르고 `EngineRuntime`
+  인터페이스만 안다 — 역류 없음. `LLMProvider`→Capability 태그 매핑을 3개
+  Agent가 각자 중복 구현하면 SRP 위반이므로, 도메인 계층의 작은 순수
+  함수 하나로 추출해 공유한다(Agent→domain 방향 유지).
+- **Interface First**: `EngineRuntime`/`EngineAdapter` 인터페이스 변경
+  **0건** — M2에서 이미 계약해 둔 다중 엔진 선택 기능을 구현체가 이제야
+  따라잡는 것뿐이다. 새 Interface 추가 없음(M5가 1개 추가했던 것과 달리
+  이번엔 기존 계약으로 충분함을 사전 확인).
+- **YAGNI 점검**: `required_capabilities`가 여러 Adapter와 동시에 매칭되는
+  상황은 실제로 발생하지 않는다(Provider당 Adapter가 정확히 1개씩만
+  등록되므로) — 복수 매칭 시 우선순위 정책(비용 기반 선택 등)은 지금
+  필요가 증명되지 않아 설계하지 않는다.
+- **리스크**: (1) `CLIProvider`(Codex/Gemini) 구현체의 `capabilities()`가
+  실제로 Provider 구분 태그를 포함하는지 M6-T02 착수 시 재확인 필요(포함
+  하지 않으면 매핑 태그 추가가 M6-T02 범위에 포함됨). (2) 정책이 없는
+  Role은 `required_capabilities=frozenset()`을 유지해 기존 동작과 완전히
+  하위 호환. (3) `LLMProvider.XAI`처럼 대응 Adapter가 없는 Provider가
+  정책에 등장하면 `NoSuitableEngineError`가 발생하는 것이 의도된
+  동작이다(별도 처리 불필요).
+
+**Definition of Done**
+1. `LLMPolicyDecision.model.provider`에 따라 `CodingAgent`/`ReviewAgent`/
+   `DocumentationAgent`가 실제로 서로 다른 등록된 `EngineAdapter`
+   (`ClaudeCodeEngineAdapter`/`CLIEngineAdapter`+`CodexProvider`/
+   `CLIEngineAdapter`+`GeminiCliProvider`)를 선택해 실행함이 통합
+   테스트로 검증된다.
+2. `ManagedEngineRuntime`이 2개 이상의 `EngineAdapter`를 동시에 등록할 수
+   있고, `required_capabilities`로 올바른 Adapter를 선택하며, 만족하는
+   Adapter가 없으면 `NoSuitableEngineError`를 던진다(계약 테스트로 검증).
+3. `EngineRuntime`/`EngineAdapter` 인터페이스 계약이 변경되지 않는다
+   (Interface First 재확인).
+4. 기존 `pytest` 전체 스위트(M5 종료 시점 398개) + 신규 테스트 모두 통과,
+   `ruff`/`mypy` 클린.
+5. `docs/ARCHITECTURE.md` §3.9/§3.10에 다중 Adapter 등록·선택 방식이
+   반영된다.
+6. Adapter 계열 통합, Codex/Gemini CLI 실제 재검증, 소규모 이월 부채는
+   이번 Milestone 범위에서 명시적으로 제외되며 계속 이월된다(위 사용자
+   확정 참고).
+
+**상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
+사용자 확정). 착수 대기 — 다음 Task는 M6-T01.
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |

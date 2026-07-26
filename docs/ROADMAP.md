@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.13.0 |
 | 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1~4 완료, v0.5.0 아키텍처 기준선 선언, Milestone 5 구현 완료 — 사용자 승인 대기) |
+| 상태 | Draft (Milestone 1~5 완료, v0.5.0 아키텍처 기준선 선언, Milestone 6 목표/Task List/DoD 확정 — 착수 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -49,6 +49,7 @@ Roadmap
 | M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Engine Runtime & Engine Adapter(Claude Code 우선) 구현 | **완료 (2026-07-25 사용자 승인)** — Interaction Layer·Coding Agent 실제 경로 통합은 M4로 공식 이관 |
 | M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | **완료 (2026-07-26 사용자 승인)** — v0.5.0 아키텍처 기준선 선언(ADR-0024) |
 | M5. 실제 개발 수행 (Real Development Execution) | LLM Policy Engine, DevelopmentContext+Agent 강화, ShellAgent, Multi-Engine(Codex/Gemini), Workflow 조건부 분기 | **완료 (2026-07-26 사용자 승인)** |
+| M6. Policy 기반 실행 라우팅 (Policy-Driven Engine Routing) | `LLMPolicyDecision`에 따라 실제 등록된 `EngineAdapter`(Claude Code/Codex/Gemini CLI)를 자동 선택해 실행 — RULES §7 로드맵의 "Policy Engine 자동 선택" 단계 완성 | **계획 확정 (2026-07-26) — 착수 대기** |
 
 ---
 
@@ -279,6 +280,48 @@ Review" 7절 참고).
 방식 불일치(M2 이월 부채 #4)를 조사한 결과, `src/ai_workspace/`의 모든
 Event 생성 지점이 이미 `uuid.uuid4()`로 일관되어 있어(M3에서 자연히
 해소됨) 코드 변경 없이 부채 항목만 해소로 종결했다.
+
+---
+
+## Milestone 6 — Policy 기반 실행 라우팅 (Policy-Driven Engine Routing)
+
+**목표**: `.ai/RULES.md` §7(Temporary LLM Policy) 로드맵의 "M4 단계: Policy
+Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M5-T01/T02가
+정책을 조회·기록하는 데까지만 연결했던 것을, 이번에는 실제로
+`LLMPolicyDecision`에 따라 서로 다른 등록된 `EngineAdapter`가 선택되어
+실행되도록 만든다 — M5 Review가 남긴 "정책→실행 연결 미완성" 갭을 해소하는
+것이 핵심이다.
+
+> **2026-07-26 사용자 확정**: 범위를 좁게 유지한다. Adapter 계열 통합
+> (`ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 흡수), Codex/Gemini CLI
+> 실제 재검증, 소규모 이월 부채(`run_parallel` 개별 재시도/
+> `MemoryEngine.search` 성능/`ShellAgent` 화이트리스트 외부화 등)는 이번
+> Milestone 범위에서 명시적으로 제외하고 계속 이월한다.
+
+**Milestone Definition of Done**
+1. `LLMPolicyDecision.model.provider`에 따라 `CodingAgent`/`ReviewAgent`/
+   `DocumentationAgent`가 실제로 서로 다른 등록된 `EngineAdapter`를 선택해
+   실행함이 통합 테스트로 검증된다.
+2. `ManagedEngineRuntime`이 2개 이상의 `EngineAdapter`를 동시에 등록할 수
+   있고, `required_capabilities`로 올바른 Adapter를 선택하며, 만족하는
+   Adapter가 없으면 `NoSuitableEngineError`를 던진다.
+3. `EngineRuntime`/`EngineAdapter` 인터페이스 계약은 변경되지 않는다
+   (Interface First).
+4. 기존 `pytest` 전체 스위트 + 신규 테스트 모두 통과, `ruff`/`mypy` 클린.
+5. Adapter 계열 통합, Codex/Gemini CLI 실제 재검증, 소규모 이월 부채는
+   이번 범위에서 제외되며 계속 이월된다.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 6" 참고)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M6-T01 | `ManagedEngineRuntime` 다중 Adapter 등록 지원 | M5 Review 이월 갭 #1 |
+| M6-T02 | `LLMProvider` → Engine Capability 매핑 + Agent 3종(Coding/Review/Documentation) 라우팅 반영 | RULES §7 M4 단계(자동 선택) |
+| M6-T03 | 다중 Adapter 조립 + End-to-End 검증 | Milestone DoD |
+| M6-T04 | Milestone 6 Review | 관례 |
+
+**진행 상태**: 목표/DoD/Task List/사전 Architecture Review 확정
+(2026-07-26 사용자 확정). 착수 대기 — 다음은 `T6-01`부터 착수.
 
 ---
 

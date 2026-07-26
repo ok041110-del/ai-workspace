@@ -219,6 +219,20 @@
   미검증, `ClaudeCodeEngineAdapter`/`CLIEngineAdapter` 미통합, Memory
   요약은 여전히 차단(정책 결정≠실제 LLM 호출 서비스). M2 이월 부채
   #1/#2/#4/#5/#6 모두 해소, #3(EventBus 재귀 발행 순서)만 그대로 유지.
+- **Milestone 6 계획 확정(2026-07-26, 착수 대기)**: 목표는 "Policy→Execution
+  라우팅 완성" — RULES §7 로드맵의 "M4 단계"(Policy Engine 자동 선택)를
+  완성해 `LLMPolicyDecision`에 따라 `CodingAgent`/`ReviewAgent`/
+  `DocumentationAgent`가 실제로 다른 `EngineAdapter`(Claude Code/Codex/
+  Gemini CLI)를 골라 실행하게 한다. 근본 원인은 `ManagedEngineRuntime`이
+  Adapter를 정확히 1개만 등록 가능하도록 M3-T01에서 의도적으로 좁혀 둔
+  것 — `EngineRuntime` 인터페이스 자체는 이미 다중 등록·Capability 기준
+  선택을 계약해 두었으므로 인터페이스 변경 없이 구현체만 갱신하면 된다.
+  Task List: M6-T01(다중 Adapter 등록 지원)/M6-T02(Provider→Capability
+  매핑+Agent 3종 라우팅 반영)/M6-T03(조립+E2E 검증)/M6-T04(Milestone
+  Review). **사용자가 명시적으로 범위에서 제외한 것**: Adapter 계열
+  통합(`ClaudeCodeEngineAdapter`↔`CLIEngineAdapter`), Codex/Gemini CLI
+  실제 재검증, 소규모 이월 부채(`run_parallel` 개별 재시도 등) — 계속
+  이월. 상세는 `.ai/TASKS.md`/`docs/ROADMAP.md`의 "Milestone 6" 참고.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
