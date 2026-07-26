@@ -397,14 +397,14 @@ memory_snapshot_id`가 자동 갱신되지 않아 PRD 7.4("새 세션이 관련
 
 | Task | 내용 | 근거/출처 |
 |---|---|---|
-| M8-T01 | `ContextManager.latest_snapshot_id(project_id)` 신규 메서드 | M7 Review 이월 갭 |
+| M8-T01 | `ContextManager.latest_snapshot_id(project_id)` 신규 메서드 — **완료** | M7 Review 이월 갭 |
 | M8-T02 | `DocumentationAgent`가 Mission 종료 시 세션에 최신 snapshot_id 기록 | Milestone DoD |
 | M8-T03 | `PlanningAgent`가 Mission 시작 시 최신 snapshot 자동 복원 | Milestone DoD |
 | M8-T04 | End-to-End 검증 | Milestone DoD |
 | M8-T05 | Milestone 8 Review | 관례 |
 
 **진행 상태**: 목표/DoD/Task List/사전 Architecture Review 확정
-(2026-07-26 사용자 확정). 착수 대기 — 다음은 `M8-T01`부터 착수.
+(2026-07-26 사용자 확정). M8-T01 완료, 다음은 `M8-T02`.
 
 ---
 

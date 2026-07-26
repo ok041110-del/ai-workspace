@@ -253,6 +253,15 @@ Task · Workflow · Approval · Automation Engine. Agent가 사용하는 능력 
   `EngineRuntime`에 접근할 수 있는 Agent 계층의 책임이다(§3.6 Agents,
   `DocumentationAgent` 참고). 저장된 요약은 `MemoryEngine.search()`(M4-T08)
   로도 검색되므로 별도 구현 없이 PRD 7.4 "검색/요약"을 함께 충족한다.
+- **세션 연속성(M8-T01)**: `ContextManager.latest_snapshot_id(project_id)`가
+  그 project로 가장 최근에 생성된 snapshot_id를 반환한다. 이 "최신"
+  포인터는 **`MemoryEngine`을 거치지 않고 Context Manager 내부에서만**
+  관리한다 — `MemoryEngine.search()`는 값의 substring 일치로 동작해
+  정렬 순서를 계약하지 않으므로, 포인터까지 그 경로로 저장하면 검색
+  결과가 오염될 위험이 있다(`memory/context_manager.py` 클래스 docstring
+  참고). `PlanningAgent`가 Mission 시작 시 이를 이용해 세션 연속성을
+  복원한다(§3.6 Agents 참고) — **Workspace Core는 이 메서드를 호출하지
+  않는다**(§8 규칙 7 유지, Memory 접근은 Agent 계층에서만).
 - **의존 방향**: Agent → Context Manager → Memory Engine.
 
 ### 3.9 Engine Runtime (EngineRuntime 인터페이스, ADR-0016)

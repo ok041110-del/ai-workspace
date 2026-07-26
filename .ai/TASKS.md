@@ -2761,7 +2761,7 @@ memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새
 
 | Task | 내용 | 근거/출처 |
 |---|---|---|
-| M8-T01 | `ContextManager`에 `latest_snapshot_id(project_id)` 신규 메서드 추가(계약+구현) — project별 최신 snapshot 포인터 | M7 Review 이월 갭 |
+| M8-T01 | `ContextManager`에 `latest_snapshot_id(project_id)` 신규 메서드 추가(계약+구현) — project별 최신 snapshot 포인터 — **완료** | M7 Review 이월 갭 |
 | M8-T02 | `DocumentationAgent`가 Mission 종료 시 `workspace_session.memory_snapshot_id`를 새 snapshot_id로 갱신 | Milestone DoD |
 | M8-T03 | `PlanningAgent`가 Mission 시작 시 `memory_snapshot_id`가 없으면 `latest_snapshot_id(project_id)`로 자동 복원 | Milestone DoD |
 | M8-T04 | End-to-End 검증(같은 세션 내 연속 Mission + 새 세션에서도 이전 요약을 자동으로 이어받음을 증명) | Milestone DoD |
@@ -2822,7 +2822,33 @@ memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새
    라우팅, Adapter 계열 통합 등은 이번 Milestone 범위 밖으로 유지된다.
 
 **상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). 착수 대기 — 다음 Task는 M8-T01.
+사용자 확정). M8-T01 완료, 다음 Task는 M8-T02.
+
+#### M8-T01: `ContextManager.latest_snapshot_id(project_id)` 신규 메서드
+- 목적: "project별 최신 snapshot"을 안정적으로 찾을 수 있는 계약을
+  마련한다 — `find_snapshots()`는 정렬 순서를 계약하지 않아 "최신"
+  판정에 쓸 수 없다.
+- 작업 내용: `interfaces/context_manager.py`에 `latest_snapshot_id(project_id:
+  str) -> str | None` 추가(계약 docstring). `memory/context_manager.py`의
+  `InMemoryContextManager`에 `_latest_snapshot_by_project: dict[str, str]`
+  신규 — `create_snapshot()`이 `session.current_project_id`가 있으면
+  호출마다 갱신. **이 포인터는 `MemoryEngine`을 거치지 않고 Context
+  Manager 내부에서만 관리**(설계 근거: `MemoryEngine.search()`는 값의
+  substring 일치라 포인터까지 저장하면 검색 결과 오염 위험). `tests/
+  interfaces/fakes.py`의 `FakeContextManager`도 동일하게 갱신.
+- 완료 조건(DoD): 같은 project_id로 여러 Snapshot을 만들면 가장 최근
+  것만 반환, project_id가 다르면 서로 독립적으로 추적, `current_project_id`
+  가 없는 세션은 포인터가 등록되지 않음, 포인터가 `find_snapshots()`
+  결과를 오염시키지 않음. `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — 계약 테스트(`tests/interfaces/
+  test_context_manager.py`) 4개 + 단위 테스트(`tests/memory/
+  test_context_manager.py`) 4개 신규(없음/최신 판정/project별 독립/
+  검색 오염 없음 확인). `tests/agents/test_documentation_agent.py`의
+  `SpyContextManager`도 위임 메서드 추가(추상 클래스 인스턴스화 유지).
+  `docs/ARCHITECTURE.md` §3.8에 반영. `pytest` 433개(M7 종료 시점 425개
+  + 신규 8개) 전부 통과, `ruff check src tests`/`mypy src` 클린. Agent가
+  실제로 이 메서드를 호출해 세션을 갱신/복원하는 것은 M8-T02/T03 범위.
+- 의존성: 없음(M8 Task List 첫 Task)
 
 ---
 

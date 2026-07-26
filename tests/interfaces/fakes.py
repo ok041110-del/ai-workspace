@@ -461,6 +461,7 @@ class FakeContextManager(ContextManager):
     def __init__(self) -> None:
         self._snapshots: dict[str, dict[str, str]] = {}
         self._id_generator = itertools.count(1)
+        self._latest_snapshot_by_project: dict[str, str] = {}
 
     def assemble_context(self, session: WorkspaceSession) -> dict[str, str]:
         context: dict[str, str] = {}
@@ -478,12 +479,17 @@ class FakeContextManager(ContextManager):
         if summary is not None:
             context["summary"] = summary
         self._snapshots[snapshot_id] = context
+        if session.current_project_id is not None:
+            self._latest_snapshot_by_project[session.current_project_id] = snapshot_id
         return snapshot_id
 
     def restore_snapshot(self, snapshot_id: str) -> dict[str, str]:
         if snapshot_id not in self._snapshots:
             raise SnapshotNotFoundError(snapshot_id)
         return dict(self._snapshots[snapshot_id])
+
+    def latest_snapshot_id(self, project_id: str) -> str | None:
+        return self._latest_snapshot_by_project.get(project_id)
 
     def find_snapshots(self, query: str) -> list[str]:
         return [

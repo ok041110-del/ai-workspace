@@ -70,3 +70,20 @@ class ContextManager(ABC):
               검색하며 MemoryEngine을 직접 호출하지 않는다).
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def latest_snapshot_id(self, project_id: str) -> str | None:
+        """
+        입력: project_id
+        출력: 해당 project_id로 `create_snapshot()`이 가장 최근에 생성한
+              snapshot_id(없으면 `None`)
+        예외: 없음
+        보장: side-effect 없음(read-only). `create_snapshot(session, ...)`
+              호출 시 `session.current_project_id`가 `project_id`와
+              같으면, 그 직후 `latest_snapshot_id(project_id)`는 새로
+              생성된 snapshot_id를 반환한다(M8-T01). `find_snapshots()`와
+              달리 내용 일치가 아니라 "가장 최근 생성"이라는 정렬 순서를
+              계약한다 — `MemoryEngine.search()`는 이 순서를 보장하지
+              않으므로(계약 문서 참고) 별도로 추적한다.
+        """
+        raise NotImplementedError

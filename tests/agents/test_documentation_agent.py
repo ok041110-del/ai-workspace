@@ -42,6 +42,9 @@ class SpyContextManager(ContextManager):
     def find_snapshots(self, query: str) -> list[str]:
         return self._inner.find_snapshots(query)
 
+    def latest_snapshot_id(self, project_id: str) -> str | None:
+        return self._inner.latest_snapshot_id(project_id)
+
 
 def build_documentation_agent(
     engine_runtime: RecordingEngineRuntime,
