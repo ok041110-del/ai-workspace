@@ -3895,7 +3895,22 @@ Task 입력으로 넘기는 것).
   시나리오(중간 Task 실패 → 이후 Task 미실행) 둘 다 다룬다.
 - 완료 조건(DoD): 두 시나리오 모두 통합 테스트로 통과하고, Task 실행
   순서가 `plan()` 결과와 정확히 일치함을 이벤트/상태로 확인한다.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `tests/integration/
+  test_m12_workflow_automation.py` 신규. `build_pipeline()`이
+  `PlanningAgent` 없이 Coding/Shell/Coordinator/Review/Documentation
+  5-Agent + `MockEngineAdapter` + `WorkflowRunner`를 조립한다(Task는
+  `WorkflowRunner`가 `TaskEngine.create_task()`로 만든 것을 그대로
+  재사용). `SequencedProcessRunner`(호출 순서별 결과 반환, 마지막
+  결과는 이후 호출에 반복)로 `ShellAgent`의 테스트 결과를 제어 —
+  Task 2개 성공 시나리오(`test_workflow_with_two_tasks_completes_
+  without_human_intervention`)와 두 번째 Task가 재작업 소진
+  (`max_rework_attempts=1`)으로 실패해 세 번째 Task가 아예 실행되지
+  않음을 증명하는 시나리오(`test_workflow_stops_when_a_task_fails_and_
+  later_tasks_never_run`) 2개. 후자에서 `task3.status == TaskStatus.
+  TODO`(create_task() 직후 그대로)로 "실행 자체가 안 됨"을 명시적으로
+  확인. `ruff check src tests`, `mypy src`, `pytest`(465개, 기존
+  463개 + 신규 2개) 모두 통과. 다음 Task: **M12-T03**(문서화 +
+  Milestone 12 Review).
 - 의존성: M12-T01.
 
 #### M12-T03: 문서화 + Milestone 12 Review
