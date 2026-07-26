@@ -214,6 +214,30 @@ def test_new_session_inherits_previous_session_summary_via_planning_agent() -> N
     assert inherited_context["summary"] == expected_summary
 
 
+def test_reset_mission_does_not_inherit_previous_session_summary() -> None:
+    """M9-T04: Milestone DoD — 새 `WorkspaceSession`이 `reset=True`로
+    Mission을 시작하면, 이전 세션이 만든 요약이 있어도 이어받지 않는다
+    (M9-T03). `test_new_session_inherits_previous_session_summary_via_
+    planning_agent`(reset 없음, 자동 복원됨)와 대비되는 시나리오다."""
+    first_pipeline = build_pipeline()
+    first_pipeline["planning_agent"].plan_mission("p1", "첫 번째 작업")
+
+    new_session = WorkspaceSession(session_id="s2", current_project_id="p1")
+    new_planning_agent = PlanningAgent(
+        agent_runtime=AgentRuntime(
+            agent_manager=FakeAgentManager(), agent_registry=FakeAgentRegistry()
+        ),
+        event_bus=InMemoryEventBus(),
+        task_engine=InMemoryTaskEngine(),
+        context_manager=first_pipeline["context_manager"],
+        workspace_session=new_session,
+    )
+
+    new_planning_agent.plan_mission("p1", "리셋된 두 번째 세션의 작업", reset=True)
+
+    assert new_session.memory_snapshot_id is None
+
+
 def test_agent_scheduler_finds_coding_agent_by_capability() -> None:
     pipeline = build_pipeline()
 
