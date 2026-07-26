@@ -2599,6 +2599,136 @@ M2~M6가 그래왔듯).
   증명되어 두 Milestone의 테스트 파일 경계를 그대로 유지했다.
 - 의존성: M7-T01, M7-T02
 
+#### M7-T04: Milestone 7 Review
+- 목적: Approval Required 원칙에 따라 Milestone 7 산출물을 검토받는다.
+- 작업 내용: DoD 체크리스트, Architecture Review, Interface First 검토,
+  테스트 결과 문서화, Technical Debt 정리, 문서 갱신, Milestone 종료
+  선언.
+- 완료 조건(DoD): 위 항목 모두 완료 + 사용자 승인.
+- 상태: 리뷰 작성 완료(2026-07-26) — **사용자 승인 대기**
+
+---
+
+## Milestone 7 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `DocumentationAgent`가 `engine_runtime.run()` 결과를 캡처해 `create_snapshot(session, summary=...)`로 전달 | ✅ (M7-T02) |
+| 2 | `ContextManager.create_snapshot()`이 선택적 `summary` 파라미터를 받고 기존 무인자 호출과 하위 호환 | ✅ (M7-T01) |
+| 3 | 저장된 요약을 `restore_snapshot()`/`assemble_context()`로 조회, `find_snapshots(query)`로 검색 가능 | ✅ (M7-T03) |
+| 4 | `MemoryEngine` 인터페이스 변경 없음 | ✅ (아래 3절) |
+| 5 | 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린 | ✅ (아래 4절) |
+| 6 | Adapter 통합/CLI 실제 재검증/Model·Effort 라우팅/소규모 이월 부채는 범위 밖 유지 | ✅ (아래 5절) |
+
+Task List(M7-T01~T03) 전체 완료. M7-T04(본 Review)로 Milestone을 마감한다.
+
+**2. Architecture Review**
+
+M7에서 실제로 바뀐 구조는 정확히 2곳, 둘 다 사전 Architecture Review가
+예고한 최소 변경 그대로였다:
+- **`ContextManager`(M7-T01)**: `create_snapshot()`에 `summary: str |
+  None = None` 파라미터만 추가했다. `MemoryEngine`은 여전히 문자열
+  저장/검색만 알 뿐 "요약"이라는 개념 자체를 전혀 모른다(ADR-0017 경계
+  그대로) — summary는 `assemble_context()`가 만든 dict에 `"summary"`
+  키로 병합된 뒤 기존과 동일한 `MemoryEngine.remember()` 경로로 저장될
+  뿐이다.
+- **`DocumentationAgent`(M7-T02)**: `engine_runtime.run()`의 반환값을
+  `result` 변수로 캡처해(이전에는 완전히 버려짐) `create_snapshot(...,
+  summary=result.output)`로 전달하는 2줄 변경. **신규 LLM 호출을 전혀
+  추가하지 않았다** — 이미 하던 호출의 결과를 재활용했을 뿐이다.
+
+`git diff --stat`(M6 종료 커밋 `464f0f5` 대비)로 확인한 결과 **소스
+파일 3개만 수정**(`interfaces/context_manager.py`,
+`memory/context_manager.py`, `agents/documentation_agent.py`), 28줄
+순증가/9줄 삭제 — M6(5개 파일, 72줄)보다도 더 작은 변경 폭으로 목표를
+달성했다. `docs/ARCHITECTURE.md` §3.8은 두 Task 완료 시점마다 즉시
+갱신되어 구현과 문서 사이 괴리가 없다.
+
+**3. Interface First 원칙 검토**
+
+**M7은 새 최상위 Interface를 0개 추가했다**(M2/M3/M4/M6와 동일 패턴,
+M5만 예외). `MemoryEngine` 계약은 메서드 하나도 바뀌지 않았다.
+`ContextManager.create_snapshot()`은 새 메서드가 아니라 **기존 메서드에
+기본값 있는 선택적 파라미터를 추가**한 것으로, 기존 모든 호출부
+(`test_pipeline.py` 등 무인자 호출)가 코드 변경 없이 그대로 동작한다.
+이는 ADR-0017이 "Context Manager는 Context 조립과 Snapshot 생명주기를,
+Memory Engine은 저장/검색만"이라고 그은 경계가 "요약"이라는 새로운
+요구사항 앞에서도 흔들리지 않고 정확히 들어맞았음을 보여준다 — 요약을
+"만드는" 책임(LLM 호출)은 애초부터 Agent 계층에만 있었고, Context
+Manager/Memory Engine은 그 결과를 받아 저장하기만 하면 됐다.
+
+**4. 테스트 결과**
+
+- `pytest`: **425개 전부 통과**(M6 완료 시점 416개 → M7에서 9개 신규:
+  M7-T01 +6, M7-T02 +2, M7-T03 +1)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(82개 소스 파일)
+- M6 완료 커밋(`464f0f5`) 대비 소스 3개 파일 수정(신규 소스 파일 0개),
+  테스트 5개 파일 수정(`fakes.py`, `test_context_manager.py`×2,
+  `test_documentation_agent.py`, `test_pipeline.py`)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M7에서 의도적으로 범위를 좁힌 것*
+- **실패해도 요약을 그대로 저장**: `result.success=False`여도 `output`
+  (에러 메시지일 수 있음)을 그대로 summary로 저장한다 — 사전
+  Architecture Review에서 이미 승인된 단순화. 실패 시 별도 처리(필터링,
+  재시도)는 필요성이 증명되지 않아 만들지 않았다.
+- **누적 압축("요약의 요약") 없음**: 매 Snapshot마다 그 시점의 최신
+  요약 하나만 저장한다. 여러 Mission에 걸친 히스토리를 압축하는 것은
+  YAGNI로 배제.
+- **`WorkspaceSession.memory_snapshot_id`가 자동으로 갱신되지 않음**
+  (이번에 새로 드러난 사실, M1부터 있었던 기존 상태): `create_snapshot()`
+  이 반환하는 `snapshot_id`를 세션에 다시 기록하는 코드가 어디에도
+  없다 — `DocumentationAgent`도 이번에 반환값을 요약 용도로만 캡처했을
+  뿐, 세션에 되먹임하지는 않는다. 그 결과 PRD 7.4가 요구하는 "검색"은
+  `find_snapshots(query)`로 완전히 동작하지만, "새 세션이 이전 세션의
+  요약을 **자동으로** 이어받는" 시나리오는 아직 수동(직접 검색 또는
+  `memory_snapshot_id`를 명시적으로 지정)으로만 가능하다. Milestone
+  DoD는 검색/복원 가능성만 요구했으므로 이번 범위의 미완료는 아니지만,
+  **M8+에서 "세션 연속성" 논의 대상으로 투명하게 기록**한다.
+
+*사용자가 명시적으로 이번 범위에서 제외한 것(계속 이월)*
+- Model/Effort 수준 라우팅(M6 Review에서 이월, 여전히 미착수)
+- Adapter 계열 통합(`ClaudeCodeEngineAdapter`↔`CLIEngineAdapter`),
+  Codex/Gemini CLI 실제 바이너리 재검증
+- `run_parallel` 개별 Task 재시도 미지원(M4-T06), `MemoryEngine.search()`
+  선형 스캔(M4-T08), Retry Backoff/Persistent Runtime Recovery/Approval
+  비동기 처리/Process Timeout 정책 고도화(M3-T08), `ShellAgent`
+  화이트리스트가 코드에 고정(M5-T04)
+- 온디맨드(사용자/CLI 요청) 요약 트리거(이번에 사용자가 명시적으로
+  제외, 파이프라인 종료 시점만 구현)
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M7-T01~T03 상세 섹션) / `docs/ROADMAP.md`(M7
+Task List 완료 표시) / `docs/ARCHITECTURE.md`(§3.8 각 Task 완료 시점마다
+이미 갱신됨) 완료. `pyproject.toml` 버전은 v0.5.0 그대로 유지한다(구조적
+기준선은 그대로, M7도 그 위에 기능을 얹은 것). `.ai/MEMORY.md`는 이
+Review 승인 직후 M1~M6와 동일한 방식으로 압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 소스 3개
+파일 수정·신규 파일 0개로 M6보다도 더 작은 변경 폭 정량 확인), Interface
+First 검토 완료(3절, 새 Interface 0개), 테스트 결과 문서화 완료(4절),
+Technical Debt 정리 완료(5절, `WorkspaceSession.memory_snapshot_id`
+자동 갱신 미비를 M8+ 논의 대상으로 투명하게 명시), 문서 갱신 완료(6절)
+— 6개 조건 모두 만족. Review 중 코드 변경이 필요한 치명적 문제(버그·계약
+위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 7 Completed를 선언한다.**
+
+**Milestone 8 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
+이번 Review에서 드러난 두 후보는 (1) M6 Review가 이월한 "Model/Effort
+수준 라우팅", (2) 이번에 드러난 "세션 연속성"(`memory_snapshot_id`
+자동 갱신)이지만, 이는 사전 논의 없이 확정된 것이 아니며 Milestone 8은
+착수 시점에 이 문서에 목표/DoD/Task List를 새로 정의한다(Task Driven
+Development 원칙, M2~M7이 그래왔듯).
+
 ---
 
 ## 진행 로그

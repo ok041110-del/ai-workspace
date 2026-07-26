@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.13.0 |
 | 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1~6 완료, v0.5.0 아키텍처 기준선 선언, Milestone 7 목표/Task List/DoD 확정 — 착수 대기) |
+| 상태 | Draft (Milestone 1~6 완료, v0.5.0 아키텍처 기준선 선언, Milestone 7 구현+Review 완료 — 사용자 승인 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -50,7 +50,7 @@ Roadmap
 | M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | **완료 (2026-07-26 사용자 승인)** — v0.5.0 아키텍처 기준선 선언(ADR-0024) |
 | M5. 실제 개발 수행 (Real Development Execution) | LLM Policy Engine, DevelopmentContext+Agent 강화, ShellAgent, Multi-Engine(Codex/Gemini), Workflow 조건부 분기 | **완료 (2026-07-26 사용자 승인)** |
 | M6. Policy 기반 실행 라우팅 (Policy-Driven Engine Routing) | `LLMPolicyDecision`에 따라 실제 등록된 `EngineAdapter`(Claude Code/Codex/Gemini CLI)를 자동 선택해 실행 — RULES §7 로드맵의 "Policy Engine 자동 선택" 단계 완성 | **완료 (2026-07-26 사용자 승인)** |
-| M7. Memory 요약 (Memory Summarization) | `DocumentationAgent`의 Engine 실행 결과를 Memory Snapshot 요약으로 저장 — PRD 7.4 "검색/요약" 갭 완성 | **계획 확정 (2026-07-26) — 착수 대기** |
+| M7. Memory 요약 (Memory Summarization) | `DocumentationAgent`의 Engine 실행 결과를 Memory Snapshot 요약으로 저장 — PRD 7.4 "검색/요약" 갭 완성 | **구현+Review 완료 (2026-07-26) — 사용자 승인 대기** |
 
 ---
 
@@ -356,11 +356,11 @@ M6에서 실제 LLM 호출 인프라(`EngineRuntime`→`EngineAdapter`)가 완�
 | M7-T01 | `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가 — **완료** | PRD 7.4 갭 |
 | M7-T02 | `DocumentationAgent`가 버려지던 engine 결과를 요약으로 전달 — **완료** | PRD 7.4 갭 |
 | M7-T03 | End-to-End 검증 — **완료** | Milestone DoD |
-| M7-T04 | Milestone 7 Review | 관례 |
+| M7-T04 | Milestone 7 Review — 리뷰 작성 완료, 사용자 승인 대기 | 관례 |
 
-**진행 상태**: 목표/DoD/Task List/사전 Architecture Review 확정
-(2026-07-26 사용자 확정). M7-T01~T03 완료, 다음은 `M7-T04`(Milestone
-Review).
+**진행 상태**: M7-T01~T03 전체 완료(2026-07-26). Milestone DoD 1~5번
+충족 확인됨(6번은 범위 제외 확정 그대로 유지). Milestone 7 Review 작성
+완료(`.ai/TASKS.md`의 "Milestone 7 Review" 참고) — 사용자 승인 대기.
 
 ---
 
