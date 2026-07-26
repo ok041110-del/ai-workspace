@@ -1771,6 +1771,51 @@ Event ID 생성 방식 불일치(M2 이월 부채 #3)를 정리하려 `src/ai_wo
   기존 341개 + 신규 4개, 기존 테스트 내용 일부 갱신) 모두 통과.
 - 의존성: M5-T01
 
+#### M5-T03: DevelopmentContext 도입 + Coding/Review Agent 강화
+- 목적: `CodingAgent`/`ReviewAgent`가 `task.title` 문자열 하나만 주고받던
+  것을 실제 산출물이 이어지는 구조로 바꿔 "Task 제목만 전달하는 Agent"
+  에서 "실제 산출물을 이어받아 협업하는 Agent"로 발전시킨다.
+- 작업 내용: `DevelopmentContext` 도메인 객체 신규, `CodingAgent`/
+  `ReviewAgent`가 이를 통해 실행 지시를 조립하고 Event payload로 산출물을
+  전달하도록 강화.
+- 완료 조건(DoD): `ReviewAgent`가 `CodingAgent`의 실제 실행 결과(output)를
+  받아 프롬프트에 반영함을 테스트로 증명, 원본 Task는 변경되지 않음,
+  `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — **확인한 핵심 문제**: `ReviewAgent`가
+  `CodingAgent`의 실행 결과(`EngineResult.output`)를 전혀 모른 채 같은
+  `task.title`로 Claude Code를 다시 호출하고 있었음(T2-06부터 있던
+  실질적 정보 단절). `domain/development_context.py`에
+  `DevelopmentContext(task_id, instructions, prior_output)` +
+  `to_prompt()` 신규 — **사용자 지시로 필드 자체를 진실의 원천으로 두고
+  `to_prompt()`는 여러 렌더링 방식 중 하나로 위치**시킴(향후 다른 표현이
+  필요해져도 dataclass는 그대로 두고 메서드만 추가 가능). `EngineAdapter.
+  run(session_id, task)` 계약은 건드리지 않음(보호 자산) — 대신
+  `dataclasses.replace(task, title=context.to_prompt())`로 **임시 사본**을
+  만들어 Engine 호출에만 쓰고, `TaskEngine`이 추적하는 원본 `task.title`
+  은 그대로 보존(테스트로 증명). `CodingAgent`는 `DevelopmentContext
+  (instructions=task.title)`(prior_output 없음, 첫 단계라 기존과 동일한
+  프롬프트)로 실행하고 결과를 `CODE_COMPLETED` payload에 `output`/
+  `success`로 실어 보냄. `ReviewAgent`는 payload의 `output`을
+  `prior_output`으로 받아 실제로 무엇을 검토해야 하는지 알고 실행,
+  자신도 `output`/`success`를 `REVIEW_COMPLETED` payload에 실음. **사용자
+  지시로 `success`도 함께 포함**(M5-T03에서는 쓰지 않지만 M5-T06 Workflow
+  조건부 분기가 재사용할 수 있어 Event 형식을 다시 바꿀 필요가 없어짐).
+  **범위에서 제외(사용자 확인)**: `DocumentationAgent`는 이번 Task
+  이름에 명시되지 않아 그대로 둠(payload에 필드가 늘어도 `task_id`만
+  읽어 하위 호환), `EngineResult.success=False`여도 다음 단계로 계속
+  진행하는 기존 동작 유지(성공/실패 처리 강화는 범위 밖),
+  `ContextManager`/Memory 연동까지는 확장하지 않음. 새 Interface 없음,
+  `EngineAdapter`/`EngineRuntime` 계약 무변경. `tests/domain/
+  test_development_context.py`(2개) + 신규 `tests/agents/
+  test_coding_agent.py`/`test_review_agent.py`(각 3개, `RecordingEngineRuntime`
+  테스트 더블로 실제 전달되는 title/payload를 직접 검증 — 기존
+  `test_pipeline.py`는 Mock 기반 전체 체인만 검증해 이 정밀도가 없었음)
+  신규. 기존 `tests/agents/test_pipeline.py`/`tests/integration/
+  test_coding_agent_runtime_integration.py`는 수정 없이 그대로 통과.
+  `ruff check src tests`, `mypy src`, `pytest`(353개, 기존 345개 +
+  신규 8개) 모두 통과.
+- 의존성: T2-06
+
 ---
 
 ## 진행 로그

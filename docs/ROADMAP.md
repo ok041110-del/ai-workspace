@@ -265,7 +265,7 @@ Review" 7절 참고).
 |---|---|---|
 | M5-T01 | Rule 기반 `LLMPolicyEngine` 구현 — **완료**: `pyyaml` 최초 외부 의존성 추가, PolicyLoader 계층 분리 | RULES §7 M2 단계 소급 |
 | M5-T02 | Agent Runtime이 `LLMPolicyEngine`을 통해 정책을 조회·기록하도록 연결 — **완료**(실제 Engine/Adapter 선택 반영은 M5-T05 이후) | RULES §7 M3 단계 소급 |
-| M5-T03 | `DevelopmentContext` 도입 + 기존 Coding/Review Agent 강화 | 사용자 지시 — M5 핵심 목표 |
+| M5-T03 | `DevelopmentContext` 도입 + 기존 Coding/Review Agent 강화 — **완료**: Coding→Review 산출물 전달, 원본 Task 불변 | 사용자 지시 — M5 핵심 목표 |
 | M5-T04 | `ShellAgent` 신규(실제 쉘 명령 실행 능력) | 사용자 지시 — M5 핵심 목표 |
 | M5-T05 | Codex/Gemini CLI Engine Adapter(가능한 범위) | PRD 7.8 Multi-Engine 지원 |
 | M5-T06 | Workflow 조건부 분기 + 필요 범위의 `Step` Domain 반영(M2 이월 부채 #6) | PRD 7.3 갭 + M2 이월 부채 #6 |

@@ -234,8 +234,20 @@
   통합 테스트**로 "연결"을 실증. **아직 하지 않은 것(M5-T05로 이월)**:
   실제 Adapter의 model이 이 정책을 따라 바뀌지는 않음 —
   `ManagedEngineRuntime`이 Adapter를 하나만 등록할 수 있어 여러 Adapter가
-  실제로 생기기 전까지는 의미가 없음. 전체 345개 테스트 통과. 다음은
-  **M5-T03**(`DevelopmentContext` 도입 + Coding/Review Agent 강화).
+  실제로 생기기 전까지는 의미가 없음. 전체 345개 테스트 통과.
+- **M5-T03 완료(2026-07-26)**: `ReviewAgent`가 `CodingAgent`의 실행
+  결과를 전혀 모른 채 같은 `task.title`을 재실행하던 정보 단절을 발견해
+  해소. `domain/development_context.py`에 `DevelopmentContext(task_id,
+  instructions, prior_output)` + `to_prompt()` 신규 — 사용자 지시로
+  필드 자체가 진실의 원천, `to_prompt()`는 여러 렌더링 방식 중 하나로
+  위치. `EngineAdapter.run()` 계약은 무변경 — `dataclasses.replace()`로
+  Engine 호출 전용 임시 사본을 만들어 원본 Task는 그대로 보존.
+  `CodingAgent`/`ReviewAgent`가 `CODE_COMPLETED`/`REVIEW_COMPLETED`
+  payload에 `output`+`success`를 함께 실음(사용자 지시 — `success`는
+  M5-T06 Workflow 조건부 분기가 재사용할 수 있도록 미리 포함).
+  `DocumentationAgent`/실패 처리 강화/ContextManager 연동은 범위 밖으로
+  명시 유지. 전체 353개 테스트 통과. 다음은 **M5-T04**(`ShellAgent`
+  신규).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
