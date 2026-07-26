@@ -6,6 +6,7 @@ from dataclasses import replace
 from ai_workspace.agents.events import CODE_COMPLETED, MISSION_PLANNED
 from ai_workspace.domain.agent import AgentCapability, AgentRole
 from ai_workspace.domain.development_context import DevelopmentContext
+from ai_workspace.domain.llm_policy import required_capabilities
 from ai_workspace.domain.task import TaskStatus
 from ai_workspace.interfaces.engine_runtime import EngineRuntime
 from ai_workspace.interfaces.event_bus import Event, EventBus
@@ -24,7 +25,13 @@ class CodingAgent:
     그대로 유지). `MissionPlanned` payload에 `rework_reason`이 있으면
     (M5-T06, `CoordinatorAgent`가 테스트 실패 후 재발행한 경우)
     `DevelopmentContext.prior_output`으로 반영해 이전에 무엇이 실패했는지
-    알고 재작업한다."""
+    알고 재작업한다.
+
+    **Policy→Execution 라우팅(M6-T02)**: `AgentSession.llm_policy_decision`
+    (M5-T02)을 `required_capabilities()`로 변환해 `engine_runtime.run()`에
+    전달한다 — 여러 `EngineAdapter`가 등록되어 있으면(M6-T01) 실제로 이
+    Role에 배정된 Provider의 Adapter가 선택되어 실행된다. 정책이 없으면
+    빈 집합이 되어 기존 동작(제약 없음)과 하위 호환된다."""
 
     def __init__(
         self,
@@ -53,7 +60,10 @@ class CodingAgent:
             instructions=task.title,
             prior_output=event.payload.get("rework_reason"),
         )
-        result = self._engine_runtime.run(replace(task, title=context.to_prompt()))
+        result = self._engine_runtime.run(
+            replace(task, title=context.to_prompt()),
+            required_capabilities=required_capabilities(self._session.llm_policy_decision),
+        )
         self._task_engine.transition(task, TaskStatus.REVIEW)
         self._event_bus.publish(
             Event(

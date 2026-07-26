@@ -6,6 +6,7 @@ from dataclasses import replace
 from ai_workspace.agents.events import CODE_VERIFIED, REVIEW_COMPLETED
 from ai_workspace.domain.agent import AgentCapability, AgentRole
 from ai_workspace.domain.development_context import DevelopmentContext
+from ai_workspace.domain.llm_policy import required_capabilities
 from ai_workspace.interfaces.engine_runtime import EngineRuntime
 from ai_workspace.interfaces.event_bus import Event, EventBus
 from ai_workspace.interfaces.task_engine import TaskEngine
@@ -23,7 +24,11 @@ class ReviewAgent:
     **트리거 변경(M5-T06)**: 이전에는 `CodeCompleted`를 직접 구독했지만,
     이제 `CoordinatorAgent`가 `ShellAgent`의 테스트 결과를 확인한 뒤
     발행하는 `CodeVerified`를 구독한다 — 테스트를 통과한 코드만 검토
-    대상이 되도록 조건부 게이트를 통과시킨다."""
+    대상이 되도록 조건부 게이트를 통과시킨다.
+
+    **Policy→Execution 라우팅(M6-T02)**: `CodingAgent`와 동일하게
+    `AgentSession.llm_policy_decision`을 `required_capabilities()`로
+    변환해 `engine_runtime.run()`에 전달한다."""
 
     def __init__(
         self,
@@ -51,7 +56,10 @@ class ReviewAgent:
             instructions=task.title,
             prior_output=event.payload.get("output"),
         )
-        result = self._engine_runtime.run(replace(task, title=context.to_prompt()))
+        result = self._engine_runtime.run(
+            replace(task, title=context.to_prompt()),
+            required_capabilities=required_capabilities(self._session.llm_policy_decision),
+        )
         self._event_bus.publish(
             Event(
                 event_id=str(uuid.uuid4()),

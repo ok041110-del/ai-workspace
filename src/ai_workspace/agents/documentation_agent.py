@@ -4,6 +4,7 @@ import uuid
 
 from ai_workspace.agents.events import DOCUMENTATION_COMPLETED, REVIEW_COMPLETED
 from ai_workspace.domain.agent import AgentCapability, AgentRole
+from ai_workspace.domain.llm_policy import required_capabilities
 from ai_workspace.domain.session import WorkspaceSession
 from ai_workspace.domain.task import TaskStatus
 from ai_workspace.interfaces.context_manager import ContextManager
@@ -17,7 +18,11 @@ class DocumentationAgent:
     """`ReviewCompleted` Event를 구독해 문서화하고 `DocumentationCompleted`
     Event를 발행하는 Agent(ARCHITECTURE.md §3.6, §5, T2-06). 협업 체인의
     마지막 단계로, 완료 시 Context Manager로 Snapshot을 생성해 Memory를
-    갱신한다(ARCHITECTURE.md §5 다이어그램의 마무리 단계)."""
+    갱신한다(ARCHITECTURE.md §5 다이어그램의 마무리 단계).
+
+    **Policy→Execution 라우팅(M6-T02)**: `CodingAgent`와 동일하게
+    `AgentSession.llm_policy_decision`을 `required_capabilities()`로
+    변환해 `engine_runtime.run()`에 전달한다."""
 
     def __init__(
         self,
@@ -44,7 +49,9 @@ class DocumentationAgent:
             return
         task_id = event.payload["task_id"]
         task = self._task_engine.get_task(task_id)
-        self._engine_runtime.run(task)
+        self._engine_runtime.run(
+            task, required_capabilities=required_capabilities(self._session.llm_policy_decision)
+        )
         self._task_engine.transition(task, TaskStatus.DONE)
         self._context_manager.create_snapshot(self._workspace_session)
         self._event_bus.publish(

@@ -2133,7 +2133,7 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
 | Task | 내용 | 근거/출처 |
 |---|---|---|
 | M6-T01 | `ManagedEngineRuntime` 다중 Adapter 등록 지원(`register_engine`의 "정확히 1개" 제한 해제, name 기준 dict 저장, `required_capabilities` 만족 후보 중 선택) — **완료** | M5 Review 이월 갭 #1 |
-| M6-T02 | `LLMProvider` → Engine Capability 태그 매핑 + `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가 `llm_policy_decision`을 `required_capabilities`로 변환해 `engine_runtime.run()`에 전달 | RULES §7 M4 단계(자동 선택) |
+| M6-T02 | `LLMProvider` → Engine Capability 태그 매핑 + `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가 `llm_policy_decision`을 `required_capabilities`로 변환해 `engine_runtime.run()`에 전달 — **완료** | RULES §7 M4 단계(자동 선택) |
 | M6-T03 | 다중 Adapter 조립 + End-to-End 검증(정책에 따라 실제로 다른 Adapter가 선택·실행됨을 통합 테스트로 증명) | Milestone DoD |
 | M6-T04 | Milestone 6 Review | 관례 |
 
@@ -2181,7 +2181,7 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
    확정 참고).
 
 **상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). M6-T01 완료, 다음 Task는 M6-T02.
+사용자 확정). M6-T01/M6-T02 완료, 다음 Task는 M6-T03.
 
 #### M6-T01: `ManagedEngineRuntime` 다중 Adapter 등록 지원
 - 목적: `EngineRuntime` 인터페이스가 이미 계약해 둔 "다중 엔진 등록·
@@ -2218,6 +2218,43 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
   Documentation)가 실제로 `required_capabilities`를 넘기도록 반영하는
   것은 M6-T02 범위.
 - 의존성: 없음(M6 Task List 첫 Task)
+
+#### M6-T02: `LLMProvider` → Engine Capability 매핑 및 Agent 라우팅
+- 목적: M6-T01이 만든 다중 Adapter 등록 기반 위에, `LLMPolicyDecision`이
+  실제로 어떤 Adapter를 선택할지를 결정하는 신호(`required_capabilities`)
+  를 흘려보낸다 — Policy→Execution 라우팅의 실질적인 연결 지점.
+- 작업 내용: `domain/llm_policy.py`에 `LLMProvider`→capability 태그
+  매핑(`_PROVIDER_ENGINE_CAPABILITY`: ANTHROPIC→`claude_code`, OPENAI→
+  `codex`, GOOGLE→`gemini`, XAI→`xai`)과 `required_capabilities(decision:
+  LLMPolicyDecision | None) -> frozenset[str]` 순수 함수 추가(정책 없으면
+  빈 집합). `CodingAgent`/`ReviewAgent`/`DocumentationAgent` 3곳이
+  `self._session.llm_policy_decision`을 이 함수에 넘겨 `engine_runtime.
+  run(..., required_capabilities=...)`로 전달하도록 수정.
+- 착수 시 확인한 사실: 실제 Adapter의 capability 태그를 재확인한 결과
+  `ClaudeCodeEngineAdapter`→`"claude_code"`, `CodexProvider`→`"codex"`,
+  `GeminiCliProvider`→`"gemini"`(M6-T01 문서에 "gemini_cli"로 적었던 것은
+  오기 — `docs/ARCHITECTURE.md` §3.9에서 바로잡음). `docs/
+  llm_policy.example.yaml`의 실제 규칙(`coding→anthropic`, `reviewer→
+  openai`, `documentation→google`)이 정확히 이 3개 Agent와 1:1 매칭되어
+  설계가 실사용 정책과 들어맞음을 확인했다.
+- 완료 조건(DoD): 정책이 없으면 `required_capabilities`가 빈 집합(기존
+  동작과 하위 호환), 정책이 있으면 매핑된 태그가 실제로 `engine_runtime.
+  run()`에 전달됨을 3개 Agent 각각 단위 테스트로 검증. `EngineRuntime`
+  인터페이스·`docs/ARCHITECTURE.md` 컴포넌트 구조 변경 없음(Agent 내부
+  로직 변경일 뿐). `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — `tests/domain/test_llm_policy.py`에
+  `required_capabilities` 단위 테스트 5개(정책 없음, ANTHROPIC/OPENAI/
+  GOOGLE 매핑, 모든 Provider 매핑 존재 확인) 추가. `RecordingEngineRuntime`
+  (`tests/agents/test_coding_agent.py`)이 `required_capabilities`도
+  기록하도록 확장해 `CodingAgent`/`ReviewAgent`에 각 2개, 신규
+  `tests/agents/test_documentation_agent.py`(이전에는 전용 테스트 파일이
+  없었음 — `DocumentationAgent` 단위 테스트를 이번에 처음 추가)에 3개
+  테스트 추가 — 총 pytest 412개(M6-T01 종료 시점 401개 + 신규 11개) 전부
+  통과, `ruff check src tests`/`mypy src` 클린. `docs/ARCHITECTURE.md`
+  §3.9에 매핑 규칙과 라우팅 흐름을 반영(인터페이스/컴포넌트 구조는
+  무변경이므로 최소 갱신). 실제로 여러 Adapter를 등록해 이 라우팅이
+  End-to-End로 동작하는지 증명하는 것은 M6-T03 범위.
+- 의존성: M6-T01
 
 ---
 

@@ -265,8 +265,17 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   매칭)를 선택해 실행한다 — 복수 매칭 시 우선순위 정책(비용 기반 선택
   등)은 필요성이 증명되지 않아 도입하지 않는다(YAGNI). 이 방식으로
   `LLMPolicyDecision.model.provider`에 따라 Agent가 서로 다른 등록된
-  Adapter(예: `claude_code`/`codex`/`gemini_cli`)를 실행 시점에 고를 수
-  있는 기반이 마련된다(실제 매핑·Agent 반영은 M6-T02).
+  Adapter(capability 태그 기준 `claude_code`/`codex`/`gemini`)를 실행
+  시점에 고를 수 있는 기반이 마련된다.
+- **Policy→Execution 라우팅(M6-T02)**: `domain/llm_policy.py`의
+  `required_capabilities(decision)` 순수 함수가 `LLMProvider`(ANTHROPIC/
+  OPENAI/GOOGLE/XAI)를 위 capability 태그로 매핑한다(ANTHROPIC→
+  `claude_code`, OPENAI→`codex`, GOOGLE→`gemini`; XAI는 대응 Adapter가
+  없어 매칭 실패 시 `NoSuitableEngineError`가 자연히 발생하는 것이 의도된
+  동작). `CodingAgent`/`ReviewAgent`/`DocumentationAgent` 3개 Agent가
+  `AgentSession.llm_policy_decision`을 이 함수에 넘겨 `engine_runtime.
+  run()`의 `required_capabilities`로 전달한다 — 정책이 없으면 빈 집합이
+  되어 기존 동작과 하위 호환된다.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
