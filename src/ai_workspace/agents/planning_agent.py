@@ -23,7 +23,14 @@ class PlanningAgent:
     자동 복원한다 — Workspace Core가 아니라 Agent 계층에서 해결한다
     (ARCHITECTURE.md §8 규칙 5·7, Workspace Core는 Context Manager를
     전혀 모른다). 이미 값이 있으면(같은 세션에서 이어지는 Mission)
-    덮어쓰지 않는다."""
+    덮어쓰지 않는다.
+
+    **세션 리셋 옵션(M9-T03)**: `plan_mission(..., reset=True)`면 위
+    자동 복원을 건너뛴다 — 사용자가 이전 프로젝트 요약을 이어받지 않고
+    완전히 새로 시작하고 싶을 때 쓴다. 이미 `memory_snapshot_id`가 있는
+    세션(같은 세션의 후속 Mission)에는 영향을 주지 않는다 — 그 값을
+    지우는 것은 이번 갭(M8 Review가 지적한 "새 세션 자동 복원을 원치
+    않는 경우")과는 다른 문제라 범위에 포함하지 않는다."""
 
     def __init__(
         self,
@@ -42,8 +49,8 @@ class PlanningAgent:
             AgentRole.PLANNER, frozenset({AgentCapability.PLANNING})
         )
 
-    def plan_mission(self, project_id: str, title: str) -> Task:
-        if self._workspace_session.memory_snapshot_id is None:
+    def plan_mission(self, project_id: str, title: str, *, reset: bool = False) -> Task:
+        if not reset and self._workspace_session.memory_snapshot_id is None:
             self._workspace_session.memory_snapshot_id = self._context_manager.latest_snapshot_id(
                 project_id
             )

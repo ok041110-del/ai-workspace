@@ -87,6 +87,34 @@ def test_plan_mission_only_restores_for_matching_project() -> None:
     assert workspace_session.memory_snapshot_id is None
 
 
+def test_plan_mission_with_reset_skips_snapshot_restoration() -> None:
+    """M9-T03: `reset=True`면 memory_snapshot_id가 비어 있어도 이전
+    프로젝트 Snapshot을 자동 복원하지 않는다(의도적으로 새로 시작)."""
+    context_manager = FakeContextManager()
+    context_manager.create_snapshot(WorkspaceSession(session_id="prior", current_project_id="p1"))
+    workspace_session = WorkspaceSession(session_id="s1", current_project_id="p1")
+    agent, _event_bus, _task_engine = build_planning_agent(workspace_session, context_manager)
+
+    agent.plan_mission("p1", "구현하기", reset=True)
+
+    assert workspace_session.memory_snapshot_id is None
+
+
+def test_plan_mission_reset_does_not_clear_existing_snapshot_id() -> None:
+    """reset은 "새 세션 자동 복원"만 건너뛴다 — 같은 세션에 이미 있는
+    memory_snapshot_id(이어지는 Mission)는 건드리지 않는다(범위 밖)."""
+    context_manager = FakeContextManager()
+    context_manager.create_snapshot(WorkspaceSession(session_id="prior", current_project_id="p1"))
+    workspace_session = WorkspaceSession(
+        session_id="s1", current_project_id="p1", memory_snapshot_id="existing-snapshot"
+    )
+    agent, _event_bus, _task_engine = build_planning_agent(workspace_session, context_manager)
+
+    agent.plan_mission("p1", "구현하기", reset=True)
+
+    assert workspace_session.memory_snapshot_id == "existing-snapshot"
+
+
 def test_plan_mission_still_publishes_mission_planned_event() -> None:
     context_manager = FakeContextManager()
     workspace_session = WorkspaceSession(session_id="s1", current_project_id="p1")

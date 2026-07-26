@@ -236,6 +236,11 @@ Agent의 실행을 담당하는 계층.
   project의 최신 Snapshot을 자동 복원한다(이미 값이 있으면 덮어쓰지
   않음). §8 규칙 5(Agent → Context Manager)로 해결하며, Workspace
   Core는 이 로직에 관여하지 않는다(§8 규칙 3·7 무변경).
+- **세션 리셋 옵션(M9-T03)**: `plan_mission(..., reset=True)`는 위 자동
+  복원을 건너뛴다 — 사용자가 이전 프로젝트 요약을 이어받지 않고 완전히
+  새로 시작하고 싶을 때 쓴다. 같은 세션에 이미 있는 `memory_snapshot_id`
+  (이어지는 Mission)는 건드리지 않는다 — "새 세션 자동 복원"만 막는
+  좁은 범위다.
 
 ### 3.7 Core Engines (Services)
 Task · Workflow · Approval · Automation Engine. Agent가 사용하는 능력 서비스.
