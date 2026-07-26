@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~11 완료, v0.5.0 아키텍처 기준선 선언, Milestone 12 목표 미정) |
+| 상태 | Draft (Milestone 1~11 완료, v0.5.0 아키텍처 기준선 선언, Milestone 12 계획 확정 — 착수 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -531,6 +531,42 @@ Debt 후보 제시)는 `.ai/TASKS.md`의 "Milestone 9 Review" 참고.
 
 **진행 상태**: M11-T01~T04 전체 완료. Milestone DoD 1~6번 전부 충족
 확인됨. **Milestone 11 완료 — 2026-07-26 사용자 승인.**
+
+---
+
+## Milestone 12 — Workflow Automation
+
+**목표**: 여러 Task로 구성된 Workflow가 사람 개입 없이
+`WorkflowEngine.plan()`이 계산한 의존관계 순서대로 자동 순차 실행되게
+한다(MVP). Multi-Agent 선택/Routing/병렬 실행/Retry/Approval은 범위
+밖 — 기존 고정 Agent 파이프라인을 그대로 재사용한다.
+
+**설계 방향**: `WorkflowEngine`(Core Engine)에 실행 책임을 추가하지
+않는다(의존 방향 §8 위반 방지). 새 Agent로도 만들지 않는다(Multi-Agent
+범위 제외). `AgentRuntime`을 거치지 않는 순수 조율 클래스
+`WorkflowRunner`(`runtime/workflow/`)를 신설해 `WorkflowEngine.plan()`
+순서대로 `MissionPlanned`를 순차 발행하고, Task가 `DONE`에 도달하지
+못하면 중단한다.
+
+**Milestone Definition of Done**
+1. `WorkflowRunner`가 `plan()` 순서대로 Task를 순차 실행한다.
+2. 앞 Task 실패 시 이후 Task는 실행되지 않고 즉시 중단된다.
+3. Task 2개 이상 + 의존관계가 있는 실제 Workflow가 사람 개입 없이
+   완주함(성공/중단 두 시나리오)이 통합 테스트로 증명된다.
+4. 기존 `WorkflowEngine`/`EventBus`/`TaskEngine`/Agent 파이프라인
+   계약은 변경하지 않는다.
+5. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 12"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M12-T01 | `WorkflowRunner` 구현 | TODO |
+| M12-T02 | End-to-End 검증 | TODO |
+| M12-T03 | 문서화 + Milestone 12 Review | TODO |
+
+**진행 상태**: 계획 확정, 착수 대기.
 
 ---
 

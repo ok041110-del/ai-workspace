@@ -3790,12 +3790,108 @@ Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 2/
 
 **Milestone 11 종료 — 2026-07-26 사용자 승인.**
 
-**Milestone 12 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
-누적 Technical Debt(5절 참고) 중 어느 것을 다음으로 다룰지, 또는
-`docs/ROADMAP.md`가 원래 그려둔 M12(Workflow Automation) 방향을 그대로
-따를지는 사전 논의 없이 확정된 것이 아니며, Milestone 12는 착수
-시점에 이 문서에 목표/DoD/Task List를 새로 정의한다(Task Driven
-Development 원칙, M2~M11이 그래왔듯).
+**Milestone 12 상태**: 착수 확정. 아래 "Milestone 12" 절 참고.
+
+---
+
+## Milestone 12 — Workflow Automation
+
+**목표**: 여러 Task로 구성된 Workflow가, 사람이 각 Task마다 개별적으로
+실행을 트리거하지 않아도 `WorkflowEngine.plan()`이 계산한 의존관계
+순서대로 자동으로 순차 실행되게 한다(MVP, 2026-07-26 사용자 확정).
+
+> **설계 검토에서 발견한 사실**: `WorkspaceCore.start_workflow()`가
+> 이미 `WorkflowEngine.plan()`을 호출해 순서를 계산하지만, 그 순서를
+> 실제로 실행하는 코드는 지금까지 어디에도 없었다. `plan()`은 계약상
+> 순수 함수(순서 계산만, side-effect 없음)이고, Task를 실제로 돌리는
+> 유일한 경로는 `PlanningAgent.plan_mission()`(Task 1개를 새로 만들며
+> 즉시 파이프라인을 시작)뿐이었다. 또한 `InMemoryEventBus.publish()`는
+> 완전히 동기(M9-T01 조사에서 확인)라 `MissionPlanned` 발행이 끝나는
+> 시점에는 Coding→Shell→Coordinator→Review→Documentation 전체
+> 파이프라인이 이미 동기적으로 끝나 있다 — "완료를 기다리는" 별도
+> 비동기 로직이 필요 없다.
+
+**설계 방향(사용자 확정)**: `WorkflowEngine`(Core Engine)에 실행 책임을
+추가하지 않는다 — Core Engine은 Agent보다 하위 계층이라 EventBus에
+의존하면 `docs/ARCHITECTURE.md` §8 의존성 규칙(Agent → Core Engines)이
+뒤집힌다. 새 Agent(Capability 포함)로도 만들지 않는다 — Multi-Agent
+범위 제외 취지에 맞춰 `AgentRuntime`/`AgentScheduler`를 거치지 않는
+순수 조율용 클래스 **`WorkflowRunner`**(신규, `runtime/workflow/
+workflow_runner.py`)를 둔다. `WorkflowEngine.plan()` + `EventBus` +
+`TaskEngine`만 사용해, `plan()` 순서대로 각 task_id에 `MissionPlanned`
+를 발행하고, 발행 직후 `TaskEngine.get_task(task_id).status`가 `DONE`
+이 아니면(예: 재작업 소진 `ReworkExhausted`) 그 자리에서 중단한다.
+엔진 예외가 그대로 전파되는 경우도 함께 잡아 중단 처리한다.
+
+**Non-goal(범위 밖)**: Multi-Agent 선택/조정 로직 변경(기존 고정
+파이프라인 그대로 재사용), Provider/Model Routing, 병렬 실행, Workflow
+레벨 Retry, Approval 게이트, Task 간 결과 전달(한 Task의 산출물을 다음
+Task 입력으로 넘기는 것).
+
+**Milestone Definition of Done**
+1. `WorkflowRunner`가 `Workflow`를 받아 `plan()` 순서대로 각 Task를
+   순차 실행한다.
+2. 앞 Task가 실패하면(`TaskStatus.DONE`에 도달하지 못하거나 예외 발생)
+   이후 Task는 실행되지 않고 즉시 중단된다.
+3. Task 2개 이상 + 의존관계가 있는 실제 Workflow가 사람 개입 없이
+   완주함이 통합 테스트로 증명된다(성공 케이스 + 중간 실패 시 중단
+   케이스 둘 다).
+4. 기존 `WorkflowEngine`/`EventBus`/`TaskEngine`/Agent 파이프라인
+   계약은 전혀 변경하지 않는다(새 컴포넌트 추가만).
+5. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-26 확정, 사용자 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M12-T01 | `WorkflowRunner` 구현 | TODO |
+| M12-T02 | End-to-End 검증 | TODO |
+| M12-T03 | 문서화 + Milestone 12 Review | TODO |
+
+**진행 상태**: 계획 확정, 착수 대기.
+
+#### M12-T01: `WorkflowRunner` 구현
+- 목적: Workflow의 Task 순차 자동 실행 책임을 가진 컴포넌트를 만든다.
+- 작업 내용: `runtime/workflow/workflow_runner.py`에 `WorkflowRunner`
+  구현. 생성자로 `workflow_engine: WorkflowEngine`, `event_bus:
+  EventBus`, `task_engine: TaskEngine`을 주입받는다(키워드 전용,
+  기존 `WorkspaceCore`/`AgentRuntime` 패턴과 동일). `run(workflow:
+  Workflow) -> WorkflowRunResult`(가칭) 형태의 단일 공개 메서드 —
+  `plan()`으로 순서를 얻고, 각 task_id에 대해 `MissionPlanned` Event를
+  발행(`event_id`는 다른 Agent들과 동일하게 `uuid4()`)한 뒤
+  `task_engine.get_task(task_id).status`를 확인해 `DONE`이 아니면
+  중단하고 어디까지 실행됐는지 반환한다. `AgentRuntime`/
+  `AgentScheduler`/`AgentCapability`는 전혀 사용하지 않는다(Agent가
+  아님을 코드로도 증명).
+- 완료 조건(DoD): 성공적으로 완주하는 경우, 중간에 실패해 중단되는
+  경우 각각을 Mock/Fake `WorkflowEngine`/`EventBus`/`TaskEngine`으로
+  검증하는 단위 테스트가 통과한다.
+- 상태: TODO
+- 의존성: 없음(기존 Interface만 사용).
+
+#### M12-T02: End-to-End 검증
+- 목적: 실제 Agent 파이프라인 위에서 다단계 Workflow가 사람 개입 없이
+  완주함을 증명한다.
+- 작업 내용: `tests/integration/`에 2~3개 Task + 의존관계가 있는
+  실제 `Workflow`를 구성하고, `WorkflowRunner`가 `MockEngineAdapter`(또는
+  기존 통합 테스트가 쓰던 패턴)를 통해 각 Task를 실제 6-Agent
+  파이프라인(Planning 제외 — Task는 이미 생성돼 있으므로 Coding부터)
+  으로 순차 실행함을 검증한다. 성공 시나리오(전체 완주)와 실패
+  시나리오(중간 Task 실패 → 이후 Task 미실행) 둘 다 다룬다.
+- 완료 조건(DoD): 두 시나리오 모두 통합 테스트로 통과하고, Task 실행
+  순서가 `plan()` 결과와 정확히 일치함을 이벤트/상태로 확인한다.
+- 상태: TODO
+- 의존성: M12-T01.
+
+#### M12-T03: 문서화 + Milestone 12 Review
+- 목적: 문서와 구현을 일치시키고 Milestone 종료 승인을 받는다.
+- 작업 내용: `docs/ARCHITECTURE.md`에 `WorkflowRunner` 반영(어느
+  절에 넣을지는 착수 시 재검토 — Core Engines도 Agent도 아닌 새
+  종류의 컴포넌트이므로 §3에 소절 신설 여부를 판단), `docs/ROADMAP.md`/
+  `.ai/MEMORY.md` 갱신, 전체 테스트 결과 정리 및 제시.
+- 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
+- 상태: TODO
+- 의존성: M12-T01~T02.
 
 ---
 
