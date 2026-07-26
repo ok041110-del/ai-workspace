@@ -2480,7 +2480,7 @@ M2~M6가 그래왔듯).
 
 | Task | 내용 | 근거/출처 |
 |---|---|---|
-| M7-T01 | `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가(인터페이스 확장, 하위 호환) | PRD 7.4 갭 |
+| M7-T01 | `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가(인터페이스 확장, 하위 호환) — **완료** | PRD 7.4 갭 |
 | M7-T02 | `DocumentationAgent`가 기존에 버려지던 `engine_runtime.run()` 결과를 캡처해 요약으로 전달 | PRD 7.4 갭 |
 | M7-T03 | End-to-End 검증(파이프라인 실행 후 요약이 저장·검색·복원됨을 통합 테스트로 증명) | Milestone DoD |
 | M7-T04 | Milestone 7 Review | 관례 |
@@ -2525,7 +2525,31 @@ M2~M6가 그래왔듯).
    라우팅, 그 외 소규모 이월 부채는 이번 Milestone 범위 밖으로 유지된다.
 
 **상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). 착수 대기 — 다음 Task는 M7-T01.
+사용자 확정). M7-T01 완료, 다음 Task는 M7-T02.
+
+#### M7-T01: `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가
+- 목적: Memory 요약을 저장할 최소 계약을 마련한다 — `MemoryEngine`은
+  손대지 않고(ADR-0017 경계 유지), `ContextManager` 인터페이스만
+  하위 호환되게 확장한다.
+- 작업 내용: `interfaces/context_manager.py`의 `create_snapshot()`에
+  `summary: str | None = None` 파라미터 추가(계약 docstring 갱신).
+  `memory/context_manager.py`의 `InMemoryContextManager.create_snapshot()`
+  이 summary가 주어지면 `context["summary"] = summary`로 병합 후 기존과
+  동일하게 `MemoryEngine.remember()`로 저장. `tests/interfaces/fakes.py`
+  의 `FakeContextManager`도 동일하게 갱신(계약 테스트 일관성).
+- 완료 조건(DoD): summary 없이 호출하면 기존과 완전히 동일하게 동작(하위
+  호환), summary가 있으면 `restore_snapshot()`/`assemble_context()`로
+  조회되고 `find_snapshots()`로도 검색됨. `MemoryEngine` 인터페이스
+  변경 없음. `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — 계약 테스트(`tests/interfaces/
+  test_context_manager.py`) 3개 + 단위 테스트(`tests/memory/
+  test_context_manager.py`) 3개 신규(summary 포함/미포함/검색). 기존
+  프로덕션 호출부(`DocumentationAgent`)는 아직 무인자로 호출하므로
+  회귀 없음(summary 실제 반영은 M7-T02 범위). `docs/ARCHITECTURE.md`
+  §3.8에 "Context Manager/Memory Engine 둘 다 요약을 생성하지 않는다"는
+  경계를 명시. `pytest` 422개(M7 착수 전 416개 + 신규 6개) 전부 통과,
+  `ruff check src tests`/`mypy src` 클린.
+- 의존성: 없음(M7 Task List 첫 Task)
 
 ---
 

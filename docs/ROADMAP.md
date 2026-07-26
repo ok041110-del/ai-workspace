@@ -353,13 +353,13 @@ M6에서 실제 LLM 호출 인프라(`EngineRuntime`→`EngineAdapter`)가 완�
 
 | Task | 내용 | 근거/출처 |
 |---|---|---|
-| M7-T01 | `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가 | PRD 7.4 갭 |
+| M7-T01 | `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가 — **완료** | PRD 7.4 갭 |
 | M7-T02 | `DocumentationAgent`가 버려지던 engine 결과를 요약으로 전달 | PRD 7.4 갭 |
 | M7-T03 | End-to-End 검증 | Milestone DoD |
 | M7-T04 | Milestone 7 Review | 관례 |
 
 **진행 상태**: 목표/DoD/Task List/사전 Architecture Review 확정
-(2026-07-26 사용자 확정). 착수 대기 — 다음은 `M7-T01`부터 착수.
+(2026-07-26 사용자 확정). M7-T01 완료, 다음은 `M7-T02`.
 
 ---
 

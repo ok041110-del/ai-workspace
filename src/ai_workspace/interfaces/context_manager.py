@@ -30,14 +30,20 @@ class ContextManager(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def create_snapshot(self, session: WorkspaceSession) -> str:
+    def create_snapshot(self, session: WorkspaceSession, summary: str | None = None) -> str:
         """
-        입력: session (현재 Context 상태를 저장할 대상 WorkspaceSession)
+        입력: session (현재 Context 상태를 저장할 대상 WorkspaceSession),
+              summary (선택, M7-T01 — 이 Snapshot에 함께 저장할 자연어
+              요약. 생략하면 요약 없이 기존과 동일하게 동작)
         출력: 새로 생성된 Snapshot을 식별하는 snapshot_id
         예외: 없음
         보장: create_snapshot(session) 직후 restore_snapshot(snapshot_id)를
-              호출하면 그 시점의 assemble_context(session) 결과와 동일한
-              Context를 반환한다.
+              호출하면 그 시점의 assemble_context(session) 결과에 summary가
+              주어졌을 경우 `{"summary": summary}`가 추가된 Context를
+              반환한다. summary는 `MemoryEngine`이 저장하는 문자열의 일부가
+              되므로 `find_snapshots()`로도 검색된다. 여러 Snapshot에 걸친
+              누적 요약(요약의 요약)은 하지 않는다 — 매번 최신 요약 하나만
+              저장한다.
         """
         raise NotImplementedError
 

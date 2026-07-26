@@ -246,6 +246,13 @@ Task · Workflow · Approval · Automation Engine. Agent가 사용하는 능력 
   Memory Snapshot은 Context Manager가 소유·관리한다.
 - **Memory Engine** (`MemoryEngine`): **저장/검색**만 담당하는 하위 서비스.
   Context Manager가 이를 사용한다.
+- **Memory 요약(M7-T01)**: `ContextManager.create_snapshot(session, summary=...)`가
+  선택적 `summary` 문자열을 받아 Snapshot 내용에 포함시킨다. **Context
+  Manager와 Memory Engine 둘 다 요약을 생성하지 않는다** — 이미 만들어진
+  요약 문자열을 전달받아 저장할 뿐이다. 요약을 실제로 만드는 것(LLM 호출)은
+  `EngineRuntime`에 접근할 수 있는 Agent 계층의 책임이다(§3.6 Agents,
+  `DocumentationAgent` 참고). 저장된 요약은 `MemoryEngine.search()`(M4-T08)
+  로도 검색되므로 별도 구현 없이 PRD 7.4 "검색/요약"을 함께 충족한다.
 - **의존 방향**: Agent → Context Manager → Memory Engine.
 
 ### 3.9 Engine Runtime (EngineRuntime 인터페이스, ADR-0016)

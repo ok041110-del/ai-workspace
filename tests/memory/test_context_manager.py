@@ -93,3 +93,34 @@ def test_find_snapshots_delegates_to_memory_engine_search() -> None:
     )
 
     assert manager.find_snapshots("p1") == memory_engine.search("p1") == [snapshot_id]
+
+
+def test_create_snapshot_with_summary_persists_via_memory_engine() -> None:
+    """M7-T01: summary는 MemoryEngine을 거쳐 저장되는 JSON의 일부가
+    된다 — MemoryEngine 자체는 summary가 뭔지 모른 채 문자열로만
+    저장한다(ADR-0017 경계 유지)."""
+    manager = InMemoryContextManager(InMemoryMemoryEngine())
+    session = WorkspaceSession(session_id="s1", current_project_id="p1")
+
+    snapshot_id = manager.create_snapshot(session, summary="로그인 기능 구현 및 검토 완료")
+
+    assert manager.restore_snapshot(snapshot_id)["summary"] == "로그인 기능 구현 및 검토 완료"
+
+
+def test_create_snapshot_without_summary_omits_summary_key() -> None:
+    manager = InMemoryContextManager(InMemoryMemoryEngine())
+    session = WorkspaceSession(session_id="s1", current_project_id="p1")
+
+    snapshot_id = manager.create_snapshot(session)
+
+    assert "summary" not in manager.restore_snapshot(snapshot_id)
+
+
+def test_find_snapshots_matches_summary_content() -> None:
+    """M7-T01 DoD: 요약 내용도 검색된다 — PRD 7.4 "검색/요약" 완전 충족."""
+    manager = InMemoryContextManager(InMemoryMemoryEngine())
+    snapshot_id = manager.create_snapshot(
+        WorkspaceSession(session_id="s1", current_project_id="p1"), summary="로그인 기능 완료"
+    )
+
+    assert manager.find_snapshots("로그인") == [snapshot_id]

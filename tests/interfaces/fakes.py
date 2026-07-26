@@ -472,9 +472,12 @@ class FakeContextManager(ContextManager):
             context.update(self._snapshots[session.memory_snapshot_id])
         return context
 
-    def create_snapshot(self, session: WorkspaceSession) -> str:
+    def create_snapshot(self, session: WorkspaceSession, summary: str | None = None) -> str:
         snapshot_id = f"snapshot-{next(self._id_generator)}"
-        self._snapshots[snapshot_id] = self.assemble_context(session)
+        context = self.assemble_context(session)
+        if summary is not None:
+            context["summary"] = summary
+        self._snapshots[snapshot_id] = context
         return snapshot_id
 
     def restore_snapshot(self, snapshot_id: str) -> dict[str, str]:
