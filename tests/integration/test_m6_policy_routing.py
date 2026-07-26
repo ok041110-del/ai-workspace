@@ -32,6 +32,7 @@ from ai_workspace.engines.llm_policy_engine import InMemoryLLMPolicyEngine
 from ai_workspace.engines.task_engine import InMemoryTaskEngine
 from ai_workspace.events.event_bus import InMemoryEventBus
 from ai_workspace.interfaces.event_bus import Event
+from ai_workspace.interfaces.execution_environment import ExecutionEnvironment, ExecutionResult
 from ai_workspace.memory.context_manager import InMemoryContextManager
 from ai_workspace.memory.memory_engine import InMemoryMemoryEngine
 from ai_workspace.runtime.agent.agent_runtime import AgentRuntime
@@ -41,30 +42,32 @@ from ai_workspace.storage.llm_policy_loader import load_llm_policy_rules
 _EXAMPLE_YAML = Path(__file__).resolve().parents[2] / "docs" / "llm_policy.example.yaml"
 
 
-class SwitchingFakeProcessRunner:
+class SwitchingFakeExecutionEnvironment(ExecutionEnvironment):
     """command[0](CLI 실행 파일 이름)에 따라 서로 다른 결과를 반환하는
-    테스트 더블(M6-T03) — `ClaudeCodeEngineAdapter`/`CLIEngineAdapter`
-    (Codex)/`CLIEngineAdapter`(Gemini)가 하나의 `ManagedEngineRuntime`에
-    동시에 등록되어도, 실제로 정책에 맞는 어댑터만 호출됐음을 실행 파일
-    이름으로 구분해 증명한다(세 어댑터 모두 실제 프로세스 대신 이
-    Runner를 공유해서 주입받는다)."""
+    테스트 더블(M6-T03, M11-T03에서 `ExecutionEnvironment` 계약으로 전환)
+    — `ClaudeCodeEngineAdapter`/`CLIEngineAdapter`(Codex)/`CLIEngineAdapter`
+    (Gemini)가 하나의 `ManagedEngineRuntime`에 동시에 등록되어도, 실제로
+    정책에 맞는 어댑터만 호출됐음을 실행 파일 이름으로 구분해 증명한다
+    (세 어댑터 모두 실제 프로세스 대신 이 환경을 공유해서 주입받는다)."""
 
     def __init__(self, stdout_by_executable: dict[str, str]) -> None:
         self._stdout_by_executable = stdout_by_executable
-        self.received_commands: list[list[str]] = []
+        self.executed_commands: list[list[str]] = []
 
-    def run(
+    def execute(
         self,
-        process_id: str,
+        execution_id: str,
         command: list[str],
         *,
         cwd: str | None = None,
         timeout: float | None = None,
-    ) -> ProcessResult:
-        self.received_commands.append(command)
-        return ProcessResult(returncode=0, stdout=self._stdout_by_executable[command[0]], stderr="")
+    ) -> ExecutionResult:
+        self.executed_commands.append(command)
+        return ExecutionResult(
+            returncode=0, stdout=self._stdout_by_executable[command[0]], stderr=""
+        )
 
-    def cancel(self, process_id: str) -> None:
+    def cancel(self, execution_id: str) -> None:
         pass
 
 
@@ -76,11 +79,12 @@ def assemble() -> dict[str, Any]:
     "진짜 정책 파일" 검증 방식). Coding/Review/Documentation 3개 Agent가
     각자 Role에 배정된 Provider의 Adapter로 실제 라우팅되는지(M6-T02)를
     End-to-End로 증명하는 것이 이 통합 테스트의 목적이다. 세 Adapter
-    모두 실제 CLI 프로세스 대신 `SwitchingFakeProcessRunner`를 공유
-    주입받는다(명령 조립·결과 파싱 등 실제 코드 경로는 그대로 거친다)."""
+    모두 실제 CLI 프로세스 대신 `SwitchingFakeExecutionEnvironment`를
+    공유 주입받는다(명령 조립·결과 파싱 등 실제 코드 경로는 그대로
+    거친다)."""
     event_bus = InMemoryEventBus()
     task_engine = InMemoryTaskEngine()
-    process_runner = SwitchingFakeProcessRunner(
+    execution_environment = SwitchingFakeExecutionEnvironment(
         {
             "claude": json.dumps({"is_error": False, "result": "claude 실행 결과"}),
             "codex": json.dumps({"content": "codex 실행 결과"}),
@@ -90,13 +94,17 @@ def assemble() -> dict[str, Any]:
 
     engine_runtime = ManagedEngineRuntime(event_bus=event_bus)
     engine_runtime.register_engine(
-        "claude_code", ClaudeCodeEngineAdapter(process_runner=process_runner)
+        "claude_code", ClaudeCodeEngineAdapter(execution_environment=execution_environment)
     )
     engine_runtime.register_engine(
-        "codex", CLIEngineAdapter(provider=CodexProvider(), process_runner=process_runner)
+        "codex",
+        CLIEngineAdapter(provider=CodexProvider(), execution_environment=execution_environment),
     )
     engine_runtime.register_engine(
-        "gemini", CLIEngineAdapter(provider=GeminiCliProvider(), process_runner=process_runner)
+        "gemini",
+        CLIEngineAdapter(
+            provider=GeminiCliProvider(), execution_environment=execution_environment
+        ),
     )
 
     llm_policy_engine = InMemoryLLMPolicyEngine(load_llm_policy_rules(_EXAMPLE_YAML))
@@ -149,7 +157,7 @@ def assemble() -> dict[str, Any]:
         "planning_agent": planning_agent,
         "task_engine": task_engine,
         "event_bus": event_bus,
-        "process_runner": process_runner,
+        "execution_environment": execution_environment,
     }
 
 
@@ -189,7 +197,7 @@ def test_policy_routes_each_role_to_distinct_registered_engine_adapter() -> None
     pipeline["planning_agent"].plan_mission("p1", "구현하기")
 
     invoked_executables = [
-        command[0] for command in pipeline["process_runner"].received_commands
+        command[0] for command in pipeline["execution_environment"].executed_commands
     ]
     assert sorted(invoked_executables) == ["claude", "codex", "gemini"]
 

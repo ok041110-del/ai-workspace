@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 
 from ai_workspace.adapters.cli_provider import CLIProvider
-from ai_workspace.adapters.process_runner import ProcessResult
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_adapter import EngineResult
+from ai_workspace.interfaces.execution_environment import ExecutionResult
 
 
 class GeminiCliProvider(CLIProvider):
@@ -41,18 +41,18 @@ class GeminiCliProvider(CLIProvider):
             command.extend(["--model", self._model])
         return command
 
-    def parse_result(self, process_result: ProcessResult) -> EngineResult:
-        data = self._parse_json(process_result.stdout)
+    def parse_result(self, execution_result: ExecutionResult) -> EngineResult:
+        data = self._parse_json(execution_result.stdout)
         if data is not None and "response" in data:
             return EngineResult(
-                success=process_result.returncode == 0, output=str(data["response"])
+                success=execution_result.returncode == 0, output=str(data["response"])
             )
-        if process_result.returncode == 0:
-            return EngineResult(success=True, output=process_result.stdout)
+        if execution_result.returncode == 0:
+            return EngineResult(success=True, output=execution_result.stdout)
         return EngineResult(
             success=False,
-            output=process_result.stdout,
-            error=process_result.stderr or process_result.stdout,
+            output=execution_result.stdout,
+            error=execution_result.stderr or execution_result.stdout,
         )
 
     @staticmethod

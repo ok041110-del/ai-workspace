@@ -3617,7 +3617,35 @@ Claude API 기반 EngineAdapter, Model/Effort 수준 라우팅(M6 Review 최초
   `ExecutionEnvironment` 기준으로 갱신되어) 회귀 없이 통과. 신규
   `FakeExecutionEnvironment` 주입만으로 Adapter 코드 변경 없이 동작함을
   보이는 테스트 포함(Milestone DoD 4번 직접 증명).
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `ClaudeCodeEngineAdapter`/`CLIEngineAdapter`
+  생성자 매개변수를 `process_runner: ProcessRunner | None` →
+  `execution_environment: ExecutionEnvironment | None`(기본값
+  `LocalExecutionEnvironment()`)로 교체, 내부 호출을 `execute()`/
+  `cancel()`로 변경(둘 다 DI 기본값만 다르게 감쌈, 로직 변경 없음).
+  `CLIProvider.parse_result()`(및 `CodexProvider`/`GeminiCliProvider`
+  구현) 시그니처도 `ProcessResult` → `ExecutionResult`로 함께 갱신
+  (같은 이유로 항상 함께 바뀌는 강결합이라 이번 Task에 포함).
+  `tests/adapters/test_claude_code_engine_adapter.py`/
+  `test_cli_engine_adapter.py`의 로컬 `FakeProcessRunner`를
+  `tests/interfaces/fakes.py`의 `FakeExecutionEnvironment`로 교체(다른
+  Interface들과 동일한 "Fake는 interfaces/fakes.py에 두고 cross-import"
+  관례를 따름). `test_cancel_marks_status_cancelled_and_notifies_process_
+  runner`는 `ExecutionEnvironment.cancel()`이 미실행 id에 대해
+  `ExecutionNotFoundError`를 던지는 새 계약에 맞춰
+  `test_cancel_before_execution_marks_status_cancelled`로 재작성(Adapter가
+  예외를 삼키고 상태만 전이시킴을 확인하는 것으로 범위를 정정 — 이전
+  테스트는 duck-typing Fake가 예외를 던지지 않던 우연한 동작에
+  의존했음). `test_cli_engine_adapter.py`에
+  `test_new_execution_environment_extends_adapter_without_code_changes`
+  신규 추가해 Milestone DoD 4번(OCP)을 직접 증명. `test_m3_end_to_end.py`/
+  `test_m6_policy_routing.py`/`test_coding_agent_runtime_integration.py`의
+  로컬 duck-typing 더블(`SwitchingFakeProcessRunner`/`FlakyProcessRunner`
+  등)도 `ExecutionEnvironment`를 상속하도록 함께 갱신(회귀 없음 확인
+  목적). `ShellAgent`가 쓰는 `ProcessRunner`/`FakeProcessRunner`(M5-T04,
+  EngineAdapter와 무관한 별도 경로)는 범위 밖으로 전혀 손대지 않음.
+  `ruff check src tests`, `mypy src`, `pytest`(460개, 기존 459개 +
+  신규 1개) 모두 통과. 다음 Task: **M11-T04**(문서화 + Milestone 11
+  Review).
 - 의존성: M11-T02.
 
 #### M11-T04: 문서화 + Milestone 11 Review
