@@ -2764,7 +2764,7 @@ memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새
 | M8-T01 | `ContextManager`에 `latest_snapshot_id(project_id)` 신규 메서드 추가(계약+구현) — project별 최신 snapshot 포인터 — **완료** | M7 Review 이월 갭 |
 | M8-T02 | `DocumentationAgent`가 Mission 종료 시 `workspace_session.memory_snapshot_id`를 새 snapshot_id로 갱신 — **완료** | Milestone DoD |
 | M8-T03 | `PlanningAgent`가 Mission 시작 시 `memory_snapshot_id`가 없으면 `latest_snapshot_id(project_id)`로 자동 복원 — **완료** | Milestone DoD |
-| M8-T04 | End-to-End 검증(같은 세션 내 연속 Mission + 새 세션에서도 이전 요약을 자동으로 이어받음을 증명) | Milestone DoD |
+| M8-T04 | End-to-End 검증(같은 세션 내 연속 Mission + 새 세션에서도 이전 요약을 자동으로 이어받음을 증명) — **완료** | Milestone DoD |
 | M8-T05 | Milestone 8 Review | 관례 |
 
 **Architecture Review(사전 검토, 착수 전)**:
@@ -2822,7 +2822,7 @@ memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새
    라우팅, Adapter 계열 통합 등은 이번 Milestone 범위 밖으로 유지된다.
 
 **상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). M8-T01~T03 완료, 다음 Task는 M8-T04(End-to-End 검증).
+사용자 확정). M8-T01~T04 완료, 다음 Task는 M8-T05(Milestone Review).
 
 #### M8-T01: `ContextManager.latest_snapshot_id(project_id)` 신규 메서드
 - 목적: "project별 최신 snapshot"을 안정적으로 찾을 수 있는 계약을
@@ -2895,6 +2895,36 @@ memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새
   `docs/ARCHITECTURE.md` §3.6에 반영. `pytest` 440개(M8-T02 종료 시점
   435개 + 신규 5개) 전부 통과, `ruff check src tests`/`mypy src` 클린.
 - 의존성: M8-T01, M8-T02
+
+#### M8-T04: End-to-End 검증
+- 목적: M8-T01(포인터)/M8-T02(쓰기)/M8-T03(읽기)가 실제 파이프라인
+  안에서 맞물려 동작하는지 증명한다 — Milestone DoD 4번의 직접 검증
+  대상.
+- 작업 내용: `tests/agents/test_pipeline.py`의 `build_pipeline()`에
+  `context_manager`/`session_id` 선택적 파라미터 추가(기존 호출부
+  하위 호환) — 같은 `ContextManager`를 공유하는 두 번째 파이프라인/세션을
+  조립할 수 있게 함. 신규 테스트 2개:
+  `test_second_mission_in_same_session_sees_prior_summary_in_context`
+  (같은 세션의 연속 Mission이 이전 요약을 자동으로 이어받음, DoD 4번의
+  첫 번째 절), `test_new_session_inherits_previous_session_summary_via_planning_agent`
+  (완전히 새로운 `WorkspaceSession`이 실제 `InMemoryContextManager`/
+  `InMemoryMemoryEngine`을 통해 이전 세션의 요약을 자동으로 이어받음,
+  DoD 4번의 두 번째 절 — "세션 연속성"의 핵심 시나리오). 두 번째
+  테스트는 새 세션에 `DocumentationAgent`를 일부러 연결하지 않았다 —
+  연결하면 그 세션의 새 Mission이 끝나자마자 자신의 새 요약으로 즉시
+  덮어써(M8-T02, "누적이 아니라 최신 하나만 유지") 이어받은 상태를
+  관찰할 수 없기 때문이다(그 "덮어쓰기" 자체는 M8-T02의 별도 단위
+  테스트가 이미 검증).
+- 완료 조건(DoD): 같은 세션의 연속 Mission이 이전 요약을 자동으로
+  이어받음, 완전히 새로운 세션도 실제 구현체를 통해 이전 세션의 요약을
+  자동으로 이어받음(project별 독립성 유지). `pytest`/`ruff`/`mypy`
+  통과.
+- 상태: **DONE (2026-07-26)** — 신규 테스트 2개 추가. `pytest` 442개
+  (M8-T03 종료 시점 440개 + 신규 2개) 전부 통과, `ruff check src
+  tests`/`mypy src` 클린. Fake 기반 단위 테스트(M8-T01~T03)와 달리
+  실제 프로덕션 구현체(`InMemoryContextManager`+`InMemoryMemoryEngine`)
+  로 교차 세션 시나리오를 검증해 통합 수준의 신뢰도를 더했다.
+- 의존성: M8-T01, M8-T02, M8-T03
 
 ---
 
