@@ -2135,7 +2135,7 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
 | M6-T01 | `ManagedEngineRuntime` 다중 Adapter 등록 지원(`register_engine`의 "정확히 1개" 제한 해제, name 기준 dict 저장, `required_capabilities` 만족 후보 중 선택) — **완료** | M5 Review 이월 갭 #1 |
 | M6-T02 | `LLMProvider` → Engine Capability 태그 매핑 + `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가 `llm_policy_decision`을 `required_capabilities`로 변환해 `engine_runtime.run()`에 전달 — **완료** | RULES §7 M4 단계(자동 선택) |
 | M6-T03 | 다중 Adapter 조립 + End-to-End 검증(정책에 따라 실제로 다른 Adapter가 선택·실행됨을 통합 테스트로 증명) — **완료** | Milestone DoD |
-| M6-T04 | Milestone 6 Review | 관례 |
+| M6-T04 | Milestone 6 Review — **리뷰 작성 완료, 사용자 승인 대기** | 관례 |
 
 **Architecture Review(사전 검토, 착수 전)**:
 - **컴포넌트 경계**: 이번 변경은 `EngineRuntime`(§3.9)의 **구체 구현체**
@@ -2181,8 +2181,9 @@ Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M
    확정 참고).
 
 **상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). M6-T01/M6-T02/M6-T03 완료, 다음 Task는 M6-T04(Milestone
-Review).
+사용자 확정). M6-T01~T03 전체 DONE, M6-T04(Milestone 6 Review)는 리뷰
+작성 완료·사용자 승인 대기. Milestone 6 Review는 아래 "Milestone 6
+Review" 절 참고.
 
 #### M6-T01: `ManagedEngineRuntime` 다중 Adapter 등록 지원
 - 목적: `EngineRuntime` 인터페이스가 이미 계약해 둔 "다중 엔진 등록·
@@ -2295,6 +2296,157 @@ Review).
   검증, `ClaudeCodeEngineAdapter`/`CLIEngineAdapter` 프레임워크 통합은
   이번 Milestone 범위 밖으로 확정된 대로 손대지 않았다.
 - 의존성: M6-T01, M6-T02
+
+#### M6-T04: Milestone 6 Review
+- 목적: Approval Required 원칙에 따라 Milestone 6 산출물을 검토받는다.
+- 작업 내용: DoD 체크리스트, Architecture Review, Interface First 검토,
+  테스트 결과 문서화, Technical Debt 정리, 문서 갱신, Milestone 종료
+  선언.
+- 완료 조건(DoD): 위 항목 모두 완료 + 사용자 승인.
+- 상태: 리뷰 작성 완료(2026-07-26) — **사용자 승인 대기**
+
+---
+
+## Milestone 6 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `LLMPolicyDecision.model.provider`에 따라 3개 Agent가 실제로 서로 다른 등록된 `EngineAdapter`를 선택해 실행함이 통합 테스트로 검증 | ✅ (M6-T03) |
+| 2 | `ManagedEngineRuntime`이 2개 이상 `EngineAdapter` 동시 등록·`required_capabilities` 기반 선택·매칭 실패 시 `NoSuitableEngineError` | ✅ (M6-T01) |
+| 3 | `EngineRuntime`/`EngineAdapter` 인터페이스 계약 변경 없음 | ✅ (아래 3절) |
+| 4 | 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린 | ✅ (아래 4절) |
+| 5 | Adapter 계열 통합/Codex·Gemini CLI 실제 재검증/소규모 이월 부채는 범위 제외 유지 | ✅ (아래 5절) |
+
+Task List(M6-T01~T03) 전체 완료. M6-T04(본 Review)로 Milestone을 마감한다.
+
+**2. Architecture Review**
+
+M6에서 실제로 바뀐 구조는 정확히 2곳, 둘 다 M5 Review가 예고했던
+"정책→실행 연결" 갭을 메우는 최소 변경이었다:
+- **`ManagedEngineRuntime`(M6-T01)**: 내부 저장을 `EngineAdapter | None`
+  단일 필드에서 `dict[str, EngineAdapter]`로 교체하고, 어댑터 선택 로직을
+  "정확히 1개"에서 "`required_capabilities`를 만족하는 첫 매칭"으로
+  바꿨다. `cancel()`이 task별 실제 실행 어댑터를 정확히 추적하도록
+  `_task_adapters` 맵을 신규 추가했다. `tests/interfaces/fakes.py`의
+  `FakeEngineRuntime`(계약 검증용)이 이미 이 방식으로 구현돼 있어 참고
+  구현으로 그대로 따랐다 — 즉 `EngineRuntime` 인터페이스가 애초에
+  계약해 둔 것을 프로덕션 구현체가 뒤늦게 따라잡은 것뿐이다.
+- **Agent 3종(M6-T02)**: `domain/llm_policy.py`에 `LLMProvider`→
+  capability 태그 매핑과 `required_capabilities()` 순수 함수를 추가하고,
+  `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가 `AgentSession.
+  llm_policy_decision`을 이 함수로 변환해 `engine_runtime.run()`에
+  전달하도록 3줄씩만 바꿨다. `PlanningAgent`/`ShellAgent`/
+  `CoordinatorAgent`는 애초에 `engine_runtime.run()`을 호출하지 않아
+  손대지 않았다.
+
+`git diff --stat`(M5 종료 커밋 `b622e5f` 대비)로 확인한 결과 **소스 파일
+5개만 수정**(`llm_policy.py`, `managed_engine_runtime.py`,
+`coding_agent.py`/`review_agent.py`/`documentation_agent.py`)되었고
+**신규 소스 파일은 0개**다(72줄 순증가, 21줄 삭제) — Milestone 목표가
+"정책→실행 연결"이라는 좁은 범위였다는 것과, 그 범위를 지키기 위해
+Surgical Changes 원칙을 실제로 지켰다는 것을 정량적으로 뒷받침한다.
+`docs/ARCHITECTURE.md` §3.9는 두 Task 완료 시점마다 즉시 갱신되어
+구현과 문서 사이 괴리가 없다.
+
+**3. Interface First 원칙 검토**
+
+**M6은 새 최상위 Interface를 0개 추가했다** — M1 이후 유일하게 M5만
+1개(`LLMPolicyEngine`)를 추가했었고, M2/M3/M4/M6는 모두 0개다.
+`EngineRuntime`/`EngineAdapter`/`LLMPolicyEngine` 계약 중 어느 것도
+메서드 시그니처가 바뀌지 않았다 — M6가 실제로 한 일은 "이미 계약된 것을
+구현체가 따라잡는 것"(`ManagedEngineRuntime`)과 "이미 존재하는 도메인
+값(`AgentSession.llm_policy_decision`)을 이미 존재하는 파라미터
+(`required_capabilities`)로 연결하는 것"(Agent 3종)뿐이었다. 이는 M2
+시점에 `EngineRuntime`/`EngineAdapter` 인터페이스를 설계할 때 이미
+"여러 엔진 등록·Capability 기준 선택"을 내다보고 계약해 둔 결과이며,
+v0.5.0 아키텍처 기준선(ADR-0024) 선언 이후 "새 기능은 기존 16(+1)종
+Interface 위에 조립한다"는 방침이 M6에서도 그대로 지켜졌음을 보여준다.
+
+**4. 테스트 결과**
+
+- `pytest`: **416개 전부 통과**(M5 완료 시점 398개 → M6에서 18개 신규:
+  M6-T01 +3, M6-T02 +11, M6-T03 +4)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(82개 소스 파일)
+- M5 완료 커밋(`b622e5f`) 대비 소스 5개 파일 수정(신규 소스 파일 0개),
+  테스트 9개 파일 수정 + 2개 파일 신규(`test_documentation_agent.py` —
+  `DocumentationAgent`의 첫 전용 단위 테스트, `test_m6_policy_routing.py`)
+- 신규 외부 런타임 의존성 없음(M5의 `pyyaml` 이후 추가 없음).
+  `poetry.lock`을 이번 Milestone에서 처음 커밋했다(이전에는 저장소에
+  없었음 — 재현 가능한 의존성 고정을 위한 Maintenance 작업, 코드 변경
+  아님).
+
+**5. Technical Debt 정리**
+
+*M6에서 의도적으로 범위를 좁히거나 새로 드러난 것*
+- **Model/Effort 수준 라우팅 미완성**: 이번에 완성한 것은 **Provider
+  단위** 라우팅(`LLMPolicyDecision.model.provider` → 어느 CLI를 쓸지)
+  뿐이다. 같은 Provider 안에서 Model(예: `opus`/`sonnet`/`haiku`)이나
+  Effort(low/medium/high)를 실제 Adapter 실행에 반영하는 것은 아직 없다
+  — `ClaudeCodeEngineAdapter`/`CodexProvider`/`GeminiCliProvider` 모두
+  생성 시점에 `model` 파라미터가 고정되고, `EngineAdapter.run()`은
+  Model/Effort를 인자로 받지 않는다. Role별로 서로 다른 Model을 실제로
+  쓰려면 Role마다 별도 Adapter 인스턴스를 등록하거나 `EngineAdapter`
+  계약 자체를 확장해야 하는데, 이는 Milestone 6가 확정한 범위("Adapter
+  선택")를 벗어나는 더 큰 결정이라 **M7+ 논의 대상으로 명시적으로
+  이월**한다.
+- **복수 매칭 시 우선순위 정책 없음**: `required_capabilities`를 만족하는
+  Adapter가 여러 개면 등록 순서상 첫 매칭을 쓴다(실제로는 Provider당
+  Adapter가 정확히 1개씩만 등록되므로 지금은 발생하지 않는 상황) — 비용
+  기반 선택 등은 필요성이 증명되지 않아 여전히 만들지 않는다(YAGNI,
+  M6-T01 Architecture Review에서 이미 확인).
+- **`run_parallel()`이 `supports_parallel()`을 필터링하지 않음**: 여러
+  Adapter가 등록된 지금, `run_parallel()`이 capability만으로 어댑터를
+  고르고 병렬 지원 여부는 확인하지 않는다는 사실이 다중 Adapter 환경에서
+  더 뚜렷해졌다(`FakeEngineRuntime`은 `require_parallel` 파라미터로 이미
+  이를 거르지만 `ManagedEngineRuntime`은 M3-T01부터 하지 않았다) — M6
+  범위(단일 `run()` 경로의 Provider 라우팅)와 무관해 이번에도 손대지
+  않았다. 실제로 `run_parallel()`을 정책 라우팅과 함께 쓸 계획이 생기면
+  다음에 반드시 확인해야 한다.
+
+*사용자가 명시적으로 이번 범위에서 제외한 것(계속 이월)*
+- `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임워크 통합(M5-T05에서
+  "M6+에서 재검토"로 예고됐던 것 — 이번에 재검토하지 않기로 확정)
+- Codex/Gemini CLI 실제 바이너리 설치 후 재검증(M5-T05 미해결)
+- `run_parallel` 개별 Task 재시도 미지원(M4-T06), `MemoryEngine.search()`
+  선형 스캔(M4-T08), Retry Backoff/Persistent Runtime Recovery/Approval
+  비동기 처리/Process Timeout 정책 고도화(M3-T08), `ShellAgent`
+  화이트리스트가 코드에 고정(M5-T04)
+- Memory Engine 요약(summarization) 여전히 미구현(M4-T08→M5 Review에서
+  재확인 — "정책 결정"과 "실제 LLM 호출 서비스"는 여전히 다른 것이라는
+  진단이 M6에서도 변하지 않았다. Model/Effort 라우팅 미완성 항목과
+  같은 근본 원인)
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M6-T01~T03 상세 섹션) / `docs/ROADMAP.md`(M6
+Task List 완료 표시, Milestone 개요 갱신) / `docs/ARCHITECTURE.md`(§3.9
+각 Task 완료 시점마다 이미 갱신됨) 완료. `pyproject.toml` 버전은 v0.5.0
+그대로 유지한다(M4-T09에서 선언한 구조적 기준선은 그대로이고, M6은 그
+위에 기능을 얹은 것 — M5와 동일한 판단). `.ai/MEMORY.md`는 이 Review
+승인 직후 M1~M5와 동일한 방식으로 압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 소스 5개
+파일 수정·신규 파일 0개로 Surgical Changes 정량 확인), Interface First
+검토 완료(3절, 새 Interface 0개 — M2/M3/M4와 같은 패턴 유지), 테스트
+결과 문서화 완료(4절), Technical Debt 정리 완료(5절, Model/Effort 라우팅
+미완성을 M7+ 논의 대상으로 투명하게 명시), 문서 갱신 완료(6절) — 6개
+조건 모두 만족. Review 중 코드 변경이 필요한 치명적 문제(버그·계약
+위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 6 Completed를 선언한다.**
+
+**Milestone 7 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
+이번 Review에서 드러난 가장 뚜렷한 후속 논의 대상은 "Model/Effort 수준
+라우팅"(Role별로 같은 Provider 안에서도 다른 Model/Effort를 실제로
+쓰게 하려면 `EngineAdapter` 계약 확장이 필요한지 검토)이지만, 이는 사전
+논의 없이 확정된 것이 아니며 Milestone 7은 착수 시점에 이 문서에
+목표/DoD/Task List를 새로 정의한다(Task Driven Development 원칙,
+M2~M6가 그래왔듯).
 
 ---
 
