@@ -332,9 +332,14 @@ class FakeEngineRuntime(EngineRuntime):
         adapter = self._select(required_capabilities, require_parallel=True)
         results: list[EngineResult] = []
         for task in tasks:
-            session_id = adapter.create_session()
-            result = adapter.run(session_id, task)
-            adapter.destroy_session(session_id)
+            try:
+                session_id = adapter.create_session()
+                result = adapter.run(session_id, task)
+                adapter.destroy_session(session_id)
+            except BaseException as exc:
+                self._task_status[task.task_id] = EngineSessionStatus.FAILED
+                results.append(EngineResult(success=False, output="", error=str(exc)))
+                continue
             self._task_status[task.task_id] = (
                 EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED
             )

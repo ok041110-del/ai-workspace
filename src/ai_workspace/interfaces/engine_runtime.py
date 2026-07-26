@@ -66,9 +66,20 @@ class EngineRuntime(ABC):
               엔진이 반드시 지원해야 하는 능력 태그 집합, 생략 시 제약 없음)
         출력: tasks와 같은 순서, 같은 길이의 EngineResult 목록
         예외: required_capabilities를 모두 만족하면서 병렬 실행(supports_parallel)을
-              지원하는 등록된 엔진이 없으면 NoSuitableEngineError
-        보장: 반환된 목록의 i번째 원소는 tasks의 i번째 Task에 대한 결과다
-              (실행 완료 순서가 아니라 입력 순서를 따른다).
+              지원하는 등록된 엔진이 없으면 NoSuitableEngineError(Runtime 자체가
+              이 요청을 처리할 수 없는 치명적 오류이므로, 개별 Task 실행을
+              시작하기 전에 즉시 전파된다 — 아래 "개별 Task 실패" 보장과는
+              다른 층위다).
+        보장(M10-T01, 개별 Task 실패 격리):
+          1. 반환된 목록의 길이는 항상 len(tasks)와 같다.
+          2. 반환된 목록의 i번째 원소는 tasks의 i번째 Task에 대한 결과다
+             (실행 완료 순서가 아니라 입력 순서를 따른다).
+          3. 개별 Task 실행 중 발생한 예외(예: EngineExecutionError)는 그
+             Task의 EngineResult(success=False, error=예외 메시지)로 변환된다.
+          4. 개별 Task 실패만으로는 run_parallel() 자체가 예외를 던지지
+             않는다 — 위 "예외" 항목(NoSuitableEngineError 등 Runtime 자체의
+             치명적 오류)만 예외로 전파되며, 그 외에는 항상 EngineResult
+             목록을 정상 반환한다.
         """
         raise NotImplementedError
 
