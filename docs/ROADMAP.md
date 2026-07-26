@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~12 완료, v0.5.0 아키텍처 기준선 선언, Milestone 13 목표 미정) |
+| 상태 | Draft (Milestone 1~12 완료, v0.5.0 아키텍처 기준선 선언, Milestone 13 계획 확정 — 착수 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -568,6 +568,44 @@ Debt 후보 제시)는 `.ai/TASKS.md`의 "Milestone 9 Review" 참고.
 
 **진행 상태**: M12-T01~T03 전체 완료. Milestone DoD 1~5번 전부 충족
 확인됨. **Milestone 12 완료 — 2026-07-26 사용자 승인.**
+
+---
+
+## Milestone 13 — Multi-Agent Collaboration
+
+**목표**: 같은 Capability(CODING)를 가진 Agent가 여러 개 등록돼 있을
+때, `AgentScheduler.select()`가 실제로 그중 하나만 고르고 선택되지
+않은 Agent는 개입하지 않는다는 것을 실제 동작으로 증명한다(MVP).
+Provider/Model Routing, 병렬 실행, Scheduler 정책 고도화, CodingAgent
+외 확장은 범위 밖.
+
+**설계 방향**: 새 중앙 디스패처 없이, 각 Agent가 처리 직전 "내가
+Scheduler에게 선택됐나?"를 스스로 확인하는 자가 확인 가드를 둔다.
+`agents/scheduling.py`에 `is_agent_selected()` 헬퍼를 추가하고,
+`CodingAgent`에 `agent_registry`/`agent_scheduler`를 **선택적**
+매개변수로 추가(기본값 `None` — 기존 호출부 전혀 안 건드림).
+
+**Milestone Definition of Done**
+1. `agent_registry`/`agent_scheduler` 미주입 시 `CodingAgent`는 기존과
+   완전히 동일하게 동작한다(회귀 없음).
+2. 같은 Capability의 `CodingAgent` 2개 중 Scheduler가 고른 1개만
+   Task를 처리하고 나머지는 개입하지 않는다.
+3. 위 2번이 실제 구현체(Fake 아님)로 통합 테스트로 증명된다.
+4. 기존 `EventBus`/`AgentRegistry`/`AgentScheduler`/`CodingAgent`의
+   다른 계약은 변경되지 않는다.
+5. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 13"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M13-T01 | `is_agent_selected()` 헬퍼 정의 | TODO |
+| M13-T02 | `CodingAgent`에 선택적 Scheduler 가드 적용 | TODO |
+| M13-T03 | End-to-End 통합 테스트 | TODO |
+| M13-T04 | 문서화 + Milestone 13 Review | TODO |
+
+**진행 상태**: 계획 확정, 착수 대기.
 
 ---
 

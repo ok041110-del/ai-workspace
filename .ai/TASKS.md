@@ -4032,11 +4032,121 @@ Interface First 검토 완료(3절, 새 Interface 0개), 테스트 결과 문서
 
 **Milestone 12 종료 — 2026-07-26 사용자 승인.**
 
-**Milestone 13 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
-`docs/ROADMAP.md`가 원래 그려둔 다음 단계는 M13(Multi-Agent
-Collaboration)이지만, 이는 사전 논의 없이 확정된 것이 아니며 Milestone
-13은 착수 시점에 이 문서에 목표/DoD/Task List를 새로 정의한다(Task
-Driven Development 원칙, M2~M12가 그래왔듯).
+**Milestone 13 상태**: 착수 확정. 아래 "Milestone 13" 절 참고.
+
+---
+
+## Milestone 13 — Multi-Agent Collaboration
+
+**목표**: 같은 Capability(CODING)를 가진 Agent가 여러 개 등록돼 있을 때,
+`AgentScheduler.select()`가 실제로 그중 하나만 고르고 선택되지 않은
+Agent는 개입하지 않는다는 것을 실제 동작으로 증명한다(MVP, 2026-07-26
+사용자 확정).
+
+> **설계 검토에서 발견한 사실**: `AgentScheduler`(Capability 기준 Agent
+> 선택 계약)는 M1부터 정의되어 있었지만, 지금까지 한 번도 실제 협업
+> 흐름에서 쓰인 적이 없었다. 현재 파이프라인은 각 Agent가 특정 Event
+> 타입을 직접 구독해 무조건 처리하는 고정 배선 구조라, Capability가
+> 같은 Agent가 여러 개 있어도 Scheduler가 "이번엔 누가 처리할지"를
+> 실제로 고르는 시나리오가 존재한 적이 없었다. `agents/scheduling.py`
+> 의 `find_agent_by_capability()`도 테스트에서 "등록 여부 확인" 용도로만
+> 쓰였다. `AgentRuntime.start_agent()`가 이미 `AgentRegistry.register()`
+> 를 호출하므로, 같은 Capability의 Agent 인스턴스를 여러 개 만들면
+> 자동으로 전부 Registry에 등록된다 — 새 Interface 없이 기존 구성요소
+> 만으로 이번 MVP를 구현할 수 있다.
+
+**설계 방향(사용자 확정)**: 새로운 중앙 디스패처를 만들지 않는다.
+`InMemoryAgentScheduler.select()`가 결정적(candidates 리스트에서 첫
+매치)이므로, 모든 후보 Agent가 같은 `candidates`로 같은 질문을 하면
+전부 같은 답을 얻는다는 점을 이용한다 — 각 Agent가 처리 직전에
+"내가 선택됐나?"를 스스로 확인하고 아니면 조용히 넘어가는 **자가 확인
+가드**를 둔다. `agents/scheduling.py`에 `is_agent_selected(agent_registry,
+agent_scheduler, capability, agent_id) -> bool` 헬퍼를 추가하고,
+`CodingAgent` 생성자에 `agent_registry`/`agent_scheduler`를 **선택적**
+(기본값 `None`) 키워드 매개변수로 추가한다 — 주어지지 않으면 기존과
+100% 동일하게 동작해 기존 호출부(수십 곳)를 전혀 건드리지 않는다.
+MVP는 `CodingAgent` 하나에만 적용한다(Review/Documentation 등으로
+확장은 후속 Milestone).
+
+**Non-goal(범위 밖)**: Provider/Model Routing(M6에서 이미 다룸), 병렬
+실행, Scheduler 선택 정책 고도화(우선순위/부하 기반 — 기존 "첫 매치"
+그대로 사용), `CodingAgent` 외 다른 Agent로의 확장.
+
+**Milestone Definition of Done**
+1. `agent_registry`/`agent_scheduler`를 주입하지 않으면 `CodingAgent`는
+   기존과 완전히 동일하게 동작한다(회귀 없음).
+2. 같은 CODING Capability의 `CodingAgent` 2개가 등록된 상태에서,
+   `MissionPlanned` 하나에 대해 Scheduler가 고른 1개만 Task를 처리하고
+   나머지는 아무것도 하지 않는다.
+3. 위 2번이 실제 `AgentRegistry`/`AgentScheduler` 구현체(Fake 아님)로
+   통합 테스트로 증명된다.
+4. 기존 `EventBus`/`AgentRegistry`/`AgentScheduler`/`CodingAgent`의
+   다른 계약은 변경되지 않는다.
+5. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-26 확정, 사용자 최종 승인 — 구현/구현/Integration
+Test/문서화+Review 4단계 패턴, 이후 Milestone에도 동일 패턴 적용)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M13-T01 | `is_agent_selected()` 헬퍼 정의 | TODO |
+| M13-T02 | `CodingAgent`에 선택적 Scheduler 가드 적용 | TODO |
+| M13-T03 | End-to-End 통합 테스트 | TODO |
+| M13-T04 | 문서화 + Milestone 13 Review | TODO |
+
+**진행 상태**: 계획 확정, 착수 대기.
+
+#### M13-T01: `is_agent_selected()` 헬퍼 정의
+- 목적: "이 Agent가 이번에 Scheduler에게 선택됐는가"를 판별하는 순수
+  함수를 만든다.
+- 작업 내용: `agents/scheduling.py`에 `is_agent_selected(agent_registry:
+  AgentRegistry, agent_scheduler: AgentScheduler, capability:
+  AgentCapability, agent_id: str) -> bool` 추가 — `agent_registry.
+  list_active()`로 후보를 모으고 `agent_scheduler.select(candidates,
+  capability, max_count=1)`로 선택된 Agent의 `agent_id`가 인자로 받은
+  `agent_id`와 같은지 비교한다. 기존 `find_agent_by_capability()`와
+  나란히 두는 순수 함수(side-effect 없음).
+- 완료 조건(DoD): 후보가 여러 개일 때 선택된 것만 True, 나머지는
+  False임을 확인하는 단위 테스트(Fake `AgentRegistry`/`AgentScheduler`
+  사용)가 통과한다.
+- 상태: TODO
+- 의존성: 없음(기존 Interface만 사용).
+
+#### M13-T02: `CodingAgent`에 선택적 Scheduler 가드 적용
+- 목적: 여러 `CodingAgent` 인스턴스가 등록돼 있어도 Scheduler가 고른
+  것만 실제로 일하게 한다.
+- 작업 내용: `CodingAgent.__init__`에 `agent_registry: AgentRegistry |
+  None = None`, `agent_scheduler: AgentScheduler | None = None` 추가.
+  `_on_mission_planned()` 맨 앞에서 두 인자가 모두 주어졌을 때만
+  `is_agent_selected(...)`를 확인하고, False면 Task/Event에 아무 영향
+  없이 바로 return한다.
+- 완료 조건(DoD): (a) 둘 다 주지 않으면 기존 테스트 전부 회귀 없이
+  통과(Milestone DoD 1번), (b) 선택되지 않은 인스턴스는 Task 상태도
+  Event도 건드리지 않음을 단위 테스트로 확인.
+- 상태: TODO
+- 의존성: M13-T01.
+
+#### M13-T03: End-to-End 통합 테스트
+- 목적: 실제 구현체(Fake 아님)로 전체 시나리오를 증명한다.
+- 작업 내용: `tests/integration/`에 같은 `AgentRegistry`/
+  `AgentScheduler`(`InMemoryAgentRegistry`/`InMemoryAgentScheduler`)를
+  공유하는 `CodingAgent` 2개를 등록하고, 하나의 `MissionPlanned`
+  Event에 대해 Scheduler가 고른 1개만 `engine_runtime.run()`을
+  호출하고 Task를 전이시키며 `CodeCompleted`를 발행함을, 나머지 1개는
+  아무 것도 하지 않음을 증명한다.
+- 완료 조건(DoD): Milestone DoD 2·3번이 통합 테스트로 직접 증명된다.
+- 상태: TODO
+- 의존성: M13-T02.
+
+#### M13-T04: 문서화 + Milestone 13 Review
+- 목적: 문서와 구현을 일치시키고 Milestone 종료 승인을 받는다.
+- 작업 내용: `docs/ARCHITECTURE.md`에 Scheduler 가드 메커니즘 반영
+  (§3.4 Agent Scheduler 또는 §3.6 Agents 소절 갱신 — 착수 시 재검토),
+  `docs/ROADMAP.md`/`.ai/MEMORY.md` 갱신, 전체 테스트 결과 정리 및
+  제시.
+- 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
+- 상태: TODO
+- 의존성: M13-T01~T03.
 
 ---
 
