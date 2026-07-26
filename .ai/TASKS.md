@@ -2926,6 +2926,138 @@ memory_snapshot_id`가 자동으로 갱신되지 않아, PRD 7.4("새 세션/새
   로 교차 세션 시나리오를 검증해 통합 수준의 신뢰도를 더했다.
 - 의존성: M8-T01, M8-T02, M8-T03
 
+#### M8-T05: Milestone 8 Review
+- 목적: Approval Required 원칙에 따라 Milestone 8 산출물을 검토받는다.
+- 작업 내용: DoD 체크리스트, Architecture Review, Interface First 검토,
+  테스트 결과 문서화, Technical Debt 정리, 문서 갱신, Milestone 종료
+  선언.
+- 완료 조건(DoD): 위 항목 모두 완료 + 사용자 승인.
+- 상태: 리뷰 작성 완료(2026-07-26) — **사용자 승인 대기**
+
+---
+
+## Milestone 8 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `ContextManager.latest_snapshot_id(project_id)`가 최근 생성된 snapshot_id 반환 | ✅ (M8-T01) |
+| 2 | `DocumentationAgent`가 Mission 종료 시 세션에 최신 snapshot_id 기록 | ✅ (M8-T02) |
+| 3 | `PlanningAgent`가 Mission 시작 시 비어 있으면 자동 복원 | ✅ (M8-T03) |
+| 4 | 같은 세션 연속 Mission + 새 세션 모두 자동 이어받음이 통합 테스트로 증명 | ✅ (M8-T04) |
+| 5 | `WorkspaceCore`/`MemoryEngine` 인터페이스 변경 없음 | ✅ (아래 3절) |
+| 6 | 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린 | ✅ (아래 4절) |
+| 7 | 동시성 경쟁 조건/세션 리셋 옵션/Model·Effort 라우팅/Adapter 통합은 범위 밖 유지 | ✅ (아래 5절) |
+
+Task List(M8-T01~T04) 전체 완료. M8-T05(본 Review)로 Milestone을 마감한다.
+
+**2. Architecture Review**
+
+M8에서 실제로 바뀐 구조는 정확히 3곳:
+- **`ContextManager`(M8-T01)**: `latest_snapshot_id(project_id)` 메서드
+  1개 추가. 이 "최신" 포인터는 **`MemoryEngine`을 거치지 않고 Context
+  Manager 내부에서만** 관리한다 — `MemoryEngine.search()`는 값의
+  substring 일치라 포인터까지 저장하면 검색 결과가 오염될 위험이
+  있었기 때문이다(`memory/context_manager.py` docstring에 근거 명시).
+- **`DocumentationAgent`(M8-T02)**: `create_snapshot()`의 반환값을
+  `workspace_session.memory_snapshot_id`에 되먹이는 2줄 변경(세션
+  연속성의 쓰기 측).
+- **`PlanningAgent`(M8-T03)**: `context_manager`/`workspace_session`을
+  신규 생성자 의존성으로 받아, Mission 시작 시 `memory_snapshot_id`가
+  비어 있으면 자동 복원(세션 연속성의 읽기 측).
+
+**핵심 설계 결정이 그대로 지켜졌다**: `docs/ARCHITECTURE.md` §8 규칙
+7("Memory 접근은 Agent → Context Manager → Memory Engine 순서로만")에
+따라 **Workspace Core는 이번에도 전혀 건드리지 않았다** — "세션
+연속성"을 Workspace Core가 아니라 Agent 계층(Rule 5)에서 해결한다는
+사전 Architecture Review의 결정대로, `WorkspaceCore.start_session()`/
+`update_session()`은 손대지 않고 `PlanningAgent`만 확장했다. ADR 추가나
+의존성 규칙 변경이 전혀 필요 없었다.
+
+`git diff --stat`(M7 종료 커밋 `aa7f243` 대비)로 확인한 결과 **소스
+파일 4개만 수정**(`interfaces/context_manager.py`,
+`memory/context_manager.py`, `agents/documentation_agent.py`,
+`agents/planning_agent.py`), 69줄 순증가/5줄 삭제 — M6(5개 파일)와
+비슷한 폭이며, `PlanningAgent`가 처음으로 `ContextManager`/
+`WorkspaceSession`을 알게 된 것을 빼면 대부분 몇 줄짜리 변경이었다.
+`docs/ARCHITECTURE.md` §3.6·§3.8은 각 Task 완료 시점마다 즉시 갱신되어
+구현과 문서 사이 괴리가 없다.
+
+**3. Interface First 원칙 검토**
+
+**M8은 새 최상위 Interface를 0개 추가했다**(M2/M3/M4/M6/M7과 동일
+패턴, M5만 예외). `WorkspaceCore`/`MemoryEngine` 계약은 메서드 하나도
+바뀌지 않았다. `ContextManager`에 메서드 1개(`latest_snapshot_id`)가
+추가됐지만 이는 M4-T08(`search`/`find_snapshots`)·M5-T06
+(`record_step`/`get_steps`)·M7-T01(`create_snapshot`의 `summary`
+파라미터)과 같은 패턴 — 필요성이 실제로 증명된 뒤 기존 계약에 추가한
+것이다. `PlanningAgent`가 `ContextManager`에 의존하게 된 것은 새
+Interface가 아니라 §8 규칙 5("Agent는 Context Manager에 의존")가
+이미 허용해 둔 관계를 실제로 쓰기 시작한 것뿐이다.
+
+**4. 테스트 결과**
+
+- `pytest`: **442개 전부 통과**(M7 완료 시점 425개 → M8에서 17개 신규:
+  M8-T01 +8, M8-T02 +2, M8-T03 +5, M8-T04 +2)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(82개 소스 파일)
+- M7 완료 커밋(`aa7f243`) 대비 소스 4개 파일 수정(신규 소스 파일 0개),
+  테스트 다수 파일 수정 + `tests/agents/test_planning_agent.py` 신규
+  (`PlanningAgent` 최초 전용 단위 테스트 파일)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M8에서 의도적으로 범위를 좁힌 것(사전 Architecture Review에서 이미
+확정)*
+- **동시성 경쟁 조건 미해결**: 여러 세션이 동시에 같은 project_id로
+  Mission을 병행 실행하면 `latest_snapshot_id`/`memory_snapshot_id`
+  갱신에 경쟁 조건이 생길 수 있다 — 현재 시스템에 검증된 동시 다중
+  세션 시나리오가 없어(순차 실행 가정) 이번 범위에서 다루지 않았다.
+- **명시적 "세션 리셋" 옵션 없음**: Mission을 시작할 때마다 항상 최신
+  요약을 이어받는다 — 사용자가 의도적으로 완전히 새로 시작하고 싶은
+  경우를 구분할 방법이 없다. 필요성이 증명되면 다음에 재검토.
+- **`PlanningAgent`의 책임 확장**: "Mission 계획"에 "세션 연속성 복원"
+  이 더해졌다 — 사전 Architecture Review에서 별도 Agent 신설은 YAGNI
+  위반으로 판단해 배제하고 진입점에 두기로 확정한 그대로다.
+
+*계속 이월되는 기존 항목*
+- Model/Effort 수준 라우팅(M6 Review 이월, 여전히 미착수)
+- Adapter 계열 통합(`ClaudeCodeEngineAdapter`↔`CLIEngineAdapter`),
+  Codex/Gemini CLI 실제 바이너리 재검증
+- `run_parallel` 개별 Task 재시도 미지원(M4-T06), `MemoryEngine.search()`
+  선형 스캔(M4-T08), Retry Backoff/Persistent Runtime Recovery/Approval
+  비동기 처리/Process Timeout 정책 고도화(M3-T08), `ShellAgent`
+  화이트리스트가 코드에 고정(M5-T04)
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M8-T01~T04 상세 섹션) / `docs/ROADMAP.md`(M8
+Task List 완료 표시) / `docs/ARCHITECTURE.md`(§3.6·§3.8 각 Task 완료
+시점마다 이미 갱신됨) 완료. `pyproject.toml` 버전은 v0.5.0 그대로
+유지한다(구조적 기준선은 그대로, M8도 그 위에 기능을 얹은 것).
+`.ai/MEMORY.md`는 이 Review 승인 직후 M1~M7과 동일한 방식으로 압축
+반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 소스 4개
+파일 수정·신규 파일 0개, Workspace Core 무변경 원칙 재확인), Interface
+First 검토 완료(3절, 새 Interface 0개), 테스트 결과 문서화 완료(4절),
+Technical Debt 정리 완료(5절, 동시성/세션 리셋 미해결을 투명하게
+명시), 문서 갱신 완료(6절) — 6개 조건 모두 만족. Review 중 코드 변경이
+필요한 치명적 문제(버그·계약 위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 8 Completed를 선언한다.**
+
+**Milestone 9 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
+이번 Review에서 드러난 후보들은 (1) M6 Review가 이월한 "Model/Effort
+수준 라우팅", (2) 이번에 드러난 동시성 경쟁 조건/세션 리셋 옵션, (3)
+Adapter 계열 통합이지만, 이는 사전 논의 없이 확정된 것이 아니며
+Milestone 9는 착수 시점에 이 문서에 목표/DoD/Task List를 새로 정의한다
+(Task Driven Development 원칙, M2~M8이 그래왔듯).
+
 ---
 
 ## 진행 로그
