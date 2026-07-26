@@ -3566,7 +3566,17 @@ Claude API 기반 EngineAdapter, Model/Effort 수준 라우팅(M6 Review 최초
     쓴다.
 - 완료 조건(DoD): `tests/interfaces/fakes.py`에 `FakeExecutionEnvironment`
   추가 + 계약 테스트 통과.
-- 상태: TODO
+- 상태: **DONE (2026-07-26)** — `interfaces/execution_environment.py`에
+  `ExecutionEnvironment`(ABC, `execute`/`cancel`), `ExecutionResult`,
+  `ExecutionNotFoundError` 정의(기존 `ProcessResult`/`ProcessNotFoundError`
+  와 동일한 필드·의미이나 특정 실행 방식을 가정하지 않도록 `execution_id`
+  로 명명). `tests/interfaces/fakes.py`에 `FakeExecutionEnvironment` 추가
+  (`result`/`exception`으로 결과 구성, `executed_commands`로 호출 검증,
+  `cancel()`은 현재 `execute()` 실행 중인 id에만 성공하고 그 외에는
+  `ExecutionNotFoundError`). `tests/interfaces/test_execution_environment.py`
+  5개 신규 테스트. `ruff check src tests`, `mypy src`, `pytest`(454개,
+  기존 449개 + 신규 5개) 모두 통과. 다음 Task: **M11-T02**
+  (`LocalExecutionEnvironment` 구현).
 - 의존성: 없음.
 
 #### M11-T02: `LocalExecutionEnvironment` 구현
