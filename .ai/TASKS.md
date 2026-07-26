@@ -2481,7 +2481,7 @@ M2~M6가 그래왔듯).
 | Task | 내용 | 근거/출처 |
 |---|---|---|
 | M7-T01 | `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가(인터페이스 확장, 하위 호환) — **완료** | PRD 7.4 갭 |
-| M7-T02 | `DocumentationAgent`가 기존에 버려지던 `engine_runtime.run()` 결과를 캡처해 요약으로 전달 | PRD 7.4 갭 |
+| M7-T02 | `DocumentationAgent`가 기존에 버려지던 `engine_runtime.run()` 결과를 캡처해 요약으로 전달 — **완료** | PRD 7.4 갭 |
 | M7-T03 | End-to-End 검증(파이프라인 실행 후 요약이 저장·검색·복원됨을 통합 테스트로 증명) | Milestone DoD |
 | M7-T04 | Milestone 7 Review | 관례 |
 
@@ -2525,7 +2525,7 @@ M2~M6가 그래왔듯).
    라우팅, 그 외 소규모 이월 부채는 이번 Milestone 범위 밖으로 유지된다.
 
 **상태**: 목표/Task List/사전 Architecture Review/DoD 확정(2026-07-26
-사용자 확정). M7-T01 완료, 다음 Task는 M7-T02.
+사용자 확정). M7-T01/M7-T02 완료, 다음 Task는 M7-T03.
 
 #### M7-T01: `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가
 - 목적: Memory 요약을 저장할 최소 계약을 마련한다 — `MemoryEngine`은
@@ -2550,6 +2550,30 @@ M2~M6가 그래왔듯).
   경계를 명시. `pytest` 422개(M7 착수 전 416개 + 신규 6개) 전부 통과,
   `ruff check src tests`/`mypy src` 클린.
 - 의존성: 없음(M7 Task List 첫 Task)
+
+#### M7-T02: `DocumentationAgent`가 engine 결과를 요약으로 전달
+- 목적: M7-T01이 마련한 `summary` 파라미터에 실제 값을 흘려보낸다 —
+  Memory 요약을 "만드는" 지점.
+- 작업 내용: `_on_review_completed()`에서 `self._engine_runtime.run(...)`
+  의 반환값을 `result` 변수로 캡처(이전에는 버려짐), `self._context_manager
+  .create_snapshot(self._workspace_session, summary=result.output)`로
+  전달하도록 2줄 변경.
+- 완료 조건(DoD): `engine_runtime.run()`의 실제 출력이 그대로
+  `create_snapshot()`의 `summary`로 전달됨을 단위 테스트로 증명, 저장된
+  요약이 `find_snapshots()`로 검색됨. `pytest`/`ruff`/`mypy` 통과.
+- 상태: **DONE (2026-07-26)** — `tests/agents/test_documentation_agent.py`
+  에 실제 `InMemoryContextManager`에 위임하며 `summary` 인자를 기록하는
+  `SpyContextManager` 신규 도입(기존 3개 테스트는 반환 튜플에 4번째
+  원소가 추가되어 그대로 갱신, 하위 호환 깨짐 아님 — 테스트 헬퍼 시그니처
+  변경). 신규 테스트 2개: `test_documentation_agent_passes_engine_result_
+  output_as_summary`(engine 결과가 실제로 summary로 전달됨),
+  `test_documentation_agent_summary_is_retrievable_via_context_manager`
+  (저장된 요약이 `find_snapshots()`로 검색됨 — PRD 7.4 DoD 직접 검증).
+  성공/실패 여부와 무관하게 `output`을 그대로 저장하는 단순 정책을
+  그대로 구현(사전 Architecture Review에서 이미 승인된 단순화).
+  `pytest` 424개(M7-T01 종료 시점 422개 + 신규 2개) 전부 통과, `ruff
+  check src tests`/`mypy src` 클린.
+- 의존성: M7-T01
 
 ---
 
