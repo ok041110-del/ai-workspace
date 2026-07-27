@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~18 완료, v0.5.0 아키텍처 기준선 선언, Milestone 19 목표 미정) |
+| 상태 | Draft (Milestone 1~18 완료, v0.5.0 아키텍처 기준선 선언, Milestone 19(Reliability Layer) 진행 중) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -783,6 +783,41 @@ Review" 참고). **Milestone 17 완료 — 2026-07-27 사용자 승인.**
 **진행 상태**: M18-T01~T04 전체 완료. Milestone DoD 1~13번 전부 충족
 확인됨. Milestone 18 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 18
 Review" 참고). **Milestone 18 완료 — 2026-07-27 사용자 승인.**
+
+---
+
+## Milestone 19 — Reliability Layer
+
+**목표**: M18 Execution Layer의 안정성 확보 — 정책 기반 Retry,
+Timeout, 안전한 Cancellation. 기존 `RetryPolicy`(M3)를 확장하고
+(새 이름 도입 없음), `RetryExecutor`가 인증→Registry 조회→Adapter
+실행 전체를 감싸 재시도한다. Auth/등록 실패는 재시도하지 않는다.
+
+**Milestone Definition of Done**
+1. `RetryPolicy` 확장(최대 횟수/재시도 가능 판단/Delay).
+2. `RetryExecutor`가 재시도 담당, `ExecutionDispatcher`는 직접
+   구현하지 않음.
+3~4. Timeout 시 정책대로 재시도, 취소 시 결과에 반영.
+5. `EngineExecutionResult` 확장(retry_count/cancelled/timed_out).
+6~7. `AuthenticationRequiredError`/`EngineNotRegisteredError`(및
+   `NoSuitableEngineError`) 재시도 안 함.
+8~9. 재시도 가능/불가능 분류, 횟수 정책 동작을 단위 테스트로 증명.
+10~11. Timeout/Cancellation을 통합 테스트로 증명.
+12. `ExecutionDispatcher`의 `RetryPolicy` 비직접구현을 의존성
+    검증으로 증명.
+13. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 상세는 `.ai/TASKS.md`의 "Milestone 19"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M19-T01 | Reliability Domain(`RetryPolicy` 확장/`RetryDecision`/`RetryExecutor`) | 진행 예정 |
+| M19-T02 | Execution Reliability 구현 | 진행 예정 |
+| M19-T03 | End-to-End 통합 테스트 | 진행 예정 |
+| M19-T04 | 문서화 + Milestone 19 Review | 진행 예정 |
+
+**진행 상태**: Task List 승인 완료, 구현 착수.
 
 ---
 

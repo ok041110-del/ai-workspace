@@ -5601,13 +5601,85 @@ First 검토 완료(3절, 새 Interface 1개를 "신규 계층 도입" 계열 AD
 
 **Milestone 18 종료 — 2026-07-27 사용자 승인.**
 
-**Milestone 19 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
-않았다. M18로 Task→...→`EngineExecutionResult`까지 이어지는 첫
-End-to-End 실행 경로가 완성됐다 — 다만 다음 단계(예: 실제
-Authentication/Agent 파이프라인 연결/Codex·Gemini 실연동)는 사전
-논의 없이 확정된 것이 아니며, Milestone 19는 착수 시점에 이 문서에
-목표/DoD/Task List를 새로 정의한다(Task Driven Development 원칙,
-M2~M18이 그래왔듯).
+**Milestone 19 상태**: 착수 확정. 아래 "Milestone 19" 절 참고.
+
+---
+
+## Milestone 19 — Reliability Layer
+
+**목표**: M18 Execution Layer의 안정성을 확보한다 — Engine 실행 중
+발생하는 실패를 감지하고, 정책 기반으로 재시도하거나 안전하게
+종료하며, 일관된 실행 결과를 제공한다(2026-07-27 사용자 확정).
+
+> **설계 검토에서 발견한 사실 3가지**:
+> 1. `domain/retry_policy.py`의 `RetryPolicy`(M3, `max_attempts`만
+>    보유)가 이미 존재하고 `RecoveringEngineRuntime`이 "무조건
+>    재시도"에 쓰고 있다 — M16/M18과 달리 이번엔 **같은 개념의
+>    확장**이라 새 이름 대신 기존 `RetryPolicy`에 필드를 추가한다
+>    (`retry_delay_seconds`/`non_retryable_exceptions`, 둘 다 기본값
+>    있어 `RecoveringEngineRuntime` 무영향).
+> 2. `ClaudeCodeEngineAdapter.run()`은 Timeout과 "CLI 실행 파일 없음"
+>    을 **같은 예외 타입**(`EngineExecutionError`)으로 처리하고
+>    메시지 텍스트로만 구분된다 — "EngineAdapter 인터페이스는
+>    변경하지 않는다"는 제약과 충돌해 `timed_out` 판정은 메시지
+>    휴리스틱으로만 가능하다(사용자 승인 조건 1: 기술 부채로 명시).
+> 3. DoD가 언급한 `NoSuitableEngineError`(`EngineRuntime` 시절
+>    예외)는 이 경로에 실제로 나타나지 않는다 — M18이 `EngineRuntime`
+>    을 건너뛰고 `EngineRegistry`를 직접 쓰기 때문에 실제로는
+>    `EngineNotRegisteredError`가 발생한다. `NoSuitableEngineError`도
+>    재시도 불가 목록에 넣어두되(향후 호환), 실제 검증은
+>    `EngineNotRegisteredError` 기준으로 한다.
+
+**설계 방향(사용자 최종 승인)**: `RetryExecutor`가 사용자의
+Architecture 다이어그램대로 **인증 확인→Registry 조회→Adapter 실행
+전체**를 감싸 재시도한다(`AuthenticationRequiredError`/
+`EngineNotRegisteredError`/`NoSuitableEngineError`는 첫 시도에서
+즉시 실패, 재시도 없음). `ExecutionDispatcher.dispatch()`는
+`EngineExecutionError`(재시도 소진 후)만 실패 결과로 변환하고,
+인증/등록 예외는 M18처럼 그대로 예외로 전파한다(하위 호환). 취소는
+`EngineAdapter`가 이미 쓰는 sentinel(`EngineResult.error ==
+"cancelled"` — `ExecutionResult.cancelled`이 Adapter 내부에서 이미
+이 값으로 인코딩됨, 사용자 승인 조건 2: 새 문자열 규칙을 만들지
+않고 기존 값을 그대로 이어받음)로 판정하고, 재시도 루프 자체를
+타지 않는다.
+
+**Non-goal(범위 밖)**: Dashboard, Scheduler, Workflow Automation,
+MCP, Plugin, Billing, Telemetry, Logging 고도화, 실제 로그인/OAuth/
+Credential 관리, Engine Selection/Budget/Knowledge 개선,
+`EngineRegistry`/`EngineSelectionPolicy`/`AuthenticationManager`/
+`ExecutionEnvironment`/`EngineAdapter` 인터페이스 변경.
+
+**Milestone Definition of Done**
+1. `RetryPolicy`가 최대 Retry 횟수/재시도 가능 여부 판단/Delay
+   정책을 포함한다(기존 `RetryPolicy` 확장, `RecoveringEngineRuntime`
+   하위 호환).
+2. `RetryExecutor`가 `RetryPolicy`에 따라 실행을 반복한다.
+   `ExecutionDispatcher`는 Retry를 직접 구현하지 않는다.
+3. Timeout 발생 시 `RetryPolicy`에 따라 재시도 여부를 결정한다.
+4. 취소 시 `EngineExecutionResult`에 취소 상태가 반영된다.
+5. `EngineExecutionResult`가 확장된다(success/output/error/engine/
+   execution_time/retry_count/cancelled/timed_out).
+6. `AuthenticationRequiredError`는 재시도하지 않는다.
+7. `NoSuitableEngineError`(및 실제 발생하는 `EngineNotRegisteredError`)
+   는 재시도하지 않는다.
+8. 재시도 가능한 오류와 불가능한 오류를 단위 테스트로 증명한다.
+9. 재시도 횟수가 정책대로 동작함을 단위 테스트로 증명한다.
+10. Timeout 동작을 통합 테스트로 증명한다(휴리스틱 한계 포함 문서화).
+11. Cancellation 동작을 통합 테스트로 증명한다.
+12. `ExecutionDispatcher`는 `RetryPolicy`를 직접 구현하지 않음을
+    Architecture 의존성 검증으로 증명한다.
+13. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M19-T01 | Reliability Domain 정의(`RetryPolicy` 확장, `RetryDecision`, `RetryExecutor`) | 진행 예정 |
+| M19-T02 | Execution Reliability 구현(Retry/Timeout/Cancellation, `ExecutionDispatcher` 연동) | 진행 예정 |
+| M19-T03 | End-to-End 통합 테스트 | 진행 예정 |
+| M19-T04 | 문서화 + Milestone 19 Review | 진행 예정 |
+
+**진행 상태**: Task List 승인 완료, 구현 착수.
 
 ---
 
