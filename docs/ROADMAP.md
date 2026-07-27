@@ -874,14 +874,14 @@ Domain이며, `ExecutionDispatcher`를 통해서만 Task를 실행하고,
 | Task | 내용 | 상태 |
 |---|---|---|
 | M21-T01 | Automation 도메인 + `AutomationRepository` Interface + `InMemoryAutomationRepository` | **완료** |
-| M21-T02 | `AutomationService`(CRUD) 구현 | 진행 예정 |
+| M21-T02 | `AutomationService`(CRUD) 구현 | **완료** |
 | M21-T03 | `AutomationScheduler` + Time/Interval/Startup Trigger 구현 | 진행 예정 |
 | M21-T04 | Event Trigger + `ExecutionDispatcher` 연동 | 진행 예정 |
 | M21-T05 | Automation API + Dashboard 연계 | 진행 예정 |
 | M21-T06 | Dashboard Web UI Automation 화면 | 진행 예정 |
 | M21-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M21-T01 완료, M21-T02 진행 예정.
+**진행 상태**: M21-T01~T02 완료, M21-T03 진행 예정.
 
 ---
 

@@ -6314,14 +6314,31 @@ Rule 추천.
 | Task | 내용 | 상태 |
 |---|---|---|
 | M21-T01 | Automation 도메인 + `AutomationRepository` Interface + `InMemoryAutomationRepository` | **완료** |
-| M21-T02 | `AutomationService`(CRUD) 구현 | 진행 예정 |
+| M21-T02 | `AutomationService`(CRUD) 구현 | **완료** |
 | M21-T03 | `AutomationScheduler` + Time/Interval/Startup Trigger 구현 | 진행 예정 |
 | M21-T04 | Event Trigger + `ExecutionDispatcher` 연동 | 진행 예정 |
 | M21-T05 | Automation API + Dashboard 연계 | 진행 예정 |
 | M21-T06 | Dashboard Web UI Automation 화면 | 진행 예정 |
 | M21-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M21-T01 완료. M21-T02 진행 예정.
+**진행 상태**: M21-T01~T02 완료. M21-T03 진행 예정.
+
+#### M21-T02: AutomationService(CRUD)
+- 상태: **DONE (2026-07-27)** — `runtime/automation/automation_service.py`
+  의 `AutomationService(automation_repository)`가 `create_rule`/
+  `get_rule`/`list_rules`/`update_rule`(부분 갱신 — 넘긴 필드만
+  변경)/`delete_rule`/`enable_rule`/`disable_rule`을 제공한다.
+  `create_rule`이 `rule_id`(uuid4)와 `created_at`/`updated_at`
+  (ISO 8601, `ExecutionDispatcher`의 `_now_iso()`와 동일한 패턴)을
+  채운다. `update_rule`/`enable_rule`/`disable_rule` 모두
+  `updated_at`을 갱신한다. **Action 실제 실행은 이 Task 범위 밖**
+  (`AutomationScheduler`/`ExecutionDispatcher` 연동은 M21-T03/T04)
+  — API의 `POST /{id}/run`은 그 두 Task가 끝난 뒤 M21-T05에서
+  연결한다. `web/`이나 `Dashboard`를 전혀 참조하지 않음(`DashboardService`
+  와 동일한 순수 서비스 패턴). 단위 테스트 10개 신규. `pytest`
+  (662개), `ruff`, `mypy` 통과. 다음 Task: **M21-T03**
+  (`AutomationScheduler` + Time/Interval/Startup Trigger).
+- 의존성: M21-T01.
 
 #### M21-T01: Automation 도메인 + Repository
 - 상태: **DONE (2026-07-27)** — `domain/automation.py`에 `TriggerKind`
