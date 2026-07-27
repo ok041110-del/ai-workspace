@@ -775,12 +775,12 @@ Review" 참고). **Milestone 17 완료 — 2026-07-27 사용자 승인.**
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M18-T01 | `EngineExecutionResult` domain + `AuthenticationManager` | 진행 예정 |
+| M18-T01 | `EngineExecutionResult` domain + `AuthenticationManager` | **완료** |
 | M18-T02 | `ExecutionDispatcher` 핵심 로직 | 진행 예정 |
 | M18-T03 | End-to-End 통합 테스트 | 진행 예정 |
 | M18-T04 | 문서화 + Milestone 18 Review | 진행 예정 |
 
-**진행 상태**: Task List 승인 완료, 구현 착수.
+**진행 상태**: M18-T01 완료, M18-T02 진행 중.
 
 ---
 

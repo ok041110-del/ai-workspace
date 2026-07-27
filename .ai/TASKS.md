@@ -5401,12 +5401,28 @@ Stub/Mock으로만 검증), `CodingAgent` 연결.
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M18-T01 | `EngineExecutionResult` domain + `AuthenticationManager` Interface + `InMemoryAuthenticationManager` | 진행 예정 |
+| M18-T01 | `EngineExecutionResult` domain + `AuthenticationManager` Interface + `InMemoryAuthenticationManager` | **완료** |
 | M18-T02 | `ExecutionDispatcher` 핵심 로직(인증 확인/실패/Decision 부재 처리) | 진행 예정 |
 | M18-T03 | End-to-End 통합 테스트(실제 `ClaudeCodeEngineAdapter`+`ExecutionEnvironment` 연결 + 의존성 검증) | 진행 예정 |
 | M18-T04 | 문서화 + Milestone 18 Review | 진행 예정 |
 
-**진행 상태**: Task List 승인 완료, 구현 착수.
+**진행 상태**: M18-T01 완료. M18-T02 진행 중.
+
+#### M18-T01: `EngineExecutionResult` domain + `AuthenticationManager` Interface + 구현체
+- 상태: **DONE (2026-07-27)** — `domain/execution_result.py`에
+  `EngineExecutionResult`(success/output/error/engine/execution_time,
+  Provider 독립, 기존 `ExecutionResult`(M11, 프로세스 결과)와 이름·
+  개념 분리) 신규. `interfaces/authentication_manager.py`에
+  `AuthenticationStatus`(AUTHENTICATED/UNAUTHENTICATED)/
+  `AuthenticationRequiredError`/`AuthenticationManager`(`is_
+  authenticated`/`authentication_status`만 — `login`/`logout` 없음,
+  "로그인 수행"이 아니라 "상태 확인"만 담당) 신규. `engines/
+  authentication_manager.py`의 `InMemoryAuthenticationManager` —
+  생성 시 주어진 인증된 Engine 이름 집합으로만 상태를 판단(실제
+  로그인/OAuth/Credential 없음). 단위 테스트 5개 신규(domain 2개,
+  engines 3개). `pytest`(558개), `ruff`, `mypy` 통과. 다음 Task:
+  **M18-T02**(`ExecutionDispatcher` 핵심 로직).
+- 의존성: 없음.
 
 ---
 
