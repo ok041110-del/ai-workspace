@@ -779,11 +779,12 @@
   클래스/dataclass, M19에 이어 두 번째 "새 Interface 없이도 ADR
   작성" 사례)로 ADR-0034 기록. 새로 발생한 기술 부채 없음(순환
   참조는 우회가 아니라 `TYPE_CHECKING`으로 근본 해결).
-- **M23-Preparation(Obsidian Knowledge Base 구축) 진행 중.** T01~T07
-  완료(저장소 루트 `Vault/`에 PARA 구조로 GitHub 요약+링크 Index를
-  구축 — Overview/Architecture/ADR/Backend/API/Dashboard/Automation/
-  Production/iOS·Android/Milestones/Decisions), 사용자 최종 승인
-  대기 중. 2026-07-27 사용자 지시로 **T01A(Vault Retrieval/Prompt
+- **M23-Preparation(Obsidian Knowledge Base 구축) 전체 완료
+  (2026-07-27, T01~T07 + T01A~T01D).** T01~T07(저장소 루트
+  `Vault/`에 PARA 구조로 GitHub 요약+링크 Index를 구축 — Overview/
+  Architecture/ADR/Backend/API/Dashboard/Automation/Production/
+  iOS·Android/Milestones/Decisions). 2026-07-27 사용자 지시로
+  **T01A(Vault Retrieval/Prompt
   효율화)** 추가 완료: `PROJECT_INDEX.md`(작업 종류→문서 라우팅
   표, Vault 최초 진입점) 신규, `AI_CONTEXT.md`를 "현재 상태" 절이
   최상단에 오도록 개편, `AI_RULES.md`에 Context Retrieval Rule/
@@ -804,7 +805,19 @@
   Document Update/Validation/Completion Report 7단계 Standard
   Workflow를 정의해, "무엇을 읽을지"(T01A)/"무엇으로 만들지"
   (T01B)에 이어 "어떻게 처리할지"까지 문서화했다. `PROMPT_PROFILE.md`
-  /`PROJECT_INDEX.md`에 각각 연계 절을 추가.
+  /`PROJECT_INDEX.md`에 각각 연계 절을 추가. 마지막으로
+  **T01D(PREPARATION_SUMMARY + M23 Start Criteria)**로 마무리:
+  `PREPARATION_SUMMARY.md` 신규(구현 완료 항목/신규 시스템 구성요소/
+  템플릿 13종/운영 Workflow 4원칙/Baseline/M23 Start Criteria/
+  Deferred Items 종합), `PROJECT_INDEX.md`에 "Preparation Status"
+  절, `AI_CONTEXT.md`의 "현재 상태"를 M23 기준으로 갱신. Baseline:
+  코드/아키텍처는 v0.5.0 기준선(ADR-0024) + Interface 27종
+  (ADR-0034) 유지, Vault는 30개 문서 + 4개 운영 원칙(Retrieval
+  First/Short Prompt Workflow/Template First/Standard Execution
+  Workflow) 확정. M23 Start Criteria 5개 중 Client 저장소 위치/
+  서버 지원 범위/Push 발송 주체 3개는 "미정"으로 정직하게 남기고
+  M23 kickoff에서 재확인하기로 함. T08(Obsidian MCP 연동)만 Claude
+  Code 도입 시점으로 이월 보류.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

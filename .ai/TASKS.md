@@ -7154,12 +7154,61 @@ Optional)로 이월한다.
 | M23-Prep-T01A | Vault Retrieval/Prompt 효율화(Router+Template) | **완료** |
 | M23-Prep-T01B | 산출물별 작성 Template 5종 + Template Mapping | **완료** |
 | M23-Prep-T01C | EXECUTION_PROFILE(Standard Workflow) 도입 | **완료** |
+| M23-Prep-T01D | PREPARATION_SUMMARY + M23 Start Criteria + 완료 반영 | **완료** |
 | M23-Prep-T08 (Optional) | Obsidian MCP 연동 — Claude Code 도입 시점으로 이월 | 보류 |
 
-**진행 상태**: M23-Prep-T01~T07 전체 완료(아래 "M23-Preparation
-Review" 참고) + T01A/T01B/T01C(2026-07-27 사용자 지시로 추가) 완료.
+**진행 상태**: **M23-Preparation 전체 완료(T01~T07 + T01A~T01D,
+2026-07-27).** T08(Optional)만 Claude Code 도입 시점으로 이월
+보류. 다음은 Milestone 23(Mobile Experience) 목표 검토 —
+[[PREPARATION_SUMMARY]](Vault)의 M23 Start Criteria 참고.
 
-#### M23-Prep-T01C: EXECUTION_PROFILE(Standard Workflow) 도입
+#### M23-Prep-T01D: PREPARATION_SUMMARY + M23 Start Criteria + 완료 반영
+
+**목표**: M23-Preparation(T01~T07 + T01A~T01C) 전체를 마무리
+짓는다. 결과를 한 문서로 종합하고, 프로젝트 기준선(Baseline)을
+확정하며, M23(Mobile Experience) 착수 전 반드시 확인해야 할
+조건(Start Criteria)을 명시한다.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `PREPARATION_SUMMARY.md` 신규(구현 완료 항목/신규 시스템 구성요소/템플릿 목록/Workflow 요약/Baseline/Start Criteria/Deferred Items 7절 포함) | ✅ |
+| 2 | `PROJECT_INDEX.md`에 Preparation Status 절 추가 | ✅ |
+| 3 | `AI_CONTEXT.md`의 "현재 상태" 절을 M23 기준으로 갱신 | ✅ |
+| 4 | `.ai/TASKS.md`를 M23-Preparation 전체 완료 상태로 반영 | ✅ |
+| 5 | `docs/ROADMAP.md` 갱신 | ✅ |
+| 6 | `.ai/MEMORY.md` 갱신 | ✅ |
+| 7 | M23 Start Criteria 정의(미해결 항목 정직하게 기록) | ✅ |
+| 8 | 기존 구조·Backlink·Tag·원문 규칙 유지(검증 완료, 미해결 링크 0건) | ✅ |
+| 9 | 변경된 파일만 수정 | ✅ |
+
+**구현 내용**
+
+- `00 System/PREPARATION_SUMMARY.md`(신규): T01~T07/T01A~T01C
+  10개 Task를 표로 종합, `00 System/`의 6개 구성요소(PROJECT_INDEX/
+  AI_CONTEXT/AI_RULES/PROMPT_PROFILE/EXECUTION_PROFILE/이 문서)와
+  `99 Templates/`의 13개 템플릿(설계·실행용 6종 + Vault 등록용
+  6종 + Architecture 1종)을 목록화. Baseline은 코드/아키텍처(v0.5.0
+  기준선, Interface 27종)와 지식 관리(Vault 30개 문서, 4개 운영
+  원칙) 두 층위로 구분해 기록. M23 Start Criteria 5개 중 3개(Client
+  저장소 위치/서버 지원 범위/Push 발송 주체)를 "미정"으로 정직하게
+  남기고, 나머지 2개(Production API 표준 필드/Vault 컨텍스트
+  충족)는 "충족"으로 확인.
+- `00 System/PROJECT_INDEX.md`(수정): "Preparation Status" 절
+  추가 — M23-Preparation 완료 선언 + [[PREPARATION_SUMMARY]]로
+  안내, 새 세션이 이 Vault를 쓰기 전 Start Criteria부터 확인하도록
+  유도.
+- `00 System/AI_CONTEXT.md`(수정): "현재 상태" 절을 M23-Preparation
+  완료/M23 착수 대기 기준으로 갱신. T01A만 언급하던 "최근 변경"을
+  "완료"/"다음"/"Baseline" 3항목으로 재구성하고 [[PREPARATION_SUMMARY]]
+  로 위임.
+- Vault 전체 재검증: 미해결 Backlink 0건(기존과 동일한 3건의
+  텍스트 설명 오탐 외 신규 문제 없음).
+
+**의존성**: M23-Prep-T01~T07 + T01A~T01C(전부 완료돼야 종합 가능).
+
+---
 
 **목표**: T01A(무엇을 읽을지)/T01B(무엇으로 만들지)에 이어, "요청을
 받은 뒤 AI가 실제로 어떻게 처리하는가"의 표준 절차를 명문화한다.
@@ -7450,7 +7499,11 @@ PROJECT_INDEX 라우팅 표가 유효함).
 - MCP 연동(T08) — 이번 범위 아님, 보류.
 - Vault 내용에 대한 자동 동기화/알림 — 이번 범위 아님.
 
-Task List(M23-Prep-T01~T07) 전체 완료. 사용자 승인 대기.
+Task List(M23-Prep-T01~T07) 전체 완료. 이후 T01A(Retrieval/Prompt
+효율화)~T01D(PREPARATION_SUMMARY+Start Criteria)가 추가되어
+**M23-Preparation 전체 완료**(2026-07-27, T01D를 통한 사용자
+지시로 최종 반영 — 상세 Baseline/Start Criteria는 Vault
+`PREPARATION_SUMMARY.md` 참고).
 
 ---
 

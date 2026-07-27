@@ -73,12 +73,20 @@ Task Start → Context Retrieval(이 문서) → Template Selection
 
 각 단계의 상세 규칙은 [[EXECUTION_PROFILE]] 참고.
 
+## Preparation Status
+
+**M23-Preparation(Obsidian Knowledge Base 구축) 완료**(T01~T07 +
+T01A~T01D, 2026-07-27). 이 Vault 자체가 그 산출물이다. 전체 결과·
+Baseline·M23 착수 조건은 [[PREPARATION_SUMMARY]] 참고 — 새 세션은
+이 Vault를 쓰기 전에 그 문서의 "M23 Start Criteria"부터 확인한다.
+
 ## 관련 문서
 
 - [[AI_CONTEXT]]
 - [[AI_RULES]]
 - [[PROMPT_PROFILE]]
 - [[EXECUTION_PROFILE]]
+- [[PREPARATION_SUMMARY]]
 
 ## 원문
 

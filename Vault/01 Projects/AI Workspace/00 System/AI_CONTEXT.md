@@ -11,13 +11,17 @@ tags: [system]
 
 ## 현재 상태(가장 먼저 확인)
 
-- **완료**: Milestone 1~22 전체, M23-Preparation(Obsidian Knowledge
-  Base 구축, T01~T07 + T01A) 완료.
-- **진행 중/다음**: Milestone 23(Mobile Experience) 목표 검토 —
-  서버 전용 지원/PWA/네이티브 앱 코드 중 범위가 아직 확정되지 않음.
-- **최근 변경**: [[PROJECT_INDEX]](Router)/[[PROMPT_PROFILE]]/
-  [[DESIGN_TEMPLATE]] 신규(M23-Prep-T01A) — Retrieval First/Short
-  Prompt Workflow/Template First 원칙 도입.
+- **완료**: Milestone 1~22 전체 + **M23-Preparation(Obsidian
+  Knowledge Base 구축, T01~T07 + T01A~T01D) 전체 완료**. Vault
+  30개 문서, Retrieval First/Short Prompt Workflow/Template
+  First/Standard Execution Workflow 4개 운영 원칙 도입 완료.
+- **다음**: Milestone 23(Mobile Experience) 목표 검토 착수. 착수
+  전 확인해야 할 미해결 조건은 [[PREPARATION_SUMMARY]]의 "M23
+  Start Criteria" 참고(Client 저장소 위치/서버 지원 범위/Push
+  발송 주체 3가지가 아직 미정).
+- **Baseline**: 코드/아키텍처는 v0.5.0 기준선(ADR-0024) + Interface
+  27종(ADR-0034) 유지. Vault를 포함한 전체 산출물의 상세 Baseline은
+  [[PREPARATION_SUMMARY]] 참고.
 - 상세 진행률·이력은 [[Overview]]와 [[Milestones Index]] 참고
   (이 섹션이 바뀔 때마다 그 문서들도 함께 갱신한다).
 
@@ -49,6 +53,7 @@ tags: [system]
 
 - [[PROJECT_INDEX]]
 - [[AI_RULES]]
+- [[PREPARATION_SUMMARY]]
 - [[Overview]]
 - [[Architecture Overview]]
 
