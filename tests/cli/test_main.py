@@ -5,6 +5,23 @@ import pytest
 from ai_workspace.cli.main import main
 
 
+def test_start_command_delegates_to_run_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    """M20 DoD 12번: `workspace start`는 서버를 실행하고, 기존 명령
+    (project create/show/list)은 그대로 유지된다 - 실제 소켓을 열지
+    않도록 `run_server`를 대체해 호출 인자만 확인한다."""
+    calls: list[dict[str, object]] = []
+
+    def fake_run_server(*, host: str, port: int) -> None:
+        calls.append({"host": host, "port": port})
+
+    monkeypatch.setattr("ai_workspace.web.server.run_server", fake_run_server)
+
+    exit_code = main(["start", "--host", "0.0.0.0", "--port", "9000"])
+
+    assert exit_code == 0
+    assert calls == [{"host": "0.0.0.0", "port": 9000}]
+
+
 def test_create_then_show_end_to_end(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     data_dir = str(tmp_path)
 

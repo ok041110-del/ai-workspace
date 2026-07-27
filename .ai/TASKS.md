@@ -5947,12 +5947,34 @@ Approval UI, 사용자 인증/권한 관리.
 | M20-T01 | Dashboard 도메인 및 이벤트 정의 | **완료** |
 | M20-T02 | 실행 계층과 Dashboard 연결(`ExecutionDispatcher` Event 발행 + `InMemoryDashboardRepository` 구독) | **완료** |
 | M20-T03 | Read Model 및 ViewModel(`DashboardService` + `DashboardViewModel`) | **완료** |
-| M20-T04 | 서버 런타임 구축(`workspace start`, FastAPI app 골격) | 진행 예정 |
+| M20-T04 | 서버 런타임 구축(`workspace start`, FastAPI app 골격) | **완료** |
 | M20-T05 | API 및 Web UI(REST 라우터 + WebSocket + 정적 UI) | 진행 예정 |
 | M20-T06 | 전체 흐름 검증(End-to-End 통합 테스트 + 의존성 검증) | 진행 예정 |
 | M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
 
-**진행 상태**: M20-T01~T03 완료. M20-T04 진행 중.
+**진행 상태**: M20-T01~T04 완료. M20-T05 진행 중.
+
+#### M20-T04: 서버 런타임 구축
+- 상태: **DONE (2026-07-27)** — `pyproject.toml`에 첫 런타임 의존성
+  `fastapi`/`uvicorn[standard]` 추가(dev에는 `httpx`, `TestClient`용).
+  `web/app.py`의 `create_app(dashboard_service)`가 FastAPI 앱 골격을
+  조립(`/health` 헬스 체크만, 실제 Dashboard 라우터는 M20-T05).
+  `DashboardService`를 `app.state.dashboard_service`에 실어 M20-T05
+  라우터가 꺼내 쓸 수 있게 함. `web/server.py`의 `build_app()`(실제
+  소켓을 열지 않고 `TestClient`로 테스트 가능하도록 앱 조립과 서버
+  기동을 분리)/`run_server()`(`uvicorn.run()` 호출). `cli/main.py`에
+  `start` 서브커맨드 추가(`--host`/`--port`) — 지연 import로 `web`
+  모듈을 불러와 다른 CLI 명령은 FastAPI/uvicorn을 몰라도 되게 유지.
+  **환경 메모**: 이 세션의 `mypy`는 `uv tool install`로 별도
+  가상환경에 설치돼 있어 `pip install`로 넣은 `fastapi`/`uvicorn`을
+  기본적으로 못 찾는다 — `mypy --python-executable "$(which
+  python3)" src`로 실행해야 한다(코드/설정 문제 아님, 이 환경의
+  mypy 설치 방식 때문). 단위 테스트 6개 신규(`web/app.py` 2개,
+  `web/server.py` 2개, CLI `start` 위임 1개... 실제로는 5개+1개
+  기존 파일에 추가). `pytest`(624개), `ruff`, `mypy`(올바른
+  `--python-executable`로) 통과. 다음 Task: **M20-T05**(API 및
+  Web UI).
+- 의존성: M20-T03.
 
 #### M20-T03: Read Model 및 ViewModel
 - 상태: **DONE (2026-07-27)** — `runtime/dashboard/

@@ -44,6 +44,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    start_parser = subparsers.add_parser(
+        "start", help="Dashboard 서버 실행(M20) — 상시 실행, 기존 명령과 독립"
+    )
+    start_parser.add_argument("--host", default="127.0.0.1")
+    start_parser.add_argument("--port", type=int, default=8080)
+
     project_parser = subparsers.add_parser("project", help="Project 관리")
     project_subparsers = project_parser.add_subparsers(dest="project_command", required=True)
 
@@ -97,6 +103,15 @@ def _list_projects(core: WorkspaceCore, args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "start":
+        # 서버 실행은 FastAPI/uvicorn을 요구한다(M20) — 다른 CLI 명령은
+        # 웹 프레임워크를 몰라도 되므로 지연 import로 분리한다.
+        from ai_workspace.web.server import run_server
+
+        run_server(host=args.host, port=args.port)
+        return 0
+
     core = _build_workspace_core(args.data_dir)
 
     if args.project_command == "create":
