@@ -7594,7 +7594,7 @@ FCM·APNs 전송)은 그대로 유효**하며, 해당 Milestone 착수 시 다�
 | M23-T03 | Vault Save Engine — Markdown 생성/저장 엔진 구현 | **완료** |
 | M23-T04 | Auto Save Workflow — Task 완료 후 자동 Vault 갱신 | **완료** |
 | M23-T05 | Vault Synchronization — Create/Update/Rename/Delete/Conflict/Version/Link·Backlink 검증 정책 | **완료** |
-| M23-T06 | Execution Engine — 자연어 명령 → Retrieval → Template → 작업 → Vault 저장 → Validation → 완료 보고 라우팅 | 예정 |
+| M23-T06 | Execution Engine — 자연어 명령 → Retrieval → Template → 작업 → Vault 저장 → Validation → 완료 보고 라우팅 | **완료** |
 | M23-T07 | Execution Environment Integration — Claude Code/Filesystem/MCP/GitHub 실제 연동 검증 | 예정 |
 
 #### M23-T02: Obsidian Integration Architecture
@@ -7851,6 +7851,58 @@ Link/Backlink 검증은 M23-T04의 `find_broken_backlinks()`가 이미
 
 **의존성**: M23-T03(Vault Save Engine)/M23-T04(Auto Save Workflow)
 완료.
+
+---
+
+#### M23-T06: Execution Engine
+
+**목표**: 자연어 명령("다음 Task 진행", "M23-T05 진행", "ADR 작성"
+등)이 실제 작업으로 이어지는 전체 경로(PROJECT_INDEX → AI_CONTEXT
+→ TASKS → READING_PROFILES → Retrieval → Template 선택 → 작업
+수행 → Vault 저장 → Validation → 완료 보고)를 명문화한다.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 명령 라우팅을 새 결정적 프로그램이 아니라 절차 문서로 구현하기로 판단하고 근거 기록(자연어 해석은 AI 역할) | ✅ |
+| 2 | Vault `EXECUTION_PROFILE`에 "Execution Engine" 절 추가 — 흐름도(사용자 명령→...→완료 보고) | ✅ |
+| 3 | "지원 명령 예시" 표(다음 Task 진행/M23-T05 진행/ADR 작성/Bug Fix/Feature Design/API 설계 → 적용 Reading Profile) | ✅ |
+| 4 | 5단계(Document Update)가 `vault.auto_save.run_auto_save()`를 구체적으로 가리키도록 갱신 | ✅ |
+| 5 | 6단계(Validation)가 `AutoSaveReport`를 구체적으로 가리키도록 갱신 | ✅ |
+| 6 | Vault `Vault Integration Architecture.md`/`docs/ARCHITECTURE.md`에 구현 상태(절차 문서) 반영 | ✅ |
+| 7 | 변경된 파일만 수정, 새 Core Interface/새 코드 미추가(의도적) | ✅ |
+
+**구현 내용**
+
+- **판단**: 자연어 명령("다음 Task 진행" 등)을 해석해 어떤
+  Task/Reading Profile을 적용할지 정하는 것은 AI(이 세션) 자체의
+  역할이다 — 정규식/키워드 매칭으로 흉내 낸 "명령 파서"를 만들면
+  실제로 아무도 호출하지 않는 죽은 코드가 된다(이 세션의 판단은
+  Python 함수 호출이 아니라 매 턴의 추론이다). 그래서 T06은
+  Retrieval/Template/저장/검증처럼 **이미 코드로 뒷받침되는
+  부분**([[READING_PROFILES]], `vault/`)과, **AI가 그때그때
+  해석하는 부분**(자연어 이해)의 경계를 명확히 하고, 전자를 후자가
+  일관되게 거치도록 절차로 고정하는 데 집중했다.
+- Vault `00 System/EXECUTION_PROFILE.md`(수정): "Execution Engine
+  — 자연어 명령 라우팅" 절 신규. 사용자가 제시한 흐름(PROJECT_INDEX
+  → AI_CONTEXT → TASKS → READING_PROFILES → Retrieval → Template
+  선택 → 작업 수행 → Vault 저장 → Validation → 완료 보고)을 그대로
+  다이어그램으로 옮기고, "지원 명령 예시" 표(다음 Task 진행/다음
+  작업 진행/M23-T05 진행/ADR 작성/Bug Fix/Feature Design/API 설계
+  → 적용 Reading Profile)를 추가했다. 5단계(Document Update)에
+  "GitHub 원문 갱신 내용을 `VaultDocumentRequest`로 정리할 수
+  있으면 `vault.auto_save.run_auto_save()`를 호출" 문구를 추가하고,
+  6단계(Validation)를 `AutoSaveReport.ok`/`summary()` 기준으로
+  구체화했다.
+- Vault `Vault Integration Architecture.md`/`docs/ARCHITECTURE.md`
+  (v0.29.0, §3.21)(수정): "구현 상태(M23-T06)" 절 추가 — 새 코드가
+  아니라 절차 문서임을 명시.
+- 코드 변경 없음(의도적) — `tests/vault/`는 38개 그대로.
+
+**의존성**: M23-T04(Auto Save Workflow)/M23-T05(Vault
+Synchronization) 완료(Execution Engine이 가리키는 `run_auto_save()`
+/`AutoSaveReport`가 실제로 존재해야 함).
 
 ---
 

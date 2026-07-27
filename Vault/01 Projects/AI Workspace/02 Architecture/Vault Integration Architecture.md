@@ -101,9 +101,23 @@ Handling을 구현 — 저장 시점 사이 파일이 다른 경로로 바뀌면
 `find_broken_backlinks()`를 재사용. `tests/vault/` 38개(T03 18 +
 T04 9 + T05 11), `ruff`/`mypy` 클린.
 
+## 구현 상태(M23-T06, Execution Engine)
+
+새 Python 코드가 아니라 **절차 문서**로 구현됐다 — 자연어 해석은
+AI(이 세션) 고유의 역할이라 결정적 프로그램으로 대체할 대상이
+아니고, 그 이후 단계(Retrieval/Template/저장/검증)는 이미
+[[READING_PROFILES]]와 `vault/`(M23-T03~T05)가 코드로 뒷받침하기
+때문이다. [[EXECUTION_PROFILE]]에 "Execution Engine — 자연어 명령
+라우팅" 절을 추가해 "사용자 명령 → PROJECT_INDEX → AI_CONTEXT →
+TASKS → READING_PROFILES → Retrieval → Template 선택 → 작업 수행 →
+Vault 저장(`run_auto_save()`) → Validation → 완료 보고" 흐름과
+지원 명령 예시("다음 Task 진행"/"M23-T05 진행"/"ADR 작성"/
+"Bug Fix"/"Feature Design"/"API 설계")를 표로 명시했다.
+[[EXECUTION_PROFILE]] 5~6단계(Document Update/Validation)도
+`run_auto_save()`를 구체적으로 가리키도록 갱신.
+
 ## 범위 밖(계속)
 
-- 자연어 명령 라우팅 — M23-T06(Execution Engine).
 - Claude Code/Filesystem/MCP/GitHub 실제 연동 검증 — M23-T07
   (Execution Environment Integration).
 

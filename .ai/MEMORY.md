@@ -1136,6 +1136,19 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   결정**(Vault가 이미 git으로 버전 관리됨, 최소 복잡성 원칙 — 새
   ADR 불필요, 기존 ADR-0035 연장). Link/Backlink 검증은 M23-T04의
   `find_broken_backlinks()`를 그대로 재사용(중복 구현 없음).
-  `tests/vault/` 11개 추가(총 38개), `ruff`/`mypy` 클린. 다음
-  Task: **M23-T06**(Execution Engine — 자연어 명령 → Retrieval →
-  Template → 작업 → Vault 저장 → Validation → 완료 보고 라우팅).
+  `tests/vault/` 11개 추가(총 38개), `ruff`/`mypy` 클린.
+- **M23-T06 완료: Execution Engine(2026-07-27)**. 자연어 명령
+  해석은 AI(이 세션) 고유의 역할이라 정규식/키워드 매칭식 "명령
+  파서"를 코드로 만들지 않기로 판단(만들어도 아무도 호출하지 않는
+  죽은 코드가 됨) — 대신 Vault `EXECUTION_PROFILE`에 "Execution
+  Engine" 절을 추가해 사용자 명령→PROJECT_INDEX→AI_CONTEXT→TASKS→
+  READING_PROFILES→Retrieval→Template 선택→작업 수행→Vault 저장
+  (`vault.auto_save.run_auto_save()`)→Validation(`AutoSaveReport`)
+  →완료 보고 흐름과 "지원 명령 예시" 표(다음 Task 진행/M23-T05
+  진행/ADR 작성/Bug Fix/Feature Design/API 설계 → 적용 Reading
+  Profile)를 명문화했다. 5~6단계(Document Update/Validation)를
+  이미 존재하는 `run_auto_save()`/`AutoSaveReport`를 구체적으로
+  가리키도록 갱신. 코드 변경 없음(의도적), `tests/vault/` 38개
+  그대로. 다음 Task: **M23-T07**(Execution Environment
+  Integration — Claude Code/Filesystem/MCP/GitHub 실제 연동
+  검증, Milestone 23 마지막 Task).

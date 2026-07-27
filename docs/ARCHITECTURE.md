@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.28.0 |
+| 문서 버전 | v0.29.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~22 완료, Milestone 23은 "Obsidian Integration & Auto Save"로 재정의(M23-T01/T02 완료) — ADR-0035로 신규 §3.21 Vault Integration Layer 도입. 새 Interface 없이 27종 유지. **M23-T03 완료**: `vault/` 패키지(Path Map/Document Router/Markdown Generator/Vault Writer/VaultSaveEngine) 실제 구현. **M23-T04 완료**: `vault/validation.py`+`vault/auto_save.py`로 저장→Validation→완료 보고를 한 번에 묶는 Auto Save Workflow 추가. **M23-T05 완료**: `vault/sync.py`로 Rename/Delete/Conflict Handling 추가, Version Strategy는 git 기반 유지로 결정) |
+| 상태 | Draft (Milestone 1~22 완료, Milestone 23은 "Obsidian Integration & Auto Save"로 재정의(M23-T01/T02 완료) — ADR-0035로 신규 §3.21 Vault Integration Layer 도입. 새 Interface 없이 27종 유지. **M23-T03 완료**: `vault/` 패키지(Path Map/Document Router/Markdown Generator/Vault Writer/VaultSaveEngine) 실제 구현. **M23-T04 완료**: `vault/validation.py`+`vault/auto_save.py`로 저장→Validation→완료 보고를 한 번에 묶는 Auto Save Workflow 추가. **M23-T05 완료**: `vault/sync.py`로 Rename/Delete/Conflict Handling 추가, Version Strategy는 git 기반 유지로 결정. **M23-T06 완료**: 새 코드 없이 Vault `EXECUTION_PROFILE`에 자연어 명령→Retrieval→Template→저장→Validation→완료 보고 절차를 명문화) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -933,8 +933,13 @@ GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
   새로 만들지 않고 `Vault/`가 이미 git으로 버전 관리되는 사실을
   그대로 쓰기로 결정(최소 복잡성 원칙). Link/Backlink Validation은
   M23-T04의 `find_broken_backlinks()`를 그대로 재사용.
-- **범위 밖(계속)**: 자연어 명령 라우팅(M23-T06), 실행 환경 연동
-  검증(M23-T07).
+- **구현 상태(M23-T06, Execution Engine)**: 새 코드가 아니라
+  절차 문서로 구현 — 자연어 해석은 AI 고유 역할이라 결정적
+  프로그램 대상이 아니다. Vault `EXECUTION_PROFILE`에 "Execution
+  Engine — 자연어 명령 라우팅" 절 추가(흐름도 + 지원 명령 예시
+  표), 5~6단계(Document Update/Validation)가 `vault.auto_save.
+  run_auto_save()`를 구체적으로 가리키도록 갱신.
+- **범위 밖(계속)**: 실행 환경 연동 검증(M23-T07).
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 

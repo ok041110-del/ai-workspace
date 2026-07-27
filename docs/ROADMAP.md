@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.29.0 |
+| 문서 버전 | v0.30.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~22 완료, v0.5.0 아키텍처 기준선 선언, Milestone 22에서 Production Platform 도입 — ADR-0034(새 Interface 없이 27종 유지). **M23-Preparation(Obsidian Knowledge Base 구축, `Vault/`) 전체 완료**(T01~T07 + T01A~T01D). **Milestone 23이 "Obsidian Integration & Auto Save"로 재정의됨**(2026-07-27 — 구 Mobile Experience Task List는 별도 Milestone으로 이월, Start Criteria 3개 결정은 그대로 유효). **M23-T01~T05 완료**(Reading Profiles / Obsidian Integration Architecture, ADR-0035 / Vault Save Engine / Auto Save Workflow / Vault Synchronization — `src/ai_workspace/vault/`). 다음은 M23-T06(Execution Engine)) |
+| 상태 | Draft (Milestone 1~22 완료, v0.5.0 아키텍처 기준선 선언, Milestone 22에서 Production Platform 도입 — ADR-0034(새 Interface 없이 27종 유지). **M23-Preparation(Obsidian Knowledge Base 구축, `Vault/`) 전체 완료**(T01~T07 + T01A~T01D). **Milestone 23이 "Obsidian Integration & Auto Save"로 재정의됨**(2026-07-27 — 구 Mobile Experience Task List는 별도 Milestone으로 이월, Start Criteria 3개 결정은 그대로 유효). **M23-T01~T06 완료**(Reading Profiles / Obsidian Integration Architecture, ADR-0035 / Vault Save Engine / Auto Save Workflow / Vault Synchronization / Execution Engine — 코드는 `src/ai_workspace/vault/`, T06은 Vault `EXECUTION_PROFILE` 절차 문서화). 다음은 M23-T07(Execution Environment Integration, Milestone 23 마지막 Task)) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
