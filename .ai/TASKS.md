@@ -6771,12 +6771,36 @@ Activity, Push Notification.
 | M22-T01 | Production Configuration + Loader(Env Var+설정 파일, 불변) | **완료** |
 | M22-T02 | Production Logging(표준 `logging`, Console+File) | **완료** |
 | M22-T03 | Lifecycle Manager(Startup/Running/Shutdown, Graceful Shutdown) | **완료** |
-| M22-T04 | Health Monitor + Version 조회 | 진행 예정 |
+| M22-T04 | Health Monitor + Version 조회 | **완료** |
 | M22-T05 | Production API(4종) + Server Runtime 연동 | 진행 예정 |
 | M22-T06 | Dashboard Health 화면 | 진행 예정 |
 | M22-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M22-T01~T03 완료. M22-T04 진행 예정.
+**진행 상태**: M22-T01~T04 완료. M22-T05 진행 예정.
+
+#### M22-T04: Health Monitor + Version 조회
+- 상태: **DONE (2026-07-27)** — `runtime/production/version.py`에
+  `WORKSPACE_VERSION`(제품 릴리스 버전, `pyproject.toml`의 아키텍처
+  기준선 버전과 별개 — M22 kickoff 승인 사항) + `get_git_commit_hash()`
+  (`git rev-parse HEAD`, 실패 시 `None` — git 저장소가 아니어도
+  Version API가 항상 동작) + `get_version_info()` 신규.
+  `runtime/production/health.py`에 `HealthStatus`(HEALTHY/DEGRADED/
+  UNHEALTHY)/`ComponentHealth`/`ProductionStatus`(사용자 승인
+  조건 5의 `uptime_seconds`/`started_at`/`version`/`health_status`
+  표준 필드 포함) + `HealthMonitor`(사용자 승인 조건 3 — 조회
+  전용, 상태를 바꾸지 않음) 신규. Server/Dashboard/Automation/
+  EventBus/Engine 5개 컴포넌트를 각각 점검해 가장 나쁜 상태로
+  전체 `health_status`를 집계한다(`server`는 `LifecycleManager.state`
+  로 판정 — RUNNING=Healthy/STARTUP=Degraded/SHUTDOWN=Unhealthy,
+  나머지 4개는 주입 여부로 판정). **Engine 항목 범위**: M22 kickoff
+  합의대로 `EngineRegistry` Interface를 확장하지 않고 "연결돼
+  있는가"만 확인한다(개별 Engine 상태는 범위 밖, `detail`에 명시).
+  `uptime_seconds`는 `LifecycleManager.started_at`과 현재 시각의
+  차이로 계산(시작 전이면 `None`). 단위 테스트 14개 신규(health
+  8개, version 3개, 추가 aggregate/shutdown 케이스 3개). `pytest`
+  (753개), `ruff`, `mypy` 통과. 다음 Task: **M22-T05**(Production
+  API + Server Runtime 연동).
+- 의존성: M22-T03.
 
 #### M22-T03: Lifecycle Manager
 - 상태: **DONE (2026-07-27)** — `runtime/production/lifecycle.py`의
