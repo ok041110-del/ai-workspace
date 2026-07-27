@@ -1124,5 +1124,18 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   append 모드는 기존 파일의 frontmatter를 건드리지 않으므로 Tag
   검증은 create 모드(현재는 Daily)로 새로 생성된 파일에만 적용하도록
   범위를 좁힘(과잉 검증 방지). `tests/vault/` 9개 추가(총 27개),
-  `ruff`/`mypy` 클린. 다음 Task: **M23-T05**(Vault Synchronization —
-  Create/Update/Rename/Delete/Conflict/Version 정책).
+  `ruff`/`mypy` 클린.
+- **M23-T05 완료: Vault Synchronization(2026-07-27)**. `vault/
+  sync.py` 신규 — `rename_document()`(파일명 변경 + Vault 전체
+  `[[..]]`/`[[..|별칭]]`/`[[..#절]]` Backlink 일괄 갱신),
+  `delete_document()`(다른 문서가 참조 중이면 기본 거부, `force=
+  True`로만 강제 삭제 — Orphan Backlink 방지), `content_hash()` +
+  `VaultWriter.upsert_section(expected_hash=...)`(Conflict Handling
+  — 저장 시점 사이 파일이 바뀌면 `VaultConflictError`). **Version
+  Strategy는 별도 시스템을 새로 만들지 않고 git 기반 유지로
+  결정**(Vault가 이미 git으로 버전 관리됨, 최소 복잡성 원칙 — 새
+  ADR 불필요, 기존 ADR-0035 연장). Link/Backlink 검증은 M23-T04의
+  `find_broken_backlinks()`를 그대로 재사용(중복 구현 없음).
+  `tests/vault/` 11개 추가(총 38개), `ruff`/`mypy` 클린. 다음
+  Task: **M23-T06**(Execution Engine — 자연어 명령 → Retrieval →
+  Template → 작업 → Vault 저장 → Validation → 완료 보고 라우팅).

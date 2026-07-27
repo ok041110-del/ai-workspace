@@ -7593,7 +7593,7 @@ FCM·APNs 전송)은 그대로 유효**하며, 해당 Milestone 착수 시 다�
 | M23-T02 | Obsidian Integration Architecture — Vault 연동 구조/저장 전략/Auto Save Architecture 설계, ADR 작성 | **완료** |
 | M23-T03 | Vault Save Engine — Markdown 생성/저장 엔진 구현 | **완료** |
 | M23-T04 | Auto Save Workflow — Task 완료 후 자동 Vault 갱신 | **완료** |
-| M23-T05 | Vault Synchronization — Create/Update/Rename/Delete/Conflict/Version/Link·Backlink 검증 정책 | 예정 |
+| M23-T05 | Vault Synchronization — Create/Update/Rename/Delete/Conflict/Version/Link·Backlink 검증 정책 | **완료** |
 | M23-T06 | Execution Engine — 자연어 명령 → Retrieval → Template → 작업 → Vault 저장 → Validation → 완료 보고 라우팅 | 예정 |
 | M23-T07 | Execution Environment Integration — Claude Code/Filesystem/MCP/GitHub 실제 연동 검증 | 예정 |
 
@@ -7785,6 +7785,72 @@ Workflow를 구현한다. EXECUTION_PROFILE Standard Workflow의 4단계
   와 무관.
 
 **의존성**: M23-T03(Vault Save Engine) 완료.
+
+---
+
+#### M23-T05: Vault Synchronization
+
+**목표**: Create/Update 외 나머지 Vault 파일 관리 정책(Rename/
+Delete/Conflict Handling/Version Strategy/Link·Backlink 검증)을
+구현한다. Create/Update는 M23-T03의 `VaultWriter`가 이미 담당하고,
+Link/Backlink 검증은 M23-T04의 `find_broken_backlinks()`가 이미
+담당하므로 이 Task는 그 위에 Rename/Delete/Conflict Handling을
+추가하고 Version Strategy를 결정하는 데 집중한다.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `vault/sync.py` — `rename_document()`(파일명 변경 + Vault 전체 Backlink 일괄 갱신) | ✅ |
+| 2 | `vault/sync.py` — `delete_document()`(참조 중이면 기본 거부, `force=True`로 강제 삭제 가능) | ✅ |
+| 3 | `vault/sync.py` — `find_references()`(Delete 전 참조 확인에 재사용) | ✅ |
+| 4 | `vault/sync.py` — `content_hash()` + `VaultWriter.upsert_section(expected_hash=...)`(Conflict Handling) | ✅ |
+| 5 | Version Strategy 결정(별도 버전 시스템 신설 없이 git 기반 유지) 및 문서화 | ✅ |
+| 6 | Link/Backlink Validation은 M23-T04 `find_broken_backlinks()` 재사용 확인(중복 구현 없음) | ✅ |
+| 7 | `tests/vault/test_sync.py` 신규 9개 + `test_writer.py` Conflict 케이스 2개 | ✅ |
+| 8 | `ruff check src/ai_workspace/vault tests/vault`, `mypy src/ai_workspace/vault` 클린 | ✅ |
+| 9 | `docs/ARCHITECTURE.md`/Vault `Vault Integration Architecture.md`/`Backend Index`에 구현 상태 반영 | ✅ |
+| 10 | 변경된 파일만 수정, 새 Core Interface 미추가 | ✅ |
+
+**구현 내용**
+
+- `src/ai_workspace/vault/sync.py`(신규): `rename_document(vault_
+  root, old_title, new_title)`이 `{old_title}.md`를 찾아 이름을
+  바꾸고, Vault 전체 `.md` 파일에서 `[[old_title]]`/
+  `[[old_title|별칭]]`/`[[old_title#절]]`을 정규식으로 찾아
+  `new_title` 기준으로 갱신한다(Backlink Rule 유지). 대상 이름이
+  이미 존재하면 `VaultConflictError`, 원본이 없으면
+  `VaultDocumentNotFoundError`. `delete_document(vault_root, title,
+  force=False)`는 `find_references()`로 아직 참조 중인 문서가
+  있으면 삭제하지 않고 `DeleteResult(deleted=False, referencing_
+  paths=...)`를 돌려준다(Orphan Backlink 방지) — `force=True`일
+  때만 참조가 남아 있어도 삭제한다. `content_hash()`(sha256)는
+  `vault/writer.py`의 `VaultWriter.upsert_section()`에 새 키워드
+  인자 `expected_hash`로 연결돼, 저장 직전에 실제 파일 해시가
+  다르면(그 사이 다른 경로로 파일이 바뀜) 조용히 덮어쓰는 대신
+  `VaultConflictError`를 낸다.
+- **Version Strategy 결정**: 별도 버전 관리 시스템(파일별 리비전
+  번호, 스냅샷 등)을 새로 만들지 않는다 — `Vault/`는 이미 GitHub
+  저장소와 함께 git으로 버전 관리되므로 파일 단위 변경 이력은
+  git이 그대로 담당한다(ADR-0035와 동일한 최소 복잡성 원칙 적용,
+  새 ADR 불필요 — 기존 결정의 연장).
+- `tests/vault/test_sync.py`(신규, 9개): 해시 변화 감지, 참조
+  문서 탐색, Rename 후 파일 이동 + 별칭/절 포함 Backlink 갱신
+  확인, 원본 없음/대상 이름 충돌 예외, 참조 중인 문서 삭제 거부/
+  `force=True` 강제 삭제/참조 없는 문서 정상 삭제/원본 없음 예외.
+- `tests/vault/test_writer.py`(수정, 2개 추가): `expected_hash`가
+  다르면 `VaultConflictError`, 일치하면 정상 저장.
+- `docs/ARCHITECTURE.md`(v0.28.0)/Vault `Vault Integration
+  Architecture.md`/`Backend Index`(수정): 구현 상태 반영.
+- 검증: `poetry run ruff check src/ai_workspace/vault tests/vault`
+  / `poetry run mypy src/ai_workspace/vault` / `poetry run pytest
+  tests/vault` 전부 통과(38개, T03 18 + T04 9 + T05 11). 전체
+  `pytest`/`mypy src`는 M23-T03/T04와 동일한 사전 존재 환경 제약
+  (`pyyaml`/`fastapi`/`uvicorn` 미설치)으로 여전히 실패 — `vault/`
+  와 무관.
+
+**의존성**: M23-T03(Vault Save Engine)/M23-T04(Auto Save Workflow)
+완료.
 
 ---
 

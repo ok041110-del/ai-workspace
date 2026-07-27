@@ -8,23 +8,34 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ai_workspace.vault.sync import VaultConflictError, content_hash
+
 _RELATED_DOCS_HEADING = "## 관련 문서"
 
 
 class VaultWriter:
     def create_file(self, path: Path, content: str) -> bool:
         """새 파일을 만든다. 이미 존재하면 아무것도 하지 않고 False를
-        돌려준다 — 덮어쓰지 않는다(Conflict 정책은 M23-T05에서 다룬다)."""
+        돌려준다 — 덮어쓰지 않는다."""
         if path.exists():
             return False
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         return True
 
-    def upsert_section(self, path: Path, heading: str, body: str) -> bool:
+    def upsert_section(
+        self, path: Path, heading: str, body: str, *, expected_hash: str | None = None
+    ) -> bool:
         """`path` 안에서 "## {heading}" 섹션을 찾아 있으면 본문을 교체하고,
         없으면 "## 관련 문서" 절 바로 앞에 새 섹션을 추가한다. 내용이 실제로
-        바뀔 때만 파일을 쓰고 True를 돌려준다."""
+        바뀔 때만 파일을 쓰고 True를 돌려준다.
+
+        `expected_hash`(`sync.content_hash()`로 미리 읽어 둔 값)를 주면,
+        그 사이 다른 경로로 파일이 바뀌었을 때 조용히 덮어쓰는 대신
+        `VaultConflictError`를 낸다(Conflict Handling, M23-T05)."""
+        if expected_hash is not None and content_hash(path) != expected_hash:
+            raise VaultConflictError(f"저장 시점 사이에 파일이 변경되었습니다: {path}")
+
         original = path.read_text(encoding="utf-8")
         updated = _upsert_section_text(original, heading, body)
         if updated == original:

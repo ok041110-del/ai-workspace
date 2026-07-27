@@ -86,10 +86,23 @@ auto_save.py`(`run_auto_save` — 여러 `VaultDocumentRequest`를 한
 문구를 만든다)로 구현 완료. `tests/vault/` 27개(T03 18 + T04 9),
 `ruff`/`mypy` 클린.
 
+## 구현 상태(M23-T05, Vault Synchronization)
+
+`vault/sync.py`(신규): `rename_document()`가 파일명을 바꾸고
+Vault 전체에서 그 문서를 가리키는 `[[..]]`/`[[..|별칭]]`/
+`[[..#절]]`을 일괄 갱신한다. `delete_document()`는 다른 문서가
+아직 참조 중이면 기본적으로 삭제를 거부하고 참조 목록을 돌려준다
+(Orphan Backlink 방지, `force=True`로 강제 가능). `content_hash()`
++ `VaultWriter.upsert_section(expected_hash=...)`로 Conflict
+Handling을 구현 — 저장 시점 사이 파일이 다른 경로로 바뀌면
+`VaultConflictError`. **Version Strategy**: 별도 버전 관리를 새로
+만들지 않고 이미 git으로 관리되는 `Vault/`를 그대로 쓴다(최소
+복잡성). Link/Backlink Validation은 M23-T04의
+`find_broken_backlinks()`를 재사용. `tests/vault/` 38개(T03 18 +
+T04 9 + T05 11), `ruff`/`mypy` 클린.
+
 ## 범위 밖(계속)
 
-- Rename/Delete/Conflict/Version 정책 — M23-T05(Vault
-  Synchronization).
 - 자연어 명령 라우팅 — M23-T06(Execution Engine).
 - Claude Code/Filesystem/MCP/GitHub 실제 연동 검증 — M23-T07
   (Execution Environment Integration).

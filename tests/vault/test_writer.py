@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+from ai_workspace.vault.sync import VaultConflictError, content_hash
 from ai_workspace.vault.writer import VaultWriter
 
 
@@ -82,3 +85,28 @@ def test_upsert_section_appends_to_end_when_no_related_docs_heading(tmp_path: Pa
     content = path.read_text(encoding="utf-8")
     assert "## 기존" in content
     assert content.index("## 기존") < content.index("## 신규")
+
+
+def test_upsert_section_raises_on_stale_expected_hash(tmp_path: Path) -> None:
+    writer = VaultWriter()
+    path = tmp_path / "Index.md"
+    path.write_text("# Index\n\n## 관련 문서\n\n- [[Overview]]\n", encoding="utf-8")
+    stale_hash = content_hash(path)
+    path.write_text(
+        "# Index\n\n다른 세션이 먼저 바꿈\n\n## 관련 문서\n\n- [[Overview]]\n", encoding="utf-8"
+    )
+
+    with pytest.raises(VaultConflictError):
+        writer.upsert_section(path, "신규", "- a\n", expected_hash=stale_hash)
+
+
+def test_upsert_section_succeeds_with_matching_expected_hash(tmp_path: Path) -> None:
+    writer = VaultWriter()
+    path = tmp_path / "Index.md"
+    path.write_text("# Index\n\n## 관련 문서\n\n- [[Overview]]\n", encoding="utf-8")
+    current_hash = content_hash(path)
+
+    changed = writer.upsert_section(path, "신규", "- a\n", expected_hash=current_hash)
+
+    assert changed is True
+    assert "## 신규" in path.read_text(encoding="utf-8")
