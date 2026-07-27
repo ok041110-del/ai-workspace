@@ -5141,12 +5141,29 @@ M14의 정적 정책이 담당 — 이 Decision은 Engine 선택에만 집중),
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M17-T01 | `EngineCandidate`/`EngineSelectionDecision` domain + `EngineRegistry` Interface + `InMemoryEngineRegistry` | 진행 예정 |
+| M17-T01 | `EngineCandidate`/`EngineSelectionDecision` domain + `EngineRegistry` Interface + `InMemoryEngineRegistry` | **완료** |
 | M17-T02 | `EngineSelectionPolicy` Interface + `InMemoryEngineSelectionPolicy`(Budget 내 최저 비용 우선) | 진행 예정 |
 | M17-T03 | End-to-End 통합 테스트(다중 Engine 후보 선택 + 실행과의 비연결 증명) | 진행 예정 |
 | M17-T04 | 문서화 + Milestone 17 Review | 진행 예정 |
 
-**진행 상태**: Task List 승인 완료, 구현 착수.
+**진행 상태**: M17-T01 완료. M17-T02 진행 중.
+
+#### M17-T01: `EngineCandidate`/`EngineSelectionDecision` domain + `EngineRegistry` Interface + 구현체
+- 상태: **DONE (2026-07-27)** — `domain/engine_selection.py`에
+  `EngineCandidate`(engine_name/capabilities/estimated_tokens/
+  estimated_cost_usd/supports_parallel)/`EngineSelectionDecision`
+  (engine_name/model/reason) 신규(Provider 독립, `CostEstimate`를
+  그대로 참조하지 않고 값만 옮겨 담아 domain이 interfaces에 의존하지
+  않는 기존 원칙 유지). `interfaces/engine_registry.py`에
+  `EngineRegistry`(`register`/`get`/`list_candidates`, `AgentRegistry`
+  와 동일한 설계 원칙) 신규 — `EngineRuntime`의 실행 계약(run/
+  estimate_cost)은 전혀 확장하지 않음. `runtime/engine/
+  engine_registry.py`의 `InMemoryEngineRegistry` 최소 구현체 —
+  `list_candidates()`가 각 Adapter의 `estimate_cost(task)`를 호출해
+  후보 목록을 조립(세션 미생성). 단위 테스트 8개 신규(domain 2개,
+  runtime/engine 6개). `pytest`(540개), `ruff`, `mypy` 통과. 다음
+  Task: **M17-T02**.
+- 의존성: 없음.
 
 ---
 
