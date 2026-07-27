@@ -5946,13 +5946,32 @@ Approval UI, 사용자 인증/권한 관리.
 |---|---|---|
 | M20-T01 | Dashboard 도메인 및 이벤트 정의 | **완료** |
 | M20-T02 | 실행 계층과 Dashboard 연결(`ExecutionDispatcher` Event 발행 + `InMemoryDashboardRepository` 구독) | **완료** |
-| M20-T03 | Read Model 및 ViewModel(`DashboardService` + `DashboardViewModel`) | 진행 예정 |
+| M20-T03 | Read Model 및 ViewModel(`DashboardService` + `DashboardViewModel`) | **완료** |
 | M20-T04 | 서버 런타임 구축(`workspace start`, FastAPI app 골격) | 진행 예정 |
 | M20-T05 | API 및 Web UI(REST 라우터 + WebSocket + 정적 UI) | 진행 예정 |
 | M20-T06 | 전체 흐름 검증(End-to-End 통합 테스트 + 의존성 검증) | 진행 예정 |
 | M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
 
-**진행 상태**: M20-T01~T02 완료. M20-T03 진행 중.
+**진행 상태**: M20-T01~T03 완료. M20-T04 진행 중.
+
+#### M20-T03: Read Model 및 ViewModel
+- 상태: **DONE (2026-07-27)** — `runtime/dashboard/
+  dashboard_service.py`에 `KNOWN_ENGINES`(claude_code/gemini_cli/
+  codex_cli/ollama 4종 고정 목록)/`DashboardSnapshot`/
+  `DashboardService`(Repository만 사용, UI를 전혀 모름 — `web/`
+  import 없음, 단위 테스트로 확인) 신규. 아직 실행된 적 없는 Engine은
+  기본 상태 READY로 채운다. 신규 `web/` 디렉터리(Infrastructure
+  계층 시작)의 `dashboard_viewmodel.py`에 `DashboardViewModel`/
+  `WorkspaceStatusViewModel`/`EngineStatusViewModel`/
+  `ExecutionHistoryEntryViewModel` + 변환 함수(`build_dashboard_
+  view_model()` 등) — 한국어 상태 라벨(준비 완료/실행 중/인증 필요/
+  오류, 대기 중, 성공/실패/취소/시간 초과)과 Engine 표시 이름(영어
+  유지, 예: "Claude Code")을 여기서만 다룬다. `DashboardService`는
+  이 타입을 전혀 모른다(변환은 `web/` 계층 전담). 단위 테스트 9개
+  신규(dashboard_service 4개, dashboard_viewmodel 5개). `pytest`
+  (619개), `ruff`, `mypy` 통과. 다음 Task: **M20-T04**(서버 런타임
+  구축).
+- 의존성: M20-T02.
 
 #### M20-T02: 실행 계층과 Dashboard 연결
 - 상태: **DONE (2026-07-27)** — `runtime/execution/events.py`에
