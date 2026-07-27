@@ -5143,10 +5143,10 @@ M14의 정적 정책이 담당 — 이 Decision은 Engine 선택에만 집중),
 |---|---|---|
 | M17-T01 | `EngineCandidate`/`EngineSelectionDecision` domain + `EngineRegistry` Interface + `InMemoryEngineRegistry` | **완료** |
 | M17-T02 | `EngineSelectionPolicy` Interface + `InMemoryEngineSelectionPolicy`(Budget 내 최저 비용 우선) | **완료** |
-| M17-T03 | End-to-End 통합 테스트(다중 Engine 후보 선택 + 실행과의 비연결 증명) | 진행 예정 |
+| M17-T03 | End-to-End 통합 테스트(다중 Engine 후보 선택 + 실행과의 비연결 증명) | **완료** |
 | M17-T04 | 문서화 + Milestone 17 Review | 진행 예정 |
 
-**진행 상태**: M17-T01~T02 완료. M17-T03 진행 중.
+**진행 상태**: M17-T01~T03 완료. M17-T04(문서화 + Review) 진행 중.
 
 #### M17-T01: `EngineCandidate`/`EngineSelectionDecision` domain + `EngineRegistry` Interface + 구현체
 - 상태: **DONE (2026-07-27)** — `domain/engine_selection.py`에
@@ -5183,6 +5183,28 @@ M14의 정적 정책이 담당 — 이 Decision은 Engine 선택에만 집중),
   시 등록 순서 유지). `pytest`(546개), `ruff`, `mypy` 통과. 다음
   Task: **M17-T03**(End-to-End 통합 테스트).
 - 의존성: M17-T01.
+
+#### M17-T03: End-to-End 통합 테스트
+- 상태: **DONE (2026-07-27)** — `tests/integration/
+  test_m17_intelligent_engine_selection.py` 신규, 7개 테스트. 실제
+  `InMemoryEngineRegistry`/`InMemoryBudgetPolicyEngine`/
+  `InMemoryEngineSelectionPolicy` 조합으로 (1) 여러 Engine이 실제
+  등록된 상태에서 Budget 내 최저 비용 후보 선택, (2) 예산 초과 후보
+  제외, (3) 전체 후보가 예산을 넘으면 `None`, (4) 실제
+  `FileKnowledgeRepository`(프로젝트 루트)로 조회한 실제 Knowledge가
+  결정 사유에 반영됨을 검증. **Milestone DoD 5번(가장 중요한 경계)**:
+  `EngineSelectionPolicy`가 "cheap"을 추천하더라도, 실제
+  `EngineRuntime`에는 "expensive"만 등록해 둔 실제 `CodingAgent`
+  파이프라인을 통째로 실행 — Task가 정상적으로 `expensive`로
+  실행·완료됨을 확인해(`EngineRuntime.status()`), Selection Decision이
+  실행에 전혀 영향을 주지 않음을 직접 증명. 추가로
+  `inspect.signature(CodingAgent.__init__)`으로 `CodingAgent`
+  생성자가 `engine_selection_policy`/`engine_registry` 파라미터를
+  아예 받지 않음을 코드 수준에서 재확인(설계상 약속이 실제로
+  지켜지고 있음을 이중으로 증명). `pytest`(553개, 기존 546개 + 신규
+  7개), `ruff`, `mypy` 통과. 다음 Task: **M17-T04**(문서화 +
+  Milestone 17 Review).
+- 의존성: M17-T02.
 
 ---
 

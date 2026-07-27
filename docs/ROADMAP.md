@@ -743,10 +743,10 @@ M18. `EngineRuntime` 계약 확장 대신 신규 `EngineRegistry`(기존
 |---|---|---|
 | M17-T01 | `EngineCandidate`/`EngineSelectionDecision` domain + `EngineRegistry` | **완료** |
 | M17-T02 | `EngineSelectionPolicy` + `InMemoryEngineSelectionPolicy` | **완료** |
-| M17-T03 | End-to-End 통합 테스트 | 진행 예정 |
+| M17-T03 | End-to-End 통합 테스트 | **완료** |
 | M17-T04 | 문서화 + Milestone 17 Review | 진행 예정 |
 
-**진행 상태**: M17-T01~T02 완료, M17-T03 진행 중.
+**진행 상태**: M17-T01~T03 완료, M17-T04(문서화 + Review) 진행 중.
 
 ---
 
