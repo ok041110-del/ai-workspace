@@ -5949,10 +5949,34 @@ Approval UI, 사용자 인증/권한 관리.
 | M20-T03 | Read Model 및 ViewModel(`DashboardService` + `DashboardViewModel`) | **완료** |
 | M20-T04 | 서버 런타임 구축(`workspace start`, FastAPI app 골격) | **완료** |
 | M20-T05 | API 및 Web UI(REST 라우터 + WebSocket + 정적 UI) | **완료** |
-| M20-T06 | 전체 흐름 검증(End-to-End 통합 테스트 + 의존성 검증) | 진행 예정 |
+| M20-T06 | 전체 흐름 검증(End-to-End 통합 테스트 + 의존성 검증) | **완료** |
 | M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
 
-**진행 상태**: M20-T01~T05 완료. M20-T06 진행 예정.
+**진행 상태**: M20-T01~T06 완료. M20-T07 진행 예정.
+
+#### M20-T06: 전체 흐름 검증
+- 상태: **DONE (2026-07-27)** —
+  `tests/integration/test_m20_realtime_dashboard_platform.py` 신규
+  (M18/M19처럼 실제 `ClaudeCodeEngineAdapter` + `FakeExecutionEnvironment`
+  조합 사용, Fake Dashboard 컴포넌트 없음). `ExecutionDispatcher.dispatch()`
+  실제 실행 → `InMemoryDashboardRepository` 구독 갱신 →
+  `DashboardService` → `/api/dashboard` REST 응답까지 이어짐을 증명
+  (`test_real_execution_updates_rest_api_dashboard`). 동일한 흐름이
+  `/ws/dashboard`로도 최초 스냅샷 + 실행 시작/완료 2건의 실시간 갱신을
+  민다는 것도 증명(`test_real_execution_pushes_websocket_updates`,
+  Polling 없이 실제 이벤트 발행 시점에만 메시지 수신됨을 확인).
+  `ast` 기반 import 그래프 검사로 CQRS 경계를 재확인:
+  `DashboardService`/`InMemoryDashboardRepository`(Core)가 `web/`이나
+  `fastapi`/`uvicorn`을 import하지 않음
+  (`test_dashboard_service_and_repository_do_not_import_web_layer`),
+  `ExecutionDispatcher`도 `runtime.dashboard`/`web`을 참조하지 않음
+  (`test_execution_dispatcher_does_not_import_dashboard_layer`) —
+  T03에서 만든 docstring 기반 검사(`test_dashboard_service.py`)의
+  한계(클래스 자체 docstring에 "web/"이라는 단어가 있어 문자열
+  검사로는 오탐 발생)를 겪었던 경험을 반영해 처음부터 `ast.ImportFrom`
+  노드만 검사. 신규 테스트 4개. `pytest`(635개), `ruff`, `mypy`
+  통과. 다음 Task: **M20-T07**(문서화 및 아키텍처 정리).
+- 의존성: M20-T05.
 
 #### M20-T05: API 및 Web UI
 - 상태: **DONE (2026-07-27)** — `web/routes.py`에 `/api/dashboard`
