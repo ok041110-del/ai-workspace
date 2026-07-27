@@ -469,6 +469,37 @@
   확장(ADR-0009/0015와 동일 계열)** — ADR-0026으로 정식 기록. 이월
   부채는 M13과 동일하게 유지(Effort 라우팅 신규 이월, Codex/Gemini
   실연동 계속 이월).
+- **Milestone 15(Token & Cost Optimization) 완료 — 2026-07-27
+  사용자 승인.** 목표는 "`EngineAdapter.estimate_cost()`를 실제로
+  활용하는 Workspace 차원 Budget 정책을 도입해 Task 실행 전에 예산을
+  확인하고 초과 시 막는다"(MVP, Provider 독립). **핵심 발견**:
+  `estimate_cost()`는 M3부터 있었지만 `EngineRuntime`도 Agent도 호출한
+  적이 없었다(M12의 `WorkflowEngine.plan()`, M13의 `AgentScheduler.
+  select()`와 동일한 "만들어졌지만 쓰인 적 없는 기능" 패턴). `domain/
+  budget.py`에 `Budget`/`BudgetDecision`(Provider 독립) 신규,
+  `interfaces/budget_policy_engine.py`에 `BudgetPolicyEngine`
+  Interface 신규(`LLMPolicyEngine`과 동일 설계 원칙 — side-effect
+  없음, 정책 없으면 항상 허용), `InMemoryBudgetPolicyEngine` 최소
+  구현. `EngineRuntime`(RULES §1.2 보호 자산)에 `estimate_cost(task,
+  required_capabilities) -> CostEstimate`를 신규 추가(세션 미생성,
+  `run()`과 동일한 선택 규칙, 신규 **ADR-0027**) — `InMemoryEngineRuntime`
+  /`ManagedEngineRuntime`은 기존 선택 로직 재사용, `RecoveringEngineRuntime`
+  은 순수 위임. `CodingAgent`에 선택적 `budget_policy_engine` DI 추가 —
+  실행 직전 `estimate_cost()` → `check()`를 거쳐 예산 초과 시 Approval/
+  Retry 없이 Task를 `BLOCKED`로 전환하고 실행하지 않는다. 실제
+  `ManagedEngineRuntime`+`ClaudeCodeEngineAdapter`+`CodingAgent` 조합
+  으로 예산 내/초과/미설정 3가지 시나리오를 통합 테스트로 증명
+  (M15-T03). 새 소스 파일 3개(`domain/budget.py`, `interfaces/
+  budget_policy_engine.py`, `engines/budget_policy_engine.py`), 기존
+  파일 수정 5개(`EngineRuntime` Interface 1·구현체 3·`CodingAgent` 1).
+  전체 `pytest` 511개(M14 완료 489개 → M15에서 22개 신규) 통과,
+  `ruff`/`mypy` 클린. **새 최상위 Interface 1개(`BudgetPolicyEngine`)
+  추가 + 기존 `EngineRuntime` 계약 확장** — 새 Interface 추가(M5/M11과
+  동일 계열)와 기존 계약 확장(M14와 동일 계열)이 겹친 첫 Milestone.
+  이월 부채는 M14와 동일하게 유지(여러 Task에 걸친 누적 예산 추적,
+  예산 초과 시 Approval 흐름, 실제 API 과금 조회는 신규 이월 후보로
+  기록했으나 전부 "사용자가 이번 범위에서 의도적으로 제외"한 항목이라
+  기존 5개 부채 목록에는 추가하지 않음).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -615,6 +646,7 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR-0024 | v0.5.0 아키텍처 기준선(Baseline) 선언 (`pyproject.toml` 버전 상향) | 승인됨 |
 | ADR-0025 | **ExecutionEnvironment**를 새 최상위 Layer 대신 `EngineAdapter` 하위 인터페이스로 도입, DI 기본 방향 | 승인됨 |
 | ADR-0026 | `EngineAdapter`/`EngineRuntime`에 `model` 파라미터 확장(Model 라우팅, `ClaudeCodeEngineAdapter`만 적용) | 승인됨 |
+| ADR-0027 | `EngineRuntime`에 `estimate_cost()` 추가 + `BudgetPolicyEngine` 신설(Token & Cost Optimization) | 승인됨 |
 
 기술 스택(Python, dataclasses, 파일 기반 저장, CLI, 인메모리 Event Bus+파일
 Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
@@ -652,18 +684,17 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-26)**: Milestone 1~14 전체 완료(사용자 승인).
-  Milestone 15는 아직 목표/DoD/Task List가 정의되지 않음. 버전 v0.5.0
-  유지(ADR-0024 기준선 — `ExecutionEnvironment`/`WorkflowRunner`/
-  `CodingAgent`의 자가 확인 가드/`model` 파라미터 확장 모두 새 최상위
-  Interface나 계층 구조 변경이 아니라 기존 계약 위에서의 추가·확장이라
-  기준선 재선언 대상이 아님). `pytest` 489개, `ruff`/`mypy` 클린.
-  Milestone 15는 아직 목표/DoD/Task List 미정의(Task Driven
-  Development 원칙).
+- **현재 상태(2026-07-27)**: Milestone 1~15 전체 완료(사용자 승인).
+  Milestone 16(Project Knowledge System/Memory Engine)은 착수
+  시점(Task Driven Development 원칙, 목표/DoD/Task List는 착수 시
+  새로 정의). 버전 v0.5.0 유지(ADR-0024 기준선 — M15까지의 변경은
+  전부 기존 계약 위에서의 추가·확장이거나 그와 동급의 신규 Interface
+  1개 추가라 기준선 재선언 대상이 아님). `pytest` 511개, `ruff`/`mypy`
+  클린.
 - **이 환경의 제약(2026-07-26 확인)**: `claude` CLI만 설치되어 있고
   `codex`/`gemini` CLI는 설치되어 있지 않다(`which` 확인). Codex/Gemini
   관련 Task는 이 세션에서 실행 불가 — 실제 CLI가 설치된 환경이 필요하다.
-- **누적 Technical Debt(2026-07-26 기준, M14 완료 후)**: (1)
+- **누적 Technical Debt(2026-07-27 기준, M15 완료 후)**: (1)
   **Effort 수준 라우팅 미완성** — Model은 M14에서 해소됐지만(opus/
   sonnet/haiku가 `--model`까지 반영됨), Effort(low/medium/high)는
   Claude Code CLI에 대응하는 플래그가 없어 검증 불가능한 상태가 되는

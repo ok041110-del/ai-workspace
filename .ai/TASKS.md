@@ -4813,6 +4813,8 @@ Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 3/
 
 **사용자 승인을 조건으로 Milestone 15 Completed를 선언한다.**
 
+**Milestone 15 종료 — 2026-07-27 사용자 승인.**
+
 **Milestone 16 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
 않았다. 사용자가 예고한 다음 단계는 Obsidian 도입 여부 검토 후
 그 결과를 반영해 Memory Engine의 목표/구조를 확정하는 것이다 — 이는
