@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.33.0 |
+| 문서 버전 | v0.34.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~22 완료, v0.5.0 아키텍처 기준선 선언, Milestone 22에서 Production Platform 도입 — ADR-0034(새 Interface 없이 27종 유지). **M23-Preparation(Obsidian Knowledge Base 구축, `Vault/`) 전체 완료**(T01~T07 + T01A~T01D). **Milestone 23(Obsidian Integration & Auto Save) — Completed**(T01~T07 + Verification). **Milestone 24(Real Obsidian Vault Integration) — Task List T01~T08 구현 완료, 사용자 최종 확인 대기**(2026-07-27) — ADR-0036: `vault/connection.py`(실제 Vault 연결)/`filesystem.py`(Adapter)/`atomic.py`(원자적 쓰기) 신규, Auto Save Validation을 Incremental로 전환. 실제 `Vault/`를 대상으로 한 End-to-End 테스트(`tmp_path` 미사용) 5개로 Create/Update/Rename/Delete/Auto Save 왕복 검증, 실제 Vault는 테스트 종료 후 무변경. 구 Mobile Experience Task List는 별도 Milestone(번호 미정)으로 이월, Start Criteria 3개 결정은 그대로 유효) |
+| 상태 | Draft (Milestone 1~22 완료, v0.5.0 아키텍처 기준선 선언, Milestone 22에서 Production Platform 도입 — ADR-0034(새 Interface 없이 27종 유지). **M23-Preparation 전체 완료**. **Milestone 23(Obsidian Integration & Auto Save) — Completed**. **Milestone 24(Real Obsidian Vault Integration) — Completed**(T01~T08, 사용자 승인, ADR-0036: 실제 Vault 연결/Filesystem Adapter/Atomic Write, Auto Save Validation Incremental 전환). **Milestone 25(Production Vault Activation) — Task List T01~T05 구현 완료, 사용자 최종 확인 대기**(2026-07-27) — 실제 Vault 권한 확인/`TEST_DOCUMENT.md` 생성·수정·삭제 후 원상복구/프로젝트 문서 동기화(Backend Index 갱신)/링크·Backlink·Frontmatter 검증까지 실제 운영 환경에서 수행, 신규 결함 없음. 구 Mobile Experience Task List는 별도 Milestone(번호 미정)으로 이월, Start Criteria 3개 결정은 그대로 유효) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 

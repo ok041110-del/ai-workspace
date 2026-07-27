@@ -1229,3 +1229,33 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   Milestone 24 자체의 "Completed" 선언은 M23과 동일하게 사용자의
   별도 확인을 거쳐야 하므로 이번 턴에서는 선언하지 않음 — Task
   List(T01~T08)만 구현 완료로 기록.
+- **Milestone 24(Real Obsidian Vault Integration) — Completed
+  (2026-07-27, 사용자 승인 "승인.").**
+- **Milestone 25(Production Vault Activation) T01~T05 구현 완료
+  (2026-07-27)**. M24 구현을 실제 운영 환경에서 활성화 — 구현
+  자체는 변경하지 않고 권한 확인→안전성 검증→실제 동기화 순으로
+  진행. **M25-T01**: `connection.connect()` 실제 호출 + `os.access()`
+  로 Read/Write/Create/Update/Delete/Rename 권한과 PARA 구조 15개
+  디렉터리 존재를 문서 생성 없이 순수 읽기 전용으로 확인, 전부
+  통과. **M25-T02**: 실제 Vault 루트에 `TEST_DOCUMENT.md`를
+  `VaultFileSystem`/`VaultWriter`로 실제 생성→수정→검증→삭제까지
+  수행(Frontmatter/UTF-8/Backlink/Tag 전부 정상), 종료 후
+  `git status`/`git diff -- Vault/`로 완전 무변경 확인("Obsidian
+  에서 정상 표시"는 이 세션에 Obsidian 앱이 없어 Frontmatter
+  파싱·Validation 통과로 대리 확인했다고 정직하게 기록). **M25-T03**:
+  실제 동기화 대상을 ADR/API/Decision(+표 형식 Backend Index)으로
+  한정(TASKS/MEMORY/ROADMAP은 ADR-0035/0036 경계 유지, Design/
+  Implementation/Documentation은 대응 Vault 폴더 없어 제외) —
+  대조 결과 `Backend Index`의 `vault/` 행이 M24/ADR-0036을 빠뜨리고
+  있던 유일한 실제 Gap을 발견해 수정. 이미 정확한 ADR Index
+  섹션(ADR-0035/0036)을 자동 생성기로 재렌더링해 덮어쓰는 것은
+  품질 저하 위험이 있어 하지 않기로 판단. **M25-T04**: 실제
+  Vault 전체(34개 파일) 대상 Backlink(9건, 전부 기존에 알려진
+  `[[...]]` 문법 설명용 프롬프트 예시)/Frontmatter(누락 0건)/
+  중복 헤딩(`AI_RULES.md`의 "## 원문" 2회 발견됐으나 하나는
+  코드 펜스 안 예시라 실질 중복 아님, `system` kind라 자동 저장
+  대상도 아님)/누락 여부 전부 확인, 신규 결함 없음. **M25-T05**:
+  DoD 9개 항목 전부 충족 확인. **Milestone 25 자체의 "Completed"
+  선언은 M23/M24와 동일하게 사용자의 별도 확인을 거쳐야 하므로
+  이번 턴에서는 선언하지 않음** — Task List(T01~T05)만 구현
+  완료로 기록.

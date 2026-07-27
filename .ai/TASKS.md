@@ -8354,6 +8354,150 @@ Save/Retrieval 결과 저장/Validation을 통합 테스트로 검증한다.
 **의존성**: Milestone 23(Obsidian Integration & Auto Save) 전체
 완료.
 
+**Milestone 24(Real Obsidian Vault Integration) — Completed.**
+(2026-07-27, 사용자 승인)
+
+---
+
+## Milestone 25 — Production Vault Activation
+
+**목표**(2026-07-27 사용자 요청): M24에서 구현한 Real Obsidian
+Vault Integration을 실제 운영 환경(Production Vault)에서
+활성화한다. 구현 자체는 변경하지 않고 (1) 권한 확인 → (2) 안전성
+검증 → (3) 실제 Vault 동기화 순으로 진행한다.
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M25-T01 | Vault Permission Verification — Root/Read/Write/Create/Update/Delete/Rename 권한 + Configuration 확인 | **완료** |
+| M25-T02 | Production Safety Test — TEST_DOCUMENT.md 생성→수정→저장 확인→삭제, Vault 원상복구 | **완료** |
+| M25-T03 | Production Vault Synchronization — 실제 프로젝트 문서와 Vault 동기화 상태 확인·보정 | **완료** |
+| M25-T04 | Production Verification — 실제 Vault 반영 결과(링크/Backlink/Frontmatter/Template/중복/누락) 검증 | **완료** |
+| M25-T05 | Production Completion — 결과 요약, 운영 준비 여부 확정 | **완료** |
+
+### M25-T01: Vault Permission Verification
+
+**목표**: 실제 Obsidian Vault 접근 가능 여부를 문서 생성 없이
+확인한다. 실패 시 원인만 보고하고 아무것도 만들지 않는다.
+
+**검증 방법**: `vault.connection.resolve_default_vault_root()`/
+`connect()`(존재/디렉터리/쓰기 권한)를 실제로 호출하고, 나머지
+권한(Read/Create/Update/Delete/Rename)은 `os.access()`로 순수
+읽기 전용 확인만 수행(파일을 만들지 않음).
+
+**결과**
+
+| # | 항목 | 결과 |
+|---|---|---|
+| 1 | Vault Root 확인(`resolve_default_vault_root`) | ✅ `Vault/01 Projects/AI Workspace` |
+| 2 | `connect()` — 존재/디렉터리/쓰기 권한 | ✅ |
+| 3 | Read 권한(R_OK, root) | ✅ |
+| 4 | Write 권한(W_OK, root) | ✅ |
+| 5 | Create/Delete/Rename 권한(디렉터리 W_OK+X_OK, `03 ADR/` 표본) | ✅ |
+| 6 | Update 권한(기존 파일 `PROJECT_INDEX.md`의 W_OK) | ✅ |
+| 7 | Configuration 확인(PARA 구조 15개 디렉터리 전부 존재) | ✅ |
+
+**모든 권한 확인 통과 — 문서는 생성하지 않음(순수 읽기 전용
+검증).**
+
+### M25-T02: Production Safety Test
+
+**목표**: 실제 Vault에서 Create/Update/Delete가 안전하게 동작하는지
+실제로 확인하고, 종료 후 Vault를 원래 상태로 되돌린다.
+
+**절차 및 결과**: `VaultFileSystem`/`VaultWriter`로 실제 Vault
+루트에 `TEST_DOCUMENT.md`를 생성 → 섹션 추가로 수정 → 저장 내용
+읽어 확인 → 삭제까지 전부 실제로 수행했다.
+
+| # | 항목 | 결과 |
+|---|---|---|
+| 1 | 생성(`VaultFileSystem.create`) | ✅ |
+| 2 | 수정(`VaultWriter.upsert_section`) | ✅ |
+| 3 | 저장 확인(다시 읽어 내용 대조) | ✅ |
+| 4 | Frontmatter(`tags: [system]`) 유지 | ✅ |
+| 5 | UTF-8(한글 "가나다라" 보존) | ✅ |
+| 6 | Link(`[[Overview]]`) | ✅ (대상 문서 실제 존재) |
+| 7 | Backlink Validation(`find_broken_backlinks`) | ✅ 이슈 0건 |
+| 8 | Tag Validation(`find_missing_tags`) | ✅ 이슈 0건 |
+| 9 | 삭제(`VaultFileSystem.delete`) | ✅ |
+| 10 | "Obsidian에서 정상 표시 확인" | ⚠️ 대리 검증 — 이 세션에 Obsidian 앱이 없어 직접 열어 확인할 수 없다. Frontmatter 파싱 가능 여부/Backlink·Tag Validation 통과로 대신 확인했다(정직하게 기록) |
+| 11 | 테스트 후 Vault 원상복구 | ✅ `git status`/`git diff -- Vault/` 확인 결과 무변경 |
+
+**Production Safety Test 통과.**
+
+### M25-T03: Production Vault Synchronization
+
+**목표**: 실제 프로젝트 문서(TASKS/MEMORY/ROADMAP/ADR/API/DESIGN/
+IMPLEMENTATION/DECISION/DOCUMENTATION)를 실제 Vault와 동기화한다.
+M25-T02가 성공했으므로 진행(사용자 제약 조건 충족).
+
+**실제 동기화 범위 확인**: `vault/`는 ADR-0035/0036부터 "GitHub
+원문(TASKS/MEMORY/ROADMAP)을 대신 쓰지 않는다"는 경계를 지켜 왔다
+— 이번에도 그 경계를 유지했다(범위를 넓히지 않음, M24-T04와 동일
+판단). DESIGN/IMPLEMENTATION/DOCUMENTATION은 실제 Vault(PARA
+구조)에 대응하는 전용 디렉터리가 없어 동기화 대상에서 제외(동일
+판단 근거). 실제로 동기화 가능한 대상(ADR/API/DECISION, 그리고
+표 구조 문서인 Backend Index)을 실제 Vault와 대조한 결과:
+
+| 대상 | 상태 |
+|---|---|
+| ADR Index | ✅ ADR-0035/0036 모두 이미 등록됨(직전 Task에서 반영) |
+| API Catalog | ✅ M23~M25에서 신규 REST 엔드포인트 없음 — 동기화 필요 없음 |
+| Decisions Index | ✅ 관련 결정("왜 Server와 iOS/Android를 분리했는가") 이미 최신 |
+| Backend Index | ⚠️→✅ `vault/` 행이 M23(ADR-0035)까지만 언급하고 M24/ADR-0036 (connection/filesystem/atomic)을 빠뜨리고 있어 **실제로 갱신함**(이번 Task에서 발견·수정한 유일한 실제 Gap) |
+
+**의도적으로 하지 않은 것**: `run_auto_save()`(kind=ADR)로 ADR
+Index의 기존 ADR-0035/0036 섹션을 다시 렌더링해 덮어쓰는 것 —
+기각. 이미 수작업으로 정확히 작성된 요약을 자동 생성기의 범용
+포맷으로 교체하면 내용 품질이 떨어질 위험이 있고, "구현 자체를
+변경하는 것이 아니라"는 이번 Milestone의 원칙과도 맞지 않는다
+(대상 섹션이 이미 최신이므로 다시 쓸 이유가 없다).
+
+### M25-T04: Production Verification
+
+**목표**: 실제 Vault 반영 결과(문서 위치/링크/Backlink/Frontmatter/
+Template/중복/누락)를 확인한다.
+
+**실제 Vault 전체(34개 파일) 대상 검증 결과**
+
+| # | 항목 | 결과 |
+|---|---|---|
+| 1 | 문서 위치(Vault Directory Mapping과 실제 파일 경로 일치) | ✅ |
+| 2 | 링크/Backlink(`find_broken_backlinks(root)` 전체 스캔) | ⚠️ 9건 — 전부 `AI_RULES`/`PREPARATION_SUMMARY`/`PROMPT_PROFILE`/`READING_PROFILES`/`Vault Integration Architecture`가 `[[...]]` 문법을 설명하려고 쓰는 예시 텍스트(기존에 이미 알려진 오탐, 신규 문제 아님) |
+| 3 | Frontmatter(전체 34개 파일 `tags` 존재 여부) | ✅ 누락 0건 |
+| 4 | Template 일관성(ADR/Decision/Daily는 실제 관행과 일치, 나머지 kind는 M23 Verification에서 이미 기록한 "범용 형식" 한계 유지 — 이번에 새로 악화되지 않음) | ✅ (기존 상태 유지 확인) |
+| 5 | 중복 여부(파일 내 `## ` heading 중복 스캔) | ⚠️ `AI_RULES.md`에서 "## 원문"이 2번 발견되나, 하나는 GitHub Link Rule을 설명하는 **코드 펜스(```markdown) 안의 예시**이고 실제 중복 섹션이 아님(수동 확인). `AI_RULES`는 kind=`system`으로 애초에 자동 저장 대상이 아니므로 운영상 영향 없음 — 다만 Vault Writer의 줄 기반 섹션 매칭이 코드 펜스를 인식하지 못한다는 점은 향후 참고용으로 기록 |
+| 6 | 누락 여부(15개 PARA 디렉터리 + `PROJECT_INDEX.md` 등 핵심 문서 존재) | ✅ |
+
+**신규 결함 없음 — 전부 이미 알려졌거나(M23 Verification) 운영에
+영향이 없는 항목임을 재확인.**
+
+### M25-T05: Production Completion
+
+**목표**: Production 환경 활성화를 완료 선언한다.
+
+**DoD 최종 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Vault 권한 확인 완료 | ✅ |
+| 2 | 테스트 문서 생성 성공 | ✅ |
+| 3 | 테스트 문서 수정 성공 | ✅ |
+| 4 | 테스트 문서 삭제 성공 | ✅ |
+| 5 | 테스트 후 Vault 원상복구 | ✅ |
+| 6 | 실제 프로젝트 문서 동기화 완료 | ✅ (범위: ADR/API/Decision/Backend Index — TASKS/MEMORY/ROADMAP은 의도적 범위 밖, 위 M25-T03 참고) |
+| 7 | 링크 및 Backlink 정상 | ✅ (알려진 예시 텍스트 오탐만 존재, 신규 문제 없음) |
+| 8 | Validation 통과 | ✅ |
+| 9 | 운영 환경 활성화 완료 | ✅ |
+
+**Task List(M25-T01~T05) 전부 완료. 실제 Obsidian Vault가 M24
+구현으로 안전하게 운영 가능한 상태임을 확인했다 — Milestone
+25(Production Vault Activation) 자체의 "Completed" 선언은 M23/
+M24와 동일하게 사용자의 최종 확인을 거친다.**
+
+**의존성**: Milestone 24(Real Obsidian Vault Integration) 완료.
+
 ---
 
 ## 진행 로그

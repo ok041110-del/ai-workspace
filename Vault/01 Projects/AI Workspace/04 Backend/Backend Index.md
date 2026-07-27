@@ -22,7 +22,7 @@ tags: [backend]
 | Automation | `src/ai_workspace/runtime/automation/` | AutomationScheduler/AutomationRepository(M21) |
 | Production | `src/ai_workspace/runtime/production/` | Configuration/Lifecycle/Health/Logging/Version(M22) |
 | Storage | `src/ai_workspace/storage/` | 파일 기반 Repository 구현체 |
-| Vault Integration | `src/ai_workspace/vault/` | GitHub↔Vault 문서 자동 저장(Router/Markdown Generator/Writer) + Auto Save Workflow(저장→Validation→완료 보고) + Sync(Rename/Delete/Conflict Handling), Core Domain·`web/`을 모두 모름(M23, ADR-0035) |
+| Vault Integration | `src/ai_workspace/vault/` | GitHub↔Vault 문서 자동 저장(Router/Markdown Generator/Writer) + Auto Save Workflow(저장→Validation→완료 보고) + Sync(Rename/Delete/Conflict Handling) + 실제 Vault 연결/Adapter/Atomic Write(connection.py/filesystem.py/atomic.py), Core Domain·`web/`을 모두 모름(M23~M25, ADR-0035/0036) |
 | Web | `src/ai_workspace/web/` | FastAPI 앱, 유일하게 프레임워크를 아는 계층 |
 | CLI | `src/ai_workspace/cli/` | 커맨드라인 진입점 |
 
