@@ -7148,12 +7148,23 @@ Optional)로 이월한다.
 | M23-Prep-T02 | 프로젝트 개요 및 아키텍처 작성 | **완료** |
 | M23-Prep-T03 | ADR 정리 | **완료** |
 | M23-Prep-T04 | Backend/API 문서화 | **완료** |
-| M23-Prep-T05 | 서버 구성 문서화 | 진행 예정 |
+| M23-Prep-T05 | 서버 구성 문서화 | **완료** |
 | M23-Prep-T06 | Client 및 프로젝트 이력 정리 | 진행 예정 |
 | M23-Prep-T07 | 운영 문서 및 검증 | 진행 예정 |
 | M23-Prep-T08 (Optional) | Obsidian MCP 연동 — Claude Code 도입 시점으로 이월 | 보류 |
 
-**진행 상태**: M23-Prep-T01~T04 완료. M23-Prep-T05 진행 예정.
+**진행 상태**: M23-Prep-T01~T05 완료. M23-Prep-T06 진행 예정.
+
+#### M23-Prep-T05: 서버 구성 문서화
+- 상태: **DONE (2026-07-27)** — `06 Dashboard/Dashboard Index.md`
+  (Health/Automation Reader→Reader/Execution/ViewModel),
+  `07 Automation/Automation Index.md`(Rule/Trigger/Scheduler/
+  Execution Flow, M4-T07 AutomationEngine과의 이름 구분 경고 포함),
+  `08 Production/Production Index.md`(Configuration/Lifecycle/
+  Logging/Health/Version/배포 계획) 3종 신규. 각각 관련 ADR·
+  Architecture·API Catalog로 상호 링크. 다음 Task: **M23-Prep-T06**
+  (Client 및 프로젝트 이력 정리).
+- 의존성: M23-Prep-T04.
 
 #### M23-Prep-T04: Backend/API 문서화
 - 상태: **DONE (2026-07-27)** — `04 Backend/Backend Index.md`
