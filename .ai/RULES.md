@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.5.0 |
+| 문서 버전 | v0.6.0 |
 | 작성일 | 2026-07-27 |
 | 적용 대상 | 이 저장소에서 작업하는 모든 AI 구현 엔진(Claude Code, Codex, Gemini CLI 등) 및 기여자 |
 
@@ -10,6 +10,16 @@
 아래 규칙은 사용자가 제시한 개발 철학을 프로젝트 내부 규정으로 명문화한 것이며,
 모든 Task 수행 시 최우선으로 준수해야 한다.
 
+> **v0.6.0 변경 (Branch Deletion 표준화, M24-T05)**: 신규 §8.5 Branch
+> Deletion 추가. PR 병합 후 작업 브랜치 삭제는 GitHub의 "Automatically
+> delete head branches" 기능에 위임하는 것을 표준으로 삼는다.
+> `git push origin --delete`/`git branch -d`/`-D` 등 브랜치 삭제 명령을
+> Claude Code Workflow에 포함하지 않는다 — 이 환경의 git 프록시에서
+> `git push --delete`가 구조적으로 `403 Forbidden`을 반환해 신뢰할 수
+> 없기도 하고, 2026-07-27 PR #6 실증 테스트로 GitHub 자동 삭제가 정상
+> 동작함을 확인했기 때문이다. 자동 삭제가 동작하지 않는 경우에도 GitHub
+> Actions 등 별도 자동화는 기본적으로 도입하지 않는다.
+>
 > **v0.5.0 변경 (GitHub Flow Migration, M24-T04)**: 신규 §8 Git Branch
 > Strategy(GitHub Flow) 추가. 이 저장소는 2026-07-27부로 `main` 단일
 > 상시 브랜치 + 짧은 수명 작업 브랜치(`feature/*`/`fix/*`/`docs/*`/
@@ -414,7 +424,7 @@ Recommendation 구조와 추천 알고리즘은 그대로 이어진다.
 - Merge 전 관련 테스트(`pytest`)와 `ruff`/`mypy`를 통과해야 한다(§2.3
   Test Before Complete).
 - **Merge가 끝난 작업 브랜치는 삭제한다** — `main`에 이미 반영된 브랜치를
-  계속 남겨 두지 않는다.
+  계속 남겨 두지 않는다. 삭제 방식은 §8.5를 따른다.
 
 ### 8.4 AI 구현 엔진(Claude Code 등)에 대한 구속력
 - 이 저장소에서 작업하는 모든 AI 세션은 새 작업을 시작할 때 `claude/*`
@@ -426,3 +436,19 @@ Recommendation 구조와 추천 알고리즘은 그대로 이어진다.
 - PR 없이 `main`에 직접 push하지 않는다(단, Fast-forward만으로 이력이
   정확히 일치함을 사전에 확인한 관리 작업은 예외로 다룰 수 있다 — 이
   경우에도 충돌 검증·테스트·보고 절차는 동일하게 따른다).
+
+### 8.5 Branch Deletion (M24-T05, 2026-07-27)
+- PR 병합 후 작업 브랜치 삭제는 **GitHub의 "Automatically delete head
+  branches" 기능에 위임한다** — 이것이 표준이다(2026-07-27 PR #6으로
+  실제 Squash Merge 후 자동 삭제가 동작함을 실증 확인).
+- Claude Code(및 다른 AI 구현 엔진)는 `git push origin --delete`,
+  `git branch -d`, `git branch -D` 등 브랜치 삭제 명령을 Workflow에
+  포함하지 않는다. 이 환경의 git 프록시에서 `git push --delete`가
+  구조적으로 `403 Forbidden`을 반환해 신뢰할 수 없기 때문이기도 하다.
+- 자동 삭제가 동작하지 않는 경우(예: 과거 PR에서 실제로 미동작이
+  관찰된 사례가 있었다) 원인을 조사하되, GitHub 네이티브 설정을
+  우선 사용하는 방향을 유지한다. GitHub Actions 등 별도의 삭제
+  자동화는 기본적으로 도입하지 않는다 — 브랜치 하나를 지우기 위해
+  CI/CD를 신설하는 것은 과한 대응이다.
+- 자동 삭제로 정리되지 않은 브랜치가 남아 있다면 삭제 여부와 방법을
+  사용자에게 확인한 뒤 진행한다(GitHub 웹 UI 수동 삭제 등).
