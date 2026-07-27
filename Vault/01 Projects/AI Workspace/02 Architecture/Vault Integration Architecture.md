@@ -133,6 +133,40 @@ Vault 저장(`run_auto_save()`) → Validation → 완료 보고" 흐름과
 **Milestone 23(Obsidian Integration & Auto Save) 전체 완료
 (T01~T07).**
 
+## 구현 상태(Milestone 24, ADR-0036, Real Obsidian Vault Integration)
+
+`vault_root`를 손으로 계산해 넘기던 M23까지의 방식에 실제 연결·
+Adapter·원자적 쓰기 계층을 더했다.
+
+- `vault/connection.py`(신규): `resolve_default_vault_root()`가
+  시작 경로 상위에서 실제 `Vault/01 Projects/AI Workspace`를
+  찾고, `connect()`가 존재/디렉터리/쓰기 권한을 검증해
+  `VaultConnection`을 돌려주거나 `VaultConnectionError`를 낸다.
+- `vault/filesystem.py`(신규): `VaultFileSystem`이 Create/Read/
+  Update/Delete/Exists/Rename/Move 7개 연산을 명시적으로 노출한다
+  (`writer.py`/`sync.py`의 기존 동작은 변경하지 않음).
+- `vault/atomic.py`(신규): `atomic_write_text()`(임시 파일 +
+  `os.replace()`)를 `VaultWriter`가 내부적으로 사용해, 저장 중단
+  시 파일이 반쪽짜리로 남지 않는다.
+- **Auto Save Validation을 Incremental로 전환**: `find_broken_
+  backlinks()`에 `only_paths`를 추가해, `run_auto_save()`는
+  이제 자신이 그 호출에서 실제로 저장한 파일만 검증한다(Vault
+  전체 감사는 `only_paths` 없이 직접 호출). 이번 저장과 무관한
+  기존 문제 때문에 저장이 실패한 것처럼 보이는 문제를 없앴다.
+- `run_auto_save_on_default_vault()`(신규): `vault_root` 생략 시
+  실제 Vault에 자동 연결한다(Execution Integration, M24-T06).
+- **범위를 넓히지 않은 것**: TASKS/MEMORY/ROADMAP(GitHub 원문)은
+  여전히 `vault/`가 쓰지 않는다(ADR-0035의 경계 유지). Design/
+  Implementation/Memory/Roadmap용 새 Vault 폴더도 만들지 않았다 —
+  실제 Vault(PARA 구조)에 대응하는 디렉터리가 없는 kind를 코드가
+  상상해서 추가하지 않는다.
+- **검증**: `tests/vault/`(Mock/`tmp_path`, 38개) 전부 무변경
+  통과. `tests/integration/test_m24_real_vault_e2e.py`(신규,
+  5개)가 `tmp_path` 없이 이 저장소의 실제 `Vault/`를 대상으로
+  Connect/Create/Update/Rename/Delete/Auto Save 왕복을 검증하고
+  스스로 정리해 기존 문서에 영구 변경을 남기지 않는다(`git status`
+  로 확인).
+
 ## 관련 문서
 
 - [[Architecture Overview]]
@@ -142,5 +176,5 @@ Vault 저장(`run_auto_save()`) → Validation → 완료 보고" 흐름과
 
 ## 원문
 
-- `.ai/DECISIONS.md` (ADR-0035)
+- `.ai/DECISIONS.md` (ADR-0035, ADR-0036)
 - `docs/ARCHITECTURE.md` (§3.21)

@@ -8176,6 +8176,186 @@ Mobile Experience 이월분([[Decisions Index]]/[[PREPARATION_SUMMARY]]
 
 ---
 
+## Milestone 24 — Real Obsidian Vault Integration
+
+**목표**(2026-07-27 사용자 요청): M23이 구축한 Obsidian Integration
+Foundation을 기반으로, Mock/`tmp_path`가 아닌 **실제 Obsidian
+Vault**(`Vault/01 Projects/AI Workspace`)를 대상으로 Markdown 문서를
+생성·수정·삭제할 수 있도록 구현한다. "다음 Task 진행" 같은 짧은
+명령이 PROJECT_INDEX → READING_PROFILES → Retrieval → Task 수행 →
+Markdown 생성 → 실제 Vault 저장 → Validation → 완료 보고까지 하나의
+Workflow로 동작하는 것이 최종 목표.
+
+**기본 원칙**: Retrieval First / Minimum Retrieval / Template
+First / Short Prompt Workflow / Standard Execution Workflow /
+기존 Architecture 유지 / Mock 구현 제거 금지 / Mock와 실제 구현
+분리 / 변경 최소화 / 기존 테스트 유지 / 실제 Vault를 기준으로
+설계.
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M24-T01 | Real Vault Connection — Vault Root 설정/Configuration/Path Resolver/Permission Validation/존재 확인/연결 실패 예외 처리 | **완료** |
+| M24-T02 | Filesystem Adapter — 실제 Vault Create/Read/Update/Delete/Exists/Rename/Move | **완료** |
+| M24-T03 | Real Markdown Writer — UTF-8/Frontmatter 유지/Directory 자동 생성/파일명 충돌 처리/Metadata 유지/Atomic Write | **완료** |
+| M24-T04 | Template Integration — Template 기반 Markdown을 실제 Vault 문서로 생성 | **완료(범위 축소, 아래 참고)** |
+| M24-T05 | Real Auto Save — Task 완료 시 실제 Vault 자동 저장 | **완료** |
+| M24-T06 | Execution Integration — 짧은 명령을 실제 실행으로 연결 | **완료** |
+| M24-T07 | Real Vault Synchronization — Create/Update/Rename/Delete/Link·Backlink Validation/Conflict Detection/Incremental Sync | **완료** |
+| M24-T08 | End-to-End Integration Test — 실제 Obsidian Vault 대상 통합 테스트 | **완료** |
+
+### M24-T01~T03: Real Vault Connection / Filesystem Adapter / Real Markdown Writer
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `vault/connection.py` — `resolve_default_vault_root()`(상위 경로 탐색), `connect()`(존재/디렉터리/쓰기 권한 검증) | ✅ |
+| 2 | 연결 실패 시 `VaultConnectionError`(경로 없음/디렉터리 아님/쓰기 권한 없음 3종 메시지) | ✅ |
+| 3 | `vault/filesystem.py` — `VaultFileSystem`(Create/Read/Update/Delete/Exists/Rename/Move 7종) | ✅ |
+| 4 | 기존 Mock(`tmp_path`) 기반 `tests/vault/` 제거하지 않고 그대로 유지 | ✅ |
+| 5 | `vault/atomic.py` — `atomic_write_text()`(임시 파일 + `os.replace()`) | ✅ |
+| 6 | `VaultWriter.create_file()`/`upsert_section()`이 내부적으로 Atomic Write 사용, 공개 동작(반환값) 불변 | ✅ |
+| 7 | UTF-8/Frontmatter 유지/Directory 자동 생성/파일명 충돌 처리(기존 파일 미덮어씀)/Metadata 유지 — 전부 M23에서 이미 구현된 것을 재확인 | ✅ |
+| 8 | `ruff`/`mypy`/`pytest tests/vault`(38개, 무변경) 통과 | ✅ |
+
+**구현 내용**: `src/ai_workspace/vault/connection.py`(신규),
+`filesystem.py`(신규), `atomic.py`(신규) — 상세 설계 근거는 ADR-0036
+참고. `writer.py`는 `path.write_text()` 2곳을 `atomic_write_text()`
+로 교체한 것 외에는 변경 없음(공개 API·반환값 동일, 기존 테스트
+전부 무변경 통과로 확인).
+
+### M24-T04: Template Integration(범위 축소)
+
+**목표**: 모든 산출물 종류를 실제 Vault 문서로 생성 가능하게 한다.
+
+**실제 결정**: 사용자가 예시로 든 kind 목록(ADR/API/Decision/
+Design/Documentation/Feature/Implementation/Memory/Roadmap/Task)
+중 **ADR/API/Decision은 이미 M23의 `VaultDocumentKind`에 존재**
+한다. 나머지(Design/Documentation/Feature/Implementation/Memory/
+Roadmap/Task)는 실제 Vault(PARA 구조, M23-Preparation에서 확정)에
+대응하는 전용 디렉터리가 없다 — Roadmap은 개념적으로 [[Milestones
+Index]](kind=milestone)로 이미 대응되고, Memory/Task는 GitHub
+`.ai/MEMORY.md`/`.ai/TASKS.md` 원문이라 ADR-0035부터 지켜 온
+"GitHub 원문을 `vault/`가 대신 쓰지 않는다"는 경계 밖이다. 새
+Vault 폴더를 이번 Task 하나로 임의로 만들면 "기존 Architecture
+유지"/"실제 Vault를 기준으로 설계" 원칙과 충돌한다고 판단해
+**kind를 추가하지 않았다**(ADR-0036에 대안으로 기각 사유 기록).
+대신 기존 12종 kind가 실제 Vault 위에서 정말 동작하는지를
+M24-T08에서 실제로 검증했다(ADR/Daily 2종을 실제 파일로 왕복).
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 기존 12종 kind와 실제 Vault 대응 여부 재확인 | ✅ |
+| 2 | 범위를 넓히지 않기로 한 결정과 근거를 ADR-0036에 기록 | ✅ |
+| 3 | 실제 Vault 대상 왕복 테스트(M24-T08)로 최소 2종(ADR/Daily) 실증 | ✅ |
+
+### M24-T05: Real Auto Save
+
+**목표**: Task 완료 시 실제 Vault에 자동 저장되는 Workflow를
+완성한다(Task 완료 → Markdown 생성 → Validation → Vault 저장 →
+결과 보고).
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `run_auto_save()`가 실제 Vault 경로에 대해서도 그대로 동작 확인 | ✅ (M24-T08 실측) |
+| 2 | `run_auto_save_on_default_vault()`(신규) — `vault_root` 생략 시 `connection.connect()`로 실제 Vault 자동 연결 | ✅ |
+| 3 | Validation을 Incremental로 전환(저장한 파일만 검사) — 이번 저장과 무관한 기존 문제로 실패하지 않음 | ✅ |
+| 4 | `find_broken_backlinks()`에 `only_paths` 추가, 생략 시 기존과 동일한 전체 스캔(하위 호환) | ✅ |
+| 5 | 자동 저장 대상: ADR/Decision/Backend/API/Dashboard/Automation/Production/iOS/Android/Milestone/Daily/Architecture(Vault 12종). TASKS/MEMORY/ROADMAP(GitHub 원문)은 범위 밖(ADR-0035/0036 경계 유지) | ✅ |
+| 6 | 기존 Auto Save 테스트(`tests/vault/test_auto_save.py` 4개) 무변경 통과 | ✅ |
+
+### M24-T06: Execution Integration
+
+**목표**: "다음 Task 진행"/"M24-Txx 진행"/"ADR 작성"/"API 설계"/
+"Feature Design"/"Bug Fix" 같은 짧은 명령이 PROJECT_INDEX →
+READING_PROFILES → Retrieval → Task → Markdown 생성 → **실제 Vault
+저장** → Validation → 완료 보고로 이어지도록 연결한다.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | M23-T06에서 정의한 Execution Engine 절차([[EXECUTION_PROFILE]])가 M24 이후에도 그대로 유효한지 확인 | ✅ |
+| 2 | 5단계(Document Update)가 가리키는 `run_auto_save()`를 실제 Vault에도 호출 가능하게(`run_auto_save_on_default_vault()`) 갱신 | ✅ |
+| 3 | 지원 명령 표에 "M24-Txx 진행" 패턴이 기존 "M23-T05 진행" 예시로 이미 일반화돼 있음을 재확인(신규 항목 추가 불필요) | ✅ |
+
+**구현 내용**: `EXECUTION_PROFILE.md`는 M23-T06에서 이미 kind에
+무관한 절차로 작성돼 있어 구조 변경이 필요하지 않았다. 5단계
+설명에 `run_auto_save_on_default_vault()`가 실제 Vault로 자동
+연결됨을 반영(아래 Vault 문서 갱신 참고).
+
+### M24-T07: Real Vault Synchronization
+
+**목표**: Create/Update/Rename/Delete/Link·Backlink Validation/
+Conflict Detection/Incremental Sync가 실제 Vault 위에서 전부
+동작하는지 확인한다.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Create/Update/Delete가 실제 Vault에서 동작(M24-T08 실측) | ✅ |
+| 2 | Rename이 실제 Vault에서 파일명 변경 + Backlink(별칭/절 포함) 일괄 갱신(M24-T08 실측) | ✅ |
+| 3 | Link/Backlink Validation — `find_broken_backlinks()` 재사용 | ✅ |
+| 4 | Conflict Detection — `content_hash()`+`expected_hash`(M23-T05) 유지, 신규 변경 없음 | ✅ |
+| 5 | Incremental Sync — `only_paths`로 검사 범위를 좁히는 기능 신규 구현(M24-T05와 공유) | ✅ |
+
+### M24-T08: End-to-End Integration Test
+
+**목표**: Mock가 아닌 실제 Obsidian Vault를 대상으로 문서 생성/
+수정/삭제/Rename/Link 유지/Backlink 유지/Template 적용/Auto
+Save/Retrieval 결과 저장/Validation을 통합 테스트로 검증한다.
+`tmp_path`만 쓰는 테스트는 이 Task의 완료 기준으로 인정하지
+않는다(사용자 명시).
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `tests/integration/test_m24_real_vault_e2e.py` 신규 — `tmp_path` 미사용 | ✅ |
+| 2 | 실제 Vault 연결(`connect`) + 미존재 경로 예외 처리 테스트 | ✅ |
+| 3 | 실제 Vault 위에서 Create→Update→Rename→Delete 왕복(Backlink 별칭/절 포함 갱신 확인) | ✅ |
+| 4 | 실제 `ADR Index.md`(기존 문서)에 `run_auto_save()`로 저장 후 `finally`로 원본 완전 복원 | ✅ |
+| 5 | 테스트가 만든 파일은 전부 스스로 정리(존재할 수 없는 미래 날짜 제목 사용) | ✅ |
+| 6 | 테스트 종료 후 `git status`/`git diff`로 실제 Vault 무변경 확인 | ✅ |
+| 7 | 기존 문서에 대한 삭제/Rename은 수행하지 않음(사용자 명시 제약 준수 — 전부 테스트가 스스로 만든 문서만 대상) | ✅ |
+| 8 | `ruff`/`mypy`/`pytest`(5개) 통과 | ✅ |
+
+**구현 내용**: 위 "변경된 파일" 참고. `test_connect_to_real_vault`/
+`test_resolve_default_vault_root_finds_real_vault`/
+`test_connect_rejects_nonexistent_path`(연결)·
+`test_real_vault_create_update_rename_delete_round_trip`(CRUD+Rename
++Backlink)·`test_run_auto_save_writes_to_real_adr_index_and_restores_it`
+(Auto Save, 임시 반영 후 원상복구) 5개.
+
+### 검증 요약(M24 전체)
+
+- `poetry run ruff check src/ai_workspace/vault tests/vault
+  tests/integration/test_m23_vault_environment_integration.py
+  tests/integration/test_m24_real_vault_e2e.py` — 통과.
+- `poetry run mypy src/ai_workspace/vault` — 통과.
+- `poetry run pytest tests/vault tests/integration/
+  test_m23_vault_environment_integration.py tests/integration/
+  test_m24_real_vault_e2e.py` — **46개 전부 통과**(Mock/`tmp_path`
+  38개 + M23-T07 실제 Vault 3개 + M24-T08 실제 Vault 5개).
+- 실제 Vault(`Vault/`) 대상 테스트 실행 전후 `git status`/`git diff`
+  로 무변경 확인(테스트가 만든 파일은 자체 정리, 기존 `ADR
+  Index.md`는 `finally`로 원본 그대로 복원).
+- 전체 `pytest`/`mypy src`는 M23부터 기록해 온 사전 존재 환경
+  제약(`pyyaml`/`fastapi`/`uvicorn` 미설치)으로 다른 모듈에서 여전히
+  실패 — `vault/`와 무관.
+
+**의존성**: Milestone 23(Obsidian Integration & Auto Save) 전체
+완료.
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |

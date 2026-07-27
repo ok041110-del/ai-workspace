@@ -1199,3 +1199,33 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   — 원 M23이 다루던 Mobile Experience 이월분(Start Criteria 3개
   결정은 [[PREPARATION_SUMMARY]]에 보존) 또는 사용자가 지정하는
   새 작업 중 착수 시점에 결정한다.
+- **Milestone 24(Real Obsidian Vault Integration) T01~T08 구현
+  완료(2026-07-27, ADR-0036)**. 사용자가 "Mock/tmp_path가 아니라
+  실제 Obsidian Vault를 대상으로 동작해야 한다"는 목표로 요청.
+  신규: `vault/connection.py`(`resolve_default_vault_root()`+
+  `connect()` — 실제 Vault 탐색·존재/디렉터리/쓰기 권한 검증,
+  실패 시 `VaultConnectionError`), `vault/filesystem.py`
+  (`VaultFileSystem` — Create/Read/Update/Delete/Exists/Rename/
+  Move 7종 명시적 Adapter), `vault/atomic.py`(`atomic_write_text()`
+  — 임시 파일+`os.replace()` 원자적 저장, `VaultWriter`가 내부
+  사용, 공개 동작 불변). **Auto Save Validation을 Vault 전체
+  스캔에서 저장한 파일만 검사하는 Incremental 방식으로 전환**
+  (`find_broken_backlinks()`에 `only_paths` 추가, 생략 시 기존과
+  동일한 전체 스캔 — 하위 호환 유지) — 이번 저장과 무관한 기존
+  문제 때문에 Auto Save가 실패한 것처럼 보이던 문제를 해소.
+  `run_auto_save_on_default_vault()`(신규)가 `vault_root` 생략 시
+  실제 Vault에 자동 연결. **범위를 의도적으로 넓히지 않음**:
+  TASKS/MEMORY/ROADMAP(GitHub 원문)은 `vault/`가 쓰지 않는 경계를
+  유지(ADR-0035부터), Design/Implementation/Memory/Roadmap용 새
+  Vault 폴더도 만들지 않음(실제 Vault PARA 구조에 대응 폴더가
+  없어 kind를 추가하지 않기로 ADR-0036에 명시적 기록). `tests/
+  vault/`(Mock, 38개) 전부 무변경 통과 + `tests/integration/
+  test_m24_real_vault_e2e.py`(신규, 5개, `tmp_path` 미사용)가
+  실제 `Vault/`를 대상으로 Connect/Create/Update/Rename/Delete/
+  Auto Save 왕복을 검증 — 테스트가 만든 파일은 존재할 수 없는
+  미래 날짜 제목을 써서 스스로 정리하고, 기존 `ADR Index.md`에
+  대한 유일한 실제 쓰기는 `finally`로 원본을 그대로 복원해 실제
+  Vault는 테스트 전후 `git status`/`git diff` 기준 완전히 무변경.
+  Milestone 24 자체의 "Completed" 선언은 M23과 동일하게 사용자의
+  별도 확인을 거쳐야 하므로 이번 턴에서는 선언하지 않음 — Task
+  List(T01~T08)만 구현 완료로 기록.

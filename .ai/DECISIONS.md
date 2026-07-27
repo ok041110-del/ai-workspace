@@ -1803,3 +1803,98 @@
   승인, M23-Final) — 이 ADR의 결정을 변경하거나 범위를 확장하지
   않는다. 상세 체크리스트는 `.ai/TASKS.md`의 "Milestone 23
   Verification"/"M23-Final" 절 참고.
+
+## ADR-0036: Real Obsidian Vault Integration — Connection/Filesystem Adapter/Atomic Write 신설, Auto Save Validation을 Incremental로 전환 (Milestone 24)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: M23(ADR-0035)이 만든 `vault/`는 처음부터 실제 `pathlib`
+  호출로만 동작했지만(별도 Mock 파일시스템 계층 없음), 호출자가
+  항상 `vault_root: Path`를 직접 계산해서 넘겨야 했고(단위 테스트는
+  `tmp_path`, M23-T07 통합 테스트는 실제 경로를 수동 계산), 저장
+  경로를 못 찾거나 권한이 없을 때의 처리, 쓰기 중단 시 파일이
+  반쪽짜리로 남는 문제, Auto Save의 Validation이 매번 Vault
+  전체를 다시 스캔해 "이번 저장과 무관한 기존 문제 때문에 저장이
+  실패한 것처럼 보이는" 문제가 남아 있었다. 사용자가 "Mock/
+  tmp_path가 아니라 실제 Obsidian Vault를 대상으로 동작해야 한다"는
+  목표로 M24(T01~T08)를 요청했다.
+- 결정:
+  1. **`vault/connection.py`(신규)**: `resolve_default_vault_root()`
+     가 시작 경로(기본값 `Path.cwd()`)에서 상위로 올라가며
+     `Vault/01 Projects/AI Workspace`가 실제로 존재하는 첫 조상
+     경로를 찾는다(이 저장소의 루트 위치를 가정하지 않음).
+     `connect(root=None)`이 그 경로(또는 명시적으로 넘긴 경로)가
+     존재/디렉터리/쓰기 가능한지 검증해 `VaultConnection`을
+     돌려주고, 실패하면 `VaultConnectionError`(Permission
+     Validation + 존재 여부 확인 + 연결 실패 예외 처리, 사용자
+     DoD 요구사항 그대로).
+  2. **`vault/filesystem.py`(신규)**: `VaultFileSystem` 클래스가
+     Create/Read/Update/Delete/Exists/Rename/Move 7개 연산을
+     명시적인 이름으로 노출한다. `writer.py`/`sync.py`의 기존
+     동작은 그대로 유지하고(변경 최소화), 이 클래스는 그 연산들의
+     경계를 드러내는 얇은 추가 계층이다 — 기존 코드를 이 계층
+     위로 재작성하지 않는다.
+  3. **`vault/atomic.py`(신규)**: `atomic_write_text()`가 같은
+     디렉터리에 임시 파일을 먼저 쓰고 `os.replace()`로 원자적
+     교체한다. `VaultWriter.create_file()`/`upsert_section()`
+     내부의 `path.write_text()` 호출을 이 함수로 교체했다 — 두
+     메서드의 공개 동작(반환값, 언제 파일을 쓰는지)은 전혀 바뀌지
+     않았다(기존 테스트 38개 무변경 통과로 확인).
+  4. **Auto Save Validation을 Incremental로 전환**:
+     `find_broken_backlinks()`에 `only_paths` 파라미터를 추가하고
+     (생략 시 기존과 동일하게 Vault 전체 스캔), `run_auto_save()`
+     내부 호출을 `find_broken_backlinks(vault_root)`에서
+     `find_broken_backlinks(vault_root, only_paths=saved)`로
+     바꿨다 — Auto Save는 자신이 그 호출에서 실제로 저장한 파일만
+     검증 책임을 진다. Vault 전체 감사(M23-T07 패턴)는 여전히
+     `only_paths` 없이 직접 호출하면 된다. 이 변경은 기존 4개
+     Auto Save 테스트의 기대 결과를 하나도 바꾸지 않는다(깨진
+     링크는 항상 저장한 파일 자체 안에 있었기 때문).
+  5. **`run_auto_save_on_default_vault()`(신규,
+     `vault/auto_save.py`)**: `vault_root`를 생략하면
+     `connection.connect()`로 실제 Vault를 찾아 연결한 뒤
+     `run_auto_save()`를 수행한다 — "다음 Task 진행" 같은 명령을
+     받은 AI가 매번 실제 경로를 손으로 계산하지 않아도 된다.
+  6. **범위를 의도적으로 넓히지 않은 것**: 사용자가 자동 저장
+     대상으로 언급한 TASKS/MEMORY/ROADMAP은 GitHub `.ai/`/`docs/`
+     원문이며, `vault/`는 ADR-0035부터 "GitHub 원문을 복제하지
+     않는다"는 경계를 지켜 왔다 — 이번에도 그 경계를 유지하고
+     `vault/`가 GitHub 원문 파일을 직접 쓰도록 확장하지 않았다.
+     Design/Implementation/Memory/Roadmap/Task는 실제 Vault(PARA
+     구조, M23-Preparation에서 확정)에 대응하는 전용 디렉터리가
+     없어 `VaultDocumentKind`에 새 kind를 추가하지 않았다 — 실제로
+     존재하지 않는 폴더를 코드가 상상해서 만들지 않는다("실제
+     Vault를 기준으로 설계" 원칙).
+- 대안:
+  - `writer.py`/`sync.py`를 `VaultFileSystem` 위로 전면 재작성 —
+    기각. 두 모듈은 이미 실제 파일시스템으로만 동작해 정상 동작하고
+    있었고, 재작성은 위험 대비 이득이 없다("변경 최소화" 원칙,
+    기존 테스트 유지 요구사항).
+  - Auto Save Validation을 계속 Vault 전체 스캔으로 유지 — 기각.
+    이번 저장과 무관한 기존 파일의 문제 때문에 매번 저장이 실패한
+    것처럼 보이는 것은 "Auto Save가 책임지지 않아도 될 실패"를
+    보고하는 것이라 판단했다. 전체 감사가 필요하면 여전히 직접
+    호출 가능하므로 기능을 잃지 않는다.
+  - Design/Implementation/Memory/Roadmap용 새 Vault 폴더를 즉석에서
+    만들기 — 기각. 실제 Vault 구조는 M23-Preparation에서 사용자
+    승인으로 확정된 PARA 구조이며, 이번 Task 하나로 임의로 늘리면
+    "기존 Architecture 유지" 원칙과 충돌한다.
+- 이유: `resolve_default_vault_root()`/`connect()`는 "실제 경로를
+  어떻게 찾고 검증하는가"를 한 곳에 모아, 이후 어떤 호출자도
+  경로 탐색·권한 검증 로직을 중복 구현하지 않게 한다. Atomic
+  Write는 실제 Vault(git으로 추적되는 진짜 파일들)에 쓰는 이상
+  중단 시 손상 위험을 없애는 것이 M23 시점보다 훨씬 중요해졌다
+  (M23까지는 `tmp_path`라 손상돼도 테스트 재실행이면 그만이었다).
+  Incremental Validation은 Auto Save를 "내가 만든 문제만 책임지는"
+  좁고 예측 가능한 계약으로 유지한다.
+- 결과/영향: `src/ai_workspace/vault/`에 `connection.py`/
+  `atomic.py`/`filesystem.py` 3개 파일 신규, `writer.py`/
+  `auto_save.py`/`validation.py` 최소 수정(공개 동작 불변).
+  새 Interface 없음(27종 그대로) — `vault/`는 ADR-0035부터 Core
+  Interface 계약 밖에 있다. `tests/vault/`(Mock/`tmp_path`, 38개)
+  는 전부 무변경 통과, `tests/integration/test_m24_real_vault_e2e.py`
+  (신규, 5개)가 `tmp_path` 없이 이 저장소의 실제 `Vault/`를 대상으로
+  Connect/Create/Update/Rename/Delete/Auto Save 왕복을 검증하고
+  테스트 종료 시 스스로 정리해 실제 Vault에는 영구 변경을 남기지
+  않는다. `docs/ARCHITECTURE.md` §3.21 갱신, Vault `Vault
+  Integration Architecture.md`에 반영.

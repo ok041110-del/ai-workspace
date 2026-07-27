@@ -28,12 +28,20 @@ def _document_titles(vault_root: Path) -> set[str]:
     return {p.stem for p in _iter_markdown_files(vault_root)}
 
 
-def find_broken_backlinks(vault_root: Path) -> list[VaultValidationIssue]:
-    """Vault 전체에서 `[[제목]]`이 실제 존재하는 문서(파일명)를 가리키지
-    않는 경우를 찾는다."""
+def find_broken_backlinks(
+    vault_root: Path, only_paths: Iterable[Path] | None = None
+) -> list[VaultValidationIssue]:
+    """`[[제목]]`이 실제 존재하는 문서(파일명)를 가리키지 않는 경우를
+    찾는다. 대상 문서 집합(어떤 제목이 "존재"하는가)은 항상 Vault
+    전체를 기준으로 하지만, **어떤 파일의 링크를 검사할지**는
+    `only_paths`로 좁힐 수 있다(M24-T07 Incremental Sync) — 예를 들어
+    Auto Save가 방금 저장한 파일만 검사하면, 이번 저장과 무관한 Vault
+    안의 기존 문제 때문에 저장이 실패한 것처럼 보이는 일을 막는다.
+    `only_paths`를 생략하면 기존과 동일하게 Vault 전체를 검사한다."""
     titles = _document_titles(vault_root)
+    paths = list(only_paths) if only_paths is not None else _iter_markdown_files(vault_root)
     issues: list[VaultValidationIssue] = []
-    for path in _iter_markdown_files(vault_root):
+    for path in paths:
         text = path.read_text(encoding="utf-8")
         for match in _BACKLINK_PATTERN.finditer(text):
             target = match.group(1).strip()

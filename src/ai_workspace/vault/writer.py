@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ai_workspace.vault.atomic import atomic_write_text
 from ai_workspace.vault.sync import VaultConflictError, content_hash
 
 _RELATED_DOCS_HEADING = "## 관련 문서"
@@ -16,11 +17,11 @@ _RELATED_DOCS_HEADING = "## 관련 문서"
 class VaultWriter:
     def create_file(self, path: Path, content: str) -> bool:
         """새 파일을 만든다. 이미 존재하면 아무것도 하지 않고 False를
-        돌려준다 — 덮어쓰지 않는다."""
+        돌려준다 — 덮어쓰지 않는다. Atomic Write(M24-T03)로 반쪽짜리
+        파일이 남지 않는다."""
         if path.exists():
             return False
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        atomic_write_text(path, content)
         return True
 
     def upsert_section(
@@ -40,7 +41,7 @@ class VaultWriter:
         updated = _upsert_section_text(original, heading, body)
         if updated == original:
             return False
-        path.write_text(updated, encoding="utf-8")
+        atomic_write_text(path, updated)
         return True
 
 

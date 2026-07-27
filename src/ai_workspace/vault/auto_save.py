@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from ai_workspace.vault.connection import connect
 from ai_workspace.vault.engine import VaultSaveEngine
 from ai_workspace.vault.models import VaultDocumentRequest
 from ai_workspace.vault.router import DocumentRouter
@@ -46,10 +47,14 @@ class AutoSaveReport:
 def run_auto_save(
     vault_root: Path, requests: Sequence[VaultDocumentRequest]
 ) -> AutoSaveReport:
-    """`requests`를 전부 저장한 뒤 Vault 전체 Backlink와 새로 만든 파일의
-    Tag를 검증해 `AutoSaveReport`를 돌려준다. 저장 자체는 하나가
-    실패해도 나머지를 계속 진행한다 — 부분 실패를 감추지 않고 report에
-    그대로 남긴다."""
+    """`requests`를 전부 저장한 뒤, **이번 호출이 실제로 저장한
+    파일만** Backlink를 검증하고 새로 만든 파일의 Tag를 검증해
+    `AutoSaveReport`를 돌려준다(Incremental Sync, M24-T07) — Vault
+    전체를 매번 다시 스캔하지 않으므로, 이번 저장과 무관한 기존
+    문제 때문에 저장이 실패한 것처럼 보이지 않는다. Vault 전체
+    감사가 필요하면 `vault.validation.find_broken_backlinks(vault_root)`
+    를 직접 호출한다. 저장 자체는 하나가 실패해도 나머지를 계속
+    진행한다 — 부분 실패를 감추지 않고 report에 그대로 남긴다."""
     engine = VaultSaveEngine(vault_root)
     router = DocumentRouter(vault_root)
 
@@ -64,7 +69,7 @@ def run_auto_save(
             created.append(target.path)
 
     issues: list[VaultValidationIssue] = []
-    issues.extend(find_broken_backlinks(vault_root))
+    issues.extend(find_broken_backlinks(vault_root, only_paths=saved))
     issues.extend(find_missing_tags(created))
 
     return AutoSaveReport(
@@ -72,3 +77,15 @@ def run_auto_save(
         unchanged_paths=tuple(unchanged),
         validation_issues=tuple(issues),
     )
+
+
+def run_auto_save_on_default_vault(
+    requests: Sequence[VaultDocumentRequest], vault_root: Path | None = None
+) -> AutoSaveReport:
+    """M24-T06 Execution Integration: `vault_root`를 넘기지 않으면
+    `vault.connection.connect()`로 실제 Obsidian Vault를 찾아 연결한
+    뒤 `run_auto_save()`를 수행한다. "다음 Task 진행" 같은 명령을
+    받은 AI가 tmp_path를 직접 계산할 필요 없이 이 함수 하나로 실제
+    Vault에 저장한다."""
+    connection = connect(vault_root)
+    return run_auto_save(connection.root, requests)

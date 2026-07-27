@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.30.0 |
+| 문서 버전 | v0.31.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~22 완료. **Milestone 23(Obsidian Integration & Auto Save) 전체 완료**(T01~T07) — ADR-0035로 신규 §3.21 Vault Integration Layer 도입, 새 Interface 없이 27종 유지. `vault/` 패키지(Path Map/Document Router/Markdown Generator/Vault Writer/VaultSaveEngine/Validation/Auto Save Workflow/Sync) 구현 완료(M23-T03~T05), Execution Engine은 절차 문서화(M23-T06), **M23-T07 완료**: 실제 `Vault/`를 대상으로 한 통합 테스트로 Filesystem 접근·Retrieval Validation·Auto Save Round-trip 검증 — 검증 과정에서 발견한 줄바꿈으로 깨진 Backlink 2건도 함께 수정) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed(T01~T07 + Verification). **Milestone 24(Real Obsidian Vault Integration) 진행 중** — ADR-0036으로 §3.21 Vault Integration Layer에 Connection/Filesystem Adapter/Atomic Write 추가, Auto Save Validation을 Incremental로 전환. 새 Interface 없이 27종 유지) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -957,6 +957,25 @@ GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
 **Milestone 23(Obsidian Integration & Auto Save) 전체 완료
 (T01~T07).**
 
+- **구현 상태(Milestone 24, ADR-0036, Real Obsidian Vault
+  Integration)**: `vault/connection.py`(`resolve_default_vault_root()`
+  로 이 저장소 상위에서 실제 `Vault/01 Projects/AI Workspace`를
+  탐색, `connect()`가 존재/디렉터리/쓰기 권한을 검증해
+  `VaultConnection` 반환 또는 `VaultConnectionError`), `vault/
+  filesystem.py`(`VaultFileSystem` — Create/Read/Update/Delete/
+  Exists/Rename/Move 7개 연산을 명시적으로 노출하는 얇은 Adapter),
+  `vault/atomic.py`(`atomic_write_text()` — 임시 파일 + `os.replace()`
+  로 원자적 저장, `VaultWriter`가 내부적으로 사용). `run_auto_save()`
+  의 Validation을 Vault 전체 스캔에서 **이번 호출이 저장한 파일만
+  검사하는 Incremental 방식**으로 전환(`find_broken_backlinks()`에
+  `only_paths` 파라미터 추가, 생략 시 기존과 동일한 전체 스캔).
+  `run_auto_save_on_default_vault()`(신규)가 `vault_root` 생략 시
+  실제 Vault에 자동 연결한다. `tests/vault/`(Mock/`tmp_path`, 38개)
+  는 전부 무변경 통과, `tests/integration/test_m24_real_vault_e2e.py`
+  (신규, 5개)가 `tmp_path` 없이 이 저장소의 실제 `Vault/`를 대상으로
+  Connect/Create/Update/Rename/Delete/Auto Save 왕복을 검증하고
+  종료 시 스스로 정리한다(기존 문서 영구 변경 없음).
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -1150,7 +1169,10 @@ src/ai_workspace/
 │                       #   ADR-0035) + validation.py/auto_save.py
 │                       #   (Auto Save Workflow, M23-T04) +
 │                       #   sync.py(Rename/Delete/Conflict, M23-T05)
-│                       #   — Core Domain·web/을 모두 모름, Milestone 23
+│                       #   + connection.py/filesystem.py/atomic.py
+│                       #   (Real Vault Connection/Adapter/Atomic
+│                       #   Write, M24, ADR-0036)
+│                       #   — Core Domain·web/을 모두 모름, Milestone 23~24
 ├── web/               # Infrastructure 계층 — FastAPI/uvicorn을 아는 유일한 곳
 │                       #   (Milestone 20): dashboard_viewmodel.py, routes.py,
 │                       #   dashboard_broadcaster.py, app.py, server.py,

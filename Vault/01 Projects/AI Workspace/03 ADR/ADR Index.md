@@ -218,6 +218,12 @@ tags: [decision]
 - 결정: 신규 `vault/` 패키지(Path Map/Document Router/Markdown Generator/Vault Writer), Core Domain·`web/` 양쪽 모두 모르는 완전 독립 계층으로 설계(새 Interface 없음, 설계만·미구현)
 - 영향: 상세 설계는 [[Vault Integration Architecture]], 실제 구현은 M23-T03(Vault Save Engine)부터
 
+## ADR-0036: Real Obsidian Vault Integration 도입 (Milestone 24)
+
+- 목적: `vault/`가 실제 Obsidian Vault에 안전하게 연결·저장하도록 Mock/tmp_path 의존을 제거
+- 결정: `connection.py`(실제 Vault 탐색·연결 검증)/`filesystem.py`(Create/Read/Update/Delete/Exists/Rename/Move Adapter)/`atomic.py`(원자적 쓰기) 신규, Auto Save Validation을 Vault 전체 스캔에서 저장한 파일만 검사하는 Incremental 방식으로 전환
+- 영향: `tests/vault/`(Mock, 38개) 무변경 유지 + `tests/integration/test_m24_real_vault_e2e.py`(신규, 5개)가 실제 Vault 대상으로 Connect/CRUD/Rename/Auto Save 왕복 검증. 상세는 [[Vault Integration Architecture]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
