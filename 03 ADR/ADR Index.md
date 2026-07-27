@@ -224,6 +224,12 @@ tags: [decision]
 - 결정: `connection.py`(실제 Vault 탐색·연결 검증)/`filesystem.py`(Create/Read/Update/Delete/Exists/Rename/Move Adapter)/`atomic.py`(원자적 쓰기) 신규, Auto Save Validation을 Vault 전체 스캔에서 저장한 파일만 검사하는 Incremental 방식으로 전환
 - 영향: `tests/vault/`(Mock, 38개) 무변경 유지 + `tests/integration/test_m24_real_vault_e2e.py`(신규, 5개)가 실제 Vault 대상으로 Connect/CRUD/Rename/Auto Save 왕복 검증. 상세는 [[Vault Integration Architecture]]
 
+## ADR-0037: Obsidian Vault Root Refactoring (Milestone 26)
+
+- 목적: Git Vault Sync/Obsidian Mobile·macOS가 요구하는 "Vault == Repository Root" 조건 충족
+- 결정: `Vault/01 Projects/AI Workspace/`의 15개 디렉터리를 `git mv`로 저장소 root로 승격, PARA 뼈대(Inbox/Resources/Archives) 제거. `connection.py`는 표식 파일(`00 System/PROJECT_INDEX.md`) 기준으로 Vault Root를 찾도록 변경, `mapping.py`는 무변경(처음부터 상대 경로), `validation.py`/`sync.py`는 스캔 범위를 Vault 콘텐츠 15개 디렉터리로 제한
+- 영향: Wikilink는 파일명 기준이라 전혀 깨지지 않음(마크다운 상대경로 링크는 Vault 안에 0건). 상세는 [[Vault Integration Architecture]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

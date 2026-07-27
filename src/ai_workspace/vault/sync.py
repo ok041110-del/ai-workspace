@@ -12,8 +12,9 @@ Create/Update은 이미 `writer.py`(File Creator/File Updater)가 담당한다.
   파일이 바뀌었을 때 `VaultConflictError`로 실패한다(조용히 덮어쓰지
   않는다).
 - **Version Strategy**: 별도 버전 관리 시스템을 새로 만들지 않는다 —
-  `Vault/`는 이미 GitHub 저장소와 함께 git으로 버전 관리되므로, 파일
-  단위 변경 이력은 git이 담당한다(ADR-0035와 동일한 최소 복잡성 원칙).
+  Vault 콘텐츠는 이미 이 Git 저장소 자체로 버전 관리되므로(Milestone 26
+  부터 Vault Root == 저장소 Root), 파일 단위 변경 이력은 git이 담당한다
+  (ADR-0035와 동일한 최소 복잡성 원칙).
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
+
+from ai_workspace.vault.mapping import VAULT_CONTENT_DIRECTORIES
 
 _BACKLINK_PATTERN = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
 
@@ -39,10 +42,23 @@ def content_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _iter_vault_markdown_files(vault_root: Path) -> list[Path]:
+    """Vault 콘텐츠 디렉터리(15종)만 스캔한다 — `vault_root`가 저장소
+    root와 같아진 뒤(Milestone 26) `docs/`/`.claude/`/`.agents/` 등을
+    끌어들이지 않기 위함(`validation._iter_markdown_files`와 동일한
+    범위)."""
+    files: list[Path] = []
+    for name in VAULT_CONTENT_DIRECTORIES:
+        directory = vault_root / name
+        if directory.is_dir():
+            files.extend(directory.rglob("*.md"))
+    return sorted(files)
+
+
 def find_references(vault_root: Path, title: str, *, exclude: Path | None = None) -> list[Path]:
     """`title` 문서를 `[[title]]`로 참조하는 다른 문서 목록을 찾는다."""
     referencing: list[Path] = []
-    for path in sorted(vault_root.rglob("*.md")):
+    for path in _iter_vault_markdown_files(vault_root):
         if path == exclude:
             continue
         text = path.read_text(encoding="utf-8")
@@ -52,7 +68,7 @@ def find_references(vault_root: Path, title: str, *, exclude: Path | None = None
 
 
 def _find_document_path(vault_root: Path, title: str) -> Path | None:
-    matches = sorted(vault_root.rglob(f"{title}.md"))
+    matches = [p for p in _iter_vault_markdown_files(vault_root) if p.stem == title]
     return matches[0] if matches else None
 
 
@@ -83,7 +99,7 @@ def rename_document(vault_root: Path, old_title: str, new_title: str) -> RenameR
     old_path.rename(new_path)
 
     updated: list[Path] = []
-    for path in sorted(vault_root.rglob("*.md")):
+    for path in _iter_vault_markdown_files(vault_root):
         text = path.read_text(encoding="utf-8")
         updated_text = _rename_backlinks_in_text(text, old_title, new_title)
         if updated_text != text:

@@ -8548,6 +8548,134 @@ profiles-pmnpue`에만 존재했고, **한 번도 PR로 병합된 적이
 
 ---
 
+## Milestone 26 — Obsidian Vault Root Refactoring
+
+**목표**(2026-07-27 사용자 요청): Obsidian Vault == Git Repository
+Root 구조를 확립해 Git Vault Sync(iOS)/Obsidian Mobile·macOS가
+동일한 Vault를 쓸 수 있게 한다. 구현 자체(코드/문서 내용)는 바꾸지
+않고 위치만 옮긴다는 최소 변경 원칙을 따른다.
+
+**Task ID 안내**: 사용자가 이 작업을 "M24-T01"로 지칭했으나, 그
+ID는 이미 완료된 Milestone 24의 "Real Vault Connection" Task가
+쓰고 있어 기존 기록을 덮어쓰지 않기 위해 **Milestone 26,
+M26-T01**로 번호를 새로 부여했다(투명하게 기록).
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M26-T01 | Vault Root Refactoring — `Vault/01 Projects/AI Workspace/`를 저장소 root로 승격, 참조 수정, Validation | **완료** |
+
+### M26-T01: Obsidian Vault Root Refactoring
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `Vault/01 Projects/AI Workspace/`의 15개 디렉터리를 `git mv`로 저장소 root에 이동, History 보존(Delete+Create 아님) | ✅ |
+| 2 | 비어 있던 `Vault/00 Inbox`/`02 Resources`/`03 Archives`(.gitkeep만) 및 이제 빈 `Vault/`/`Vault/01 Projects/` 제거 | ✅ |
+| 3 | `vault/connection.py`를 Vault Root == 저장소 root 기준(표식 파일 탐색)으로 재작성 | ✅ |
+| 4 | `vault/mapping.py` 상대 경로는 처음부터 `vault_root` 기준이라 무변경 확인 | ✅ |
+| 5 | `vault/validation.py`/`vault/sync.py`의 문서 스캔 범위를 Vault 콘텐츠 15개 디렉터리로 제한(신규 `VAULT_CONTENT_DIRECTORIES`) — `docs/`/`.claude/`/`.agents/` 오염 방지 | ✅ |
+| 6 | Wikilink(`[[...]]`)는 파일명 기준이라 이동으로 깨지지 않음을 확인, 마크다운 상대경로 링크 0건 확인 | ✅ |
+| 7 | Broken Markdown Link = 0(알려진 프롬프트 예시 텍스트 9건 제외) | ✅ |
+| 8 | `tests/vault/`(Mock) fixture를 새 스캔 범위에 맞춰 조정, 전부 통과 | ✅ |
+| 9 | `tests/integration/test_m23_vault_environment_integration.py`/`test_m24_real_vault_e2e.py`가 저장소 root를 직접 Vault Root로 사용하도록 갱신 | ✅ |
+| 10 | Python Import 오류 없음(사전 존재하는 `pyyaml` 미설치 제약 제외) | ✅ |
+| 11 | ADR-0037 작성, `docs/ARCHITECTURE.md`/Vault `Vault Integration Architecture.md`/`ADR Index` 반영 | ✅ |
+| 12 | `.obsidian/` 직접 생성하지 않음(Obsidian이 처음 열 때 자동 생성 — 추측성 설정 파일 생성 금지) | ✅ |
+| 13 | 변경된 파일만 수정(최소 변경 원칙), 기존 기능 회귀 없음 | ✅ |
+
+**구현 내용**
+
+- **T01-1 Vault Root 승격**: `git mv "Vault/01 Projects/AI
+  Workspace/<X>" "<X>"` 15회(00 System~13 Daily, 99 Templates),
+  전부 git이 Rename(R)으로 인식(History 보존). `git rm`으로
+  `.gitkeep` 3개 제거 후 빈 디렉터리 자동 정리.
+- **T01-2 Git History 유지**: `git mv` 전용 — Delete+Create 미사용.
+  `git status`가 전 파일을 `R`(Rename)로 표시함으로 확인.
+- **T01-3 Repository 참조 수정**: 코드(`src/ai_workspace/vault/
+  connection.py` 전면 재작성 — Vault Root 표식 파일(`00 System/
+  PROJECT_INDEX.md`) 기준 탐색으로 전환), 테스트(`tests/
+  integration/test_m23_vault_environment_integration.py`/
+  `test_m24_real_vault_e2e.py`의 `_VAULT_ROOT` 계산과 스캔 방식
+  갱신), Vault 문서(`01 Overview/Overview.md`, `00 System/
+  PREPARATION_SUMMARY.md`, `02 Architecture/Vault Integration
+  Architecture.md`에 M26 구현 상태 절 추가) 갱신. `.ai/TASKS.md`/
+  `.ai/DECISIONS.md`/`.ai/MEMORY.md`의 **기존(역사적) 기록은
+  그대로 둔다** — 그 시점에는 실제로 `Vault/01 Projects/AI
+  Workspace` 경로가 맞았으므로, 소급 수정하면 오히려 진행 로그의
+  정확성이 깨진다(대신 이 Task에서 새 기록을 추가해 전환 시점을
+  명시). README/`docs/PRD.md`는 Vault 경로를 언급하지 않아 수정
+  대상이 아님을 확인.
+- **핵심 발견(설계가 이미 준비돼 있었음)**: `vault/mapping.py`의
+  대상 경로가 ADR-0035부터 이미 `vault_root` 기준 **상대 경로**
+  (`"03 ADR/ADR Index.md"` 등, `"Vault/01 Projects/AI Workspace/..."`
+  같은 절대/중첩 경로가 아님)로 설계돼 있어 **한 줄도 바꿀 필요가
+  없었다**. Backlink도 전부 Wikilink(파일명 기준)라 위치 이동에
+  영향받지 않는다 — 이 두 가지 기존 설계 덕분에 "Vault Root를
+  옮긴다"는 근본적인 변경이 실제로는 `connection.py` 1개 파일
+  교체로 끝났다.
+- **부수적으로 발견해 고친 위험**: `vault_root`가 저장소 root와
+  같아지면서, 제한 없는 `rglob("*.md")`가 `docs/`/`.claude/`/
+  `.agents/`의 마크다운(특히 `.claude/skills/`/`.agents/skills/`
+  아래 서드파티 Skill 문서 수백 개)까지 Backlink/Tag Validation에
+  끌어들이는 잠재적 버그를 미리 발견해 `VAULT_CONTENT_DIRECTORIES`
+  (신규, `mapping.py`)로 스캔 범위를 명시적으로 제한했다(`validation.
+  py`/`sync.py` 수정). 이 문제는 사용자가 요청한 범위 밖이지만
+  고치지 않으면 T01-7 Validation 자체가 거짓 결과를 낼 수 있어
+  포함했다.
+- **T01-4 Obsidian 설정 검증**: `.obsidian/`은 이 세션에 존재하지
+  않았고(이동 전에도 없었음) 새로 만들지 않았다 — Obsidian이 저장소
+  root를 Vault로 처음 열 때 자동 생성하는 파일이라 미리 만들
+  근거가 없다. "Workspace 정상 로드"/"Internal Link 정상"은 실제
+  Obsidian 앱을 이 세션에서 실행할 수 없어 직접 확인이 불가능하다
+  (정직하게 기록) — 대신 Wikilink Backlink 무결성(코드 기반
+  `find_broken_backlinks`)과 폴더 인식 가능 여부(디렉터리 존재
+  확인)로 대리 검증했다.
+- **T01-5 Git Vault Sync 호환성**: 최종 구조가 저장소 root == Vault
+  Root 조건을 만족함을 `vault.connection.connect()`(표식 파일
+  기준 탐색)로 실제 재확인.
+- **T01-6 Claude Code 영향 분석**: 이 세션(Claude Code) 자체의
+  작업 root는 원래도 저장소 root였으므로 영향 없음 — 오히려 Vault
+  경로와 처음으로 일치하게 됐다. Workflow(`EXECUTION_PROFILE`)는
+  Vault 문서 상대 경로를 참조하지 않고 wikilink/제목 기준이라
+  무변경. Automation(`vault/auto_save.py`)은 `run_auto_save_on_
+  default_vault()`가 `connection.connect()`를 그대로 재사용해
+  무변경. Prompt(`READING_PROFILES`/`PROMPT_PROFILE`)는 문서
+  제목만 참조해 무변경. README는 애초에 Vault 경로를 언급하지
+  않아 무변경.
+- **T01-7 Validation**: 아래 "검증 결과" 참고.
+
+**검증 결과**
+
+- Directory 구조: `00 System`~`13 Daily`, `99 Templates` 15개가
+  저장소 root에 존재, `Vault/`는 완전히 사라짐(확인 완료).
+- Git Status: 이동된 파일 전부 `R`(Rename)로 표시, 신규 추적
+  파일 없음(내용까지 바뀐 파일은 `RM`).
+- Git History 유지: `git mv` 전용 사용, `git log --follow`로
+  이동 전 이력 접근 가능.
+- Broken Markdown Link: 실제 Vault 전체(34개 파일) 스캔 결과 9건
+  — 전부 `AI_RULES`/`PREPARATION_SUMMARY`/`PROMPT_PROFILE`/
+  `READING_PROFILES`/`Vault Integration Architecture`가 Wikilink
+  문법을 설명하는 프롬프트 예시 텍스트(M23 Verification부터
+  누적 추적돼 온 알려진 오탐), **신규 broken link 0건**.
+  Broken Relative Path: Vault 안 마크다운 스타일 상대경로 링크
+  0건(전수 검색 확인) — 애초에 해당 없음.
+- Python Import: `pkgutil.walk_packages`로 `ai_workspace` 전체
+  모듈을 import해 확인, 실패 1건(`storage.llm_policy_loader`,
+  `pyyaml` 미설치)은 M23-T03부터 문서화해 온 사전 존재 환경
+  제약이며 이번 변경과 무관.
+- Tests: `poetry run ruff check src/ai_workspace/vault tests/vault
+  tests/integration/test_m23_vault_environment_integration.py
+  tests/integration/test_m24_real_vault_e2e.py` 클린,
+  `poetry run mypy src/ai_workspace/vault` 클린, `poetry run pytest`
+  (같은 대상) **46개 전부 통과**.
+
+**의존성**: Milestone 25(Production Vault Activation) 완료.
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |

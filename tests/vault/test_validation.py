@@ -4,8 +4,10 @@ from ai_workspace.vault.validation import find_broken_backlinks, find_missing_ta
 
 
 def test_find_broken_backlinks_detects_link_to_missing_document(tmp_path: Path) -> None:
-    (tmp_path / "A.md").write_text("# A\n\n[[B]] [[Missing]]\n", encoding="utf-8")
-    (tmp_path / "B.md").write_text("# B\n", encoding="utf-8")
+    system_dir = tmp_path / "00 System"
+    system_dir.mkdir()
+    (system_dir / "A.md").write_text("# A\n\n[[B]] [[Missing]]\n", encoding="utf-8")
+    (system_dir / "B.md").write_text("# B\n", encoding="utf-8")
 
     issues = find_broken_backlinks(tmp_path)
 
@@ -14,8 +16,10 @@ def test_find_broken_backlinks_detects_link_to_missing_document(tmp_path: Path) 
 
 
 def test_find_broken_backlinks_empty_when_all_links_resolve(tmp_path: Path) -> None:
-    (tmp_path / "A.md").write_text("# A\n\n[[B]]\n", encoding="utf-8")
-    (tmp_path / "B.md").write_text("# B\n\n[[A]]\n", encoding="utf-8")
+    system_dir = tmp_path / "00 System"
+    system_dir.mkdir()
+    (system_dir / "A.md").write_text("# A\n\n[[B]]\n", encoding="utf-8")
+    (system_dir / "B.md").write_text("# B\n\n[[A]]\n", encoding="utf-8")
 
     assert find_broken_backlinks(tmp_path) == []
 
