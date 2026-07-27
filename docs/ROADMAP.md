@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~16 완료, v0.5.0 아키텍처 기준선 선언, Milestone 17(Intelligent Engine Selection) 착수) |
+| 상태 | Draft (Milestone 1~16 완료, v0.5.0 아키텍처 기준선 선언, Milestone 17(Intelligent Engine Selection) 진행 중) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -717,6 +717,36 @@ ROADMAP/PRD)를 Workspace 전용 Knowledge로 노출하고, Agent가 Keyword
 **진행 상태**: M16-T01~T04 전체 완료. Milestone DoD 1~7번 전부 충족
 확인됨. Milestone 16 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 16
 Review" 참고). **Milestone 16 완료 — 2026-07-27 사용자 승인.**
+
+---
+
+## Milestone 17 — Intelligent Engine Selection
+
+**목표**: Task + Budget(M15) + Project Knowledge(M16) + 등록된
+Engine들의 Capability/비용을 종합해 최적 Engine 후보를 결정하는
+`EngineSelectionPolicy`를 도입한다. Decision Only — 실행 연결은
+M18. `EngineRuntime` 계약 확장 대신 신규 `EngineRegistry`(기존
+`AgentRegistry`와 동일한 패턴)로 후보 조회를 분리한다.
+
+**Milestone Definition of Done**
+1. `EngineCandidate`/`EngineSelectionDecision`이 Provider 독립.
+2. `EngineRegistry`가 등록된 모든 Engine 후보를 나열(세션 미생성).
+3. `EngineSelectionPolicy`가 규칙 기반, side-effect 없음, `reason` 포함.
+4. Budget 내 최저 비용 우선 규칙이 통합 테스트로 검증.
+5. 결정이 실제 `engine_runtime.run()` 호출에 연결되지 않음을 증명.
+6. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 상세는 `.ai/TASKS.md`의 "Milestone 17"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M17-T01 | `EngineCandidate`/`EngineSelectionDecision` domain + `EngineRegistry` | 진행 예정 |
+| M17-T02 | `EngineSelectionPolicy` + `InMemoryEngineSelectionPolicy` | 진행 예정 |
+| M17-T03 | End-to-End 통합 테스트 | 진행 예정 |
+| M17-T04 | 문서화 + Milestone 17 Review | 진행 예정 |
+
+**진행 상태**: Task List 승인 완료, 구현 착수.
 
 ---
 

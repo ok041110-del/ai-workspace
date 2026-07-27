@@ -5079,13 +5079,74 @@ Interface 3개를 "신규 계층 도입" 계열 ADR로 투명하게 기록), 테
 
 **Milestone 16 종료 — 2026-07-27 사용자 승인.**
 
-**Milestone 17 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
-않았다. 사용자가 예고한 다음 단계는 자동 AI 선택(Selection Policy)
-이며, `KnowledgeProvider`를 통해 프로젝트 규칙·설계 정보를 참조할
-수 있는 기반이 이번 Milestone으로 마련됐다 — 다만 이는 사전 논의
-없이 확정된 것이 아니며, Milestone 17은 착수 시점에 이 문서에
-목표/DoD/Task List를 새로 정의한다(Task Driven Development 원칙,
-M2~M16이 그래왔듯).
+**Milestone 17 상태**: 착수 확정. 아래 "Milestone 17" 절 참고.
+
+---
+
+## Milestone 17 — Intelligent Engine Selection
+
+**목표**: Task + Budget(M15) + Project Knowledge(M16) + 등록된
+Engine들의 Capability/비용을 종합해 **최적 Engine 후보를 결정**하는
+`EngineSelectionPolicy`를 도입한다. **이 Milestone은 결정만 한다 —
+그 결정을 실제 실행에 반영하는 것은 M18(Execution)의 책임**이다
+(2026-07-27 사용자 확정, "Decision Only Milestone").
+
+> **설계 검토에서 발견한 사실**: `EngineRuntime`은 `run()`/
+> `estimate_cost()` 둘 다 `required_capabilities`를 만족하는 등록된
+> Engine 중 **첫 번째 매칭만** 선택한다(`_require_adapter`/`_select`).
+> 여러 후보를 나열·비교하는 방법 자체가 없다 — "선택"이라 부를 만한
+> 로직이 지금은 존재하지 않는다.
+
+**설계 방향(사용자 승인 조건 반영)**: `EngineRuntime.list_candidates()`
+로 계약을 또 확장하는 대신, **`AgentManager`/`AgentRegistry` 분리와
+동일한 패턴**으로 신규 `EngineRegistry`(`interfaces/
+engine_registry.py`)를 도입한다 — "등록된 Engine이 무엇인지 조회"는
+`EngineRegistry`(신규)가, "어떻게 실행하는지"는 기존 `EngineRuntime`
+이 그대로 맡는다. **단, 이 저장소에는 `AgentRegistry`에 대응하는
+기존 Engine Registry가 없었다**(Engine 등록은 지금까지
+`EngineRuntime.register_engine()` 내부 dict가 전부였음) — 그래서
+"기존 계층을 활용"이 아니라 **신규 계층을 도입**하는 결정이다. 대신
+기존 `EngineRuntime` 3개 구현체(`InMemoryEngineRuntime`/
+`ManagedEngineRuntime`/`RecoveringEngineRuntime`)의 내부 구현은 전혀
+건드리지 않는다(zero 회귀 위험) — `EngineRegistry`는 실행 경로와는
+별도로, 같은 Adapter를 조립 시점에 한 번 더 등록해 후보 조회 전용으로
+쓴다(EngineRuntime의 계약 확장 없음). `EngineSelectionPolicy`
+(`interfaces/engine_selection_policy.py`)는 `EngineCandidate` 목록과
+`BudgetPolicyEngine`(선택, M15 재사용 — 후보별 `CostEstimate`를 만들어
+`check()`에 그대로 위임해 예산 비교 로직을 중복 구현하지 않음)/
+Knowledge(선택, M16 재사용 — 결정 사유에만 반영, 이번 MVP는 Budget/
+비용 기준 판단만)를 받아 순수하게 "판단"만 한다(side-effect 없음).
+
+**Non-goal(범위 밖)**: 실제 실행 연결(M18), Model 수준 결정(계속
+M14의 정적 정책이 담당 — 이 Decision은 Engine 선택에만 집중),
+`EngineRuntime` 내부 구현 리팩터링, ML/휴리스틱 기반 고급 판단
+(규칙 기반 최소 구현만).
+
+**Milestone Definition of Done**
+1. `EngineCandidate`/`EngineSelectionDecision`이 특정 Provider를
+   전혀 참조하지 않는다.
+2. `EngineRegistry`가 `required_capabilities`를 만족하는 등록된 모든
+   Engine 후보를 `EngineCandidate`로 나열한다(세션 미생성).
+3. `EngineSelectionPolicy`가 Task/Budget/Knowledge/후보 목록을 받아
+   결정하는 규칙 기반 계약이다(side-effect 없음, LLM 호출 없음).
+   `EngineSelectionDecision`에 선택 이유(`reason`)가 포함된다.
+4. 최소 1개 규칙(Budget 내에서 예상 비용이 가장 낮은 후보 선택)이
+   실제 여러 Engine이 등록된 상태에서 통합 테스트로 검증된다.
+5. `EngineSelectionPolicy`의 결정은 `CodingAgent`의 실제
+   `engine_runtime.run()` 호출에 전혀 연결되지 않는다 — 결정 따로,
+   실행 따로임을 통합 테스트로 명시적으로 증명한다.
+6. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M17-T01 | `EngineCandidate`/`EngineSelectionDecision` domain + `EngineRegistry` Interface + `InMemoryEngineRegistry` | 진행 예정 |
+| M17-T02 | `EngineSelectionPolicy` Interface + `InMemoryEngineSelectionPolicy`(Budget 내 최저 비용 우선) | 진행 예정 |
+| M17-T03 | End-to-End 통합 테스트(다중 Engine 후보 선택 + 실행과의 비연결 증명) | 진행 예정 |
+| M17-T04 | 문서화 + Milestone 17 Review | 진행 예정 |
+
+**진행 상태**: Task List 승인 완료, 구현 착수.
 
 ---
 
