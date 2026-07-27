@@ -798,7 +798,13 @@
   원문/실제 산출물 작성 전 계약 정리용"으로 위치시켰다.
   `PROMPT_PROFILE.md`에 산출물 종류→템플릿 Mapping 표,
   `PROJECT_INDEX.md`에 동일한 Template Index 절을 추가해 두 문서
-  모두에서 템플릿을 찾을 수 있게 했다.
+  모두에서 템플릿을 찾을 수 있게 했다. 이어서 **T01C(EXECUTION_
+  PROFILE 도입)** 추가 완료: `EXECUTION_PROFILE.md` 신규 —
+  Task Start/Context Retrieval/Template Selection/Task Execution/
+  Document Update/Validation/Completion Report 7단계 Standard
+  Workflow를 정의해, "무엇을 읽을지"(T01A)/"무엇으로 만들지"
+  (T01B)에 이어 "어떻게 처리할지"까지 문서화했다. `PROMPT_PROFILE.md`
+  /`PROJECT_INDEX.md`에 각각 연계 절을 추가.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

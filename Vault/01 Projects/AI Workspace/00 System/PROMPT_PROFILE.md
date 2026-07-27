@@ -52,6 +52,14 @@ Rules가 원칙이고, 이 문서는 그 원칙을 반복 작업 유형별 짧�
 (공백, `-`)는 그 결과를 Vault Index에 요약으로 **등록**할 때
 쓰는 용도다. 둘은 역할이 다르며 서로 대체하지 않는다.
 
+## Execution Profile 연계
+
+이 문서가 다루는 "어떻게 짧게 물어볼지"는 요청 단계까지다. 요청을
+받은 뒤 AI가 실제로 수행하는 절차(Context Retrieval → Template
+Selection → 구현 → 문서 갱신 → 검증 → 보고)는 [[EXECUTION_PROFILE]]
+의 Standard Workflow 7단계를 따른다 — 이 표의 각 프롬프트 예시는
+결국 그 7단계 중 1단계(Task Start)의 입력일 뿐이다.
+
 ## 안티패턴(피할 것)
 
 - GitHub 파일 전체 내용을 프롬프트에 복사해 붙여넣기 — 대신
@@ -66,6 +74,7 @@ Rules가 원칙이고, 이 문서는 그 원칙을 반복 작업 유형별 짧�
 - [[PROJECT_INDEX]]
 - [[AI_RULES]]
 - [[DESIGN_TEMPLATE]]
+- [[EXECUTION_PROFILE]]
 
 ## 원문
 

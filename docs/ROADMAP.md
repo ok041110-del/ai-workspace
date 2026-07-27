@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.21.0 |
+| 문서 버전 | v0.22.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~22 완료, v0.5.0 아키텍처 기준선 선언, Milestone 22에서 Production Platform 도입 — ADR-0034(새 Interface 없이 27종 유지). Milestone 23(Mobile Experience) 착수 전 M23-Preparation(Obsidian Knowledge Base 구축, `Vault/`) T01~T07 + T01A/T01B(Retrieval/Prompt 효율화 + 산출물별 Template) 완료) |
+| 상태 | Draft (Milestone 1~22 완료, v0.5.0 아키텍처 기준선 선언, Milestone 22에서 Production Platform 도입 — ADR-0034(새 Interface 없이 27종 유지). Milestone 23(Mobile Experience) 착수 전 M23-Preparation(Obsidian Knowledge Base 구축, `Vault/`) T01~T07 + T01A/T01B/T01C(Retrieval/Prompt 효율화 + 산출물별 Template + Standard Execution Workflow) 완료) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 

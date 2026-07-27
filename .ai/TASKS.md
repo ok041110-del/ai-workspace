@@ -7153,10 +7153,58 @@ Optional)로 이월한다.
 | M23-Prep-T07 | 운영 문서 및 검증 | **완료** |
 | M23-Prep-T01A | Vault Retrieval/Prompt 효율화(Router+Template) | **완료** |
 | M23-Prep-T01B | 산출물별 작성 Template 5종 + Template Mapping | **완료** |
+| M23-Prep-T01C | EXECUTION_PROFILE(Standard Workflow) 도입 | **완료** |
 | M23-Prep-T08 (Optional) | Obsidian MCP 연동 — Claude Code 도입 시점으로 이월 | 보류 |
 
 **진행 상태**: M23-Prep-T01~T07 전체 완료(아래 "M23-Preparation
-Review" 참고) + T01A/T01B(2026-07-27 사용자 지시로 추가) 완료.
+Review" 참고) + T01A/T01B/T01C(2026-07-27 사용자 지시로 추가) 완료.
+
+#### M23-Prep-T01C: EXECUTION_PROFILE(Standard Workflow) 도입
+
+**목표**: T01A(무엇을 읽을지)/T01B(무엇으로 만들지)에 이어, "요청을
+받은 뒤 AI가 실제로 어떻게 처리하는가"의 표준 절차를 명문화한다.
+Task Start부터 Completion Report까지 매 Task마다 반복해 온 절차
+(이번 T01A/T01B 작업 자체가 실제 예시)를 문서화해 다음 세션도
+동일한 순서를 따르게 한다.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `EXECUTION_PROFILE.md` 신규 | ✅ |
+| 2 | Standard Workflow 7단계(Task Start/Context Retrieval/Template Selection/Task Execution/Document Update/Validation/Completion Report) 정의 | ✅ |
+| 3 | `PROMPT_PROFILE.md`에 Execution Profile 연계 절 추가 | ✅ |
+| 4 | `PROJECT_INDEX.md`에 Execution Flow 절 추가 | ✅ |
+| 5 | 기존 구조·Backlink·Tag·원문 규칙 유지(검증 완료, 미해결 링크 0건) | ✅ |
+| 6 | 변경된 파일만 수정 | ✅ |
+| 7 | `.ai/TASKS.md`/`docs/ROADMAP.md`/`.ai/MEMORY.md` 반영 | ✅ |
+
+**구현 내용**
+
+- `00 System/EXECUTION_PROFILE.md`(신규): Standard Workflow 7단계.
+  Task Start(승인된 DoD 확인, 없으면 먼저 승인받음 — GitHub `.ai/
+  RULES.md`의 승인 필요 원칙 참고)/Context Retrieval([[PROJECT_INDEX]]
+  라우팅 표 사용)/Template Selection(Template Index/Mapping에서
+  선택)/Task Execution(DoD 범위만, 변경된 파일만 수정)/Document
+  Update(GitHub 원문 + Vault Index 동시 갱신)/Validation(Vault는
+  Backlink·Tag·원문 섹션, GitHub는 테스트/`ruff`/`mypy`)/Completion
+  Report(요청자 지정 형식 우선). 각 단계가 기존 원칙(GitHub Link
+  Rule/Backlink Rule/Tag Rule/AI Reading Rule)을 대체하지 않고
+  참조하도록 작성.
+- `00 System/PROMPT_PROFILE.md`(수정): "Execution Profile 연계"
+  절 추가 — 프롬프트 예시 표는 7단계 중 1단계(Task Start)의
+  입력일 뿐임을 명시해 두 문서의 역할 경계를 분명히 함.
+- `00 System/PROJECT_INDEX.md`(수정): "Execution Flow — 요청부터
+  완료까지" 절 추가 — Retrieval First/Template Index/
+  EXECUTION_PROFILE 3개 절을 하나의 흐름도로 연결.
+- Vault 전체 재검증: 미해결 Backlink 0건(기존과 동일한 3건의
+  텍스트 설명 오탐 외 신규 문제 없음).
+
+**의존성**: M23-Prep-T01A/T01B(Retrieval First 라우팅 표와
+Template Index/Mapping이 먼저 존재해야 Execution Flow가 그것들을
+참조할 수 있음).
+
+---
 
 #### M23-Prep-T01B: 산출물별 작성 Template 5종 + Template Mapping
 

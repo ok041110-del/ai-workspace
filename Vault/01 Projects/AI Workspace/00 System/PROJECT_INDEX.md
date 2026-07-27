@@ -59,11 +59,26 @@ Automation 연동 부분 확인해줘"(O) vs GitHub 파일 전체를 프롬프�
 산출물별 선택 기준과 "원문 작성용 vs Vault 등록용" 구분은
 [[PROMPT_PROFILE]]의 Template Mapping 절 참고.
 
+## Execution Flow — 요청부터 완료까지
+
+이 문서(Retrieval)와 [[PROMPT_PROFILE]](요청 방식)로 "무엇을
+어떻게 물을지"를 정했다면, 그 다음 "AI가 실제로 어떻게 처리하는가"
+는 [[EXECUTION_PROFILE]]의 표준 절차를 따른다:
+
+```
+Task Start → Context Retrieval(이 문서) → Template Selection
+  (Template Index) → Task Execution → Document Update
+  → Validation → Completion Report
+```
+
+각 단계의 상세 규칙은 [[EXECUTION_PROFILE]] 참고.
+
 ## 관련 문서
 
 - [[AI_CONTEXT]]
 - [[AI_RULES]]
 - [[PROMPT_PROFILE]]
+- [[EXECUTION_PROFILE]]
 
 ## 원문
 
