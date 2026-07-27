@@ -7145,7 +7145,7 @@ Optional)로 이월한다.
 | Task | 내용 | 상태 |
 |---|---|---|
 | M23-Prep-T01 | Vault 초기 구성 및 시스템 문서 작성 | **완료** |
-| M23-Prep-T02 | 프로젝트 개요 및 아키텍처 작성 | 진행 예정 |
+| M23-Prep-T02 | 프로젝트 개요 및 아키텍처 작성 | **완료** |
 | M23-Prep-T03 | ADR 정리 | 진행 예정 |
 | M23-Prep-T04 | Backend/API 문서화 | 진행 예정 |
 | M23-Prep-T05 | 서버 구성 문서화 | 진행 예정 |
@@ -7153,7 +7153,19 @@ Optional)로 이월한다.
 | M23-Prep-T07 | 운영 문서 및 검증 | 진행 예정 |
 | M23-Prep-T08 (Optional) | Obsidian MCP 연동 — Claude Code 도입 시점으로 이월 | 보류 |
 
-**진행 상태**: M23-Prep-T01 완료. M23-Prep-T02 진행 예정.
+**진행 상태**: M23-Prep-T01~T02 완료. M23-Prep-T03 진행 예정.
+
+#### M23-Prep-T02: 프로젝트 개요 및 아키텍처
+- 상태: **DONE (2026-07-27)** — `01 Overview/Overview.md`(프로젝트
+  소개, 저장소 목록, 현재 진행률, Backend 상태, Mobile 계획, 현재
+  Milestone). `02 Architecture/Architecture Overview.md`(Layer
+  구조, 핵심 컴포넌트 표, CQRS/EventBus/Repository 패턴 요약,
+  Interface 27종). `02 Architecture/Architecture Map.md`(영역별
+  진입점 지도 — 아직 만들어지지 않은 T04~T07 산출물도 미리
+  `[[]]` 링크로 걸어둠, Obsidian에서 "unresolved link"로 보이다가
+  이후 Task가 채우면 자동 연결됨). 다음 Task: **M23-Prep-T03**
+  (ADR 정리).
+- 의존성: M23-Prep-T01.
 
 #### M23-Prep-T01: Vault 초기 구성 및 시스템 문서
 - 상태: **DONE (2026-07-27)** — 저장소 루트에 `Vault/`(PARA 구조)
