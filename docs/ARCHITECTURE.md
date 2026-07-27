@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.16.0 |
-| 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~13 완료, Milestone 14 진행 중 — ADR-0026으로 §3.9/§3.10에 model 라우팅 반영) |
+| 문서 버전 | v0.17.0 |
+| 작성일 | 2026-07-27 |
+| 상태 | Draft (Milestone 1~14 완료, Milestone 15 완료 — ADR-0027로 §3.9/§3.13에 Budget 정책 반영) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -253,6 +253,10 @@ Agent의 실행을 담당하는 계층.
   새로 시작하고 싶을 때 쓴다. 같은 세션에 이미 있는 `memory_snapshot_id`
   (이어지는 Mission)는 건드리지 않는다 — "새 세션 자동 복원"만 막는
   좁은 범위다.
+- **Token & Cost Optimization(M15)**: `CodingAgent`는 선택적으로
+  `budget_policy_engine`(§3.13)을 주입받는다. 주입되어 있으면 실행
+  직전 예상 비용을 확인해 예산 초과 시 Task를 `BLOCKED`로 전환하고
+  실행하지 않는다.
 
 ### 3.7 Core Engines (Services)
 Task · Workflow · Approval · Automation Engine. Agent가 사용하는 능력 서비스.
@@ -340,6 +344,15 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   고를지에 관여하지 않고**, 이미 선택된 Adapter에 "이번 호출에서 어떤
   모델을 쓸지"만 전달한다 — 두 축(Provider 선택 vs Model 지정)은 서로
   다른 층위다.
+- **비용 사전 조회(M15, ADR-0027)**: `estimate_cost(task,
+  required_capabilities=frozenset()) -> CostEstimate`를 계약에 추가했다.
+  `EngineAdapter.estimate_cost()`는 M3부터 존재했지만 `EngineRuntime`도
+  Agent도 호출한 적이 없었다 — `run()`과 동일한 엔진 선택 규칙으로
+  Adapter를 고른 뒤 세션을 만들지 않고 그 Adapter의 `estimate_cost()`
+  결과만 반환한다(read-only). `RecoveringEngineRuntime`은 재시도 로직
+  없이 내부 Runtime에 순수 위임한다(추정은 side-effect가 없어 재시도할
+  이유가 없다). `CodingAgent`가 이를 §3.13 `BudgetPolicyEngine`과
+  함께 사용해 실행 전 예산을 확인한다.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -422,6 +435,28 @@ Core Engine도 아닌 별도 컴포넌트다.
   `TaskEngine.create_task()`로 생성되어 있어야 한다 — `WorkflowRunner`
   는 Task를 새로 만들지 않는다.
 
+### 3.13 Budget Policy (BudgetPolicyEngine 인터페이스, Milestone 15, ADR-0027)
+`EngineAdapter.estimate_cost()`가 계산한 예상 비용/토큰을 Workspace
+차원의 예산과 대조해 실행 허용 여부를 결정하는 계약. `LLMPolicyEngine`
+(§3.9 Policy→Execution 라우팅)과 동일한 설계 원칙을 따른다 — 규칙
+기반, side-effect 없음, 정책이 없으면(`Budget` 미설정) 예외가 아니라
+항상 허용으로 표현해 정책 부재가 정상 상태임을 나타낸다.
+- **domain 객체**: `Budget(max_tokens, max_cost_usd)`(둘 다 선택적,
+  Provider 독립) / `BudgetDecision(allowed, reason)`.
+- **구현체**: `InMemoryBudgetPolicyEngine` — 생성 시 주어진 단일
+  `Budget` 하나로 `CostEstimate`를 검사한다. 여러 Task에 걸친 누적
+  소비량 추적은 하지 않는다(Task 단위 개별 확인만, YAGNI).
+- **연동 지점**: `CodingAgent`에 `budget_policy_engine`을 선택적으로
+  주입하면, `MissionPlanned`를 처리하기 직전 `engine_runtime.
+  estimate_cost()` → `BudgetPolicyEngine.check()`를 거친다. 예산을
+  초과하면 Approval 요청이나 재시도 없이 Task를 `BLOCKED`로 전환하고
+  실행하지 않는다(M15 MVP — 승인 흐름은 범위 밖). 주입하지 않으면
+  (기본값 `None`) 이 확인 자체를 건너뛰어 M15 이전과 완전히 동일하게
+  동작한다.
+- **Provider 독립**: 이 Interface와 `Budget`/`BudgetDecision` 어디에도
+  특정 LLM Provider나 Engine 개념이 등장하지 않는다 — Claude/GPT/
+  Gemini 어떤 조합이든 동일하게 동작한다.
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -472,11 +507,12 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentCapability` | Coordination/Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP … |
 | `AgentStatus` | 생명주기 상태 |
 
-## 7. Interfaces (추상 계약, 총 18종)
+## 7. Interfaces (추상 계약, 총 19종)
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
 | `LLMPolicyEngine` | AgentRole별 LLM Provider/Model/Effort Rule 기반 결정 | Milestone 5 (M5-T01) | **완료(계약+구현)** |
+| `BudgetPolicyEngine` | `CostEstimate` vs `Budget` 대조로 실행 허용 여부 결정 | Milestone 15 (M15-T01 계약, `InMemoryBudgetPolicyEngine` 구현) | **완료(계약+구현)** |
 | `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 (T1-15 계약, T1-23 `FileProjectRepository` 구현) | **완료(계약+구현)** |
 | `WorkflowEngine` | Mission→…→Step 협업 흐름 | 이후 | 기존 |
 | `TaskEngine` | Task 생성/상태 전이 + Step 실행 이력(M5-T06) | 이후 | 기존 |
@@ -491,7 +527,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `InteractionEngine` | 입력 표면 정규화/응답 변환 (기존 ConversationEngine 대체) | Milestone 1 (T1-21) 계약, Milestone 3 구현 | **완료(계약)** |
 | `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료(계약)** |
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
-| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행 | Milestone 1 (T1-19) | **완료(계약)** |
+| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15) | Milestone 1 (T1-19) | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 
@@ -526,7 +562,7 @@ src/ai_workspace/
 ├── domain/            # Project, Mission, Workflow, Task, Step,
 │                       #   WorkspaceSession, Agent, AgentRole, AgentCapability, AgentStatus
 │                       #   (구현됨, T1-14~T1-17)
-├── interfaces/         # 추상 계약 (18종, §7) (구현됨, T1-15~T1-21, M11-T01)
+├── interfaces/         # 추상 계약 (19종, §7) (구현됨, T1-15~T1-21, M11-T01, M15-T01/T02)
 ├── core/              # Workspace Core (WorkspaceSession 관리, Runtime 초기화)
 │                       #   (구현됨, T1-22)
 ├── runtime/           # (Milestone 2 이후)

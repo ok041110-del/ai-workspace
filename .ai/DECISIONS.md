@@ -886,3 +886,67 @@
   실제 `docs/llm_policy.example.yaml` 기반 통합 테스트로 증명
   (M14-T03). 이월 부채(Effort 라우팅, Codex/Gemini 실연동)는
   실제 대응 지점이 생기기 전까지 계속 이월한다.
+
+## ADR-0027: `EngineRuntime`에 `estimate_cost()` 추가 + `BudgetPolicyEngine` 신설 (Milestone 15)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: `EngineAdapter.estimate_cost(task) -> CostEstimate`는 M3부터
+  존재했지만, `EngineRuntime`도 어떤 Agent도 이를 호출한 적이 없었다
+  (M12의 `WorkflowEngine.plan()`, M13의 `AgentScheduler.select()`와
+  동일한 "만들어졌지만 쓰인 적 없는 기능" 패턴). `EngineRuntime`은
+  `.ai/RULES.md` §1.2가 보호하는 핵심 아키텍처 자산(`EngineAdapter`와
+  같은 층위)이라, 계약을 확장하는 이번 결정을 ADR-0009/ADR-0015/
+  ADR-0026(과거 `EngineAdapter`/`EngineRuntime` 계약 확장)과 동일하게
+  정식 기록한다.
+- 결정:
+  1. `interfaces/engine_runtime.py`에 `estimate_cost(task,
+     required_capabilities=frozenset()) -> CostEstimate`를 추가한다.
+     `run()`과 동일한 엔진 선택 규칙(등록 순서상 첫 매칭)을 따르되,
+     세션을 만들지 않는다(read-only, side-effect 없음).
+  2. `InMemoryEngineRuntime`/`ManagedEngineRuntime`은 각자의 기존
+     어댑터 선택 로직(`_select`/`_require_adapter`)을 재사용해
+     구현한다 — 새 선택 로직을 추가하지 않는다.
+  3. `RecoveringEngineRuntime`은 재시도 로직 없이 내부 Runtime에 순수
+     위임한다 — 추정은 실패할 side-effect가 없어 재시도할 이유가 없다.
+  4. `domain/budget.py`에 `Budget(max_tokens, max_cost_usd)`/
+     `BudgetDecision(allowed, reason)`을 신설한다. 둘 다 Provider/
+     Engine 개념을 전혀 참조하지 않는 순수 domain 객체다.
+  5. `interfaces/budget_policy_engine.py`에 `BudgetPolicyEngine`
+     Interface(`check(estimate) -> BudgetDecision`)를 신설한다.
+     `LLMPolicyEngine`(M5-T01)과 동일한 설계 원칙 — 정책이 없으면
+     예외가 아니라 항상 허용으로 표현.
+  6. `CodingAgent`에 선택적 `budget_policy_engine` DI를 추가한다.
+     주입되어 있으면 실행 직전 `estimate_cost()` → `check()`를 거쳐
+     초과 시 Task를 `BLOCKED`로 전환하고 실행하지 않는다(Approval/
+     Retry 없음, M15 MVP).
+- 대안:
+  - `EngineAdapter.estimate_cost()`를 Agent가 직접 호출 — 기각.
+    `.ai/RULES.md` §8 규칙 6("Engine 호출은 Agent → Engine Runtime →
+    Engine Adapter 순서로만")을 정면으로 위반한다.
+  - Budget을 `LLMPolicyEngine`에 병합(정책 하나로 통합) — 기각.
+    `LLMPolicyEngine`은 AgentRole→Provider/Model/Effort를 결정하는
+    책임이고, Budget은 Task 단위 CostEstimate를 검사하는 책임이라
+    서로 다른 관심사다(SRP) — `LLMPolicyDecision`에 예산 필드를
+    추가하면 "정책 하나가 두 가지 다른 질문에 답하는" 결합이 생긴다.
+  - 예산 초과 시 Approval Engine으로 승인 요청 — 기각(사용자 확정
+    범위 밖). Approval 비동기 처리는 기존에도 이월된 부채이며, 이번
+    Milestone에서 함께 처리하면 범위가 걷잡을 수 없이 커진다.
+  - 여러 Task에 걸친 누적 소비량 추적(Workspace 전체 잔여 예산) —
+    기각(YAGNI). 실제 필요성이 증명되지 않았고, Task 단위 개별 확인만
+    으로도 M15 목표("실행 전에 확인하고 초과하면 막는다")는 충족된다.
+- 이유: `estimate_cost()`를 `run()`과 동일한 위치(`EngineRuntime`
+  계약)에 두면 Agent가 이미 알고 있는 `required_capabilities`를 그대로
+  재사용할 수 있고, 실제로 선택될 Adapter와 항상 같은 Adapter의
+  추정치를 얻는다는 보장이 자연스럽게 성립한다. `BudgetPolicyEngine`을
+  별도 Interface로 분리하면 Provider 독립성이 타입 수준에서 보장된다
+  (`CostEstimate`만 알고 어떤 Provider/Engine인지 전혀 모름).
+- 결과/영향: `docs/ARCHITECTURE.md` v0.17.0 §3.9/§3.13/§7(19종)에 반영.
+  `EngineRuntime` 구현체 3종(`InMemoryEngineRuntime`/
+  `ManagedEngineRuntime`/`RecoveringEngineRuntime`) 및 기존
+  `EngineRuntime` 테스트 더블(`FakeEngineRuntime` 등) 전부 새 추상
+  메서드를 구현하도록 갱신(M15-T02). `CodingAgent`가 예산 초과 시
+  실행을 막음을 실제 `ManagedEngineRuntime`+`ClaudeCodeEngineAdapter`
+  조합으로 증명(M15-T03). Effort/Model 기반 비용 차등, 여러 Task
+  누적 예산 추적, 실시간 API 과금 조회는 실제 필요성이 생기기 전까지
+  이월한다.

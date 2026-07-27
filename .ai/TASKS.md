@@ -4626,9 +4626,9 @@ Retry, Dashboard, Provider별 과금 API 연동, 예산 누적 추적(Task 단�
 | M15-T01 | `Budget`/`BudgetDecision` domain + `BudgetPolicyEngine` Interface + `InMemoryBudgetPolicyEngine` | **완료** |
 | M15-T02 | `EngineRuntime.estimate_cost()` 추가 + `CodingAgent` 연동 | **완료** |
 | M15-T03 | End-to-End 통합 테스트 | **완료** |
-| M15-T04 | 문서화 + Milestone 15 Review | 진행 예정 |
+| M15-T04 | 문서화 + Milestone 15 Review | **완료** |
 
-**진행 상태**: M15-T01~T03 완료. M15-T04(문서화 + Review) 진행 중.
+**진행 상태**: M15-T01~T04 전체 완료. 아래 "Milestone 15 Review" 참고.
 
 #### M15-T01: `Budget`/`BudgetDecision` domain + `BudgetPolicyEngine` Interface + 구현체
 - 상태: **DONE (2026-07-27)** — `domain/budget.py`에 `Budget`
@@ -4683,6 +4683,142 @@ Retry, Dashboard, Provider별 과금 API 연동, 예산 누적 추적(Task 단�
   테스트 방식). `pytest`(511개, 기존 508개 + 신규 3개), `ruff`, `mypy`
   통과. 다음 Task: **M15-T04**(문서화 + Milestone 15 Review).
 - 의존성: M15-T02.
+
+#### M15-T04: 문서화 + Milestone 15 Review
+- 목적: 문서와 구현을 일치시키고 Milestone 종료 승인을 받는다.
+- 작업 내용: `docs/ARCHITECTURE.md` §3.6/§3.9(estimate_cost 반영) +
+  신규 §3.13(Budget Policy) + §7(Interfaces 18→19종) 갱신, `.ai/
+  DECISIONS.md`에 ADR-0027 신규(`EngineRuntime`은 §1.2 보호 자산이라
+  계약 확장을 ADR-0009/0015/0026과 동일하게 기록), `docs/ROADMAP.md`/
+  `.ai/MEMORY.md` 갱신, 전체 테스트 결과 정리 및 Review 작성.
+- 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
+- 상태: **DONE (2026-07-27)** — `docs/ARCHITECTURE.md` v0.17.0
+  §3.6(Agents, CodingAgent budget_policy_engine 한 줄 요약)/§3.9
+  (Engine Runtime, "비용 사전 조회(M15, ADR-0027)" 신규 문단)/신규
+  §3.13(Budget Policy — domain 객체/구현체/연동 지점/Provider 독립
+  근거)/§7(Interfaces 총 19종, `BudgetPolicyEngine` 행 추가,
+  `EngineRuntime` 행에 "비용 사전 조회(M15)" 반영)/§9(interfaces
+  디렉터리 주석 19종으로 갱신). `.ai/DECISIONS.md`에 **ADR-0027**
+  (배경/결정 6개 항목/대안 4개/이유/결과) 신규 작성. 아래 "Milestone
+  15 Review" 절 참고.
+- 의존성: M15-T01~T03.
+
+---
+
+## Milestone 15 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `Budget`/`BudgetDecision`이 Provider 독립 | ✅ (M15-T01, 어떤 Provider/Engine 개념도 참조하지 않음) |
+| 2 | `BudgetPolicyEngine`이 side-effect 없이 동작, 정책 없으면 항상 허용 | ✅ (M15-T01) |
+| 3 | `EngineRuntime.estimate_cost()`가 세션 없이 `CostEstimate` 반환 | ✅ (M15-T02) |
+| 4 | `CodingAgent`가 예산 초과 시 실행을 막음이 통합 테스트로 증명 | ✅ (M15-T03) |
+| 5 | Budget 미지정 시 기존과 완전히 동일하게 동작(회귀 없음) | ✅ (M15-T02/T03) |
+| 6 | 전체 `pytest`/`ruff`/`mypy` 통과 | ✅ (아래 4절) |
+
+Task List(M15-T01~T04) 전체 완료. 사용자 승인 조건("실제 API 비용
+계산/실시간 과금 조회는 하지 않음", "Memory Engine/Knowledge Base/
+MCP/Approval/Retry/Dashboard 범위 밖") 그대로 충족됨.
+
+**2. Architecture Review**
+
+- **신규 컴포넌트**: `domain/budget.py`(`Budget`/`BudgetDecision`),
+  `interfaces/budget_policy_engine.py`(`BudgetPolicyEngine`),
+  `engines/budget_policy_engine.py`(`InMemoryBudgetPolicyEngine`).
+- **변경된 기존 컴포넌트**: `interfaces/engine_runtime.py`(계약 확장,
+  `estimate_cost()` 추가) + `EngineRuntime` 구현체 3종
+  (`InMemoryEngineRuntime`/`ManagedEngineRuntime`/
+  `RecoveringEngineRuntime`) + `CodingAgent`(선택적
+  `budget_policy_engine` DI).
+- **핵심 설계 결정**: `estimate_cost()`를 `EngineRuntime` 계약에
+  두어 `run()`과 동일한 엔진 선택 규칙을 그대로 재사용하게 했다 —
+  Agent가 이미 계산한 `required_capabilities`를 그대로 넘기면 실제로
+  선택될 Adapter와 항상 같은 Adapter의 추정치를 얻는다는 보장이
+  자연히 성립한다. `BudgetPolicyEngine`을 `LLMPolicyEngine`과 분리된
+  별도 Interface로 둔 것은 SRP 때문이다 — 하나는 "어떤 Provider/
+  Model을 쓸지" 결정하고, 다른 하나는 "이 비용이 예산 안인지"만
+  검사한다. 두 정책을 하나로 합치면 서로 다른 두 질문에 답하는
+  결합이 생긴다.
+
+`git diff --stat`(M14 종료 커밋 대비)로 확인한 결과 신규 소스 파일
+3개(`domain/budget.py`, `interfaces/budget_policy_engine.py`,
+`engines/budget_policy_engine.py`), 기존 소스 파일 수정 5개
+(`EngineRuntime` Interface 1개, 구현체 3개, `CodingAgent` 1개) —
+M11(신규 2/수정 5)과 비슷한 규모, M14(신규 0/수정 11)보다 신규 파일은
+많지만 수정 파일은 적다.
+
+**3. Interface First 원칙 검토**
+
+M15는 **새 최상위 Interface(`BudgetPolicyEngine`)를 추가**했다
+(M5/M11과 같은 종류). 동시에 **기존 `EngineRuntime` Interface의
+계약도 확장**했다(M14가 `EngineAdapter`/`EngineRuntime`에 `model`을
+추가한 것과 같은 종류) — 두 성격이 겹치는 첫 Milestone이다.
+`EngineRuntime`은 `.ai/RULES.md` §1.2가 보호하는 핵심 아키텍처
+자산이라 ADR-0027로 정식 기록했다(ADR-0009/0015/0026과 동일 계열).
+새 매개변수(`required_capabilities`)는 기본값이 있는 선택적 인자라
+기존 호출부와 100% 호환된다. `BudgetPolicyEngine`은 신설
+Interface이므로 기존 코드에 영향이 없다(주입하지 않으면 기존 동작
+그대로).
+
+**4. 테스트 결과**
+
+- `pytest`: **511개 전부 통과**(M14 완료 시점 489개 → M15에서 22개
+  신규: M15-T01 +9, M15-T02 +10, M15-T03 +3)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(신규 소스 파일 3개 포함, 사전에 존재하던
+  `storage/llm_policy_loader.py`의 `types-PyYAML` 미설치 경고 1건은
+  M15 변경과 무관 — M15 이전부터 존재)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M15 범위 밖으로 명시적으로 제외한 것(사용자 확정, 계속 이월)*
+- **여러 Task에 걸친 누적 예산 추적** — Task 단위 개별 확인만 구현
+  (YAGNI, 실제 필요성 미증명).
+- **예산 초과 시 Approval 요청 흐름** — 이번엔 단순 차단(BLOCKED)만.
+  실제 승인 워크플로가 필요해지면 재검토.
+- **실제 API 과금 조회/Provider별 과금 API 연동** — 사용자 확정 범위
+  밖, `EngineAdapter.estimate_cost()`의 기존 naive 추정을 그대로 재사용.
+- **Effort 기반 비용 차등** — M14에서 Model만 다루기로 확정한 것과
+  같은 이유로 이번에도 범위 밖.
+
+*계속 이월되는 기존 항목*
+- Effort 라우팅, `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임
+  워크 미통합, Codex/Gemini 실연동 미검증, `MemoryEngine.search()`
+  선형 스캔, Retry Backoff/Persistent Runtime Recovery/Approval
+  비동기 처리/Process Timeout 정책 고도화, `ShellAgent` 화이트리스트
+  코드 고정.
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M15-T01~T04 상세 섹션) / `docs/ROADMAP.md`
+(M15 Task List·목표·DoD 반영) / `docs/ARCHITECTURE.md`(v0.17.0, §3.6/
+§3.9/신규 §3.13/§7/§9 갱신) / `.ai/DECISIONS.md`(ADR-0027 신규) 완료.
+`pyproject.toml` 버전은 v0.5.0 그대로 유지(ADR-0024 기준선 — 새
+Interface 1개 추가는 M5/M11과 같은 종류의 확장이라 기준선 재선언
+대상이 아님, 상위 계층 구조 변경이 아니다). `.ai/MEMORY.md`는 이
+Review 승인 직후 M1~M14와 동일한 방식으로 압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 3/
+수정 5 소스 파일, "estimate_cost()를 EngineRuntime에 두고 Budget
+검사는 별도 Interface로 분리" 설계 결정 명시), Interface First 검토
+완료(3절, 새 Interface 1개 + 기존 1개 계약 확장을 ADR로 투명하게
+기록), 테스트 결과 문서화 완료(4절), Technical Debt 정리 완료(5절),
+문서 갱신 완료(6절) — 6개 조건 모두 만족. Review 중 코드 변경이
+필요한 치명적 문제(버그·계약 위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 15 Completed를 선언한다.**
+
+**Milestone 16 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
+않았다. 사용자가 예고한 다음 단계는 Obsidian 도입 여부 검토 후
+그 결과를 반영해 Memory Engine의 목표/구조를 확정하는 것이다 — 이는
+사전 논의 없이 확정된 것이 아니며, Milestone 16은 착수 시점에 이
+문서에 목표/DoD/Task List를 새로 정의한다(Task Driven Development
+원칙, M2~M15가 그래왔듯).
 
 ---
 
