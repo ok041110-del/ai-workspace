@@ -440,8 +440,8 @@
   작성하지 않음. MVP는 `CodingAgent` 하나에만 적용(Review/Documentation
   등으로 확장은 후속 Milestone, YAGNI). 이월 부채는 M12와 동일하게
   유지.
-- **Milestone 14(LLM Routing, Model 수준 라우팅) 완료 — 문서화 완료,
-  사용자 승인 대기.** 목표는 "Policy가 정한 Model(opus/sonnet/haiku
+- **Milestone 14(LLM Routing, Model 수준 라우팅) 완료 — 2026-07-26
+  사용자 승인.** 목표는 "Policy가 정한 Model(opus/sonnet/haiku
   등)이 실제 실행까지 전달되게 한다"는 것(MVP, 사용자 확정). **핵심
   발견**: M6이 완성한 것은 **Provider 단위** 라우팅(어떤 CLI를 쓸지)
   뿐이었고, `LLMPolicyDecision`의 `model`/`effort`는 `EngineAdapter.
@@ -652,8 +652,8 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-26)**: Milestone 1~13 완료(사용자 승인), Milestone
-  14(LLM Routing)는 구현+문서화 완료·사용자 승인 대기. 버전 v0.5.0
+- **현재 상태(2026-07-26)**: Milestone 1~14 전체 완료(사용자 승인).
+  Milestone 15는 아직 목표/DoD/Task List가 정의되지 않음. 버전 v0.5.0
   유지(ADR-0024 기준선 — `ExecutionEnvironment`/`WorkflowRunner`/
   `CodingAgent`의 자가 확인 가드/`model` 파라미터 확장 모두 새 최상위
   Interface나 계층 구조 변경이 아니라 기존 계약 위에서의 추가·확장이라
