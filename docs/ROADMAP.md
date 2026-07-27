@@ -887,6 +887,29 @@ Review" 참고).
 
 ---
 
+## Milestone 22 — Production Platform
+
+**목표**: AI Workspace를 실제 운영 가능한 Production Platform으로
+확장한다. Server Runtime의 Lifecycle/Configuration/Health/Logging을
+담당하며 비즈니스 로직은 추가하지 않는다. 상세는 `.ai/TASKS.md`의
+"Milestone 22" 참고.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M22-T01 | Production Configuration + Loader | **완료** |
+| M22-T02 | Production Logging | 진행 예정 |
+| M22-T03 | Lifecycle Manager | 진행 예정 |
+| M22-T04 | Health Monitor + Version 조회 | 진행 예정 |
+| M22-T05 | Production API + Server Runtime 연동 | 진행 예정 |
+| M22-T06 | Dashboard Health 화면 | 진행 예정 |
+| M22-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
+
+**진행 상태**: M22-T01 완료, M22-T02 진행 예정.
+
+---
+
 ## 우선순위 원칙
 
 1. 기반이 되는 도메인·인터페이스(Milestone 1)를 가장 먼저 확정한다.

@@ -6698,6 +6698,109 @@ Engine 미등록을 신규 부채로 정식 등재), 문서 갱신 완료(6절) 
 
 ---
 
+## Milestone 22 — Production Platform
+
+**목표**: AI Workspace를 실제 운영 가능한 Production Platform으로
+확장한다. Server Runtime의 생명주기(Lifecycle)/설정(Configuration)/
+상태(Health)/Logging을 담당한다. 비즈니스 로직을 추가하지 않는다 —
+Execution/Dashboard/Automation은 그대로 유지한다(2026-07-27 사용자
+확정).
+
+**설계 방향(사용자 최종 승인, 조건 5개)**:
+1. Configuration은 Infrastructure Layer의 Immutable 설정 객체로
+   유지한다 — `domain/`이 아니라 `runtime/production/`에 둔다.
+2. `LifecycleManager`는 생성이 아닌 생명주기(Startup/Shutdown)만
+   관리한다 — 컴포넌트 조립은 여전히 `web/server.py`의 책임이다.
+3. `HealthMonitor`는 조회 전용(Read Model)으로 유지한다.
+4. Dashboard Health는 기존 `DashboardService`를 확장하여
+   구현한다(M21의 `automation_service` 선택적 DI와 동일한 Reader→
+   Reader 패턴).
+5. `uptime`/`started_at`/`version`/`health_status`를 표준 상태
+   정보로 제공해 M23(Mobile Experience)에서 재사용할 수 있도록
+   한다.
+
+**설계 검토에서 확정한 세부 사항**(사용자 승인, 이견 없어 그대로
+진행):
+- **Version API 값**: `pyproject.toml`의 `version`(ADR-0024가
+  관리하는 아키텍처 기준선 버전)과 별개로, 제품 릴리스 버전을
+  담는 별도 상수(`runtime/production/version.py`의
+  `WORKSPACE_VERSION`)를 신설한다 — 두 버전 개념이 다른 것을
+  추적하기 때문이다.
+- **Health Monitor의 "Engine" 항목**: 이 서버는 아직 실제
+  `EngineAdapter`를 등록하지 않는다(M21 Review에 기록된 기존
+  한계) — 이번 Milestone은 `EngineRegistry` Interface를 확장하지
+  않고, "구조적으로 조립돼 있는가"만 조회 전용으로 확인한다.
+- **컴포넌트 배치**: Configuration/Lifecycle Manager/Health
+  Monitor 등 FastAPI를 모르는 코드는 `runtime/production/`
+  (`runtime/dashboard/`/`runtime/automation/`과 동일한 패턴)에,
+  실제 REST 엔드포인트는 `web/production_routes.py`에 둔다.
+- **Graceful Shutdown**: 별도 계측 없이 기존 `DashboardService.
+  workspace_status()`(M20)가 이미 추적하는 실행 중 여부(`status
+  == "running"`)를 폴링(타임아웃 포함)해 "실행 중인 Task 완료
+  대기"를 구현한다 — `ExecutionDispatcher`를 직접 건드리지 않아
+  "Core Domain은 Production을 모른다" 원칙을 지킨다.
+
+**Non-goal(범위 밖)**: Docker, Kubernetes, CI/CD, HTTPS, Reverse
+Proxy, Database, Authentication, Authorization, Multi-node
+Cluster, Mobile App, Home Widget, Lock Screen Widget, Live
+Activity, Push Notification.
+
+**Milestone Definition of Done**
+1. Configuration 구현(불변).
+2. Configuration Loader 구현(Env Var + 설정 파일).
+3. Lifecycle Manager 구현.
+4. Health Monitor 구현.
+5. Production Logging 구현(표준 `logging`, Console+File).
+6. Production API 구현.
+7. Dashboard Health 화면 구현.
+8. Graceful Shutdown 구현.
+9. Version API 구현.
+10. Environment Variable 지원.
+11. 설정 파일 지원.
+12. End-to-End 테스트.
+13. Architecture Test.
+14. ADR 작성.
+15. ARCHITECTURE.md 갱신.
+16. TASKS.md Review.
+17. `ruff`/`mypy`/전체 `pytest` 통과.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M22-T01 | Production Configuration + Loader(Env Var+설정 파일, 불변) | **완료** |
+| M22-T02 | Production Logging(표준 `logging`, Console+File) | 진행 예정 |
+| M22-T03 | Lifecycle Manager(Startup/Running/Shutdown, Graceful Shutdown) | 진행 예정 |
+| M22-T04 | Health Monitor + Version 조회 | 진행 예정 |
+| M22-T05 | Production API(4종) + Server Runtime 연동 | 진행 예정 |
+| M22-T06 | Dashboard Health 화면 | 진행 예정 |
+| M22-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
+
+**진행 상태**: M22-T01 완료. M22-T02 진행 예정.
+
+#### M22-T01: Production Configuration + Loader
+- 상태: **DONE (2026-07-27)** — `runtime/production/config.py`의
+  `ProductionConfig`(frozen dataclass, 사용자 승인 조건 1 —
+  Infrastructure Layer의 Immutable 설정 객체)에 `host`/`port`/
+  `log_level`/`dashboard_enabled`/`automation_enabled`/
+  `automation_tick_seconds`(M20 `web/app.py`의
+  `DEFAULT_AUTOMATION_TICK_SECONDS`를 여기로 이관 예정, T05에서
+  실제 연결)/`engine_settings`(실제 Engine 미등록 상태를 반영한
+  최소 자리표시자) 신규. `__post_init__`에서 `log_level` 허용값/
+  `port` 양수/`automation_tick_seconds` 양수를 검증
+  (`InvalidConfigurationError`). `runtime/production/
+  config_loader.py`의 `load_production_config(config_path=,
+  env=)`가 기본값→설정 파일(YAML, `storage/llm_policy_loader.py`
+  와 동일한 "로더가 PyYAML을 알고 데이터 타입은 모른다" 분리
+  패턴)→Environment Variable(`AI_WORKSPACE_` 접두사) 순으로
+  겹쳐 써 `ProductionConfig`를 만든다 — Env Var가 가장 구체적인
+  값으로 최종 우선한다. 단위 테스트 12개 신규(config 6개, loader
+  6개). `pytest`(732개), `ruff`, `mypy` 통과. 다음 Task:
+  **M22-T02**(Production Logging).
+- 의존성: 없음.
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |
