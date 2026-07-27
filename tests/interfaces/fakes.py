@@ -5,6 +5,7 @@ from collections.abc import Callable
 
 from ai_workspace.domain.agent import Agent, AgentCapability, AgentRole, AgentStatus
 from ai_workspace.domain.budget import Budget, BudgetDecision
+from ai_workspace.domain.knowledge import KnowledgeDocument
 from ai_workspace.domain.llm_policy import LLMPolicyDecision
 from ai_workspace.domain.project import Project
 from ai_workspace.domain.session import WorkspaceSession
@@ -60,6 +61,11 @@ from ai_workspace.interfaces.interaction_engine import (
     InteractionEngine,
     NormalizedRequest,
     UnsupportedSurfaceError,
+)
+from ai_workspace.interfaces.knowledge_provider import KnowledgeProvider
+from ai_workspace.interfaces.knowledge_repository import (
+    KnowledgeDocumentNotFoundError,
+    KnowledgeRepository,
 )
 from ai_workspace.interfaces.llm_policy_engine import LLMPolicyEngine
 from ai_workspace.interfaces.memory_engine import MemoryEngine
@@ -612,3 +618,27 @@ class FakeBudgetPolicyEngine(BudgetPolicyEngine):
         ):
             return BudgetDecision(allowed=False, reason="max_cost_usd exceeded")
         return BudgetDecision(allowed=True)
+
+
+class FakeKnowledgeRepository(KnowledgeRepository):
+    def __init__(self, documents: list[KnowledgeDocument] | None = None) -> None:
+        self._documents = list(documents) if documents is not None else []
+
+    def list_all(self) -> list[KnowledgeDocument]:
+        return list(self._documents)
+
+    def get(self, document_id: str) -> KnowledgeDocument:
+        for document in self._documents:
+            if document.document_id == document_id:
+                return document
+        raise KnowledgeDocumentNotFoundError(document_id)
+
+
+class FakeKnowledgeProvider(KnowledgeProvider):
+    def __init__(self, documents: list[KnowledgeDocument] | None = None) -> None:
+        self._documents = list(documents) if documents is not None else []
+        self.received_queries: list[str] = []
+
+    def provide(self, query: str) -> list[KnowledgeDocument]:
+        self.received_queries.append(query)
+        return list(self._documents)
