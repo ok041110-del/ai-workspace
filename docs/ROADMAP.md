@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~18 완료, v0.5.0 아키텍처 기준선 선언, Milestone 19(Reliability Layer) 구현 완료 — 사용자 승인 대기) |
+| 상태 | Draft (Milestone 1~19 완료, v0.5.0 아키텍처 기준선 선언, Milestone 20(Real-time Dashboard Platform) 검토 중) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -819,7 +819,7 @@ Timeout, 안전한 Cancellation. 기존 `RetryPolicy`(M3)를 확장하고
 
 **진행 상태**: M19-T01~T04 전체 완료. Milestone DoD 1~13번 전부 충족
 확인됨. Milestone 19 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 19
-Review" 참고) — 사용자 승인 대기.
+Review" 참고). **Milestone 19 완료 — 2026-07-27 사용자 승인.**
 
 ---
 

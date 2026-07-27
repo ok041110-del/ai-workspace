@@ -605,6 +605,38 @@
   계층 도입" 계열로 ADR-0030 기록. 이월 부채는 M17과 동일하게 유지
   (신규 이월: 실제 로그인/OAuth/Credential/Token Refresh, `CodingAgent`
   연결은 사용자가 명시적으로 후속 Milestone으로 분리).
+- **Milestone 19(Reliability Layer) 완료 — 2026-07-27 사용자 승인.**
+  목표는 "M18 Execution Layer의 안정성 확보 — 정책 기반 Retry,
+  Timeout, 안전한 Cancellation"(MVP). **핵심 발견 3가지**: (1)
+  `domain/retry_policy.py`의 `RetryPolicy`(M3)가 이미 있고
+  `RecoveringEngineRuntime`이 "무조건 재시도"에 쓰고 있어 — M16/M18과
+  달리 이번엔 같은 개념의 확장이라 새 이름 대신 기존 클래스에 필드
+  추가(`retry_delay_seconds`/`non_retryable_exceptions`, 기본값 있어
+  `RecoveringEngineRuntime` 무영향) + `decide() -> RetryDecision`.
+  (2) `ClaudeCodeEngineAdapter.run()`이 Timeout과 다른 실행 오류를
+  같은 예외 타입(`EngineExecutionError`)으로 던져 "EngineAdapter
+  인터페이스 변경 금지" 제약과 충돌 — `timed_out`은 메시지 텍스트
+  휴리스틱으로만 판정 가능(**신규 기술 부채, ADR-0031에 명시**). (3)
+  DoD의 `NoSuitableEngineError`(`EngineRuntime` 시절)는 이 경로에
+  실제로 나타나지 않음 — M18이 `EngineRegistry`를 직접 써서 실제로는
+  `EngineNotRegisteredError` 발생. `runtime/execution/
+  retry_executor.py`의 `RetryExecutor`(제네릭, `EngineExecutionResult`
+  를 모름)가 "인증 확인→Registry 조회→Adapter 실행" 전체를 한 시도로
+  묶어 재시도(`ExecutionDispatcher`는 재시도를 직접 구현하지 않음).
+  `AuthenticationRequiredError`/`EngineNotRegisteredError`/
+  `NoSuitableEngineError`는 기본적으로 재시도 안 함. 취소는
+  `EngineAdapter`가 이미 쓰는 sentinel(`error == "cancelled"`, 사용자
+  승인 조건)을 그대로 재사용해 즉시 반영, 재시도 루프 자체를 타지
+  않음. `EngineExecutionResult`에 `retry_count`/`cancelled`/
+  `timed_out` 확장(기본값 있어 M18 호출부 무영향). 실제
+  `ClaudeCodeEngineAdapter`+`ExecutionEnvironment`로 Timeout 재시도·
+  소진 후 반영, Cancellation 즉시 반영을 통합 테스트로 증명(M19-T03).
+  신규 소스 파일 1개, 기존 파일 수정 3개(M17/M18에 이어 세 번째로
+  작은 변경 폭). 전체 `pytest` 588개(M18 완료 567개 → M19에서 21개
+  신규) 통과, `ruff`/`mypy` 클린. **새 최상위 Interface는 0개**이나
+  사용자가 명시적으로 요구해 ADR-0031 작성(RetryPolicy 확장 근거 +
+  timed_out 휴리스틱 기술 부채 정식 기록). 이월 부채는 M18과 동일,
+  신규 이월 1건(timed_out 휴리스틱).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -755,6 +787,7 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR-0028 | Project Knowledge System 도입(`KnowledgeRepository`/`KnowledgeSearch`/`KnowledgeProvider`), 기존 `MemoryEngine`과 분리 | 승인됨 |
 | ADR-0029 | Intelligent Engine Selection 도입(`EngineRegistry`+`EngineSelectionPolicy`, Decision Only), `EngineRuntime` 계약 미확장 | 승인됨 |
 | ADR-0030 | Execution Layer 도입(`ExecutionDispatcher` 구체 클래스 + `AuthenticationManager`), Decision-Execution 완전 분리, 첫 End-to-End 실행 경로 완성 | 승인됨 |
+| ADR-0031 | Reliability Layer 도입(`RetryPolicy` 확장 + `RetryExecutor`), `timed_out` 휴리스틱 기술 부채 명시 | 승인됨 |
 
 기술 스택(Python, dataclasses, 파일 기반 저장, CLI, 인메모리 Event Bus+파일
 Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
@@ -792,17 +825,21 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-27)**: Milestone 1~18 전체 완료(사용자 승인).
-  Milestone 19는 아직 목표/DoD/Task List가 정의되지 않음(Task Driven
-  Development 원칙). 버전 v0.5.0 유지(ADR-0024 기준선 — M18까지의
-  변경은 전부 기존 계약 위에서의 추가·확장이거나 M5/M11/M16~M18과
-  같은 "신규 계층 도입" 계열이라 기준선 재선언 대상이 아니라고
-  판단했으나, M16~M18에서 Interface가 19→25종으로 크게 늘어난 만큼
-  다음 기준선 재검토 시점에 누적 변화를 함께 검토할 필요가 있음).
-  `pytest` 567개, `ruff`/`mypy` 클린. Task→Selection Policy→Decision→
+- **현재 상태(2026-07-27)**: Milestone 1~19 전체 완료(사용자 승인).
+  Milestone 20(Real-time Dashboard Platform)은 검토 시작 시점(Task
+  Driven Development 원칙). 버전 v0.5.0 유지(ADR-0024 기준선 —
+  M19까지의 변경은 전부 기존 계약 위에서의 추가·확장이거나 신규
+  계층 도입 계열이라 기준선 재선언 대상이 아니라고 판단했으나,
+  M16~M18에서 Interface가 19→25종으로 크게 늘어난 만큼 다음 기준선
+  재검토 시점에 누적 변화를 함께 검토할 필요가 있음). `pytest`
+  588개, `ruff`/`mypy` 클린. Task→Selection Policy→Decision→
   Dispatcher→Authentication→Registry→Adapter→ExecutionEnvironment→
   `EngineExecutionResult`로 이어지는 첫 End-to-End 실행 경로가
-  완성됐다(M11/M15/M16/M17/M18).
+  완성됐고(M11/M15/M16/M17/M18), M19에서 Retry/Timeout/Cancellation
+  Reliability까지 더해졌다. **참고**: `pyproject.toml`의 런타임
+  의존성은 지금까지 `pyyaml` 하나뿐이다 — M20(Dashboard, HTTP API+
+  WebSocket+Web UI)은 이 프로젝트 최초로 웹 프레임워크 의존성을
+  요구할 전망이다.
 - **이 환경의 제약(2026-07-26 확인)**: `claude` CLI만 설치되어 있고
   `codex`/`gemini` CLI는 설치되어 있지 않다(`which` 확인). Codex/Gemini
   관련 Task는 이 세션에서 실행 불가 — 실제 CLI가 설치된 환경이 필요하다.
