@@ -637,6 +637,48 @@
   사용자가 명시적으로 요구해 ADR-0031 작성(RetryPolicy 확장 근거 +
   timed_out 휴리스틱 기술 부채 정식 기록). 이월 부채는 M18과 동일,
   신규 이월 1건(timed_out 휴리스틱).
+- **Milestone 20(Real-time Dashboard Platform) 완료 — 2026-07-27
+  사용자 승인.** 목표는 "AI Workspace 운영 상태를 실시간으로
+  관찰하는 Dashboard(CQRS Read Model, Task 미실행)"(MVP). 이
+  프로젝트가 **처음으로 "서버"·외부 런타임 의존성·Web UI를
+  도입**했다(기존엔 `pyyaml` 하나뿐이던 런타임 의존성에
+  `fastapi`/`uvicorn` 추가). 사용자가 3단계로 승인한 설계: (1)
+  `workspace start` 서버 런타임 도입, 기존 CLI 명령은 무영향. (2)
+  `ExecutionDispatcher`에 `event_bus: EventBus | None = None` 선택적
+  DI — Event만 발행하고 `DashboardRepository`를 직접 참조하지
+  않음(M13부터 이어진 "선택적 DI로 기존 컴포넌트 무변경 확장"
+  패턴), `InMemoryDashboardRepository`가 스스로 구독해 Read Model을
+  갱신, API/WebSocket/Web UI는 `DashboardService`만 사용. (3) Task
+  구조 T01~T07을 사용자가 직접 확정, "Core 계층은 웹 프레임워크를
+  모르도록 유지하고 FastAPI는 Infrastructure 계층(`web/`)에서만
+  사용" 원칙 명시. `domain/dashboard.py`(`EngineStatus`/
+  `WorkspaceStatus`/`ExecutionRecord`/`ExecutionStats`/
+  `ReliabilityStats`, `EngineExecutionResult`를 그대로 참조하지 않고
+  필요 필드만 옮겨 담음), `interfaces/dashboard_repository.py`의
+  `DashboardRepository`(**신규 최상위 Interface, 26번째** — 쓰기
+  3개/읽기 5개 메서드를 한 Interface에 함께 정의, 구현체가 하나뿐이라
+  물리적 분리는 과설계로 판단), `InMemoryDashboardRepository`(통계는
+  조회 시점 계산 없이 매 Event마다 미리 갱신 — "Dashboard는 통계를
+  계산하지 않는다"), `DashboardService`(`web/`을 전혀 import하지
+  않음을 `ast` 기반 검증으로 증명), `web/`(신규 최상위 패키지 —
+  `DashboardViewModel`/`DashboardBroadcaster`(WebSocket 연결 시점에
+  캡처한 `asyncio.get_running_loop()`+`loop.call_soon_threadsafe()`로
+  동기 `EventBus.publish()`→비동기 WebSocket 전송 경계를 넘김)/
+  `routes.py`(REST 4종)/`app.py`/`server.py`/`static/`(정적
+  HTML/CSS/Vanilla JS, 빌드 도구 없음, 현재 시각·경과 시간은
+  브라우저가 1초마다 직접 계산·Polling 없음)). `cli/main.py`에
+  `start` 서브커맨드(지연 import로 다른 CLI 명령은 FastAPI 몰라도
+  됨). 실제 `ClaudeCodeEngineAdapter` 실행 결과가 Event→Repository→
+  Service→REST API/WebSocket까지 그대로 반영됨을 통합 테스트로
+  증명(M20-T06), FastAPI `response_model`이 stdlib `@dataclass`를
+  문제없이 직렬화함도 실증(사전 불확실했던 리스크 해소). 신규 소스/
+  정적 파일 13개, 기존 파일 수정 4개(전부 선택적 DI/신규 서브커맨드로
+  하위 호환 유지). 전체 `pytest` 635개(M19 완료 588개 → M20에서
+  47개 신규) 통과, `ruff`/`mypy` 클린(`mypy`는 이 환경에서
+  `--python-executable "$(which python3)"` 필요 — 환경 설치 방식
+  때문, 코드 문제 아님). **새 최상위 Interface 1개**
+  (`DashboardRepository`) 추가로 ADR-0032 기록. 새로 발생한 기술
+  부채 없음. 이월 부채는 M19와 동일하게 유지, 신규 이월 없음.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

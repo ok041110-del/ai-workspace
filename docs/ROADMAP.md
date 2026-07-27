@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.15.0 |
-| 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~19 완료, v0.5.0 아키텍처 기준선 선언, Milestone 20(Real-time Dashboard Platform) 진행 중) |
+| 문서 버전 | v0.16.0 |
+| 작성일 | 2026-07-27 |
+| 상태 | Draft (Milestone 1~20 완료, v0.5.0 아키텍처 기준선 선언, Milestone 20에서 첫 외부 런타임 의존성(FastAPI/uvicorn) 도입 — ADR-0032. Milestone 21 착수 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -855,7 +855,9 @@ Dashboard(CQRS Read Model)를 구축한다. FastAPI+uvicorn(신규 런타임
 | M20-T06 | 전체 흐름 검증 | **완료** |
 | M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
 
-**진행 상태**: M20-T01~T06 완료, M20-T07 진행 예정.
+**진행 상태**: M20-T01~T07 전체 완료. **2026-07-27 사용자 승인으로
+Milestone 20 공식 종료**(상세는 `.ai/TASKS.md`의 "Milestone 20
+Review" 참고).
 
 ---
 

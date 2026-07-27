@@ -6237,6 +6237,10 @@ Core-Web 계층 분리 + 첫 외부 런타임 의존성을 web/에 격리" 설�
 
 **사용자 승인을 조건으로 Milestone 20 Completed를 선언한다.**
 
+**Milestone 20 종료 — 2026-07-27 사용자 승인.**
+
+**Milestone 21 상태**: 미정 — 다음 Milestone 킥오프 프롬프트 대기 중.
+
 ---
 
 ## 진행 로그
