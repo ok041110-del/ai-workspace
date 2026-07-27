@@ -6770,13 +6770,34 @@ Activity, Push Notification.
 |---|---|---|
 | M22-T01 | Production Configuration + Loader(Env Var+설정 파일, 불변) | **완료** |
 | M22-T02 | Production Logging(표준 `logging`, Console+File) | **완료** |
-| M22-T03 | Lifecycle Manager(Startup/Running/Shutdown, Graceful Shutdown) | 진행 예정 |
+| M22-T03 | Lifecycle Manager(Startup/Running/Shutdown, Graceful Shutdown) | **완료** |
 | M22-T04 | Health Monitor + Version 조회 | 진행 예정 |
 | M22-T05 | Production API(4종) + Server Runtime 연동 | 진행 예정 |
 | M22-T06 | Dashboard Health 화면 | 진행 예정 |
 | M22-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M22-T01~T02 완료. M22-T03 진행 예정.
+**진행 상태**: M22-T01~T03 완료. M22-T04 진행 예정.
+
+#### M22-T03: Lifecycle Manager
+- 상태: **DONE (2026-07-27)** — `runtime/production/lifecycle.py`의
+  `LifecycleState`(STARTUP/RUNNING/SHUTDOWN) + `LifecycleManager`
+  신규(사용자 승인 조건 2 — **생성이 아닌 생명주기만** 관리, 이미
+  조립된 `AutomationScheduler`/`DashboardService`를 선택적으로
+  주입받을 뿐 컴포넌트를 스스로 만들지 않음). `startup(now=)`이
+  `started_at`(ISO 8601)을 기록하고 `AutomationScheduler.start()`
+  (Startup Trigger 1회 평가)를 호출한 뒤 RUNNING으로 전이한다.
+  `shutdown()`(비동기)은 SHUTDOWN으로 즉시 전이한 뒤
+  `DashboardService.workspace_status()`(M20이 이미 추적하는 실행 중
+  여부)를 `graceful_shutdown_poll_interval_seconds`마다 폴링해
+  "idle"이 될 때까지 기다린다 — `graceful_shutdown_timeout_seconds`
+  (기본 30초)를 넘기면 **강제로 개입하지 않고** 그대로 진행한다
+  (사용자 DoD "강제 종료를 수행하지 않는다"). `ExecutionDispatcher`
+  를 직접 참조하지 않아 Core Domain은 이 클래스를 전혀 모른다.
+  단위 테스트 7개 신규(Startup 전이/Startup Trigger 연동/Dashboard
+  미주입 시 즉시 반환/실행 중 Task 완료 대기 후 정상 종료/타임아웃
+  후 강제 없이 진행). `pytest`(745개), `ruff`, `mypy` 통과. 다음
+  Task: **M22-T04**(Health Monitor + Version 조회).
+- 의존성: M21-T03(`AutomationScheduler`), M20-T03(`DashboardService`).
 
 #### M22-T02: Production Logging
 - 상태: **DONE (2026-07-27)** — `runtime/production/logging_setup.py`
