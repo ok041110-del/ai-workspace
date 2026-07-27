@@ -94,12 +94,32 @@ function renderReliability(reliability) {
   });
 }
 
+function renderAutomationSummary(automationStatus) {
+  const list = document.getElementById("automation-summary-list");
+  list.innerHTML = "";
+  if (!automationStatus) {
+    return;
+  }
+  const rows = [
+    ["등록된 Rule 수", automationStatus.registered_rule_count],
+    ["활성 Rule 수", automationStatus.enabled_rule_count],
+    ["마지막 실행", automationStatus.last_execution_at || "-"],
+    ["다음 실행 예정", automationStatus.next_execution_at || "-"],
+  ];
+  rows.forEach(([label, value]) => {
+    const li = document.createElement("li");
+    li.textContent = `${label}: ${value}`;
+    list.appendChild(li);
+  });
+}
+
 function renderDashboard(data) {
   renderWorkspace(data.workspace || {});
   renderEngines(data.engines);
   renderStats(data.execution_stats);
   renderHistory(data.recent_history);
   renderReliability(data.reliability_stats);
+  renderAutomationSummary(data.automation_status);
 }
 
 async function fetchInitialDashboard() {
@@ -119,9 +139,179 @@ function connectWebSocket() {
   };
 }
 
+function describeTrigger(trigger) {
+  if (trigger.kind === "time") {
+    const day = trigger.day_of_week || (trigger.day_of_month ? `매월 ${trigger.day_of_month}일` : "매일");
+    return `Time: ${day} ${trigger.time_of_day}`;
+  }
+  if (trigger.kind === "interval") {
+    return `Interval: ${trigger.interval_seconds}초마다`;
+  }
+  if (trigger.kind === "event") {
+    return `Event: ${trigger.event_type}`;
+  }
+  return "Startup";
+}
+
+function describeAction(action) {
+  if (action.kind === "run_task") {
+    return `Task 실행: ${action.task_title || "-"}`;
+  }
+  if (action.kind === "run_workflow") {
+    return `Workflow 실행: ${action.workflow_id || "-"}`;
+  }
+  if (action.kind === "notification") {
+    return `Notification: ${action.notification_message || "-"}`;
+  }
+  return "Dashboard Refresh";
+}
+
+async function fetchAutomationRules() {
+  const response = await fetch("/api/automation");
+  if (!response.ok) {
+    return;
+  }
+  const rules = await response.json();
+  renderAutomationRules(rules);
+}
+
+function renderAutomationRules(rules) {
+  const tbody = document.getElementById("automation-rule-list");
+  tbody.innerHTML = "";
+  (rules || []).forEach((rule) => {
+    const tr = document.createElement("tr");
+
+    const cells = [
+      rule.name,
+      describeTrigger(rule.trigger),
+      describeAction(rule.action),
+      rule.enabled ? "활성" : "비활성",
+      rule.last_executed_at || "-",
+      rule.next_execution_at || "-",
+    ];
+    cells.forEach((text) => {
+      const td = document.createElement("td");
+      td.textContent = text;
+      tr.appendChild(td);
+    });
+
+    const actionsTd = document.createElement("td");
+    actionsTd.appendChild(
+      makeRuleButton(rule.enabled ? "비활성화" : "활성화", "", () => toggleRule(rule))
+    );
+    actionsTd.appendChild(makeRuleButton("삭제", "danger", () => deleteRule(rule)));
+    tr.appendChild(actionsTd);
+
+    tbody.appendChild(tr);
+  });
+}
+
+function makeRuleButton(label, extraClass, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = extraClass ? `rule-action ${extraClass}` : "rule-action";
+  button.textContent = label;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+async function refreshAutomationSummary() {
+  const response = await fetch("/api/summary");
+  if (!response.ok) {
+    return;
+  }
+  const data = await response.json();
+  renderAutomationSummary(data.automation_status);
+}
+
+async function toggleRule(rule) {
+  const endpoint = rule.enabled ? "disable" : "enable";
+  await fetch(`/api/automation/${rule.rule_id}/${endpoint}`, { method: "POST" });
+  fetchAutomationRules();
+  refreshAutomationSummary();
+}
+
+async function deleteRule(rule) {
+  await fetch(`/api/automation/${rule.rule_id}`, { method: "DELETE" });
+  fetchAutomationRules();
+  refreshAutomationSummary();
+}
+
+function updateVisibleFields(selectId, fieldClass, prefix) {
+  const select = document.getElementById(selectId);
+  document.querySelectorAll(`.${fieldClass}`).forEach((el) => el.classList.remove("visible"));
+  document
+    .querySelectorAll(`.${prefix}-${select.value}`)
+    .forEach((el) => el.classList.add("visible"));
+}
+
+function buildTriggerFromForm() {
+  const kind = document.getElementById("rule-trigger-kind").value;
+  const trigger = { kind };
+  if (kind === "time") {
+    trigger.time_of_day = document.getElementById("rule-trigger-time-of-day").value;
+  } else if (kind === "interval") {
+    trigger.interval_seconds = Number(
+      document.getElementById("rule-trigger-interval-seconds").value
+    );
+  } else if (kind === "event") {
+    trigger.event_type = document.getElementById("rule-trigger-event-type").value;
+  }
+  return trigger;
+}
+
+function buildActionFromForm() {
+  const kind = document.getElementById("rule-action-kind").value;
+  const action = { kind };
+  if (kind === "run_task") {
+    action.project_id = document.getElementById("rule-action-project-id").value;
+    action.task_title = document.getElementById("rule-action-task-title").value;
+  } else if (kind === "run_workflow") {
+    action.workflow_id = document.getElementById("rule-action-workflow-id").value;
+  } else if (kind === "notification") {
+    action.notification_message = document.getElementById(
+      "rule-action-notification-message"
+    ).value;
+  }
+  return action;
+}
+
+async function submitAutomationForm(event) {
+  event.preventDefault();
+  const body = {
+    name: document.getElementById("rule-name").value,
+    description: document.getElementById("rule-description").value,
+    trigger: buildTriggerFromForm(),
+    action: buildActionFromForm(),
+  };
+  await fetch("/api/automation", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  document.getElementById("automation-form").reset();
+  fetchAutomationRules();
+  refreshAutomationSummary();
+}
+
+function setupAutomationForm() {
+  document
+    .getElementById("rule-trigger-kind")
+    .addEventListener("change", () => updateVisibleFields("rule-trigger-kind", "trigger-field", "trigger"));
+  document
+    .getElementById("rule-action-kind")
+    .addEventListener("change", () => updateVisibleFields("rule-action-kind", "action-field", "action"));
+  document.getElementById("automation-form").addEventListener("submit", submitAutomationForm);
+
+  updateVisibleFields("rule-trigger-kind", "trigger-field", "trigger");
+  updateVisibleFields("rule-action-kind", "action-field", "action");
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   tickClock();
   setInterval(tickClock, 1000);
   fetchInitialDashboard();
   connectWebSocket();
+  setupAutomationForm();
+  fetchAutomationRules();
 });

@@ -6318,10 +6318,44 @@ Rule 추천.
 | M21-T03 | `AutomationScheduler` + Time/Interval/Startup Trigger 구현 | **완료** |
 | M21-T04 | Event Trigger + `ExecutionDispatcher` 연동 | **완료** |
 | M21-T05 | Automation API + Dashboard 연계 | **완료** |
-| M21-T06 | Dashboard Web UI Automation 화면 | 진행 예정 |
+| M21-T06 | Dashboard Web UI Automation 화면 | **완료** |
 | M21-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M21-T01~T05 완료. M21-T06 진행 예정.
+**진행 상태**: M21-T01~T06 완료. M21-T07 진행 예정.
+
+#### M21-T06: Dashboard Web UI Automation 화면
+- 상태: **DONE (2026-07-27)** — `web/static/index.html`에 "Automation
+  현황" 요약 영역(등록/활성 Rule 수, 마지막/다음 실행)과 전체 폭
+  "Automation Rule" 영역(목록 테이블 + 생성 폼)을 추가. 생성 폼은
+  Trigger 종류(Time/Interval/Event/Startup)와 Action 종류(Task
+  실행/Workflow 실행/Dashboard Refresh/Notification)에 따라 관련
+  입력 필드만 표시(Vanilla JS, 빌드 도구 없음, 기존 원칙 유지).
+  `web/static/app.js`에 목록 조회(`GET /api/automation`)/생성
+  (`POST`)/활성화·비활성화(`POST .../enable`,`.../disable`)/삭제
+  (`DELETE`) 연동 — Automation CRUD는 오직 Automation API만 호출한다
+  (사용자 승인 조건 3). Automation 변경(생성/활성화/삭제) 후에는
+  `/api/summary`를 다시 조회해 "Automation 현황" 요약을 갱신한다 —
+  Automation은 Dashboard를 직접 갱신하지 않으므로(Event를 발행하지
+  않음, 사용자 승인 조건 4) 이 갱신은 Web UI(클라이언트) 계층이
+  능동적으로 재조회하는 것이지 Automation이 Dashboard에 쓰기 접근을
+  갖는 것이 아니다.
+
+  **실제 브라우저 검증**: `playwright`를 임시 설치해(이 세션에만,
+  프로젝트 의존성에는 추가하지 않음) 사전 설치된 Chromium으로 실제
+  서버(`web.server.run_server`)를 띄우고 화면을 직접 조작해 검증—
+  Rule 생성(Startup/Time×Task 실행 두 가지 조합), 활성화/비활성화
+  토글, 목록 갱신, "Automation 현황" 요약의 실시간 갱신을 모두
+  확인. **버그 발견 및 수정**: `updateVisibleFields()`가
+  `document.querySelector`(단일 요소)만 써서 같은 class를 가진
+  Action 필드 2개(Project ID/Task 제목) 중 첫 번째만 보이던 문제를
+  실제 브라우저 조작 중 발견 — `querySelectorAll`+`forEach`로 수정.
+  `node --check`로 JS 구문 오류 없음도 확인.
+
+  정적 파일은 pytest 대상이 아니라 신규 단위 테스트는 없음(M20-T05
+  와 동일한 성격) — 검증은 실제 서버+브라우저로 수행. `pytest`
+  (715개, 변경 없음), `ruff`, `mypy` 통과. 다음 Task: **M21-T07**
+  (전체 흐름 검증 + 문서화).
+- 의존성: M21-T05.
 
 #### M21-T05: Automation API + Dashboard 연계
 - 상태: **DONE (2026-07-27)** — `domain/dashboard.py`에
