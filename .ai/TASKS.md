@@ -7150,10 +7150,27 @@ Optional)로 이월한다.
 | M23-Prep-T04 | Backend/API 문서화 | **완료** |
 | M23-Prep-T05 | 서버 구성 문서화 | **완료** |
 | M23-Prep-T06 | Client 및 프로젝트 이력 정리 | **완료** |
-| M23-Prep-T07 | 운영 문서 및 검증 | 진행 예정 |
+| M23-Prep-T07 | 운영 문서 및 검증 | **완료** |
 | M23-Prep-T08 (Optional) | Obsidian MCP 연동 — Claude Code 도입 시점으로 이월 | 보류 |
 
-**진행 상태**: M23-Prep-T01~T06 완료. M23-Prep-T07 진행 예정.
+**진행 상태**: M23-Prep-T01~T07 전체 완료. 아래 "M23-Preparation
+Review" 참고.
+
+#### M23-Prep-T07: 운영 문서 및 검증
+- 상태: **DONE (2026-07-27)** — `12 Decisions/Decisions Index.md`
+  신규(ADR보다 가벼운 "왜?" 메모, Status 필드 포함 — CQRS/EventBus/
+  Core Domain 분리는 "확정", Server-iOS 저장소 분리 여부는 "미정"으로
+  정직하게 기록). `13 Daily/README.md` 신규(Daily Note 사용법,
+  [[Template - Daily]] 안내 — Daily Note는 Index 문서가 아니므로
+  "원문" 섹션을 강제하지 않음을 명시). Vault 전체 검증: (1) 전체
+  `[[Backlink]]` 스캔 결과 미해결 링크 0건(순수 텍스트 설명 중
+  "이중 대괄호" 표현 1건은 오탐, 실제 깨진 링크 아님). (2) Tag Rule
+  — 21개 문서 전부 frontmatter `tags:`가 `AI_RULES.md`에 정의된
+  11종 중 하나를 사용함을 확인. (3) GitHub Link Rule — Index류
+  문서(19개) 전부 "## 원문" 섹션 보유 확인, Daily Note류(Template/
+  README)는 설계상 예외로 확인. 다음 단계: M23-Preparation 전체
+  완료 승인 요청(아래 Review).
+- 의존성: M23-Prep-T06.
 
 #### M23-Prep-T06: Client 및 프로젝트 이력 정리
 - 상태: **DONE (2026-07-27)** — `09 iOS/iOS Design.md` 신규(범위
@@ -7226,6 +7243,59 @@ Optional)로 이월한다.
   없는 폴더에는 `.gitkeep`을 둬 폴더 구조 자체가 Git에 반영되게
   했다. 다음 Task: **M23-Prep-T02**(프로젝트 개요 및 아키텍처).
 - 의존성: 없음.
+
+---
+
+## M23-Preparation Review
+
+**1. Definition of Done 체크리스트**(사용자 원본 스펙 기준 요약)
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | GitHub가 Source of Truth로 유지되고 Vault는 이를 복제하지 않음 | ✅ (`AI_RULES.md`, 모든 Index의 "원문" 섹션) |
+| 2 | Vault가 저장소 루트 `Vault/`에 체크인되어 GitHub와 함께 버전 관리 | ✅ (T01) |
+| 3 | PARA 구조(00 Inbox/01 Projects/02 Resources/03 Archives) | ✅ (T01) |
+| 4 | `00 System/AI_CONTEXT.md`, `AI_RULES.md` | ✅ (T01) |
+| 5 | Backlink Rule(`[[Wikilink]]`) 적용 | ✅ (T02~T07, 미해결 링크 0건) |
+| 6 | Tag Rule(11종 태그) 적용 | ✅ (T01 정의, T07 검증) |
+| 7 | GitHub Link Rule("원문" 섹션) | ✅ (T01 Template, T07 검증) |
+| 8 | AI Reading Rule 문서화 | ✅ (T01 `AI_RULES.md`) |
+| 9 | Overview/Architecture Overview/Architecture Map | ✅ (T02) |
+| 10 | ADR Index(전문 비복제, 목적/결정/영향 요약) | ✅ (T03, 34개) |
+| 11 | Backend Index/API Catalog | ✅ (T04) |
+| 12 | Dashboard/Automation/Production Index | ✅ (T05) |
+| 13 | iOS Design(설계만)/Android Placeholder | ✅ (T06) |
+| 14 | Milestones Index(M1~M22) | ✅ (T06) |
+| 15 | Decisions Index | ✅ (T07) |
+| 16 | Daily Notes Template/사용법 | ✅ (T01 Template, T07 README) |
+| 17 | Template 6종 | ✅ (T01) |
+| 18 | Vault 전체 링크/태그/원문 섹션 검증 | ✅ (T07) |
+
+**2. 산출물 요약**
+
+- 신규 문서 19개(Index/Design류) + Template 6개 + System 문서 2개
+  + Daily README 1개 = 총 28개 Markdown 파일.
+- Obsidian MCP 연동(T08, Optional)은 사용자 지시대로 보류 —
+  Claude Code 도입 시점에 별도 Task로 이월.
+
+**3. 원칙 준수 확인**
+
+- GitHub 원문을 복사한 곳 없음 — 모든 Index가 요약 + 링크로만
+  구성됨(특히 ADR Index가 34개 ADR을 각 3줄로 압축).
+- Core Domain은 Dashboard/Automation/Production을 모른다는 원칙과
+  동일하게, Vault도 GitHub 문서 구조를 그대로 반영하되 원문을
+  소유하지 않음.
+- M23(Mobile Experience) 착수 전 필요한 배경지식(Backend 구조,
+  API 목록, Production 표준 필드, 기존 Milestone 이력)이 한 곳에
+  정리되어 다음 세션이 GitHub 전체를 다시 훑지 않고도 M23을 시작할
+  수 있는 상태.
+
+**4. Out of Scope 확인**
+
+- MCP 연동(T08) — 이번 범위 아님, 보류.
+- Vault 내용에 대한 자동 동기화/알림 — 이번 범위 아님.
+
+Task List(M23-Prep-T01~T07) 전체 완료. 사용자 승인 대기.
 
 ---
 
