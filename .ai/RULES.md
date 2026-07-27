@@ -2,14 +2,24 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.4.0 |
-| 작성일 | 2026-07-25 |
+| 문서 버전 | v0.5.0 |
+| 작성일 | 2026-07-27 |
 | 적용 대상 | 이 저장소에서 작업하는 모든 AI 구현 엔진(Claude Code, Codex, Gemini CLI 등) 및 기여자 |
 
 이 문서는 AI Workspace 프로젝트에서 **반드시 지켜야 하는 개발 규칙**을 정의한다.
 아래 규칙은 사용자가 제시한 개발 철학을 프로젝트 내부 규정으로 명문화한 것이며,
 모든 Task 수행 시 최우선으로 준수해야 한다.
 
+> **v0.5.0 변경 (GitHub Flow Migration, M24-T04)**: 신규 §8 Git Branch
+> Strategy(GitHub Flow) 추가. 이 저장소는 2026-07-27부로 `main` 단일
+> 상시 브랜치 + 짧은 수명 작업 브랜치(`feature/*`/`fix/*`/`docs/*`/
+> `refactor/*`/`chore/*`) + Pull Request 기반 GitHub Flow를 공식
+> 브랜치 전략으로 채택한다. 이전 세션들이 써 온 `claude/*` 브랜치명
+> 패턴은 더 이상 쓰지 않는다 — Default Branch가 세션이 생성한 임시
+> 브랜치명으로 고정되는 문제(Git Vault Sync 등 표준 Git 클라이언트와의
+> 호환성 저해)가 실제로 발생해 바로잡았다(상세 경위는 `.ai/TASKS.md`의
+> "GitHub Flow Migration" 절 참고).
+>
 > **v0.4.0 변경 (설계 철학 공식 채택, DX-02)**: Milestone 2 T2-07 진행 중
 > 사용자가 제시한 설계 철학(Architecture First 강화·최소 복잡성·YAGNI·
 > 점진적 확장·응집도·기존 코드 존중)을 프로젝트 영구 규칙으로 승격했다.
@@ -367,3 +377,52 @@ Milestone에서 해당 단계의 구현이 완료되면 이 섹션과 진행 경
 돕는 **Manual Recommendation Executor**다. M3에서 Engine Runtime/Engine
 Adapter가 완성되면 실행기만 Auto Recommendation Executor로 교체되며,
 Recommendation 구조와 추천 알고리즘은 그대로 이어진다.
+
+---
+
+## 8. Git Branch Strategy — GitHub Flow (M24-T04, 2026-07-27)
+
+이 저장소는 **GitHub Flow**를 공식 브랜치 전략으로 따른다. `main` 하나만
+상시 존재하는 안정 브랜치이며, 모든 작업은 짧은 수명의 작업 브랜치에서
+진행한 뒤 Pull Request로 `main`에 합류한다.
+
+### 8.1 Default Branch
+- `main`이 이 저장소의 유일한 Default/상시 브랜치다.
+- `main`은 항상 배포 가능한(정상 테스트를 통과하는) 상태를 유지한다.
+
+### 8.2 작업 브랜치 생성 규칙
+- 모든 작업 브랜치는 **항상 `main`에서** 새로 만든다(다른 작업 브랜치에서
+  분기하지 않는다).
+- 허용되는 브랜치 접두사(prefix):
+  - `feature/*` — 새 기능
+  - `fix/*` — 버그 수정
+  - `docs/*` — 문서만 변경
+  - `refactor/*` — 동작 변경 없는 리팩터링
+  - `chore/*` — 빌드/설정/의존성 등 그 외 유지보수
+- 금지되는 브랜치명:
+  - `claude/*` — AI 세션이 자동 생성하는 임시 브랜치명 패턴. 과거 이
+    패턴이 실수로 Default Branch 자리를 차지해 Git Vault Sync 등
+    표준 Git 클라이언트와 호환성 문제를 일으킨 적이 있어(2026-07-27
+    확인) 금지한다.
+  - `develop` — Git Flow의 상시 통합 브랜치 개념. 이 저장소는 GitHub
+    Flow(단일 `main`)를 쓰므로 존재해서는 안 된다.
+  - `release/*`, `hotfix/*` — Git Flow 전용 브랜치 유형. 이 저장소의
+    배포 모델에는 해당 개념이 없다.
+
+### 8.3 Pull Request 및 Merge
+- 작업 브랜치의 변경은 Pull Request를 통해서만 `main`에 반영한다.
+- Merge 전 관련 테스트(`pytest`)와 `ruff`/`mypy`를 통과해야 한다(§2.3
+  Test Before Complete).
+- **Merge가 끝난 작업 브랜치는 삭제한다** — `main`에 이미 반영된 브랜치를
+  계속 남겨 두지 않는다.
+
+### 8.4 AI 구현 엔진(Claude Code 등)에 대한 구속력
+- 이 저장소에서 작업하는 모든 AI 세션은 새 작업을 시작할 때 `claude/*`
+  형식의 브랜치를 만들지 않는다 — §8.2의 허용 접두사 중 작업 성격에
+  맞는 것을 사용한다(예: 새 기능이면 `feature/*`, 문서 정리면 `docs/*`).
+- 세션 환경이 기본적으로 `claude/*` 브랜치명을 자동 생성해 준다면, 그
+  이름을 그대로 쓰지 않고 §8.2 접두사로 즉시 rename하거나 새 브랜치를
+  만들어 전환한다.
+- PR 없이 `main`에 직접 push하지 않는다(단, Fast-forward만으로 이력이
+  정확히 일치함을 사전에 확인한 관리 작업은 예외로 다룰 수 있다 — 이
+  경우에도 충돌 검증·테스트·보고 절차는 동일하게 따른다).
