@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.18.0 |
+| 문서 버전 | v0.19.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~21 완료, v0.5.0 아키텍처 기준선 선언, Milestone 21에서 `AutomationRepository` Interface 신설(27종) — ADR-0033. Milestone 22(Production Platform) 착수) |
+| 상태 | Draft (Milestone 1~22 완료, v0.5.0 아키텍처 기준선 선언, Milestone 22에서 Production Platform 도입 — ADR-0034(새 Interface 없이 27종 유지). Milestone 23(Mobile Experience) 목표 검토 중) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -906,8 +906,9 @@ Review" 참고).
 | M22-T06 | Dashboard Health 화면 | **완료** |
 | M22-T07 | 전체 흐름 검증 + 문서화 | **완료** |
 
-**진행 상태**: M22-T01~T07 전체 완료. Milestone 22 Review 상세는
-`.ai/TASKS.md`의 "Milestone 22 Review" 참고(사용자 승인 대기).
+**진행 상태**: M22-T01~T07 전체 완료. **2026-07-27 사용자 승인으로
+Milestone 22 공식 종료**(상세는 `.ai/TASKS.md`의 "Milestone 22
+Review" 참고).
 
 ---
 

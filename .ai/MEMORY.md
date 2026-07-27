@@ -729,6 +729,56 @@
   정합성 있는 설계를 후속 Milestone으로 이월), Dashboard 서버의
   `InMemoryEngineRegistry`에 실제 `EngineAdapter`가 등록돼 있지
   않음(Workspace Core/CLI 경로와의 실제 통합은 Out of Scope로 이월).
+- **Milestone 22(Production Platform) 완료 — 2026-07-27 사용자
+  승인.** 목표는 "AI Workspace를 실제 운영 가능한 Production
+  Platform으로 확장 — 비즈니스 로직 추가 없음, Server Runtime의
+  Lifecycle/Configuration/Health/Logging만 담당"(MVP). 사용자 최종
+  승인 조건 5개: (1) Configuration은 Infrastructure Layer의
+  Immutable 설정 객체, (2) `LifecycleManager`는 생성이 아닌
+  생명주기(Startup/Shutdown)만 관리, (3) `HealthMonitor`는 조회
+  전용(Read Model), (4) Dashboard Health는 기존 `DashboardService`
+  를 확장, (5) `uptime`/`started_at`/`version`/`health_status`를
+  표준 상태 정보로 제공해 M23 재사용 대비. Kickoff 논의에서 추가
+  확정: Version API는 `pyproject.toml`의 아키텍처 기준선 버전
+  (ADR-0024)과 별개의 `WORKSPACE_VERSION` 상수로 관리, Health
+  Monitor의 "Engine" 항목은 `EngineRegistry` Interface를 확장하지
+  않고 구조적 연결 여부만 확인, Graceful Shutdown은 별도 계측 없이
+  기존 `DashboardService.workspace_status()`(M20)를 폴링해 구현.
+  `runtime/production/`(신규 패키지)에 `ProductionConfig`(frozen
+  dataclass)+`load_production_config()`(기본값→YAML 파일→
+  `AI_WORKSPACE_` Env Var 순으로 겹쳐 씀, `storage/
+  llm_policy_loader.py`와 동일한 로더 분리 패턴)/`configure_logging()`
+  (표준 `logging`, Console+File)/`LifecycleManager`(STARTUP/
+  RUNNING/SHUTDOWN, Graceful Shutdown은 실행 중 Task 완료를
+  기다리되 타임아웃 후 강제 개입 없음)/`HealthMonitor`(Server/
+  Dashboard/Automation/EventBus/Engine 5개 컴포넌트를 가장 나쁜
+  상태로 집계)/`WORKSPACE_VERSION`+`get_git_commit_hash()`. Dashboard
+  Health는 **기존 `DashboardService`를 확장**(선택적
+  `health_monitor` DI + `production_status()`, M21
+  `automation_service`와 동일한 Reader→Reader 패턴)해 구현했는데,
+  이 과정에서 `DashboardService`↔`HealthMonitor`(및
+  `LifecycleManager`)가 서로를 참조하고 싶어 하는 이 프로젝트 첫
+  순환 참조 상황이 발생 — `TYPE_CHECKING` 가드로 타입 힌트만
+  지연 import해 런타임 순환을 없애고, `DashboardService.
+  attach_health_monitor()`(생성 후 연결)로 조립 순서 문제를 풀었다
+  (실제 순환 의존은 아님을 ADR-0034에 명시). `web/production_routes.py`
+  에 `GET /api/health`(컴포넌트별 상세)/`GET /api/config`/
+  `GET /api/version`/`GET /api/status`(4개 표준 필드만 담은 경량
+  요약, M23 재사용 대비) 4종 추가. `web/app.py`가 `production_config`
+  /`lifecycle_manager`/`health_monitor` 3개 모두 주입해야만
+  Production 라우터를 등록(기존 M20/M21 호출부 무영향), `lifespan`
+  이 `LifecycleManager`에 위임해 Graceful Shutdown을 tick Task
+  취소보다 먼저 수행. `web/server.py`가 Configuration을 로드해
+  전체 스택을 조립, CLI `--host`/`--port` 기본값을 `None`으로
+  바꿔 미지정 시 Configuration이 살아있게 함. 실제 `uvicorn.run()`
+  서버에 `curl`로 Lifecycle 전이·CLI 오버라이드를 확인, 실제
+  Chromium(Playwright)으로 "Production 현황" 화면 렌더링을 확인.
+  신규 소스 파일 7개, 기존 파일 수정 6개(전부 선택적 DI/기본값
+  유지). 전체 `pytest` 771개(M21 완료 720개 → M22에서 51개 신규)
+  통과, `ruff`/`mypy` 클린. **새 최상위 Interface 0개**(전부 구체
+  클래스/dataclass, M19에 이어 두 번째 "새 Interface 없이도 ADR
+  작성" 사례)로 ADR-0034 기록. 새로 발생한 기술 부채 없음(순환
+  참조는 우회가 아니라 `TYPE_CHECKING`으로 근본 해결).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
