@@ -7123,8 +7123,56 @@ ADR-0034 작성), 테스트 결과 문서화 완료(4절, 771개 전부 통과 +
 
 **Milestone 22 종료 — 2026-07-27 사용자 승인.**
 
-**Milestone 23 상태**: 목표 검토 중 — 아래 "Milestone 23" 절 참고
-(범위 확정 전, Task List 초안 논의 단계).
+**Milestone 23 상태**: 착수 전 — M23-Preparation(Obsidian Knowledge
+Base 구축)을 먼저 진행한다. 아래 "M23-Preparation" 절 참고.
+
+---
+
+## M23-Preparation — Obsidian Knowledge Base 구축
+
+**목표**: Mobile Experience(M23) 착수 전 AI Workspace의 장기
+Knowledge Base를 구축한다. GitHub는 Source of Truth를 유지하고,
+Obsidian Vault는 GitHub 문서를 빠르게 탐색하기 위한 지식
+Index(요약+링크, 원문 비복제)를 제공한다(2026-07-27 사용자 확정).
+PARA 구조(`00 Inbox`/`01 Projects`/`02 Resources`/`03 Archives`)를
+따르며, 저장소 루트의 `Vault/`에 체크인해 GitHub와 함께 버전
+관리한다. MCP 연동(Obsidian을 AI가 직접 읽고 쓰게 하는 것)은 이번
+범위가 아니다 — Claude Code 도입 시점의 별도 Task(M23-Prep-T08,
+Optional)로 이월한다.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M23-Prep-T01 | Vault 초기 구성 및 시스템 문서 작성 | **완료** |
+| M23-Prep-T02 | 프로젝트 개요 및 아키텍처 작성 | 진행 예정 |
+| M23-Prep-T03 | ADR 정리 | 진행 예정 |
+| M23-Prep-T04 | Backend/API 문서화 | 진행 예정 |
+| M23-Prep-T05 | 서버 구성 문서화 | 진행 예정 |
+| M23-Prep-T06 | Client 및 프로젝트 이력 정리 | 진행 예정 |
+| M23-Prep-T07 | 운영 문서 및 검증 | 진행 예정 |
+| M23-Prep-T08 (Optional) | Obsidian MCP 연동 — Claude Code 도입 시점으로 이월 | 보류 |
+
+**진행 상태**: M23-Prep-T01 완료. M23-Prep-T02 진행 예정.
+
+#### M23-Prep-T01: Vault 초기 구성 및 시스템 문서
+- 상태: **DONE (2026-07-27)** — 저장소 루트에 `Vault/`(PARA 구조)
+  생성: `00 Inbox`/`01 Projects/AI Workspace/`(00 System~99
+  Templates 16개 하위 폴더)/`02 Resources`/`03 Archives`. `00
+  System/AI_CONTEXT.md`(AI가 Vault를 열었을 때 가장 먼저 읽는
+  문서 — 프로젝트 정의, Source of Truth는 GitHub임을 명시, 읽기
+  순서 안내)와 `AI_RULES.md`(Vault가 코드 저장소가 아니고 GitHub를
+  대체/수정/복제하지 않는다는 원칙, Backlink Rule/Tag Rule
+  (`#backend #ios #android #dashboard #automation #production
+  #architecture #decision #api #milestone #system`)/GitHub Link
+  Rule(Index 문서 마지막에 "원문" 섹션)/AI Reading Rule(작업별
+  최소 문서만 읽고 필요 시 GitHub 원문 확인)) 신규. `99 Templates/`
+  에 6종 Template(Architecture/ADR Summary/API/Decision/Milestone/
+  Daily) 신규 — 전부 frontmatter 태그 + Backlink + "원문" 섹션
+  틀을 포함해 이후 Task가 이 틀을 그대로 채우도록 함. 아직 내용이
+  없는 폴더에는 `.gitkeep`을 둬 폴더 구조 자체가 Git에 반영되게
+  했다. 다음 Task: **M23-Prep-T02**(프로젝트 개요 및 아키텍처).
+- 의존성: 없음.
 
 ---
 
