@@ -5675,11 +5675,35 @@ Credential 관리, Engine Selection/Budget/Knowledge 개선,
 | Task | 내용 | 상태 |
 |---|---|---|
 | M19-T01 | Reliability Domain 정의(`RetryPolicy` 확장, `RetryDecision`, `RetryExecutor`) | **완료** |
-| M19-T02 | Execution Reliability 구현(Retry/Timeout/Cancellation, `ExecutionDispatcher` 연동) | 진행 예정 |
+| M19-T02 | Execution Reliability 구현(Retry/Timeout/Cancellation, `ExecutionDispatcher` 연동) | **완료** |
 | M19-T03 | End-to-End 통합 테스트 | 진행 예정 |
 | M19-T04 | 문서화 + Milestone 19 Review | 진행 예정 |
 
-**진행 상태**: M19-T01 완료. M19-T02 진행 중.
+**진행 상태**: M19-T01~T02 완료. M19-T03 진행 중.
+
+#### M19-T02: Execution Reliability 구현
+- 상태: **DONE (2026-07-27)** — `domain/execution_result.py`의
+  `EngineExecutionResult`에 `retry_count: int = 0`/`cancelled: bool =
+  False`/`timed_out: bool = False`(전부 기본값, M18 호출부 무영향)
+  추가. `ExecutionDispatcher`를 `RetryExecutor`에 연결 — "인증 확인→
+  Registry 조회→Adapter 실행" 전체를 한 번의 시도로 묶어
+  `RetryExecutor.execute()`에 위임(재시도 로직을 직접 구현하지 않음,
+  DoD 2/12). 기본 `RetryPolicy`는 `non_retryable_exceptions=
+  (AuthenticationRequiredError, EngineNotRegisteredError,
+  NoSuitableEngineError)`로 구성(재정의하려면 `retry_policy` 주입).
+  `EngineExecutionError`가 재시도를 소진하면 예외를 그대로 전파하는
+  대신 `EngineExecutionResult(success=False, timed_out=<휴리스틱>)`
+  로 변환 — `_looks_like_timeout()`이 "응답하지 않았습니다" 메시지
+  마커로 판정한다(**ADR-0031에 기술 부채로 명시**, `EngineAdapter`
+  인터페이스를 바꾸지 않는 제약 때문에 완전한 구분 불가). 취소는
+  `EngineResult.error == "cancelled"`(기존 `EngineAdapter`의 sentinel
+  그대로 재사용, 새 문자열 규칙 없음— 사용자 승인 조건 2)로 판정해
+  재시도 루프를 타지 않고 즉시 `cancelled=True`로 반영. 단위 테스트
+  6개 신규(재시도 후 성공/Timeout 소진 후 실패 결과+timed_out/취소
+  즉시 반영+재시도 없음/인증 실패 재시도 없음/미등록 Engine 재시도
+  없음/소스 검사로 RetryExecutor 위임 확인). `pytest`(584개), `ruff`,
+  `mypy` 통과. 다음 Task: **M19-T03**(End-to-End 통합 테스트).
+- 의존성: M19-T01.
 
 #### M19-T01: Reliability Domain 정의
 - 상태: **DONE (2026-07-27)** — `domain/retry_policy.py`의 기존
