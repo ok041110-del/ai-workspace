@@ -5341,6 +5341,8 @@ Interface First 검토 완료(3절, 새 Interface 2개를 "신규 계층 도입"
 
 **사용자 승인을 조건으로 Milestone 17 Completed를 선언한다.**
 
+**Milestone 17 종료 — 2026-07-27 사용자 승인.**
+
 **Milestone 18 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
 않았다. 사용자가 예고한 다음 단계는 Execution — M17의
 `EngineSelectionDecision`을 실제 `CodingAgent` 실행 경로에 연결하는

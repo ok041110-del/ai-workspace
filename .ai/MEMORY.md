@@ -532,6 +532,39 @@
   이월 부채는 M15와 동일하게 유지(신규 이월 없음 — Review/
   Documentation Agent로의 확장, `KnowledgeIndexer`, Semantic
   Search는 전부 "사용자가 이번 범위에서 의도적으로 제외"한 항목).
+- **Milestone 17(Intelligent Engine Selection) 완료 — 2026-07-27
+  사용자 승인.** 목표는 "Task+Budget(M15)+Knowledge(M16)+등록된
+  Engine 후보를 종합해 최적 Engine을 결정만 한다"(Decision Only,
+  실행 연결은 M18). **핵심 발견**: `EngineRuntime`은 `required_
+  capabilities`를 만족하는 등록된 Engine 중 첫 매칭만 고를 뿐, 여러
+  후보를 나열·비교하는 방법이 없었다. **사용자 승인 조건**: (1)
+  Decision Only 유지, (2) `EngineSelectionDecision`에 `reason` 포함,
+  (3) 가능하면 `EngineRuntime.list_candidates()` 대신 기존 Registry/
+  Manager 계층 활용 — 조사 결과 `AgentRegistry`에 대응하는 기존
+  Engine Registry가 없어 `AgentManager`/`AgentRegistry` 분리와 동일한
+  패턴으로 신규 `EngineRegistry`를 도입(신규 **ADR-0029**,
+  `EngineRuntime`의 실행 계약은 전혀 확장하지 않음). `domain/
+  engine_selection.py`에 `EngineCandidate`/`EngineSelectionDecision`
+  (Provider 독립), `interfaces/engine_registry.py`의
+  `EngineRegistry`(`register`/`get`/`list_candidates`, 세션 미생성),
+  `interfaces/engine_selection_policy.py`의 `EngineSelectionPolicy`
+  (후보가 어디서 왔는지 모름 — 조회/판단 책임 분리). `engines/
+  engine_selection_policy.py`의 `InMemoryEngineSelectionPolicy`가
+  `BudgetPolicyEngine.check()`를 재사용(M15, 예산 비교 로직 중복
+  없음)해 예산 내 최저 비용 후보를 선택, Knowledge는 `reason`에만
+  참고 반영. **결정과 실행의 분리**를 실제 `CodingAgent` 파이프라인
+  실행 결과 + `inspect.signature()` 이중 증명(다른 Engine을 추천해도
+  실제 실행은 영향받지 않음, `CodingAgent` 생성자에 관련 파라미터
+  자체가 없음). 신규 소스 파일 5개, **기존 소스 파일 수정 0개**(M1
+  이후 유일하게 기존 파일을 전혀 건드리지 않은 Milestone). 전체
+  `pytest` 553개(M16 완료 532개 → M17에서 21개 신규) 통과, `ruff`/
+  `mypy` 클린. **새 최상위 Interface 2개**(`EngineRegistry`/
+  `EngineSelectionPolicy`) 추가, 기존 Interface는 하나도 확장하지
+  않음(M14/M15/M16과 다른 패턴) — ADR-0017/0025/0028과 동일한 "신규
+  계층 도입" 계열로 ADR-0029 기록. 이월 부채는 M16과 동일하게 유지
+  (신규 이월: 실행 연결은 M18 예정으로 명시적으로 분리, Model 수준
+  결정/ML 기반 고급 판단은 "사용자가 이번 범위에서 의도적으로 제외"
+  한 항목이라 기존 부채 목록에는 추가하지 않음).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -680,6 +713,7 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR-0026 | `EngineAdapter`/`EngineRuntime`에 `model` 파라미터 확장(Model 라우팅, `ClaudeCodeEngineAdapter`만 적용) | 승인됨 |
 | ADR-0027 | `EngineRuntime`에 `estimate_cost()` 추가 + `BudgetPolicyEngine` 신설(Token & Cost Optimization) | 승인됨 |
 | ADR-0028 | Project Knowledge System 도입(`KnowledgeRepository`/`KnowledgeSearch`/`KnowledgeProvider`), 기존 `MemoryEngine`과 분리 | 승인됨 |
+| ADR-0029 | Intelligent Engine Selection 도입(`EngineRegistry`+`EngineSelectionPolicy`, Decision Only), `EngineRuntime` 계약 미확장 | 승인됨 |
 
 기술 스택(Python, dataclasses, 파일 기반 저장, CLI, 인메모리 Event Bus+파일
 Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
@@ -717,14 +751,14 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-27)**: Milestone 1~16 전체 완료(사용자 승인).
-  Milestone 17(Intelligent Engine Selection)은 착수 시점(Task
-  Driven Development 원칙, 목표/DoD/Task List는 착수 시 새로 정의).
-  버전 v0.5.0 유지(ADR-0024 기준선 — M16까지의 변경은 전부 기존
-  계약 위에서의 추가·확장이거나 M5/M11/M17과 같은 "신규 계층 도입"
-  계열이라 기준선 재선언 대상이 아니라고 판단했으나, M16에서
-  Interface가 19→22종으로 크게 늘어난 만큼 다음 기준선 재검토 시점에
-  M16까지의 누적 변화를 함께 검토할 필요가 있음). `pytest` 532개,
+- **현재 상태(2026-07-27)**: Milestone 1~17 전체 완료(사용자 승인).
+  Milestone 18(Multi-Engine Execution Integration)은 검토 시작 시점
+  (Task Driven Development 원칙, 목표/DoD/Task List는 착수 시 새로
+  정의). 버전 v0.5.0 유지(ADR-0024 기준선 — M17까지의 변경은 전부
+  기존 계약 위에서의 추가·확장이거나 M5/M11/M16/M17과 같은 "신규
+  계층 도입" 계열이라 기준선 재선언 대상이 아니라고 판단했으나,
+  M16+M17에서 Interface가 19→24종으로 크게 늘어난 만큼 다음 기준선
+  재검토 시점에 누적 변화를 함께 검토할 필요가 있음). `pytest` 553개,
   `ruff`/`mypy` 클린.
 - **이 환경의 제약(2026-07-26 확인)**: `claude` CLI만 설치되어 있고
   `codex`/`gemini` CLI는 설치되어 있지 않다(`which` 확인). Codex/Gemini
