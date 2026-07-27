@@ -4815,12 +4815,90 @@ Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 3/
 
 **Milestone 15 종료 — 2026-07-27 사용자 승인.**
 
-**Milestone 16 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
-않았다. 사용자가 예고한 다음 단계는 Obsidian 도입 여부 검토 후
-그 결과를 반영해 Memory Engine의 목표/구조를 확정하는 것이다 — 이는
-사전 논의 없이 확정된 것이 아니며, Milestone 16은 착수 시점에 이
-문서에 목표/DoD/Task List를 새로 정의한다(Task Driven Development
-원칙, M2~M15가 그래왔듯).
+**Milestone 16 상태**: 착수 확정. 아래 "Milestone 16" 절 참고.
+
+---
+
+## Milestone 16 — Project Knowledge System (Memory Engine)
+
+**목표**: 프로젝트의 기존 문서(`docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`/
+`.ai/RULES.md`/`.ai/TASKS.md`/`docs/ROADMAP.md`/`docs/PRD.md`)를 있는
+그대로(재작성 없이) Workspace 전용 Knowledge로 노출하고, Agent가 이를
+Keyword 기반으로 검색해 실행 컨텍스트에 참고할 수 있게 한다(2026-07-27
+사용자 확정). Provider/Engine/Agent 독립 — Claude/GPT/Gemini 어떤
+조합이든 같은 Knowledge를 참조한다. ChatGPT Memory나 Chat History가
+아니다.
+
+> **설계 검토에서 발견한 사실**: `interfaces/memory_engine.py`의
+> `MemoryEngine`은 M1부터 이미 존재하지만, `ContextManager`가 감싸서
+> **Mission 요약/세션 연속성**(M8-T03)에 쓰는 완전히 다른 개념이다.
+> 이름을 재사용하면 "세션 기억"과 "프로젝트 지식"이 섞이므로, 이번
+> Milestone은 `KnowledgeRepository`/`KnowledgeSearch`/
+> `KnowledgeProvider`라는 새 이름의 컴포넌트로 만들고 기존
+> `MemoryEngine`은 손대지 않는다(사용자 최종 승인).
+
+**설계 방향**: `domain/knowledge.py`에 `KnowledgeDocument`/
+`KnowledgeKind`(ARCHITECTURE/ADR/RULE/TASK/PROJECT 5종 — ADR과
+Decision, Workflow와 Task는 대응 파일이 하나뿐이라 통합, YAGNI).
+`KnowledgeRepository` Interface + `FileKnowledgeRepository`(파일
+하나 = 문서 하나, 문단 단위로 쪼개지 않음). `KnowledgeSearch`
+Interface(Keyword 기반, 기존 `MemoryEngine.search()`와 동일한 단순
+포함 검색). `KnowledgeProvider` Interface — Agent가 의존하는 유일한
+진입점(`ContextManager`가 `MemoryEngine`을 감싸는 것과 동일한 패턴).
+`KnowledgeIndexer`는 문서 수가 적어 성능 문제가 없어 이번 범위에서
+제외(YAGNI, 사용자 승인). `CodingAgent`에 선택적 `knowledge_provider`
+DI를 추가해, `DevelopmentContext`에 검색된 Knowledge를 반영한다.
+
+**Non-goal(범위 밖)**: Chat History 저장, Conversation Memory, User
+Profile Memory, Vector Database, Embedding, Semantic Search, RAG,
+MCP, 외부 Knowledge 연동, Obsidian API 연동, `KnowledgeIndexer`
+(영속 Index 자료구조).
+
+**Milestone Definition of Done**
+1. `KnowledgeDocument`/`KnowledgeKind`가 특정 Provider/Engine을 전혀
+   참조하지 않는다.
+2. `KnowledgeRepository`가 프로젝트 문서 파일을 읽어
+   `KnowledgeDocument` 목록으로 노출한다.
+3. `KnowledgeSearch`가 Keyword 기반으로 `KnowledgeRepository`의
+   문서를 검색한다.
+4. `KnowledgeProvider`가 Agent에게 노출되는 유일한 진입점이다 —
+   Agent는 `KnowledgeRepository`/`KnowledgeSearch`를 직접 알지
+   못한다.
+5. `CodingAgent`가 `knowledge_provider` 주입 시 검색된 Knowledge를
+   실행 프롬프트에 반영함이 통합 테스트로 증명된다. 미주입 시 기존과
+   완전히 동일(하위 호환).
+6. LLM 호출 없음 — `KnowledgeSearch`/`KnowledgeProvider`는 side-effect
+   없는 순수 조회다.
+7. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M16-T01 | `KnowledgeDocument`/`KnowledgeKind` domain + `KnowledgeRepository` Interface + `FileKnowledgeRepository` | **완료** |
+| M16-T02 | `KnowledgeSearch`/`KnowledgeProvider` + `CodingAgent` 연동(선택적 DI) | 진행 예정 |
+| M16-T03 | End-to-End 통합 테스트(실제 Markdown 문서 검색 + Agent Prompt 반영) | 진행 예정 |
+| M16-T04 | 문서화 + Milestone 16 Review | 진행 예정 |
+
+**진행 상태**: M16-T01 완료. M16-T02 진행 중.
+
+#### M16-T01: `KnowledgeDocument`/`KnowledgeKind` domain + `KnowledgeRepository` Interface + 구현체
+- 상태: **DONE (2026-07-27)** — `domain/knowledge.py`에
+  `KnowledgeKind`(ARCHITECTURE/ADR/RULE/TASK/PROJECT 5종)/
+  `KnowledgeDocument`(document_id/kind/title/content/source_path)
+  신규(Provider/Engine 독립). `interfaces/knowledge_repository.py`에
+  `KnowledgeRepository`(`list_all`/`get`, side-effect 없음,
+  `ProjectRepository`와 동일한 설계이나 읽기 전용이라 `save()` 없음)
+  신규. `storage/file_knowledge_repository.py`에
+  `FileKnowledgeRepository` 신규 — 고정 파일→kind 매핑
+  (`DEFAULT_KNOWLEDGE_FILE_MAP`: `docs/ARCHITECTURE.md`→ARCHITECTURE,
+  `.ai/DECISIONS.md`→ADR, `.ai/RULES.md`→RULE, `.ai/TASKS.md`→TASK,
+  `docs/ROADMAP.md`/`docs/PRD.md`→PROJECT)로 파일 하나를 문서 하나로
+  노출, 존재하는 파일만 반환, 제목은 첫 non-empty 줄에서 추출. 단위
+  테스트 8개 신규(domain 2개, storage 6개 — 실제 이 저장소의
+  `docs/ARCHITECTURE.md` 등을 실제로 읽어 목록에 포함되는지까지
+  확인). `pytest`(519개), `ruff`, `mypy` 통과. 다음 Task: **M16-T02**.
+- 의존성: 없음.
 
 ---
 

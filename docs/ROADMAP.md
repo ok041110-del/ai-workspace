@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~15 완료, v0.5.0 아키텍처 기준선 선언, Milestone 16(Project Knowledge System) 착수) |
+| 상태 | Draft (Milestone 1~15 완료, v0.5.0 아키텍처 기준선 선언, Milestone 16(Project Knowledge System) 진행 중) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -679,6 +679,42 @@ Review" 참고). **Milestone 14 완료 — 2026-07-26 사용자 승인.**
 **진행 상태**: M15-T01~T04 전체 완료. Milestone DoD 1~6번 전부 충족
 확인됨. Milestone 15 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 15
 Review" 참고). **Milestone 15 완료 — 2026-07-27 사용자 승인.**
+
+---
+
+## Milestone 16 — Project Knowledge System (Memory Engine)
+
+**목표**: 프로젝트 기존 문서(ARCHITECTURE/DECISIONS/RULES/TASKS/
+ROADMAP/PRD)를 Workspace 전용 Knowledge로 노출하고, Agent가 Keyword
+기반으로 검색해 실행 컨텍스트에 참고하게 한다(Provider/Engine 독립).
+기존 `MemoryEngine`(세션 연속성)과는 이름·역할을 분리한다.
+
+**설계 방향**: `domain/knowledge.py`(`KnowledgeDocument`/
+`KnowledgeKind`) + `KnowledgeRepository`(`FileKnowledgeRepository`) +
+`KnowledgeSearch` + `KnowledgeProvider`(Agent의 유일한 진입점).
+`KnowledgeIndexer`는 YAGNI로 제외.
+
+**Milestone Definition of Done**
+1. `KnowledgeDocument`/`KnowledgeKind`가 Provider/Engine 독립.
+2. `KnowledgeRepository`가 프로젝트 문서를 `KnowledgeDocument`로 노출.
+3. `KnowledgeSearch`가 Keyword 기반으로 검색.
+4. `KnowledgeProvider`가 Agent의 유일한 진입점.
+5. `CodingAgent`가 예산 확인처럼 선택적 DI로 Knowledge를 프롬프트에
+   반영, 미주입 시 기존과 동일.
+6. LLM 호출 없음(side-effect 없는 순수 조회).
+7. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 상세는 `.ai/TASKS.md`의 "Milestone 16"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M16-T01 | `KnowledgeDocument`/`KnowledgeKind` domain + `KnowledgeRepository` + `FileKnowledgeRepository` | **완료** |
+| M16-T02 | `KnowledgeSearch`/`KnowledgeProvider` + `CodingAgent` 연동 | 진행 예정 |
+| M16-T03 | End-to-End 통합 테스트 | 진행 예정 |
+| M16-T04 | 문서화 + Milestone 16 Review | 진행 예정 |
+
+**진행 상태**: M16-T01 완료, M16-T02 진행 중.
 
 ---
 
