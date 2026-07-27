@@ -5,3 +5,8 @@ __pycache__/
 .mypy_cache/
 .venv/
 venv/
+
+# Obsidian — 캐시성 파일만 제외한다. 설정(app.json 등)은 기기 간 동일한
+# 작업 환경을 유지하기 위해 저장소에 포함해 관리한다.
+.obsidian/cache/
+.obsidian/workspace-cache/

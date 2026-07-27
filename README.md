@@ -74,6 +74,8 @@ ai-workspace/
 │   ├── TASKS.md            # 전체 Task, 진행 상태, 체크리스트
 │   ├── MEMORY.md           # 프로젝트 장기 메모리, 중요한 결정, 컨텍스트
 │   └── DECISIONS.md        # Architecture Decision Record (ADR)
+├── .obsidian/               # Obsidian 설정(iPhone/Mac 등 기기 간 공용,
+│                             #   캐시 파일만 .gitignore 처리)
 ├── src/ai_workspace/        # 애플리케이션 코드
 │   ├── domain/             # Project, Mission, Workflow, Task, Step,
 │   │                       #   WorkspaceSession, Agent 등 핵심 모델
@@ -90,6 +92,31 @@ ai-workspace/
 ├── workspace/               # 프로젝트별 실제 작업 공간 (이후 구체화)
 └── tests/                   # 테스트 코드
 ```
+
+### Obsidian 설정 관리
+
+이 저장소의 루트가 곧 Obsidian Vault Root다(Milestone 26, ADR-0037).
+`.obsidian/` 설정(테마, 활성 Core/Community Plugin, 단축키 등)도 Git으로
+함께 관리해 iPhone·Mac 등 어느 기기에서 열어도 동일한 작업 환경을
+유지한다.
+
+- `app.json`, `appearance.json`, `community-plugins.json`,
+  `core-plugins.json`, `hotkeys.json`, `workspace.json`,
+  `workspace-mobile.json`은 커밋 대상이다.
+- `.obsidian/plugins/`는 Community Plugin 설치 위치로 저장소에 존재하되,
+  현재는 빈 디렉터리다(`.gitkeep`으로 추적).
+- `.obsidian/cache/`, `.obsidian/workspace-cache/` 등 캐시성 파일만
+  `.gitignore`로 제외한다.
+- 기기 간 동기화는 Git Vault Sync(iOS)와 일반 `git pull`/`git push`
+  (Mac 등 데스크톱)로 이뤄진다 — 즉 Vault 콘텐츠(`00 System`~
+  `99 Templates`)와 `.obsidian/` 설정이 동일한 Git 이력을 통해 함께
+  동기화된다.
+- `workspace.json`/`workspace-mobile.json`은 열려 있는 탭·창 배치처럼
+  기기·세션마다 계속 바뀌는 값을 담고 있어, 여러 기기에서 동시에
+  사용하면 잦은 Git 충돌이 생길 수 있다. 이 저장소는 "동일한 작업
+  환경 유지"를 우선해 두 파일도 함께 관리하기로 했으나, 충돌이 잦다고
+  판단되면 이후 별도 승인을 거쳐 `.gitignore`로 제외하는 것을 검토할
+  수 있다.
 
 ## 개발 철학
 
