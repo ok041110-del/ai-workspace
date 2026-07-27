@@ -1,4 +1,5 @@
 from ai_workspace.domain.dashboard import (
+    AutomationStatus,
     EngineStatus,
     ExecutionRecord,
     ExecutionStats,
@@ -73,3 +74,17 @@ def test_reliability_stats_holds_given_fields() -> None:
     assert stats.timeout_count == 2
     assert stats.cancelled_count == 1
     assert stats.authentication_failure_count == 3
+
+
+def test_automation_status_holds_given_fields() -> None:
+    status = AutomationStatus(
+        registered_rule_count=3,
+        enabled_rule_count=2,
+        last_execution_at="2026-07-27T09:00:00",
+        next_execution_at="2026-07-28T09:00:00",
+    )
+
+    assert status.registered_rule_count == 3
+    assert status.enabled_rule_count == 2
+    assert status.last_execution_at == "2026-07-27T09:00:00"
+    assert status.next_execution_at == "2026-07-28T09:00:00"

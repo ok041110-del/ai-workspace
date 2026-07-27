@@ -66,3 +66,18 @@ class ReliabilityStats:
     timeout_count: int
     cancelled_count: int
     authentication_failure_count: int
+
+
+@dataclass(frozen=True)
+class AutomationStatus:
+    """Dashboard의 Automation 표시 영역 Read Model(M21-T05). Automation
+    도메인(`AutomationRule` 등)을 그대로 참조하지 않고 Dashboard가
+    필요한 집계값만 옮겨 담는다 — `ExecutionRecord`(M20)와 동일한
+    원칙. `AutomationService.list_rules()`(읽기 전용 조회)를 조합해
+    만들어지며, Dashboard는 이 값을 계산할 뿐 Automation을 제어하지
+    않는다(사용자 승인 조건 4)."""
+
+    registered_rule_count: int
+    enabled_rule_count: int
+    last_execution_at: str | None
+    next_execution_at: str | None

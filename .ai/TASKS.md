@@ -6317,11 +6317,57 @@ Rule 추천.
 | M21-T02 | `AutomationService`(CRUD) 구현 | **완료** |
 | M21-T03 | `AutomationScheduler` + Time/Interval/Startup Trigger 구현 | **완료** |
 | M21-T04 | Event Trigger + `ExecutionDispatcher` 연동 | **완료** |
-| M21-T05 | Automation API + Dashboard 연계 | 진행 예정 |
+| M21-T05 | Automation API + Dashboard 연계 | **완료** |
 | M21-T06 | Dashboard Web UI Automation 화면 | 진행 예정 |
 | M21-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M21-T01~T04 완료. M21-T05 진행 예정.
+**진행 상태**: M21-T01~T05 완료. M21-T06 진행 예정.
+
+#### M21-T05: Automation API + Dashboard 연계
+- 상태: **DONE (2026-07-27)** — `domain/dashboard.py`에
+  `AutomationStatus`(registered_rule_count/enabled_rule_count/
+  last_execution_at/next_execution_at) 신규 — `AutomationRule`을
+  그대로 참조하지 않고 필요한 집계값만 옮겨 담는다(`ExecutionRecord`
+  와 동일 원칙). `DashboardService`에 선택적 `automation_service`
+  DI(M15/M16과 동일 패턴) 추가 — `automation_status()`가
+  `AutomationService.list_rules()`(읽기 전용)만 호출해 집계하고
+  Automation을 제어하지 않는다(사용자 승인 조건 4).
+  `DashboardSnapshot`/`DashboardViewModel`에 `automation_status`
+  필드 추가(기본값 `None`이라 기존 호출부 무영향). `/api/summary`
+  에도 `automation_status` 포함.
+
+  `web/automation_routes.py`에 Automation REST API 8종
+  (GET list/get, POST create, PUT update, DELETE, POST enable/
+  disable/run) 신규. `AutomationRuleCreateRequest`/
+  `AutomationRuleUpdateRequest`(dataclass, FastAPI가 중첩
+  dataclass인 `Trigger`/`Action`까지 그대로 검증·역직렬화함을
+  실제 `TestClient` 요청으로 확인) 신규.
+  `AutomationScheduler.run_now(rule_id)` 추가 — Trigger 조건과
+  무관하게 즉시 발동(`POST /{id}/run`이 위임, `_fire()`를 그대로
+  재사용해 `ExecutionDispatcher` 유일 진입점 원칙 유지).
+
+  `web/app.py`의 `create_app()`에 `automation_service`/
+  `automation_scheduler`를 선택적으로 받아 둘 다 있을 때만
+  Automation 라우터를 등록(기존 M20 호출부 무영향). `lifespan`
+  Context Manager로 전환(기존 `on_event` 대신) — 서버 기동 시
+  `AutomationScheduler.start()`(Startup Trigger 1회 평가) +
+  `automation_tick_seconds`(기본 30초)마다 `tick()`을 도는 백그라운드
+  asyncio Task를 띄우고, 종료 시 Task를 취소해 정리한다("Scheduler는
+  Server Runtime과 함께 실행된다", DoD). `web/server.py`의
+  `build_app()`이 `InMemoryEngineRegistry`/`InMemoryAuthenticationManager`
+  /`ExecutionDispatcher`/`AutomationActionExecutor`까지 전부
+  조립해 Automation의 RUN_TASK가 실제로 동작 가능한 상태로
+  구성한다 — 다만 이 시점엔 등록된 `EngineAdapter`가 없어(실제
+  Engine 등록은 Workspace Core/CLI 경로 책임, Out of Scope) RUN_TASK
+  발동 시 `EngineNotRegisteredError`가 나지만 `AutomationScheduler`
+  가 삼켜 다른 Rule에 영향이 없다(TASKS.md에 명시적으로 기록해 둔
+  현재 범위의 한계).
+
+  단위/통합 테스트 19개 신규(domain 1, dashboard_service 2,
+  dashboard_viewmodel 2, automation_routes 11, server lifespan 3).
+  `pytest`(715개), `ruff`, `mypy` 통과. 다음 Task: **M21-T06**
+  (Dashboard Web UI Automation 화면).
+- 의존성: M21-T02, M21-T04.
 
 #### M21-T04: Event Trigger + ExecutionDispatcher 연동
 - 상태: **DONE (2026-07-27)** — `trigger_evaluator.py`에

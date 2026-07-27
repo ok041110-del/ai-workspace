@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ai_workspace.domain.dashboard import (
+    AutomationStatus,
     EngineStatus,
     ExecutionRecord,
     ExecutionStats,
@@ -84,6 +85,7 @@ class DashboardViewModel:
     execution_stats: ExecutionStats
     recent_history: list[ExecutionHistoryEntryViewModel]
     reliability_stats: ReliabilityStats
+    automation_status: AutomationStatus | None
 
 
 def build_workspace_view_model(status: WorkspaceStatus) -> WorkspaceStatusViewModel:
@@ -126,4 +128,5 @@ def build_dashboard_view_model(snapshot: DashboardSnapshot) -> DashboardViewMode
         execution_stats=snapshot.execution_stats,
         recent_history=build_history_view_models(snapshot.recent_executions),
         reliability_stats=snapshot.reliability_stats,
+        automation_status=snapshot.automation_status,
     )

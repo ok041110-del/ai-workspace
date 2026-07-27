@@ -1,7 +1,10 @@
 from datetime import datetime
 
+import pytest
+
 from ai_workspace.domain.automation import Action, ActionKind, AutomationRule, Trigger, TriggerKind
 from ai_workspace.events.event_bus import InMemoryEventBus
+from ai_workspace.interfaces.automation_repository import AutomationRuleNotFoundError
 from ai_workspace.interfaces.event_bus import Event
 from ai_workspace.runtime.automation.automation_repository import InMemoryAutomationRepository
 from ai_workspace.runtime.automation.automation_scheduler import AutomationScheduler
@@ -222,3 +225,20 @@ def test_action_executor_exception_does_not_break_other_rules() -> None:
 
     assert fired == ["r2"]
     assert repository.get("r1").last_executed_at is not None
+
+
+def test_run_now_fires_regardless_of_trigger_schedule() -> None:
+    scheduler, repository, fired = make_scheduler()
+    repository.save(make_rule("r1", Trigger(kind=TriggerKind.TIME, time_of_day="09:00")))
+
+    scheduler.run_now("r1", now=datetime(2026, 7, 27, 0, 0))
+
+    assert len(fired) == 1
+    assert repository.get("r1").last_executed_at is not None
+
+
+def test_run_now_unknown_rule_raises() -> None:
+    scheduler, _repository, _fired = make_scheduler()
+
+    with pytest.raises(AutomationRuleNotFoundError):
+        scheduler.run_now("missing")

@@ -1,6 +1,9 @@
+from ai_workspace.domain.automation import Action, ActionKind, Trigger, TriggerKind
 from ai_workspace.domain.dashboard import EngineStatus
 from ai_workspace.events.event_bus import InMemoryEventBus
 from ai_workspace.interfaces.event_bus import Event
+from ai_workspace.runtime.automation.automation_repository import InMemoryAutomationRepository
+from ai_workspace.runtime.automation.automation_service import AutomationService
 from ai_workspace.runtime.dashboard.dashboard_repository import InMemoryDashboardRepository
 from ai_workspace.runtime.dashboard.dashboard_service import KNOWN_ENGINES, DashboardService
 from ai_workspace.runtime.execution.events import ENGINE_EXECUTION_STARTED
@@ -47,6 +50,46 @@ def test_snapshot_combines_all_five_areas() -> None:
     assert snapshot.execution_stats.total == 0
     assert snapshot.recent_executions == []
     assert snapshot.reliability_stats.retry_count == 0
+
+
+def test_automation_status_is_none_without_automation_service() -> None:
+    service, _event_bus = _build_service()
+
+    assert service.automation_status() is None
+
+
+def test_automation_status_aggregates_rule_counts_and_timestamps() -> None:
+    event_bus = InMemoryEventBus()
+    repository = InMemoryDashboardRepository(event_bus=event_bus)
+    automation_repository = InMemoryAutomationRepository()
+    automation_service = AutomationService(automation_repository=automation_repository)
+    service = DashboardService(
+        dashboard_repository=repository, automation_service=automation_service
+    )
+    rule1 = automation_service.create_rule(
+        name="A",
+        description="A",
+        trigger=Trigger(kind=TriggerKind.TIME, time_of_day="09:00"),
+        action=Action(kind=ActionKind.DASHBOARD_REFRESH),
+    )
+    rule1.last_executed_at = "2026-07-27T09:00:00"
+    rule1.next_execution_at = "2026-07-28T09:00:00"
+    automation_repository.save(rule1)
+    automation_service.create_rule(
+        name="B",
+        description="B",
+        trigger=Trigger(kind=TriggerKind.STARTUP),
+        action=Action(kind=ActionKind.DASHBOARD_REFRESH),
+        enabled=False,
+    )
+
+    status = service.automation_status()
+
+    assert status is not None
+    assert status.registered_rule_count == 2
+    assert status.enabled_rule_count == 1
+    assert status.last_execution_at == "2026-07-27T09:00:00"
+    assert status.next_execution_at == "2026-07-28T09:00:00"
 
 
 def test_dashboard_service_module_has_no_web_import() -> None:

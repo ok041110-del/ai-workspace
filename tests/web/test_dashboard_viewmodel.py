@@ -1,4 +1,5 @@
 from ai_workspace.domain.dashboard import (
+    AutomationStatus,
     EngineStatus,
     ExecutionRecord,
     ExecutionStats,
@@ -69,6 +70,12 @@ def test_build_dashboard_view_model_combines_all_areas() -> None:
         execution_stats=ExecutionStats(total=1, success=1, failure=0, cancelled=0, timed_out=0),
         recent_executions=[ExecutionRecord("t1", "claude_code", True, False, False, 0, None)],
         reliability_stats=ReliabilityStats(0, 0, 0, 0),
+        automation_status=AutomationStatus(
+            registered_rule_count=1,
+            enabled_rule_count=1,
+            last_execution_at=None,
+            next_execution_at=None,
+        ),
     )
 
     view_model = build_dashboard_view_model(snapshot)
@@ -78,3 +85,19 @@ def test_build_dashboard_view_model_combines_all_areas() -> None:
     assert view_model.execution_stats.total == 1
     assert view_model.recent_history[0].result_label == "성공"
     assert view_model.reliability_stats.retry_count == 0
+    assert view_model.automation_status is not None
+    assert view_model.automation_status.registered_rule_count == 1
+
+
+def test_build_dashboard_view_model_allows_missing_automation_status() -> None:
+    snapshot = DashboardSnapshot(
+        workspace_status=WorkspaceStatus(None, None, "idle", None),
+        engine_statuses={},
+        execution_stats=ExecutionStats(total=0, success=0, failure=0, cancelled=0, timed_out=0),
+        recent_executions=[],
+        reliability_stats=ReliabilityStats(0, 0, 0, 0),
+    )
+
+    view_model = build_dashboard_view_model(snapshot)
+
+    assert view_model.automation_status is None

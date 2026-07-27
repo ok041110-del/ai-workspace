@@ -80,6 +80,14 @@ class AutomationScheduler:
             rule.next_execution_at = evaluator.compute_next_execution_at(rule, now=moment)
             self._automation_repository.save(rule)
 
+    def run_now(self, rule_id: str, *, now: datetime | None = None) -> None:
+        """`POST /api/automation/{id}/run`처럼 Trigger 조건과 무관하게
+        즉시 발동시킨다(M21-T05). `AutomationRepository`에 없는
+        rule_id면 `AutomationRuleNotFoundError`가 그대로 전파된다."""
+        moment = now or utc_now()
+        rule = self._automation_repository.get(rule_id)
+        self._fire(rule, moment)
+
     def bind_event_bus(self, event_bus: EventBus) -> None:
         """Event Trigger를 위해 `EventBus`를 구독한다(M21-T04).
         `AutomationScheduler`는 이벤트를 받을 뿐 발행하지 않는다 —

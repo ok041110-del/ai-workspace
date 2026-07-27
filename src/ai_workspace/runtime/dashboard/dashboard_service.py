@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ai_workspace.domain.dashboard import (
+    AutomationStatus,
     EngineStatus,
     ExecutionRecord,
     ExecutionStats,
@@ -10,6 +11,7 @@ from ai_workspace.domain.dashboard import (
     WorkspaceStatus,
 )
 from ai_workspace.interfaces.dashboard_repository import DashboardRepository
+from ai_workspace.runtime.automation.automation_service import AutomationService
 
 KNOWN_ENGINES: tuple[str, ...] = ("claude_code", "gemini_cli", "codex_cli", "ollama")
 """Dashboard "엔진 현황" 영역에 항상 표시할 Engine 식별자 목록(M20 DoD).
@@ -29,6 +31,7 @@ class DashboardSnapshot:
     execution_stats: ExecutionStats
     recent_executions: list[ExecutionRecord]
     reliability_stats: ReliabilityStats
+    automation_status: AutomationStatus | None = None
 
 
 class DashboardService:
@@ -36,10 +39,23 @@ class DashboardService:
     요청에 응답하는 서비스(M20-T03). **UI를 전혀 모른다** — `web/`
     계층(API/WebSocket/Web UI)을 import하지 않는다(M20-T06에서
     Architecture 의존성 검증으로 증명). 통계를 스스로 계산하지 않고
-    `DashboardRepository`가 이미 계산해 둔 값을 그대로 전달한다."""
+    `DashboardRepository`가 이미 계산해 둔 값을 그대로 전달한다.
 
-    def __init__(self, *, dashboard_repository: DashboardRepository) -> None:
+    `automation_service`는 선택적으로 주입한다(M21-T05, M15
+    `budget_policy_engine`/M16 `knowledge_provider`와 동일한 선택적
+    DI 패턴) — Automation Rule 개수/마지막·다음 실행 시각을 조회해
+    표시하기 위함이다. `AutomationService.list_rules()`(읽기 전용)만
+    호출하고 Automation을 제어하지 않는다(사용자 승인 조건 4).
+    미주입 시 `automation_status()`는 `None`을 반환한다."""
+
+    def __init__(
+        self,
+        *,
+        dashboard_repository: DashboardRepository,
+        automation_service: AutomationService | None = None,
+    ) -> None:
         self._dashboard_repository = dashboard_repository
+        self._automation_service = automation_service
 
     def snapshot(self) -> DashboardSnapshot:
         return DashboardSnapshot(
@@ -48,6 +64,7 @@ class DashboardService:
             execution_stats=self.execution_stats(),
             recent_executions=self.recent_executions(),
             reliability_stats=self.reliability_stats(),
+            automation_status=self.automation_status(),
         )
 
     def workspace_status(self) -> WorkspaceStatus:
@@ -65,3 +82,19 @@ class DashboardService:
 
     def reliability_stats(self) -> ReliabilityStats:
         return self._dashboard_repository.reliability_stats()
+
+    def automation_status(self) -> AutomationStatus | None:
+        if self._automation_service is None:
+            return None
+        rules = self._automation_service.list_rules()
+        enabled_rules = [rule for rule in rules if rule.enabled]
+        last_executions = [rule.last_executed_at for rule in rules if rule.last_executed_at]
+        next_executions = [
+            rule.next_execution_at for rule in enabled_rules if rule.next_execution_at
+        ]
+        return AutomationStatus(
+            registered_rule_count=len(rules),
+            enabled_rule_count=len(enabled_rules),
+            last_execution_at=max(last_executions) if last_executions else None,
+            next_execution_at=min(next_executions) if next_executions else None,
+        )
