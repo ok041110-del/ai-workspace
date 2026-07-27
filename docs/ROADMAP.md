@@ -899,14 +899,14 @@ Review" 참고).
 | Task | 내용 | 상태 |
 |---|---|---|
 | M22-T01 | Production Configuration + Loader | **완료** |
-| M22-T02 | Production Logging | 진행 예정 |
+| M22-T02 | Production Logging | **완료** |
 | M22-T03 | Lifecycle Manager | 진행 예정 |
 | M22-T04 | Health Monitor + Version 조회 | 진행 예정 |
 | M22-T05 | Production API + Server Runtime 연동 | 진행 예정 |
 | M22-T06 | Dashboard Health 화면 | 진행 예정 |
 | M22-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M22-T01 완료, M22-T02 진행 예정.
+**진행 상태**: M22-T01~T02 완료, M22-T03 진행 예정.
 
 ---
 

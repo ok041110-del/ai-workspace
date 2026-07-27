@@ -6769,14 +6769,30 @@ Activity, Push Notification.
 | Task | 내용 | 상태 |
 |---|---|---|
 | M22-T01 | Production Configuration + Loader(Env Var+설정 파일, 불변) | **완료** |
-| M22-T02 | Production Logging(표준 `logging`, Console+File) | 진행 예정 |
+| M22-T02 | Production Logging(표준 `logging`, Console+File) | **완료** |
 | M22-T03 | Lifecycle Manager(Startup/Running/Shutdown, Graceful Shutdown) | 진행 예정 |
 | M22-T04 | Health Monitor + Version 조회 | 진행 예정 |
 | M22-T05 | Production API(4종) + Server Runtime 연동 | 진행 예정 |
 | M22-T06 | Dashboard Health 화면 | 진행 예정 |
 | M22-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M22-T01 완료. M22-T02 진행 예정.
+**진행 상태**: M22-T01~T02 완료. M22-T03 진행 예정.
+
+#### M22-T02: Production Logging
+- 상태: **DONE (2026-07-27)** — `runtime/production/logging_setup.py`
+  의 `configure_logging(config, *, log_file=None)`이
+  `ProductionConfig.log_level`을 기준으로 `ai_workspace` 이름의
+  표준 `logging.Logger`를 설정한다. Console 출력(`StreamHandler`)은
+  항상 켜지고, `log_file`을 주면 `FileHandler`도 함께 추가된다(둘 다
+  지원, 사용자 DoD). 매 호출마다 기존 핸들러를 비워 idempotent하게
+  재설정한다(중복 로그 방지). `get_logger(name=None)`은
+  `ai_workspace`(또는 `ai_workspace.<name>`) 로거를 반환 — 설정
+  이전에도 표준 `logging` 기본 동작으로 안전하게 쓸 수 있다.
+  "Logging은 Domain에 침투하지 않는다"는 원칙대로 이 모듈은
+  `runtime/production/`에만 있고 `domain`/`interfaces`/`engines`는
+  참조하지 않는다. 단위 테스트 6개 신규. `pytest`(738개), `ruff`,
+  `mypy` 통과. 다음 Task: **M22-T03**(Lifecycle Manager).
+- 의존성: M22-T01.
 
 #### M22-T01: Production Configuration + Loader
 - 상태: **DONE (2026-07-27)** — `runtime/production/config.py`의
