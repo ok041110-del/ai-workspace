@@ -66,10 +66,17 @@ GitHub 원문 갱신(Standard Workflow 5단계, Document Update)
   말미에 추가 — 과거 수작업으로 채운 내용을 보존한다.
 - 실제 내용이 바뀔 때만 파일을 쓴다(불필요한 diff 방지).
 
-## 범위 밖(이 설계 시점, M23-T02)
+## 구현 상태(M23-T03)
 
-- 실제 코드 구현 — [[READING_PROFILES]] 기준 Backend Implementation
-  대상, M23-T03(Vault Save Engine).
+`src/ai_workspace/vault/`에 `VaultDocumentKind`/`VaultDocumentRequest`
+(models.py), `VAULT_DIRECTORY_MAP`(mapping.py), `DocumentRouter`
+(router.py), `render_section`/`render_daily_file`
+(markdown_generator.py), `VaultWriter`(writer.py, 신규 파일 생성 +
+기존 섹션 upsert), `VaultSaveEngine`(engine.py, Save Flow 전체를
+잇는 진입점)로 구현 완료. `tests/vault/` 18개, `ruff`/`mypy` 클린.
+
+## 범위 밖(계속)
+
 - Task 완료 시 자동 트리거 — M23-T04(Auto Save Workflow).
 - Rename/Delete/Conflict/Version 정책 — M23-T05(Vault
   Synchronization).

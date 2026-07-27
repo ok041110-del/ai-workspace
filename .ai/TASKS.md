@@ -7591,7 +7591,7 @@ FCM·APNs 전송)은 그대로 유효**하며, 해당 Milestone 착수 시 다�
 |---|---|---|
 | M23-T01 | Reading Profiles — 작업 유형별 Retrieval Profile 정의 | **완료** |
 | M23-T02 | Obsidian Integration Architecture — Vault 연동 구조/저장 전략/Auto Save Architecture 설계, ADR 작성 | **완료** |
-| M23-T03 | Vault Save Engine — Markdown 생성/저장 엔진 구현 | 예정 |
+| M23-T03 | Vault Save Engine — Markdown 생성/저장 엔진 구현 | **완료** |
 | M23-T04 | Auto Save Workflow — Task 완료 후 자동 Vault 갱신 | 예정 |
 | M23-T05 | Vault Synchronization — Create/Update/Rename/Delete/Conflict/Version/Link·Backlink 검증 정책 | 예정 |
 | M23-T06 | Execution Engine — 자연어 명령 → Retrieval → Template → 작업 → Vault 저장 → Validation → 완료 보고 라우팅 | 예정 |
@@ -7640,6 +7640,89 @@ Strategy를 정의하고 ADR로 결정을 기록한다. 실제 구현(Markdown
 - Vault 전체 재검증: 신규 문서 Backlink/Tag/"원문" 섹션 확인.
 
 **의존성**: M23-T01(Reading Profiles) 완료.
+
+---
+
+#### M23-T03: Vault Save Engine
+
+**목표**: M23-T02(ADR-0035)에서 결정한 Vault Directory Mapping/
+Save Flow/File Strategy를 실제 코드로 구현한다. Markdown 생성 및
+저장 엔진(Markdown Generator/Vault Writer/File Creator/File
+Updater/Metadata 처리/Template 적용)을 신규 `vault/` 패키지로
+만든다.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `vault/models.py` — `VaultDocumentKind`(12종)/`VaultDocumentRequest` 구조화 입력 | ✅ |
+| 2 | `vault/mapping.py` — ADR-0035의 Vault Directory Mapping을 그대로 데이터로 구현 | ✅ |
+| 3 | `vault/router.py` — `DocumentRouter`(kind→대상 파일+append/create 결정, Daily는 날짜 치환) | ✅ |
+| 4 | `vault/markdown_generator.py` — ADR/Decision은 실제 Vault 관행(목적/결정/영향, Status/질문/답)에 맞춘 전용 렌더링, 나머지 kind는 공통 Summary 형식(Template 적용) | ✅ |
+| 5 | `vault/writer.py` — `VaultWriter`(File Creator: 신규 생성, 기존 파일 덮어쓰지 않음 / File Updater: 대상 섹션만 upsert, 내용 불변 시 파일 미변경) | ✅ |
+| 6 | `vault/engine.py` — `VaultSaveEngine`(Router→Generator→Writer Save Flow 전체를 잇는 진입점) | ✅ |
+| 7 | `tests/vault/` 신규 18개(Router/Generator/Writer/Engine) — 신규 삽입/기존 섹션 교체/무변경 시 no-op/"관련 문서" 절 없을 때 fallback 케이스 포함 | ✅ |
+| 8 | `ruff check src/ai_workspace/vault tests/vault`, `mypy src/ai_workspace/vault` 클린 | ✅ |
+| 9 | `docs/ARCHITECTURE.md`(§3.21 구현 상태 반영, §9 `vault/` 완료 표시) 갱신 | ✅ |
+| 10 | Vault `Vault Integration Architecture.md`/`Backend Index`에 구현 상태 반영 | ✅ |
+| 11 | Core Domain·`web/`이 `vault/`를 참조하지 않음(반대 방향 의존도 없음) 확인 | ✅ |
+| 12 | 변경된 파일만 수정, 새 Core Interface 미추가 | ✅ |
+
+**구현 내용**
+
+- `src/ai_workspace/vault/models.py`(신규): `VaultDocumentKind`
+  Enum(Tag Rule 11종 중 자동 저장 대상 12종 — `system`은 수동 문서라
+  제외), `VaultDocumentRequest`(frozen dataclass — kind/title/
+  summary/related_docs/source_paths/fields/date). Core Domain
+  타입을 전혀 import하지 않음(ADR-0035가 요구한 완전 독립).
+- `src/ai_workspace/vault/mapping.py`(신규): `VAULT_DIRECTORY_MAP`
+  — kind→(상대 경로, append/create) 딕셔너리. ADR-0035의 매핑표를
+  코드가 아니라 데이터로 그대로 옮김.
+- `src/ai_workspace/vault/router.py`(신규): `DocumentRouter.
+  resolve()`가 매핑을 조회해 `VaultTarget(path, mode)`을 만든다.
+  Daily는 `request.date`(없으면 오늘 날짜)로 `{date}.md` 파일명을
+  채운다. 매핑에 없는 kind는 `UnroutableVaultKindError`.
+- `src/ai_workspace/vault/markdown_generator.py`(신규):
+  `render_section()`이 (heading, body) 튜플을 만든다. ADR/Decision
+  kind는 실제 `ADR Index`/`Decisions Index`에서 관찰되는 형식
+  (목적/결정/영향, Status/질문/답)을 그대로 따르고, 나머지 kind는
+  제목+요약+관련 문서 링크로 구성된 공통 Summary 형식을 쓴다(kind별
+  전용 형식은 실제로 필요해질 때 추가 — YAGNI). `render_daily_file()`
+  은 [[Template - Daily]] 구조를 그대로 생성한다. 필수 `fields`가
+  빠지면 `MissingVaultFieldError`.
+- `src/ai_workspace/vault/writer.py`(신규): `VaultWriter.
+  create_file()`은 파일이 이미 있으면 덮어쓰지 않고 `False`를
+  반환(Conflict 정책은 M23-T05로 이월). `upsert_section()`은 같은
+  "## {heading}" 섹션이 있으면 그 섹션만 교체하고, 없으면 "## 관련
+  문서" 절 바로 앞에 삽입하며, "관련 문서" 절 자체가 없는 파일은
+  말미에 추가한다. 렌더링 결과가 원본과 같으면 파일을 쓰지 않고
+  `False`를 반환(File Strategy의 "실제 변경 시에만 저장" 그대로
+  구현).
+- `src/ai_workspace/vault/engine.py`(신규): `VaultSaveEngine.save()`
+  가 Router→Generator→Writer 전체 Save Flow를 하나의 호출로
+  묶는다. M23-T04(Auto Save Workflow)가 이 클래스 하나만 호출하면
+  되도록 설계.
+- `tests/vault/`(신규, 18개): `test_router.py`(kind→경로 매핑,
+  Daily 날짜 치환, 알 수 없는 kind 예외), `test_markdown_generator.py`
+  (ADR/Decision 전용 필드 렌더링과 필수 필드 누락 예외, 공통 Summary
+  형식, Daily 템플릿 구조), `test_writer.py`(신규 삽입/기존 섹션
+  교체/무변경 시 no-op/"관련 문서" 없을 때 fallback/기존 파일
+  덮어쓰지 않음), `test_engine.py`(ADR 저장→ADR Index 반영, Daily
+  파일 생성, 반복 저장 시 두 번째 호출은 `False`).
+- `docs/ARCHITECTURE.md`(v0.26.0): §3.21에 구현 상태 절 추가, §9
+  `vault/` 항목을 "설계됨" → "구현됨"으로 갱신.
+- Vault `Vault Integration Architecture.md`(수정): "범위 밖" 절을
+  "구현 상태" 절로 교체. `Backend Index`(수정): `vault/` 행 추가.
+- 검증: `poetry run ruff check src/ai_workspace/vault tests/vault`
+  / `poetry run mypy src/ai_workspace/vault` / `poetry run pytest
+  tests/vault` 전부 통과(18개). 전체 `pytest`/`mypy src`는 이 세션
+  환경에 `pyyaml`/`fastapi`/`uvicorn`이 설치돼 있지 않아 기존
+  Milestone 코드 쪽에서도 동일하게 실패함을 확인(내가 만든 `vault/`
+  와 무관한 사전 존재 환경 제약 — `pyproject.toml`은 건드리지
+  않음).
+
+**의존성**: M23-T02(Obsidian Integration Architecture, ADR-0035)
+완료.
 
 ---
 

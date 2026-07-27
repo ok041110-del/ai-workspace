@@ -1096,3 +1096,21 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   구현은 없음(설계 전용 Task) — 구현은 M23-T03부터. `docs/
   ARCHITECTURE.md` v0.25.0 §3.21 신규, Vault `Vault Integration
   Architecture.md` 신규.
+- **M23-T03 완료: Vault Save Engine(2026-07-27)**. ADR-0035의
+  설계를 그대로 `src/ai_workspace/vault/` 코드로 구현 — `models.py`
+  (`VaultDocumentKind`/`VaultDocumentRequest`), `mapping.py`
+  (`VAULT_DIRECTORY_MAP`), `router.py`(`DocumentRouter`),
+  `markdown_generator.py`(`render_section`/`render_daily_file` —
+  ADR/Decision은 실제 Vault 관행에 맞춘 전용 형식, 나머지는 공통
+  Summary 형식, YAGNI), `writer.py`(`VaultWriter` — 신규 생성은
+  기존 파일을 덮어쓰지 않고, 섹션 upsert는 내용이 실제로 바뀔 때만
+  파일을 쓴다), `engine.py`(`VaultSaveEngine`, Save Flow 전체
+  진입점). `tests/vault/` 18개 신규(교체/신규 삽입/no-op/fallback
+  케이스 포함), `ruff`/`mypy` 클린. Core Domain·`web/` 양쪽 모두
+  이 패키지를 참조하지 않음 확인(ADR-0035의 완전 독립 원칙 유지).
+  **참고**: 이 세션 환경에는 `pyyaml`/`fastapi`/`uvicorn`이 설치돼
+  있지 않아(poetry.lock이 pyproject.toml과 어긋남) 전체 `pytest`/
+  `mypy src`는 기존 Milestone 코드에서도 동일하게 실패한다 — `vault/`
+  와 무관한 사전 존재 환경 제약이며 이번 Task에서 `pyproject.toml`/
+  `poetry.lock`은 건드리지 않았다. 다음 Task: **M23-T04**(Auto Save
+  Workflow — Task 완료 시 `VaultSaveEngine`을 자동 호출하는 Workflow).
