@@ -23,8 +23,9 @@ class VaultValidationIssue:
 
 
 def _iter_markdown_files(vault_root: Path) -> list[Path]:
-    """`vault_root` 바로 아래 Vault 콘텐츠 디렉터리(15종)만 스캔한다.
-    Milestone 26부터 `vault_root`가 저장소 root와 같아서, 무조건
+    """`vault_root` 바로 아래 Vault 콘텐츠 디렉터리(16종, Milestone
+    27부터 `14 Tasks` 포함)만 스캔한다. Milestone 26부터 `vault_root`
+    가 저장소 root와 같아서, 무조건
     `rglob("*.md")`를 하면 `docs/`/`.claude/`/`.agents/` 등 Vault가
     아닌 마크다운까지 걸려 Backlink/Tag Validation을 오염시킨다."""
     files: list[Path] = []

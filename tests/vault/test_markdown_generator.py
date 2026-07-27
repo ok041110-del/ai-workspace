@@ -4,6 +4,7 @@ from ai_workspace.vault.markdown_generator import (
     MissingVaultFieldError,
     render_daily_file,
     render_section,
+    render_task_file,
 )
 from ai_workspace.vault.models import VaultDocumentKind, VaultDocumentRequest
 
@@ -70,5 +71,63 @@ def test_render_daily_file_matches_template_daily_structure() -> None:
     assert content.startswith("---\ntags: [daily]\n---\n")
     assert "# 2026-07-27" in content
     assert "## 오늘 작업" in content
+    assert "## 진행중" in content
+    assert "## 완료" in content
+    assert "## 문제" in content
+    assert "## 결정사항" in content
+    assert "## 내일 계획" in content
     assert "## 관련 문서" in content
     assert "[[Overview]]" in content
+
+
+def _task_request(**field_overrides: str) -> VaultDocumentRequest:
+    fields = {
+        "task_id": "T27-01",
+        "status": "in-progress",
+        "priority": "high",
+        "milestone": "M27",
+        "owner": "AI",
+        "created": "2026-07-27",
+        "updated": "2026-07-27",
+        **field_overrides,
+    }
+    return VaultDocumentRequest(
+        kind=VaultDocumentKind.TASK,
+        title="Obsidian Workspace Templates",
+        summary="Task Template 도입",
+        related_docs=("PROJECT_INDEX",),
+        fields=fields,
+    )
+
+
+def test_render_task_file_includes_frontmatter_and_sections() -> None:
+    content = render_task_file(_task_request())
+
+    assert content.startswith("---\n")
+    assert "tags: [task]" in content
+    assert "type: task" in content
+    assert "status: in-progress" in content
+    assert "priority: high" in content
+    assert "milestone: M27" in content
+    assert "owner: AI" in content
+    assert "created: 2026-07-27" in content
+    assert "updated: 2026-07-27" in content
+    assert "# Obsidian Workspace Templates" in content
+    assert "## Checklist" in content
+    assert "## Notes" in content
+    assert "Task Template 도입" in content
+    assert "## Related Documents" in content
+    assert "[[PROJECT_INDEX]]" in content
+    assert "## Decision" in content
+
+
+def test_render_task_file_missing_field_raises() -> None:
+    request = VaultDocumentRequest(
+        kind=VaultDocumentKind.TASK,
+        title="X",
+        summary="",
+        fields={"status": "in-progress"},
+    )
+
+    with pytest.raises(MissingVaultFieldError):
+        render_task_file(request)

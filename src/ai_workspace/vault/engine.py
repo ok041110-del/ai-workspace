@@ -6,7 +6,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ai_workspace.vault.markdown_generator import render_daily_file, render_section
+from ai_workspace.vault.markdown_generator import (
+    render_daily_file,
+    render_section,
+    render_task_file,
+)
 from ai_workspace.vault.models import VaultDocumentKind, VaultDocumentRequest
 from ai_workspace.vault.router import DocumentRouter
 from ai_workspace.vault.writer import VaultWriter
@@ -25,6 +29,8 @@ class VaultSaveEngine:
             if request.kind is VaultDocumentKind.DAILY:
                 day = request.date or target.path.stem
                 content = render_daily_file(day)
+            elif request.kind is VaultDocumentKind.TASK:
+                content = render_task_file(request)
             else:
                 heading, body = render_section(request)
                 content = f"# {heading}\n\n{body}"
