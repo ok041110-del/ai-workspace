@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~19 완료, v0.5.0 아키텍처 기준선 선언, Milestone 20(Real-time Dashboard Platform) 검토 중) |
+| 상태 | Draft (Milestone 1~19 완료, v0.5.0 아키텍처 기준선 선언, Milestone 20(Real-time Dashboard Platform) 진행 중) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -820,6 +820,42 @@ Timeout, 안전한 Cancellation. 기존 `RetryPolicy`(M3)를 확장하고
 **진행 상태**: M19-T01~T04 전체 완료. Milestone DoD 1~13번 전부 충족
 확인됨. Milestone 19 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 19
 Review" 참고). **Milestone 19 완료 — 2026-07-27 사용자 승인.**
+
+---
+
+## Milestone 20 — Real-time Dashboard Platform
+
+**목표**: AI Workspace 운영 상태를 실시간 관찰하는 Read-Only
+Dashboard(CQRS Read Model)를 구축한다. FastAPI+uvicorn(신규 런타임
+의존성) + 정적 Web UI + WebSocket. Core 계층은 웹 프레임워크를
+모른다 — FastAPI는 신규 `web/`(Infrastructure) 계층에서만 쓴다.
+
+**Milestone Definition of Done**
+1. `DashboardRepository`/`InMemoryDashboardRepository`.
+2. `DashboardService`(UI 비의존).
+3~4. Dashboard API 4종 + WebSocket(Event 기반, Polling 없음).
+5~6. Dashboard Web UI(정적 파일) + `DashboardViewModel`(한국어 라벨).
+7~8. 실행 결과 자동 기록(Event 기반), Repository의 Read Model만 사용.
+9. 현재 시각/경과 시간 브라우저 1초 갱신.
+10. FastAPI OpenAPI로 API 자동 문서화.
+11. `DashboardService`의 `web/` 미참조를 의존성 검증으로 증명.
+12. `workspace start` 서버 실행, 기존 CLI 영향 없음.
+13. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 상세는 `.ai/TASKS.md`의 "Milestone 20"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M20-T01 | Dashboard 도메인 및 이벤트 정의 | 진행 예정 |
+| M20-T02 | 실행 계층과 Dashboard 연결 | 진행 예정 |
+| M20-T03 | Read Model 및 ViewModel | 진행 예정 |
+| M20-T04 | 서버 런타임 구축 | 진행 예정 |
+| M20-T05 | API 및 Web UI | 진행 예정 |
+| M20-T06 | 전체 흐름 검증 | 진행 예정 |
+| M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
+
+**진행 상태**: Task List 승인 완료, 구현 착수.
 
 ---
 

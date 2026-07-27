@@ -5876,11 +5876,83 @@ Review 중 코드 변경이 필요한 치명적 문제(버그·계약 위반)는
 
 **Milestone 19 종료 — 2026-07-27 사용자 승인.**
 
-**Milestone 20 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
-않았다. 사용자가 예고한 다음 단계는 Dashboard를 통한 실행 상태
-시각화·관리다 — 다만 이는 사전 논의 없이 확정된 것이 아니며,
-Milestone 20은 착수 시점에 이 문서에 목표/DoD/Task List를 새로
-정의한다(Task Driven Development 원칙, M2~M19가 그래왔듯).
+**Milestone 20 상태**: 착수 확정. 아래 "Milestone 20" 절 참고.
+
+---
+
+## Milestone 20 — Real-time Dashboard Platform
+
+**목표**: AI Workspace의 운영 상태를 실시간으로 관찰하는 Dashboard를
+구축한다. Dashboard는 Task를 실행하지 않는 **Read Model**이다(CQRS).
+Dashboard API는 후속 M23(Mobile Experience)에서 그대로 재사용될
+표준 진입점이다(2026-07-27 사용자 확정).
+
+> **설계 검토에서 발견한 사실**: 이 프로젝트는 지금까지 "서버"였던
+> 적이 없다 — `pyproject.toml`의 런타임 의존성은 `pyyaml` 하나뿐이고,
+> `cli/main.py`는 명령 하나를 실행하고 종료하는 1회성 CLI다. M20은
+> 이 프로젝트 최초로 (1) 웹 프레임워크 의존성, (2) 상시 실행되는
+> 서버 프로세스, (3) Web UI를 도입한다.
+
+**설계 방향(사용자 최종 승인)**:
+- **웹 프레임워크**: FastAPI + uvicorn(WebSocket 내장, OpenAPI 문서
+  자동 생성으로 "Dashboard API 문서화" DoD 충족). `fastapi`/`uvicorn`
+  만 런타임 의존성으로 추가한다. **Core 계층은 웹 프레임워크를
+  전혀 모른다** — FastAPI는 신규 `web/` 디렉터리(Infrastructure
+  계층)에서만 쓴다.
+- **Web UI**: 정적 HTML/CSS/Vanilla JS(빌드 도구 도입 없음). 1초
+  타이머(현재 시각/경과 시간)는 브라우저에서 계산하고, Repository를
+  Polling하지 않는다.
+- **Event 기반 갱신**: `ExecutionDispatcher`에 `event_bus:
+  EventBus | None = None`을 선택적으로 주입한다(기존 M13~M19
+  패턴과 동일). `ExecutionDispatcher`는 Event만 발행하고
+  `DashboardRepository`를 직접 참조하지 않는다.
+  `InMemoryDashboardRepository`가 이 Event를 구독해 Read Model을
+  갱신한다.
+- **계층 분리(CQRS)**: `DashboardRepository`(저장+조회, Provider
+  독립) → `DashboardService`(Repository만 사용해 조합, UI를 모름) →
+  `DashboardViewModel`(한국어 라벨, `web/` 계층 전용 DTO) → FastAPI
+  라우터/WebSocket. API/WebSocket/Web UI는 `DashboardService`만
+  사용하고 `ExecutionDispatcher`를 직접 호출하지 않는다.
+- **서버 런타임**: `workspace start` 명령으로 상시 실행되는 서버를
+  추가한다. 기존 CLI 명령은 그대로 유지, 서버는 선택 실행이다.
+
+**Non-goal(범위 밖)**: Mobile Dashboard/Home Screen Widget/Lock
+Screen Widget/Live Activity/Dynamic Island/Push Notification(M23
+예정), Budget/Token/Billing/Telemetry 표시, Scheduler, Automation,
+Approval UI, 사용자 인증/권한 관리.
+
+**Milestone Definition of Done**
+1. `DashboardRepository` Interface + `InMemoryDashboardRepository` 구현.
+2. `DashboardService` 구현(UI를 모름).
+3. Dashboard API 구현(`/api/dashboard`, `/api/summary`,
+   `/api/history`, `/api/engines`).
+4. WebSocket 구현(Event 기반 갱신, Polling 없음).
+5. Dashboard Web UI 구현(정적 파일, API/WebSocket만 사용).
+6. `DashboardViewModel` 구현(한국어 상태 라벨, Engine 이름은 영어 유지).
+7. `ExecutionDispatcher` 실행 결과가 자동으로 기록된다(Event 기반).
+8. Engine 상태/최근 실행/실행 통계/안정성 통계 조회가 모두 Repository의
+   Read Model을 그대로 사용한다(Dashboard가 통계를 계산하지 않음).
+9. 현재 시각/경과 시간이 브라우저에서 1초마다 갱신된다(Polling 없음).
+10. Dashboard API가 자동 문서화된다(FastAPI OpenAPI).
+11. `DashboardService`가 `web/`(API/WebSocket/UI)을 참조하지 않음을
+    Architecture 의존성 검증으로 증명한다.
+12. `workspace start`로 서버가 실행되고, 기존 CLI 명령은 영향받지
+    않는다.
+13. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M20-T01 | Dashboard 도메인 및 이벤트 정의 | 진행 예정 |
+| M20-T02 | 실행 계층과 Dashboard 연결(`ExecutionDispatcher` Event 발행 + `InMemoryDashboardRepository` 구독) | 진행 예정 |
+| M20-T03 | Read Model 및 ViewModel(`DashboardService` + `DashboardViewModel`) | 진행 예정 |
+| M20-T04 | 서버 런타임 구축(`workspace start`, FastAPI app 골격) | 진행 예정 |
+| M20-T05 | API 및 Web UI(REST 라우터 + WebSocket + 정적 UI) | 진행 예정 |
+| M20-T06 | 전체 흐름 검증(End-to-End 통합 테스트 + 의존성 검증) | 진행 예정 |
+| M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
+
+**진행 상태**: Task List 승인 완료, 구현 착수.
 
 ---
 
