@@ -59,9 +59,10 @@ Vault Index([[PROJECT_INDEX]]가 가리키는 문서, `Template - X.md`
 형식). Vault는 GitHub 원문을 복제하지 않는다([[AI_RULES]]). GitHub
 원문 갱신 내용을 `VaultDocumentRequest`(kind/title/summary/
 related_docs/fields)로 정리할 수 있으면(ADR/Decision 등),
-`vault.auto_save.run_auto_save()`(M23-T03~T05, [[Vault Integration
-Architecture]])를 호출해 저장까지 코드로 수행한다 — 손으로 여러
-Vault 파일을 열어 고치는 대신 이 함수 하나로 끝낸다.
+`vault.auto_save.run_auto_save()`(M23-T03~T05,
+[[Vault Integration Architecture]] 참고)를 호출해 저장까지 코드로
+수행한다 — 손으로 여러 Vault 파일을 열어 고치는 대신 이 함수
+하나로 끝낸다.
 
 ### 6. Validation
 

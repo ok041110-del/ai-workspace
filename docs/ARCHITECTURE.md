@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.29.0 |
+| 문서 버전 | v0.30.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~22 완료, Milestone 23은 "Obsidian Integration & Auto Save"로 재정의(M23-T01/T02 완료) — ADR-0035로 신규 §3.21 Vault Integration Layer 도입. 새 Interface 없이 27종 유지. **M23-T03 완료**: `vault/` 패키지(Path Map/Document Router/Markdown Generator/Vault Writer/VaultSaveEngine) 실제 구현. **M23-T04 완료**: `vault/validation.py`+`vault/auto_save.py`로 저장→Validation→완료 보고를 한 번에 묶는 Auto Save Workflow 추가. **M23-T05 완료**: `vault/sync.py`로 Rename/Delete/Conflict Handling 추가, Version Strategy는 git 기반 유지로 결정. **M23-T06 완료**: 새 코드 없이 Vault `EXECUTION_PROFILE`에 자연어 명령→Retrieval→Template→저장→Validation→완료 보고 절차를 명문화) |
+| 상태 | Draft (Milestone 1~22 완료. **Milestone 23(Obsidian Integration & Auto Save) 전체 완료**(T01~T07) — ADR-0035로 신규 §3.21 Vault Integration Layer 도입, 새 Interface 없이 27종 유지. `vault/` 패키지(Path Map/Document Router/Markdown Generator/Vault Writer/VaultSaveEngine/Validation/Auto Save Workflow/Sync) 구현 완료(M23-T03~T05), Execution Engine은 절차 문서화(M23-T06), **M23-T07 완료**: 실제 `Vault/`를 대상으로 한 통합 테스트로 Filesystem 접근·Retrieval Validation·Auto Save Round-trip 검증 — 검증 과정에서 발견한 줄바꿈으로 깨진 Backlink 2건도 함께 수정) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -939,7 +939,23 @@ GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
   Engine — 자연어 명령 라우팅" 절 추가(흐름도 + 지원 명령 예시
   표), 5~6단계(Document Update/Validation)가 `vault.auto_save.
   run_auto_save()`를 구체적으로 가리키도록 갱신.
-- **범위 밖(계속)**: 실행 환경 연동 검증(M23-T07).
+- **구현 상태(M23-T07, Execution Environment Integration)**:
+  `tests/integration/test_m23_vault_environment_integration.py`
+  신규 — 이 실행 환경(Claude Code CLI + 로컬 Filesystem)에서
+  실제 `Vault/`에 접근 가능한지, 실제 문서 트리에서
+  `find_broken_backlinks()`가 알려진 프롬프트 예시 텍스트 외에
+  새로운 깨진 링크가 없는지, `run_auto_save()`가 실제 Vault 트리
+  복사본 위에서 저장→검증 왕복에 성공하는지 확인한다. 검증 과정
+  에서 `EXECUTION_PROFILE.md`/`Backend Index.md`에 줄바꿈으로
+  깨진 `[[..]]` 링크 2건(M23 작업 중 도입 1건, 그 이전부터 있던
+  1건)을 실제로 찾아 함께 수정 — 이 계층이 실제로 가치가 있음을
+  증명. Obsidian MCP를 통한 실시간 연동은 범위 밖으로 유지
+  (M23-Prep-T08 Optional, Claude Code 도입 시점으로 이월 유지).
+  GitHub Repository 연동은 M23-T01~T07 매 Task의 커밋·푸시 성공
+  으로 이미 검증됨.
+
+**Milestone 23(Obsidian Integration & Auto Save) 전체 완료
+(T01~T07).**
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 

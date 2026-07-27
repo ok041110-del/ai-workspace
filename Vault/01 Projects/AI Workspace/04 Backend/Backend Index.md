@@ -43,8 +43,8 @@ Milestone에서 도입된 것만 요약:
   로직을 담당(LLMPolicyEngine, BudgetPolicyEngine, EngineSelectionPolicy 등).
 - **Runtime**(`runtime/*/`): 실제 실행/조립/생명주기를 담당하는
   Infrastructure에 가까운 계층. `dashboard`/`automation`/`production`은
-  Core Domain을 모르는 상태로 EventBus만 구독한다([[Architecture
-  Overview]]의 CQRS 절 참고).
+  Core Domain을 모르는 상태로 EventBus만 구독한다
+  ([[Architecture Overview]]의 CQRS 절 참고).
 
 ## 관련 문서
 

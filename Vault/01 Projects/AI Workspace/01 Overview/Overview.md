@@ -25,11 +25,11 @@ AI Workspace 자체는 코드를 작성하지 않는다 — 역할을 가진 Age
 
 ## 현재 진행률
 
-- **Milestone 1~22 완료**(2026-07-27 기준).
-- **Milestone 23(Obsidian Integration & Auto Save)**: 진행 중
-  (T01~T02 완료). GitHub↔Vault 자동 저장 구조를 만든다. 이전에
-  M23이 다루던 Mobile Experience는 별도 Milestone(번호 미정)으로
-  이월됨(Start Criteria 3개 결정은 유효, [[Decisions Index]] 참고).
+- **Milestone 1~23 완료**(2026-07-27 기준). Milestone 23(Obsidian
+  Integration & Auto Save)이 GitHub↔Vault 자동 저장 구조
+  (`src/ai_workspace/vault/`)를 완성했다. 이전에 M23이 다루던
+  Mobile Experience는 별도 Milestone(번호 미정)으로 이월됨(Start
+  Criteria 3개 결정은 유효, [[Decisions Index]] 참고).
 - 상세 목록은 [[Milestones Index]] 참고.
 
 ## Backend 상태
@@ -52,10 +52,12 @@ Web API)가 분리돼 있다. Interface(추상 계약) 총 **27종**. 상세는
 
 ## 현재 Milestone
 
-**Milestone 23 — Obsidian Integration & Auto Save**(M23-Preparation
-완료 후 착수, T01 Reading Profiles/T02 Obsidian Integration
-Architecture 완료, T03~T07 예정). Task 진행 상태는 GitHub
-`.ai/TASKS.md`의 "Milestone 23" 절 참고.
+**Milestone 23 — Obsidian Integration & Auto Save: 전체 완료**
+(T01~T07, 2026-07-27). GitHub↔Vault 자동 저장 구조(`src/
+ai_workspace/vault/`)가 실제 환경에서 검증까지 끝났다. 다음
+Milestone은 아직 미정 — 원 M23이 다루던 Mobile Experience 이월분
+([[Decisions Index]] 참고) 또는 새 지시 대기. Task 진행 상태는
+GitHub `.ai/TASKS.md`의 "Milestone 23" 절 참고.
 
 ## 관련 문서
 

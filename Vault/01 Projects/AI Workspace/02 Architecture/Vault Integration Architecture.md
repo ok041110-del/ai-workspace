@@ -116,10 +116,22 @@ Vault 저장(`run_auto_save()`) → Validation → 완료 보고" 흐름과
 [[EXECUTION_PROFILE]] 5~6단계(Document Update/Validation)도
 `run_auto_save()`를 구체적으로 가리키도록 갱신.
 
-## 범위 밖(계속)
+## 구현 상태(M23-T07, Execution Environment Integration)
 
-- Claude Code/Filesystem/MCP/GitHub 실제 연동 검증 — M23-T07
-  (Execution Environment Integration).
+`tests/integration/test_m23_vault_environment_integration.py`
+신규 — 실제 `Vault/`를 대상으로 (1) Filesystem 접근(디렉터리·
+`PROJECT_INDEX.md` 존재 확인), (2) 실제 문서 트리 전체
+`find_broken_backlinks()`가 알려진 프롬프트 예시 텍스트 외 새
+문제가 없는지, (3) 실제 Vault 복사본 위에서 `run_auto_save()`
+저장→검증 왕복이 성공하는지 확인한다. **검증 중 실제로
+`EXECUTION_PROFILE.md`/`Backend Index.md`에서 줄바꿈 때문에 깨진
+`[[..]]` Backlink 2건을 발견해 함께 고쳤다** — Validation 계층이
+실제로 문제를 잡아낸 첫 사례. Obsidian MCP 실시간 연동은 범위
+밖으로 유지(M23-Prep-T08 Optional). GitHub 연동은 M23-T01~T07
+매 Task의 커밋·푸시로 이미 검증됨.
+
+**Milestone 23(Obsidian Integration & Auto Save) 전체 완료
+(T01~T07).**
 
 ## 관련 문서
 

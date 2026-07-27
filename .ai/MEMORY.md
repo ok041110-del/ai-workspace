@@ -1149,6 +1149,20 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   Profile)를 명문화했다. 5~6단계(Document Update/Validation)를
   이미 존재하는 `run_auto_save()`/`AutoSaveReport`를 구체적으로
   가리키도록 갱신. 코드 변경 없음(의도적), `tests/vault/` 38개
-  그대로. 다음 Task: **M23-T07**(Execution Environment
-  Integration — Claude Code/Filesystem/MCP/GitHub 실제 연동
-  검증, Milestone 23 마지막 Task).
+  그대로.
+- **M23-T07 완료 & Milestone 23(Obsidian Integration & Auto Save)
+  전체 완료(2026-07-27, T01~T07)**. `tests/integration/
+  test_m23_vault_environment_integration.py` 신규 3개 — 실제
+  `Vault/`를 대상으로 Filesystem 접근/Retrieval Validation(실제
+  전체 문서에서 `find_broken_backlinks()` 실행)/Auto Save
+  Round-trip(실제 Vault 복사본에 `run_auto_save()`로 저장, 원본
+  불변 확인)을 검증. **실제 버그 발견**: 검증 중
+  `EXECUTION_PROFILE.md`(이번 Milestone에서 직접 도입한 버그)와
+  `Backend Index.md`(M23-Preparation 시점부터 있던 훨씬 이전
+  버그) 둘 다에서 줄바꿈 때문에 `[[..]]` Backlink가 깨져 있던 것을
+  발견해 수정 — Validation 계층이 실전에서 처음으로 실제 문제를
+  잡아낸 사례. MCP는 M23-Prep-T08 Optional 이월 결정을 재확인만
+  하고 범위에 넣지 않음. `tests/vault`+신규 통합 테스트 41개 전부
+  통과, `ruff`/`mypy` 클린. **Milestone 23 전체 완료 — 다음은
+  별도 Milestone(번호 미정, 원 M23 Mobile Experience 이월분) 착수
+  또는 사용자가 지정하는 새 작업.**

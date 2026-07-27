@@ -7595,7 +7595,7 @@ FCM·APNs 전송)은 그대로 유효**하며, 해당 Milestone 착수 시 다�
 | M23-T04 | Auto Save Workflow — Task 완료 후 자동 Vault 갱신 | **완료** |
 | M23-T05 | Vault Synchronization — Create/Update/Rename/Delete/Conflict/Version/Link·Backlink 검증 정책 | **완료** |
 | M23-T06 | Execution Engine — 자연어 명령 → Retrieval → Template → 작업 → Vault 저장 → Validation → 완료 보고 라우팅 | **완료** |
-| M23-T07 | Execution Environment Integration — Claude Code/Filesystem/MCP/GitHub 실제 연동 검증 | 예정 |
+| M23-T07 | Execution Environment Integration — Claude Code/Filesystem/MCP/GitHub 실제 연동 검증 | **완료** |
 
 #### M23-T02: Obsidian Integration Architecture
 
@@ -7903,6 +7903,69 @@ Link/Backlink 검증은 M23-T04의 `find_broken_backlinks()`가 이미
 **의존성**: M23-T04(Auto Save Workflow)/M23-T05(Vault
 Synchronization) 완료(Execution Engine이 가리키는 `run_auto_save()`
 /`AutoSaveReport`가 실제로 존재해야 함).
+
+---
+
+#### M23-T07: Execution Environment Integration
+
+**목표**: `vault/`(M23-T03~T06)가 이 세션의 실제 실행 환경(Claude
+Code CLI, Filesystem, MCP, GitHub Repository)에서 실제로 동작하는지
+검증한다. `tests/vault/`는 전부 `tmp_path` 최소 fixture만 다뤘으므로,
+실제 `Vault/` 디렉터리를 대상으로 한 통합 테스트로 마무리한다.
+Milestone 23의 마지막 Task.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Filesystem 접근 검증 — 실제 `Vault/` 디렉터리와 `PROJECT_INDEX.md` 존재 확인 | ✅ |
+| 2 | Retrieval/Validation 검증 — 실제 Vault 전체에서 `find_broken_backlinks()`가 알려진 프롬프트 예시 텍스트 외 새 문제가 없는지 확인 | ✅ |
+| 3 | Auto Save 검증 — 실제 Vault 트리 복사본 위에서 `run_auto_save()` 저장→검증 왕복 성공 확인, 실제 Vault는 건드리지 않음을 함께 확인 | ✅ |
+| 4 | 검증 과정에서 발견한 실제 문제가 있으면 수정 | ✅ (아래 참고) |
+| 5 | MCP 연동 범위 확인 — M23-Prep-T08 Optional 이월 결정 유지, 이번 범위 아님을 명시 | ✅ |
+| 6 | GitHub Repository 연동 확인 — M23-T01~T07 매 Task 커밋·푸시 성공 이력으로 확인 | ✅ |
+| 7 | `tests/integration/test_m23_vault_environment_integration.py` 신규 3개 | ✅ |
+| 8 | `ruff`/`mypy`/`pytest tests/vault tests/integration/test_m23_vault_environment_integration.py` 클린 | ✅ |
+| 9 | `docs/ARCHITECTURE.md`/Vault `Vault Integration Architecture.md`에 Milestone 23 전체 완료 반영 | ✅ |
+| 10 | 변경된 파일만 수정 | ✅ |
+
+**구현 내용**
+
+- `tests/integration/test_m23_vault_environment_integration.py`
+  (신규, 3개): `test_vault_root_exists_and_is_readable`(Filesystem
+  접근), `test_real_vault_has_no_unexpected_broken_backlinks`(실제
+  Vault 전체 Backlink 검증, `AI_RULES`/`PROMPT_PROFILE`/
+  `READING_PROFILES`/`Vault Integration Architecture`가 문법
+  설명용으로 쓰는 `[[이중 대괄호]]`/`[[링크]]`/`[[문서 제목]]`/
+  `[[..]]`만 알려진 오탐으로 허용), `test_auto_save_round_trip_
+  against_copy_of_real_vault`(실제 `Vault/`를 `tmp_path`로 복사한
+  뒤 `run_auto_save()`로 ADR 항목을 저장해 실제 `ADR Index.md`
+  구조 위에서 왕복이 되는지 확인, 원본 Vault는 변경되지 않음을
+  검증).
+- **실제 버그 발견 및 수정**: 검증 테스트를 작성하며 `find_broken_
+  backlinks()`를 실제 Vault에 처음 돌려본 결과, `[[Vault Integration
+  Architecture]]`(M23-T06에서 이번 세션이 직접 도입, `EXECUTION_
+  PROFILE.md`)와 `[[Architecture Overview]]`(`Backend Index.md`,
+  M23-Preparation 시점부터 있던 훨씬 이전 문제)가 줄바꿈 때문에
+  `[[Vault Integration\nArchitecture]]`/`[[Architecture\n
+  Overview]]`로 깨져 있던 것을 발견해 둘 다 링크가 줄 안에서
+  끊기지 않도록 고쳤다. Validation 계층이 실제로 문제를 잡아낸
+  첫 사례.
+- MCP: Obsidian MCP를 통한 실시간 Vault 연동은 M23-Prep-T08
+  (Optional)에서 이미 "Claude Code 도입 시점으로 이월"로 결정됐고,
+  이번 Task 범위에서 다시 검토하지 않는다(재확인만).
+- `docs/ARCHITECTURE.md`(v0.30.0)/Vault `Vault Integration
+  Architecture.md`(수정): "Milestone 23(Obsidian Integration &
+  Auto Save) 전체 완료(T01~T07)" 선언.
+- 검증: `poetry run ruff check tests/integration/test_m23_vault_
+  environment_integration.py` / `poetry run mypy src/ai_workspace/
+  vault` / `poetry run pytest tests/vault tests/integration/
+  test_m23_vault_environment_integration.py` 전부 통과(41개, 기존
+  38 + 신규 3). 전체 `pytest`는 여전히 M23-T03부터 기록해 온
+  사전 존재 환경 제약(`pyyaml`/`fastapi`/`uvicorn` 미설치)으로
+  다른 모듈에서 실패 — `vault/`와 무관.
+
+**의존성**: M23-T03~T06 전부 완료.
 
 ---
 
