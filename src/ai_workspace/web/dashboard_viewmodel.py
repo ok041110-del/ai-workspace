@@ -11,6 +11,7 @@ from ai_workspace.domain.dashboard import (
     WorkspaceStatus,
 )
 from ai_workspace.runtime.dashboard.dashboard_service import DashboardSnapshot
+from ai_workspace.runtime.production.health import ProductionStatus
 
 _ENGINE_DISPLAY_NAMES: dict[str, str] = {
     "claude_code": "Claude Code",
@@ -86,6 +87,7 @@ class DashboardViewModel:
     recent_history: list[ExecutionHistoryEntryViewModel]
     reliability_stats: ReliabilityStats
     automation_status: AutomationStatus | None
+    production_status: ProductionStatus | None
 
 
 def build_workspace_view_model(status: WorkspaceStatus) -> WorkspaceStatusViewModel:
@@ -129,4 +131,5 @@ def build_dashboard_view_model(snapshot: DashboardSnapshot) -> DashboardViewMode
         recent_history=build_history_view_models(snapshot.recent_executions),
         reliability_stats=snapshot.reliability_stats,
         automation_status=snapshot.automation_status,
+        production_status=snapshot.production_status,
     )

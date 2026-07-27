@@ -903,10 +903,10 @@ Review" 참고).
 | M22-T03 | Lifecycle Manager | **완료** |
 | M22-T04 | Health Monitor + Version 조회 | **완료** |
 | M22-T05 | Production API + Server Runtime 연동 | **완료** |
-| M22-T06 | Dashboard Health 화면 | 진행 예정 |
+| M22-T06 | Dashboard Health 화면 | **완료** |
 | M22-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M22-T01~T05 완료, M22-T06 진행 예정.
+**진행 상태**: M22-T01~T06 완료, M22-T07 진행 예정.
 
 ---
 

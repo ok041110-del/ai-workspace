@@ -7,6 +7,8 @@ from ai_workspace.runtime.automation.automation_service import AutomationService
 from ai_workspace.runtime.dashboard.dashboard_repository import InMemoryDashboardRepository
 from ai_workspace.runtime.dashboard.dashboard_service import KNOWN_ENGINES, DashboardService
 from ai_workspace.runtime.execution.events import ENGINE_EXECUTION_STARTED
+from ai_workspace.runtime.production.health import HealthMonitor, HealthStatus
+from ai_workspace.runtime.production.lifecycle import LifecycleManager
 
 
 def _build_service() -> tuple[DashboardService, InMemoryEventBus]:
@@ -56,6 +58,26 @@ def test_automation_status_is_none_without_automation_service() -> None:
     service, _event_bus = _build_service()
 
     assert service.automation_status() is None
+
+
+def test_production_status_is_none_without_health_monitor() -> None:
+    service, _event_bus = _build_service()
+
+    assert service.production_status() is None
+
+
+def test_production_status_reflects_attached_health_monitor() -> None:
+    service, _event_bus = _build_service()
+    lifecycle_manager = LifecycleManager()
+    lifecycle_manager.startup()
+    health_monitor = HealthMonitor(lifecycle_manager=lifecycle_manager)
+
+    service.attach_health_monitor(health_monitor)
+
+    status = service.production_status()
+    assert status is not None
+    server = next(c for c in status.components if c.name == "server")
+    assert server.status == HealthStatus.HEALTHY
 
 
 def test_automation_status_aggregates_rule_counts_and_timestamps() -> None:

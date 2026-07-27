@@ -101,3 +101,27 @@ def test_build_dashboard_view_model_allows_missing_automation_status() -> None:
     view_model = build_dashboard_view_model(snapshot)
 
     assert view_model.automation_status is None
+    assert view_model.production_status is None
+
+
+def test_build_dashboard_view_model_includes_production_status_when_present() -> None:
+    from ai_workspace.runtime.production.health import HealthMonitor
+    from ai_workspace.runtime.production.lifecycle import LifecycleManager
+
+    lifecycle_manager = LifecycleManager()
+    lifecycle_manager.startup()
+    health_monitor = HealthMonitor(lifecycle_manager=lifecycle_manager)
+
+    snapshot = DashboardSnapshot(
+        workspace_status=WorkspaceStatus(None, None, "idle", None),
+        engine_statuses={},
+        execution_stats=ExecutionStats(total=0, success=0, failure=0, cancelled=0, timed_out=0),
+        recent_executions=[],
+        reliability_stats=ReliabilityStats(0, 0, 0, 0),
+        production_status=health_monitor.status(),
+    )
+
+    view_model = build_dashboard_view_model(snapshot)
+
+    assert view_model.production_status is not None
+    assert view_model.production_status.version

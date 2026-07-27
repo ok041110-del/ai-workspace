@@ -4,9 +4,16 @@ import asyncio
 import time
 from datetime import UTC, datetime
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from ai_workspace.runtime.automation.automation_scheduler import AutomationScheduler
-from ai_workspace.runtime.dashboard.dashboard_service import DashboardService
+
+if TYPE_CHECKING:
+    # DashboardService가 이 모듈을 참조하는 HealthMonitor를 선택적으로
+    # 참조할 수 있어(M22-T06, Reader→Reader) 런타임 순환 import를
+    # 피한다 — 이 클래스는 `workspace_status()` 조회만 호출하므로
+    # 타입 힌트 목적의 지연 import만으로 충분하다.
+    from ai_workspace.runtime.dashboard.dashboard_service import DashboardService
 
 DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS = 30.0
 DEFAULT_GRACEFUL_SHUTDOWN_POLL_INTERVAL_SECONDS = 0.5

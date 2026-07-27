@@ -3,13 +3,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from ai_workspace.interfaces.engine_registry import EngineRegistry
 from ai_workspace.interfaces.event_bus import EventBus
 from ai_workspace.runtime.automation.automation_scheduler import AutomationScheduler
-from ai_workspace.runtime.dashboard.dashboard_service import DashboardService
 from ai_workspace.runtime.production.lifecycle import LifecycleManager, LifecycleState
 from ai_workspace.runtime.production.version import WORKSPACE_VERSION
+
+if TYPE_CHECKING:
+    # DashboardService가 이 모듈을 선택적으로 참조할 수 있어(M22-T06,
+    # Reader→Reader) 런타임 순환 import를 피한다 — `_dashboard_health()`
+    # 는 `DashboardService`의 메서드를 전혀 호출하지 않고 주입 여부만
+    # 확인하므로, 타입 힌트 목적의 지연 import만으로 충분하다.
+    from ai_workspace.runtime.dashboard.dashboard_service import DashboardService
 
 
 class HealthStatus(Enum):

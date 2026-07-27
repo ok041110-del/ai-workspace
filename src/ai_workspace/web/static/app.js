@@ -113,6 +113,53 @@ function renderAutomationSummary(automationStatus) {
   });
 }
 
+const HEALTH_STATUS_LABELS = {
+  healthy: "정상",
+  degraded: "저하",
+  unhealthy: "비정상",
+};
+
+function formatUptime(uptimeSeconds) {
+  if (uptimeSeconds === null || uptimeSeconds === undefined) {
+    return "-";
+  }
+  let seconds = Math.max(0, Math.floor(uptimeSeconds));
+  const hours = Math.floor(seconds / 3600);
+  seconds -= hours * 3600;
+  const minutes = Math.floor(seconds / 60);
+  seconds -= minutes * 60;
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+}
+
+function renderProduction(productionStatus, config) {
+  const list = document.getElementById("production-list");
+  list.innerHTML = "";
+  if (!productionStatus) {
+    return;
+  }
+  const rows = [
+    ["Server 상태", HEALTH_STATUS_LABELS[productionStatus.health_status] || productionStatus.health_status],
+    ["Version", productionStatus.version],
+    ["시작 시각", productionStatus.started_at || "-"],
+    ["Uptime", formatUptime(productionStatus.uptime_seconds)],
+  ];
+  (productionStatus.components || []).forEach((component) => {
+    const label = HEALTH_STATUS_LABELS[component.status] || component.status;
+    rows.push([`  - ${component.name}`, label]);
+  });
+  if (config) {
+    rows.push([
+      "Configuration",
+      `${config.host}:${config.port}, log_level=${config.log_level}, dashboard=${config.dashboard_enabled}, automation=${config.automation_enabled}`,
+    ]);
+  }
+  rows.forEach(([label, value]) => {
+    const li = document.createElement("li");
+    li.textContent = `${label}: ${value}`;
+    list.appendChild(li);
+  });
+}
+
 function renderDashboard(data) {
   renderWorkspace(data.workspace || {});
   renderEngines(data.engines);
@@ -120,6 +167,15 @@ function renderDashboard(data) {
   renderHistory(data.recent_history);
   renderReliability(data.reliability_stats);
   renderAutomationSummary(data.automation_status);
+  renderProduction(data.production_status, window.__productionConfig);
+}
+
+async function fetchProductionConfig() {
+  const response = await fetch("/api/config");
+  if (!response.ok) {
+    return;
+  }
+  window.__productionConfig = await response.json();
 }
 
 async function fetchInitialDashboard() {
@@ -307,9 +363,10 @@ function setupAutomationForm() {
   updateVisibleFields("rule-action-kind", "action-field", "action");
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   tickClock();
   setInterval(tickClock, 1000);
+  await fetchProductionConfig();
   fetchInitialDashboard();
   connectWebSocket();
   setupAutomationForm();

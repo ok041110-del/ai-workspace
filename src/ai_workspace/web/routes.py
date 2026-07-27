@@ -36,6 +36,7 @@ def get_summary(request: Request) -> dict[str, object]:
         "execution_stats": service.execution_stats(),
         "reliability_stats": service.reliability_stats(),
         "automation_status": service.automation_status(),
+        "production_status": service.production_status(),
     }
 
 

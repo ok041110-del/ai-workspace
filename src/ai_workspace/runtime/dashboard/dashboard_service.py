@@ -12,6 +12,7 @@ from ai_workspace.domain.dashboard import (
 )
 from ai_workspace.interfaces.dashboard_repository import DashboardRepository
 from ai_workspace.runtime.automation.automation_service import AutomationService
+from ai_workspace.runtime.production.health import HealthMonitor, ProductionStatus
 
 KNOWN_ENGINES: tuple[str, ...] = ("claude_code", "gemini_cli", "codex_cli", "ollama")
 """Dashboard "엔진 현황" 영역에 항상 표시할 Engine 식별자 목록(M20 DoD).
@@ -32,6 +33,7 @@ class DashboardSnapshot:
     recent_executions: list[ExecutionRecord]
     reliability_stats: ReliabilityStats
     automation_status: AutomationStatus | None = None
+    production_status: ProductionStatus | None = None
 
 
 class DashboardService:
@@ -46,16 +48,34 @@ class DashboardService:
     DI 패턴) — Automation Rule 개수/마지막·다음 실행 시각을 조회해
     표시하기 위함이다. `AutomationService.list_rules()`(읽기 전용)만
     호출하고 Automation을 제어하지 않는다(사용자 승인 조건 4).
-    미주입 시 `automation_status()`는 `None`을 반환한다."""
+    미주입 시 `automation_status()`는 `None`을 반환한다.
+
+    `health_monitor`도 동일한 선택적 DI 패턴으로 주입한다(M22-T06,
+    사용자 승인 조건 4 — 기존 `DashboardService`를 확장). Dashboard
+    Health는 `HealthMonitor.status()`(조회 전용)를 그대로 감싸
+    노출할 뿐, Production 상태를 바꾸지 않는다."""
 
     def __init__(
         self,
         *,
         dashboard_repository: DashboardRepository,
         automation_service: AutomationService | None = None,
+        health_monitor: HealthMonitor | None = None,
     ) -> None:
         self._dashboard_repository = dashboard_repository
         self._automation_service = automation_service
+        self._health_monitor = health_monitor
+
+    def attach_health_monitor(self, health_monitor: HealthMonitor) -> None:
+        """생성 이후 `HealthMonitor`를 연결한다. `HealthMonitor`가
+        생명주기 확인을 위해 `DashboardService` 참조를 필요로 해서
+        (`LifecycleManager`의 Graceful Shutdown 폴링), 조립 순서상
+        `DashboardService`를 먼저 만들고 `HealthMonitor`를 나중에
+        붙여야 하는 경우에 쓴다(M22-T06, 순수한 조립 순서 문제 —
+        두 컴포넌트가 서로를 실제로 계속 참조해도 순환 의존은
+        아니다: `HealthMonitor`는 `DashboardService`가 주입돼
+        있는지만 확인할 뿐 메서드를 호출하지 않는다)."""
+        self._health_monitor = health_monitor
 
     def snapshot(self) -> DashboardSnapshot:
         return DashboardSnapshot(
@@ -65,6 +85,7 @@ class DashboardService:
             recent_executions=self.recent_executions(),
             reliability_stats=self.reliability_stats(),
             automation_status=self.automation_status(),
+            production_status=self.production_status(),
         )
 
     def workspace_status(self) -> WorkspaceStatus:
@@ -98,3 +119,8 @@ class DashboardService:
             last_execution_at=max(last_executions) if last_executions else None,
             next_execution_at=min(next_executions) if next_executions else None,
         )
+
+    def production_status(self) -> ProductionStatus | None:
+        if self._health_monitor is None:
+            return None
+        return self._health_monitor.status()

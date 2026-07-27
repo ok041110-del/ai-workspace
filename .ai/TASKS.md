@@ -6773,10 +6773,52 @@ Activity, Push Notification.
 | M22-T03 | Lifecycle Manager(Startup/Running/Shutdown, Graceful Shutdown) | **완료** |
 | M22-T04 | Health Monitor + Version 조회 | **완료** |
 | M22-T05 | Production API(4종) + Server Runtime 연동 | **완료** |
-| M22-T06 | Dashboard Health 화면 | 진행 예정 |
+| M22-T06 | Dashboard Health 화면 | **완료** |
 | M22-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M22-T01~T05 완료. M22-T06 진행 예정.
+**진행 상태**: M22-T01~T06 완료. M22-T07 진행 예정.
+
+#### M22-T06: Dashboard Health 화면
+- 상태: **DONE (2026-07-27)** — `DashboardService`를 확장(사용자
+  승인 조건 4)해 선택적 `health_monitor: HealthMonitor | None = None`
+  DI + `production_status()`(미주입 시 `None`) 추가 — M21의
+  `automation_service` 선택적 DI와 동일한 Reader→Reader 패턴.
+  `DashboardSnapshot`/`DashboardViewModel`에 `production_status`
+  필드 추가(기본값 `None`, 기존 호출부 무영향), `/api/dashboard`와
+  `/api/summary`에 자동 포함.
+
+  **순환 import 회피**: `HealthMonitor`(M22-T04)가 타입 힌트로만
+  `DashboardService`를 참조하고(`_dashboard_health()`는 주입 여부만
+  확인, 메서드 호출 없음), `LifecycleManager`도 동일하게
+  `DashboardService`를 타입 힌트로만 쓰므로(`workspace_status()`
+  호출은 하지만 그 시점엔 이미 인스턴스가 존재) 두 모듈 모두
+  `TYPE_CHECKING` 가드로 지연 import 처리해 `dashboard_service.py`
+  → `health.py`/`lifecycle.py` → `dashboard_service.py`로 되돌아오는
+  런타임 순환 import를 없앴다. **조립 순서 문제**: `HealthMonitor`
+  가 생성되려면 이미 만들어진 `DashboardService`가 필요하지만,
+  `DashboardService`도 `HealthMonitor`를 참조하고 싶어 해 생성자
+  주입만으로는 순서를 맞출 수 없다 — `DashboardService.
+  attach_health_monitor(health_monitor)`(생성 후 연결) 메서드를
+  추가해 `web/server.py`의 `build_app()`이 `dashboard_service`→
+  `lifecycle_manager`→`health_monitor`를 만든 뒤 마지막에
+  `attach_health_monitor()`로 연결하도록 했다(실제 순환 의존이
+  아니라 순수한 조립 순서 문제임을 문서화).
+
+  `web/static/index.html`에 "Production 현황" 영역(최상단) 추가,
+  `web/static/app.js`에 Health 상태 한국어 라벨(정상/저하/비정상)/
+  Uptime 포맷터/컴포넌트별 상태 목록/Configuration 요약(최초
+  로드 시 `/api/config` 1회 조회) 렌더링 로직 추가.
+
+  **실제 브라우저 검증**(Playwright, 이전 T06과 동일하게 세션
+  한정): 실제 `run_server()`로 띄운 서버에서 "Production 현황"
+  섹션이 Server 상태/Version/시작 시각/Uptime/컴포넌트별 상태/
+  Configuration 요약을 전부 정확히 렌더링함을 확인.
+
+  단위 테스트 3개 신규(`production_status` 미주입 시 `None`/
+  `attach_health_monitor` 연결 후 반영/ViewModel 변환). `pytest`
+  (764개), `ruff`, `mypy` 통과. 다음 Task: **M22-T07**(전체 흐름
+  검증 + 문서화).
+- 의존성: M22-T04, M20-T03(`DashboardService`).
 
 #### M22-T05: Production API + Server Runtime 연동
 - 상태: **DONE (2026-07-27)** — `web/production_routes.py`에

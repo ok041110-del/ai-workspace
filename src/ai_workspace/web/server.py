@@ -89,6 +89,7 @@ def build_app(
         event_bus=event_bus,
         engine_registry=engine_registry,
     )
+    dashboard_service.attach_health_monitor(health_monitor)
 
     return create_app(
         dashboard_service=dashboard_service,
