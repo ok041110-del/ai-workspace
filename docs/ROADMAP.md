@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~17 완료, v0.5.0 아키텍처 기준선 선언, Milestone 18(Multi-Engine Execution Integration) 검토 중) |
+| 상태 | Draft (Milestone 1~17 완료, v0.5.0 아키텍처 기준선 선언, Milestone 18(Multi-Engine Execution Integration) 진행 중) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -749,6 +749,38 @@ M18. `EngineRuntime` 계약 확장 대신 신규 `EngineRegistry`(기존
 **진행 상태**: M17-T01~T04 전체 완료. Milestone DoD 1~6번 전부 충족
 확인됨. Milestone 17 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 17
 Review" 참고). **Milestone 17 완료 — 2026-07-27 사용자 승인.**
+
+---
+
+## Milestone 18 — Multi-Engine Execution Integration
+
+**목표**: M17의 `EngineSelectionDecision`을 실제 실행으로 연결하는
+`ExecutionDispatcher`(구체 클래스)를 도입한다. 선택된 Engine을 인증
+상태 확인 후 실행한다. `CodingAgent`는 이번엔 수정하지 않는다.
+
+**Milestone Definition of Done**
+1. `ExecutionDispatcher`가 선택된 Engine 하나만 실행.
+2~3. `AuthenticationManager`로 인증 상태 확인, 인증된 경우 즉시 실행.
+4. 미인증 시 `AuthenticationRequiredError`.
+5~6. 실제 로그인 없음, `is_authenticated()`/`authentication_status()`만.
+7~8. `ExecutionEnvironment` 직접 생성 없음(DI), `EngineAdapter` Interface만 사용.
+9. `EngineExecutionResult` Domain(Provider 독립) 추가.
+10. `ClaudeCodeEngineAdapter` 실제 연결을 통합 테스트로 증명.
+11. Decision 없으면 미실행을 단위 테스트로 증명.
+12. `EngineSelectionPolicy`가 `ExecutionDispatcher` 미참조를 증명.
+13. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 상세는 `.ai/TASKS.md`의 "Milestone 18"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M18-T01 | `EngineExecutionResult` domain + `AuthenticationManager` | 진행 예정 |
+| M18-T02 | `ExecutionDispatcher` 핵심 로직 | 진행 예정 |
+| M18-T03 | End-to-End 통합 테스트 | 진행 예정 |
+| M18-T04 | 문서화 + Milestone 18 Review | 진행 예정 |
+
+**진행 상태**: Task List 승인 완료, 구현 착수.
 
 ---
 

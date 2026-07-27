@@ -5343,14 +5343,72 @@ Interface First 검토 완료(3절, 새 Interface 2개를 "신규 계층 도입"
 
 **Milestone 17 종료 — 2026-07-27 사용자 승인.**
 
-**Milestone 18 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
-않았다. 사용자가 예고한 다음 단계는 Execution — M17의
-`EngineSelectionDecision`을 실제 `CodingAgent` 실행 경로에 연결하는
-것이며, 이번 Milestone으로 그 판단 로직(`EngineSelectionPolicy`)과
-후보 조회(`EngineRegistry`)가 모두 마련됐다 — 다만 이는 사전 논의
-없이 확정된 것이 아니며, Milestone 18은 착수 시점에 이 문서에
-목표/DoD/Task List를 새로 정의한다(Task Driven Development 원칙,
-M2~M17이 그래왔듯).
+**Milestone 18 상태**: 착수 확정. 아래 "Milestone 18" 절 참고.
+
+---
+
+## Milestone 18 — Multi-Engine Execution Integration
+
+**목표**: M17의 `EngineSelectionDecision`을 실제 실행으로 연결하는
+`ExecutionDispatcher`를 도입한다. 선택된 Engine을 인증 상태 확인 후
+실행하는 것 하나가 이번 Milestone의 목표다(2026-07-27 사용자 확정).
+
+> **설계 검토에서 발견한 사실**: `interfaces/execution_environment.py`
+> 의 `ExecutionResult`(returncode/stdout/stderr/timed_out/cancelled,
+> M11)와 DoD가 요구하는 새 "success/output/error/engine/
+> execution_time" Domain이 이름이 겹친다 — 서로 다른 두 개념이라
+> 새 Domain은 **`EngineExecutionResult`**로 명명한다(사용자 승인).
+
+**설계 방향(사용자 최종 승인)**: `ExecutionDispatcher`는 Interface가
+아니라 구체 클래스로 구현한다(M12 `WorkflowRunner`와 동일한 패턴) —
+`EngineRegistry`/`EngineAdapter`/`AuthenticationManager` Interface만
+사용해 OCP를 지킨다. 인증 실패는 `AuthenticationRequiredError`
+예외로, `SelectionDecision` 부재는 `EngineExecutionResult(success=
+False)`로 구분한다. **이번 Milestone은 `CodingAgent`를 수정하지
+않는다** — `ExecutionDispatcher`는 독립적으로 구현·검증한다(Agent
+파이프라인 연결은 후속 Milestone).
+
+**Non-goal(범위 밖)**: 실제 로그인/OAuth/API Key 등록/Credential
+저장/Token Refresh, Retry/Timeout/Recovery/Approval, Parallel
+Execution, Scheduler, Workflow Automation, MCP, Dashboard, Budget/
+Knowledge/Selection Policy 개선, Codex/Gemini 실제 구현(Adapter
+Stub/Mock으로만 검증), `CodingAgent` 연결.
+
+**Milestone Definition of Done**
+1. `ExecutionDispatcher`가 `EngineSelectionDecision`을 받아 선택된
+   Engine 하나만 실행한다.
+2. `ExecutionDispatcher`는 `AuthenticationManager`를 통해 인증
+   상태를 확인한다.
+3. 이미 인증되어 있으면 즉시 실행된다.
+4. 인증되어 있지 않으면 `AuthenticationRequiredError`를 던진다.
+5. Workspace는 실제 로그인을 수행하지 않는다.
+6. `AuthenticationManager`는 `is_authenticated()`/
+   `authentication_status()`만 제공한다(`login()`/`logout()` 없음).
+7. `ExecutionDispatcher`는 `ExecutionEnvironment`를 직접 생성하지
+   않는다(DI만 사용, `EngineAdapter` 내부에 이미 DI되어 있음).
+8. `ExecutionDispatcher`는 `EngineAdapter` Interface만 사용한다.
+9. `EngineExecutionResult` Domain을 추가한다(success/output/error/
+   engine/execution_time, Provider 독립).
+10. `ClaudeCodeEngineAdapter`와 실제 연결되어 `ExecutionEnvironment`
+    를 통해 실행됨을 통합 테스트로 증명한다.
+11. `SelectionDecision`이 없는 경우 실행되지 않음을 단위 테스트로
+    증명한다.
+12. `EngineSelectionPolicy`가 `ExecutionDispatcher`를 참조하지
+    않음을 Architecture 의존성 검증으로 증명한다.
+13. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M18-T01 | `EngineExecutionResult` domain + `AuthenticationManager` Interface + `InMemoryAuthenticationManager` | 진행 예정 |
+| M18-T02 | `ExecutionDispatcher` 핵심 로직(인증 확인/실패/Decision 부재 처리) | 진행 예정 |
+| M18-T03 | End-to-End 통합 테스트(실제 `ClaudeCodeEngineAdapter`+`ExecutionEnvironment` 연결 + 의존성 검증) | 진행 예정 |
+| M18-T04 | 문서화 + Milestone 18 Review | 진행 예정 |
+
+**진행 상태**: Task List 승인 완료, 구현 착수.
+
+---
 
 ---
 
