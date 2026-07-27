@@ -4,6 +4,15 @@ import itertools
 from collections.abc import Callable
 
 from ai_workspace.domain.agent import Agent, AgentCapability, AgentRole, AgentStatus
+from ai_workspace.domain.budget import Budget, BudgetDecision
+from ai_workspace.domain.dashboard import (
+    EngineStatus,
+    ExecutionRecord,
+    ExecutionStats,
+    ReliabilityStats,
+    WorkspaceStatus,
+)
+from ai_workspace.domain.knowledge import KnowledgeDocument
 from ai_workspace.domain.llm_policy import LLMPolicyDecision
 from ai_workspace.domain.project import Project
 from ai_workspace.domain.session import WorkspaceSession
@@ -32,7 +41,9 @@ from ai_workspace.interfaces.automation_engine import (
     TriggerNotBoundError,
     TriggerNotFoundError,
 )
+from ai_workspace.interfaces.budget_policy_engine import BudgetPolicyEngine
 from ai_workspace.interfaces.context_manager import ContextManager, SnapshotNotFoundError
+from ai_workspace.interfaces.dashboard_repository import DashboardRepository
 from ai_workspace.interfaces.engine_adapter import (
     CostEstimate,
     EngineAdapter,
@@ -58,6 +69,11 @@ from ai_workspace.interfaces.interaction_engine import (
     InteractionEngine,
     NormalizedRequest,
     UnsupportedSurfaceError,
+)
+from ai_workspace.interfaces.knowledge_provider import KnowledgeProvider
+from ai_workspace.interfaces.knowledge_repository import (
+    KnowledgeDocumentNotFoundError,
+    KnowledgeRepository,
 )
 from ai_workspace.interfaces.llm_policy_engine import LLMPolicyEngine
 from ai_workspace.interfaces.memory_engine import MemoryEngine
@@ -400,6 +416,12 @@ class FakeEngineRuntime(EngineRuntime):
             results.append(result)
         return results
 
+    def estimate_cost(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> CostEstimate:
+        adapter = self._select(required_capabilities)
+        return adapter.estimate_cost(task)
+
     def cancel(self, task_id: str) -> None:
         if task_id not in self._task_status:
             raise EngineTaskNotFoundError(task_id)
@@ -584,3 +606,114 @@ class FakeLLMPolicyEngine(LLMPolicyEngine):
 
     def select(self, role: AgentRole) -> LLMPolicyDecision | None:
         return self._rules.get(role)
+
+
+class FakeBudgetPolicyEngine(BudgetPolicyEngine):
+    def __init__(self, budget: Budget | None = None) -> None:
+        self._budget = budget
+
+    def check(self, estimate: CostEstimate) -> BudgetDecision:
+        if self._budget is None:
+            return BudgetDecision(allowed=True)
+        if (
+            self._budget.max_tokens is not None
+            and estimate.estimated_tokens > self._budget.max_tokens
+        ):
+            return BudgetDecision(allowed=False, reason="max_tokens exceeded")
+        if (
+            self._budget.max_cost_usd is not None
+            and estimate.estimated_cost_usd > self._budget.max_cost_usd
+        ):
+            return BudgetDecision(allowed=False, reason="max_cost_usd exceeded")
+        return BudgetDecision(allowed=True)
+
+
+class FakeKnowledgeRepository(KnowledgeRepository):
+    def __init__(self, documents: list[KnowledgeDocument] | None = None) -> None:
+        self._documents = list(documents) if documents is not None else []
+
+    def list_all(self) -> list[KnowledgeDocument]:
+        return list(self._documents)
+
+    def get(self, document_id: str) -> KnowledgeDocument:
+        for document in self._documents:
+            if document.document_id == document_id:
+                return document
+        raise KnowledgeDocumentNotFoundError(document_id)
+
+
+class FakeKnowledgeProvider(KnowledgeProvider):
+    def __init__(self, documents: list[KnowledgeDocument] | None = None) -> None:
+        self._documents = list(documents) if documents is not None else []
+        self.received_queries: list[str] = []
+
+    def provide(self, query: str) -> list[KnowledgeDocument]:
+        self.received_queries.append(query)
+        return list(self._documents)
+
+
+class FakeDashboardRepository(DashboardRepository):
+    def __init__(self) -> None:
+        self._workspace_status = WorkspaceStatus(
+            project_name=None, current_task_title=None, status="idle", started_at=None
+        )
+        self._engine_statuses: dict[str, EngineStatus] = {}
+        self._executions: list[ExecutionRecord] = []
+        self.auth_failure_calls: list[str] = []
+
+    def record_execution_started(
+        self, *, engine_name: str, task_title: str, started_at: str
+    ) -> None:
+        self._workspace_status = WorkspaceStatus(
+            project_name=self._workspace_status.project_name,
+            current_task_title=task_title,
+            status="running",
+            started_at=started_at,
+        )
+        self._engine_statuses[engine_name] = EngineStatus.RUNNING
+
+    def record_execution_completed(self, record: ExecutionRecord) -> None:
+        self._executions.insert(0, record)
+        self._engine_statuses[record.engine] = (
+            EngineStatus.READY if record.success else EngineStatus.ERROR
+        )
+        self._workspace_status = WorkspaceStatus(
+            project_name=self._workspace_status.project_name,
+            current_task_title=None,
+            status="idle",
+            started_at=None,
+        )
+
+    def record_authentication_failure(self, *, engine_name: str) -> None:
+        self.auth_failure_calls.append(engine_name)
+        self._engine_statuses[engine_name] = EngineStatus.AUTH_REQUIRED
+
+    def workspace_status(self) -> WorkspaceStatus:
+        return self._workspace_status
+
+    def engine_statuses(self) -> dict[str, EngineStatus]:
+        return dict(self._engine_statuses)
+
+    def recent_executions(self, limit: int = 20) -> list[ExecutionRecord]:
+        return list(self._executions[:limit])
+
+    def execution_stats(self) -> ExecutionStats:
+        return ExecutionStats(
+            total=len(self._executions),
+            success=sum(1 for record in self._executions if record.success),
+            failure=sum(
+                1
+                for record in self._executions
+                if not record.success and not record.cancelled and not record.timed_out
+            ),
+            cancelled=sum(1 for record in self._executions if record.cancelled),
+            timed_out=sum(1 for record in self._executions if record.timed_out),
+        )
+
+    def reliability_stats(self) -> ReliabilityStats:
+        return ReliabilityStats(
+            retry_count=sum(record.retry_count for record in self._executions),
+            timeout_count=sum(1 for record in self._executions if record.timed_out),
+            cancelled_count=sum(1 for record in self._executions if record.cancelled),
+            authentication_failure_count=len(self.auth_failure_calls),
+        )

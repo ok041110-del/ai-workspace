@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from ai_workspace.domain.retry_policy import RetryPolicy
 from ai_workspace.domain.task import Task
-from ai_workspace.interfaces.engine_adapter import EngineAdapter, EngineResult, EngineSessionStatus
+from ai_workspace.interfaces.engine_adapter import (
+    CostEstimate,
+    EngineAdapter,
+    EngineResult,
+    EngineSessionStatus,
+)
 from ai_workspace.interfaces.engine_runtime import EngineRuntime
 
 
@@ -82,6 +87,11 @@ class RecoveringEngineRuntime(EngineRuntime):
             except BaseException as exc:
                 final.append(EngineResult(success=False, output="", error=str(exc)))
         return final
+
+    def estimate_cost(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> CostEstimate:
+        return self._inner.estimate_cost(task, required_capabilities)
 
     def cancel(self, task_id: str) -> None:
         self._inner.cancel(task_id)

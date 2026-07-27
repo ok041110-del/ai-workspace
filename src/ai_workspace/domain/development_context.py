@@ -14,8 +14,13 @@ class DevelopmentContext:
     task_id: str
     instructions: str
     prior_output: str | None = None
+    related_knowledge: list[str] | None = None
 
     def to_prompt(self) -> str:
-        if self.prior_output is None:
-            return self.instructions
-        return f"{self.instructions}\n\n이전 단계 결과:\n{self.prior_output}"
+        prompt = self.instructions
+        if self.prior_output is not None:
+            prompt = f"{prompt}\n\n이전 단계 결과:\n{self.prior_output}"
+        if self.related_knowledge:
+            knowledge_text = "\n\n".join(self.related_knowledge)
+            prompt = f"{prompt}\n\n관련 프로젝트 지식:\n{knowledge_text}"
+        return prompt

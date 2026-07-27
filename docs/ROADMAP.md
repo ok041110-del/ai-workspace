@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.15.0 |
-| 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~14 완료, v0.5.0 아키텍처 기준선 선언, Milestone 15 목표 미정) |
+| 문서 버전 | v0.23.0 |
+| 작성일 | 2026-07-27 |
+| 상태 | Draft (Milestone 1~22 완료, v0.5.0 아키텍처 기준선 선언, Milestone 22에서 Production Platform 도입 — ADR-0034(새 Interface 없이 27종 유지). **M23-Preparation(Obsidian Knowledge Base 구축, `Vault/`) 전체 완료**(T01~T07 + T01A~T01D). Milestone 23(Mobile Experience)은 목표 검토 대기 — 착수 조건은 Vault `PREPARATION_SUMMARY.md` 참고) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -645,6 +645,270 @@ str | None = None`을 선택적으로 추가. `ClaudeCodeEngineAdapter`만 실�
 **진행 상태**: M14-T01~T04 전체 완료. Milestone DoD 1~5번 전부 충족
 확인됨. Milestone 14 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 14
 Review" 참고). **Milestone 14 완료 — 2026-07-26 사용자 승인.**
+
+---
+
+## Milestone 15 — Token & Cost Optimization
+
+**목표**: `EngineAdapter.estimate_cost()`를 실제로 활용하는 Workspace
+차원의 Budget 정책을 도입해, Task 실행 전에 예상 비용/토큰을 확인하고
+초과 시 실행을 막는다(Provider 독립).
+
+**설계 방향**: `domain/budget.py`(`Budget`/`BudgetDecision`) +
+`BudgetPolicyEngine` Interface + `InMemoryBudgetPolicyEngine`.
+`EngineRuntime.estimate_cost()` 신설. `CodingAgent`에 선택적 DI로 연동.
+
+**Milestone Definition of Done**
+1. `Budget`/`BudgetDecision`이 Provider 독립.
+2. `BudgetPolicyEngine`이 side-effect 없이 동작, 정책 없으면 항상 허용.
+3. `EngineRuntime.estimate_cost()`가 세션 없이 `CostEstimate` 반환.
+4. `CodingAgent`가 예산 초과 시 실행을 막음이 통합 테스트로 증명.
+5. Budget 미지정 시 기존과 완전히 동일하게 동작(회귀 없음).
+6. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 상세는 `.ai/TASKS.md`의 "Milestone 15"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M15-T01 | `Budget`/`BudgetDecision` domain + `BudgetPolicyEngine` Interface + 구현체 | **완료** |
+| M15-T02 | `EngineRuntime.estimate_cost()` + `CodingAgent` 연동 | **완료** |
+| M15-T03 | End-to-End 통합 테스트 | **완료** |
+| M15-T04 | 문서화 + Milestone 15 Review | **완료** |
+
+**진행 상태**: M15-T01~T04 전체 완료. Milestone DoD 1~6번 전부 충족
+확인됨. Milestone 15 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 15
+Review" 참고). **Milestone 15 완료 — 2026-07-27 사용자 승인.**
+
+---
+
+## Milestone 16 — Project Knowledge System (Memory Engine)
+
+**목표**: 프로젝트 기존 문서(ARCHITECTURE/DECISIONS/RULES/TASKS/
+ROADMAP/PRD)를 Workspace 전용 Knowledge로 노출하고, Agent가 Keyword
+기반으로 검색해 실행 컨텍스트에 참고하게 한다(Provider/Engine 독립).
+기존 `MemoryEngine`(세션 연속성)과는 이름·역할을 분리한다.
+
+**설계 방향**: `domain/knowledge.py`(`KnowledgeDocument`/
+`KnowledgeKind`) + `KnowledgeRepository`(`FileKnowledgeRepository`) +
+`KnowledgeSearch` + `KnowledgeProvider`(Agent의 유일한 진입점).
+`KnowledgeIndexer`는 YAGNI로 제외.
+
+**Milestone Definition of Done**
+1. `KnowledgeDocument`/`KnowledgeKind`가 Provider/Engine 독립.
+2. `KnowledgeRepository`가 프로젝트 문서를 `KnowledgeDocument`로 노출.
+3. `KnowledgeSearch`가 Keyword 기반으로 검색.
+4. `KnowledgeProvider`가 Agent의 유일한 진입점.
+5. `CodingAgent`가 예산 확인처럼 선택적 DI로 Knowledge를 프롬프트에
+   반영, 미주입 시 기존과 동일.
+6. LLM 호출 없음(side-effect 없는 순수 조회).
+7. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 상세는 `.ai/TASKS.md`의 "Milestone 16"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M16-T01 | `KnowledgeDocument`/`KnowledgeKind` domain + `KnowledgeRepository` + `FileKnowledgeRepository` | **완료** |
+| M16-T02 | `KnowledgeSearch`/`KnowledgeProvider` + `CodingAgent` 연동 | **완료** |
+| M16-T03 | End-to-End 통합 테스트 | **완료** |
+| M16-T04 | 문서화 + Milestone 16 Review | **완료** |
+
+**진행 상태**: M16-T01~T04 전체 완료. Milestone DoD 1~7번 전부 충족
+확인됨. Milestone 16 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 16
+Review" 참고). **Milestone 16 완료 — 2026-07-27 사용자 승인.**
+
+---
+
+## Milestone 17 — Intelligent Engine Selection
+
+**목표**: Task + Budget(M15) + Project Knowledge(M16) + 등록된
+Engine들의 Capability/비용을 종합해 최적 Engine 후보를 결정하는
+`EngineSelectionPolicy`를 도입한다. Decision Only — 실행 연결은
+M18. `EngineRuntime` 계약 확장 대신 신규 `EngineRegistry`(기존
+`AgentRegistry`와 동일한 패턴)로 후보 조회를 분리한다.
+
+**Milestone Definition of Done**
+1. `EngineCandidate`/`EngineSelectionDecision`이 Provider 독립.
+2. `EngineRegistry`가 등록된 모든 Engine 후보를 나열(세션 미생성).
+3. `EngineSelectionPolicy`가 규칙 기반, side-effect 없음, `reason` 포함.
+4. Budget 내 최저 비용 우선 규칙이 통합 테스트로 검증.
+5. 결정이 실제 `engine_runtime.run()` 호출에 연결되지 않음을 증명.
+6. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 상세는 `.ai/TASKS.md`의 "Milestone 17"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M17-T01 | `EngineCandidate`/`EngineSelectionDecision` domain + `EngineRegistry` | **완료** |
+| M17-T02 | `EngineSelectionPolicy` + `InMemoryEngineSelectionPolicy` | **완료** |
+| M17-T03 | End-to-End 통합 테스트 | **완료** |
+| M17-T04 | 문서화 + Milestone 17 Review | **완료** |
+
+**진행 상태**: M17-T01~T04 전체 완료. Milestone DoD 1~6번 전부 충족
+확인됨. Milestone 17 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 17
+Review" 참고). **Milestone 17 완료 — 2026-07-27 사용자 승인.**
+
+---
+
+## Milestone 18 — Multi-Engine Execution Integration
+
+**목표**: M17의 `EngineSelectionDecision`을 실제 실행으로 연결하는
+`ExecutionDispatcher`(구체 클래스)를 도입한다. 선택된 Engine을 인증
+상태 확인 후 실행한다. `CodingAgent`는 이번엔 수정하지 않는다.
+
+**Milestone Definition of Done**
+1. `ExecutionDispatcher`가 선택된 Engine 하나만 실행.
+2~3. `AuthenticationManager`로 인증 상태 확인, 인증된 경우 즉시 실행.
+4. 미인증 시 `AuthenticationRequiredError`.
+5~6. 실제 로그인 없음, `is_authenticated()`/`authentication_status()`만.
+7~8. `ExecutionEnvironment` 직접 생성 없음(DI), `EngineAdapter` Interface만 사용.
+9. `EngineExecutionResult` Domain(Provider 독립) 추가.
+10. `ClaudeCodeEngineAdapter` 실제 연결을 통합 테스트로 증명.
+11. Decision 없으면 미실행을 단위 테스트로 증명.
+12. `EngineSelectionPolicy`가 `ExecutionDispatcher` 미참조를 증명.
+13. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 상세는 `.ai/TASKS.md`의 "Milestone 18"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M18-T01 | `EngineExecutionResult` domain + `AuthenticationManager` | **완료** |
+| M18-T02 | `ExecutionDispatcher` 핵심 로직 | **완료** |
+| M18-T03 | End-to-End 통합 테스트 | **완료** |
+| M18-T04 | 문서화 + Milestone 18 Review | **완료** |
+
+**진행 상태**: M18-T01~T04 전체 완료. Milestone DoD 1~13번 전부 충족
+확인됨. Milestone 18 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 18
+Review" 참고). **Milestone 18 완료 — 2026-07-27 사용자 승인.**
+
+---
+
+## Milestone 19 — Reliability Layer
+
+**목표**: M18 Execution Layer의 안정성 확보 — 정책 기반 Retry,
+Timeout, 안전한 Cancellation. 기존 `RetryPolicy`(M3)를 확장하고
+(새 이름 도입 없음), `RetryExecutor`가 인증→Registry 조회→Adapter
+실행 전체를 감싸 재시도한다. Auth/등록 실패는 재시도하지 않는다.
+
+**Milestone Definition of Done**
+1. `RetryPolicy` 확장(최대 횟수/재시도 가능 판단/Delay).
+2. `RetryExecutor`가 재시도 담당, `ExecutionDispatcher`는 직접
+   구현하지 않음.
+3~4. Timeout 시 정책대로 재시도, 취소 시 결과에 반영.
+5. `EngineExecutionResult` 확장(retry_count/cancelled/timed_out).
+6~7. `AuthenticationRequiredError`/`EngineNotRegisteredError`(및
+   `NoSuitableEngineError`) 재시도 안 함.
+8~9. 재시도 가능/불가능 분류, 횟수 정책 동작을 단위 테스트로 증명.
+10~11. Timeout/Cancellation을 통합 테스트로 증명.
+12. `ExecutionDispatcher`의 `RetryPolicy` 비직접구현을 의존성
+    검증으로 증명.
+13. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 상세는 `.ai/TASKS.md`의 "Milestone 19"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M19-T01 | Reliability Domain(`RetryPolicy` 확장/`RetryDecision`/`RetryExecutor`) | **완료** |
+| M19-T02 | Execution Reliability 구현 | **완료** |
+| M19-T03 | End-to-End 통합 테스트 | **완료** |
+| M19-T04 | 문서화 + Milestone 19 Review | **완료** |
+
+**진행 상태**: M19-T01~T04 전체 완료. Milestone DoD 1~13번 전부 충족
+확인됨. Milestone 19 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 19
+Review" 참고). **Milestone 19 완료 — 2026-07-27 사용자 승인.**
+
+---
+
+## Milestone 20 — Real-time Dashboard Platform
+
+**목표**: AI Workspace 운영 상태를 실시간 관찰하는 Read-Only
+Dashboard(CQRS Read Model)를 구축한다. FastAPI+uvicorn(신규 런타임
+의존성) + 정적 Web UI + WebSocket. Core 계층은 웹 프레임워크를
+모른다 — FastAPI는 신규 `web/`(Infrastructure) 계층에서만 쓴다.
+
+**Milestone Definition of Done**
+1. `DashboardRepository`/`InMemoryDashboardRepository`.
+2. `DashboardService`(UI 비의존).
+3~4. Dashboard API 4종 + WebSocket(Event 기반, Polling 없음).
+5~6. Dashboard Web UI(정적 파일) + `DashboardViewModel`(한국어 라벨).
+7~8. 실행 결과 자동 기록(Event 기반), Repository의 Read Model만 사용.
+9. 현재 시각/경과 시간 브라우저 1초 갱신.
+10. FastAPI OpenAPI로 API 자동 문서화.
+11. `DashboardService`의 `web/` 미참조를 의존성 검증으로 증명.
+12. `workspace start` 서버 실행, 기존 CLI 영향 없음.
+13. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 상세는 `.ai/TASKS.md`의 "Milestone 20"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M20-T01 | Dashboard 도메인 및 이벤트 정의 | **완료** |
+| M20-T02 | 실행 계층과 Dashboard 연결 | **완료** |
+| M20-T03 | Read Model 및 ViewModel | **완료** |
+| M20-T04 | 서버 런타임 구축 | **완료** |
+| M20-T05 | API 및 Web UI | **완료** |
+| M20-T06 | 전체 흐름 검증 | **완료** |
+| M20-T07 | 문서화 및 아키텍처 정리 | **완료** |
+
+**진행 상태**: M20-T01~T07 전체 완료. **2026-07-27 사용자 승인으로
+Milestone 20 공식 종료**(상세는 `.ai/TASKS.md`의 "Milestone 20
+Review" 참고).
+
+---
+
+## Milestone 21 — Automation Engine
+
+**목표**: 사용자의 명시적 요청 없이 조건/일정에 따라 Task를 자동
+실행하는 Automation을 구현한다. Automation은 Dashboard와 독립적인
+Domain이며, `ExecutionDispatcher`를 통해서만 Task를 실행하고,
+`EventBus`와 Dashboard는 그대로 재사용한다. 상세는 `.ai/TASKS.md`의
+"Milestone 21" 참고.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M21-T01 | Automation 도메인 + `AutomationRepository` Interface + `InMemoryAutomationRepository` | **완료** |
+| M21-T02 | `AutomationService`(CRUD) 구현 | **완료** |
+| M21-T03 | `AutomationScheduler` + Time/Interval/Startup Trigger 구현 | **완료** |
+| M21-T04 | Event Trigger + `ExecutionDispatcher` 연동 | **완료** |
+| M21-T05 | Automation API + Dashboard 연계 | **완료** |
+| M21-T06 | Dashboard Web UI Automation 화면 | **완료** |
+| M21-T07 | 전체 흐름 검증 + 문서화 | **완료** |
+
+**진행 상태**: M21-T01~T07 전체 완료. **2026-07-27 사용자 승인으로
+Milestone 21 공식 종료**(상세는 `.ai/TASKS.md`의 "Milestone 21
+Review" 참고).
+
+---
+
+## Milestone 22 — Production Platform
+
+**목표**: AI Workspace를 실제 운영 가능한 Production Platform으로
+확장한다. Server Runtime의 Lifecycle/Configuration/Health/Logging을
+담당하며 비즈니스 로직은 추가하지 않는다. 상세는 `.ai/TASKS.md`의
+"Milestone 22" 참고.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M22-T01 | Production Configuration + Loader | **완료** |
+| M22-T02 | Production Logging | **완료** |
+| M22-T03 | Lifecycle Manager | **완료** |
+| M22-T04 | Health Monitor + Version 조회 | **완료** |
+| M22-T05 | Production API + Server Runtime 연동 | **완료** |
+| M22-T06 | Dashboard Health 화면 | **완료** |
+| M22-T07 | 전체 흐름 검증 + 문서화 | **완료** |
+
+**진행 상태**: M22-T01~T07 전체 완료. **2026-07-27 사용자 승인으로
+Milestone 22 공식 종료**(상세는 `.ai/TASKS.md`의 "Milestone 22
+Review" 참고).
 
 ---
 

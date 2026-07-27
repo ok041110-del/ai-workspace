@@ -1,0 +1,92 @@
+---
+tags: [architecture]
+---
+
+# Architecture Overview
+
+## 요약
+
+AI Workspace는 위(UI)에서 아래(구현 엔진)로만 의존하는 계층형
+구조다. Agent 간 협업만 EventBus를 통한 수평 결합이고, 나머지는
+전부 단방향 의존이다. Milestone 20부터는 Dashboard/Automation/
+Production이라는 Infrastructure 계층이 추가됐지만, Core
+Domain(`domain`/`interfaces`/`engines`)은 이 계층들의 존재를
+전혀 모른다.
+
+## Layer 구조
+
+```
+UI Surfaces (CLI, Web Dashboard)
+  → Interaction Layer
+  → Workspace Core (오케스트레이터)
+  → Agent Runtime (Registry/Scheduler/Manager/EventBus)
+  → Agents (Coordination/Planning/Coding/Review/Documentation …)
+  → Core Engines / Context Manager+Memory Engine / Engine Runtime→Engine Adapter→구현 엔진
+```
+
+병렬로 존재하는 Infrastructure 계층(Core Domain과 독립):
+
+```
+ExecutionDispatcher → EventBus → Dashboard(Read Model)
+                              ↘ Automation(Scheduler, EventBus 구독)
+Production(Configuration/Lifecycle/Health) → web/(FastAPI, 유일하게 프레임워크를 아는 계층)
+```
+
+## 핵심 컴포넌트
+
+| 컴포넌트 | 역할 | 관련 문서 |
+|---|---|---|
+| Workspace Core | 최상위 오케스트레이터, Task를 직접 실행하지 않고 Agent Runtime에 위임 | |
+| Agent Runtime | Registry/Scheduler/Manager, Capability 기준으로 Agent 선택 | |
+| EventBus | Agent/Engine/Workspace Core 사이 pub/sub. Event Store는 독립 구독자 | 아래 EventBus 절 |
+| Engine Runtime → Engine Adapter | 구현 엔진(Claude Code/Codex/Gemini CLI) 호출 경로 | |
+| ExecutionDispatcher | `EngineSelectionDecision` → 실제 실행. 유일한 실행 진입점(M18) | [[Automation Index]] |
+| DashboardService | CQRS Read Model, Task를 실행하지 않고 조회만 | [[Dashboard Index]] |
+| AutomationScheduler | 조건/일정에 따라 Task 자동 실행. Dashboard와 독립적인 Domain | [[Automation Index]] |
+| LifecycleManager / HealthMonitor | Server Runtime의 생명주기/상태(비즈니스 로직 없음) | [[Production Index]] |
+
+## CQRS
+
+Dashboard/Automation Read 경로는 CQRS를 따른다 — 쓰기(Event 발행)
+와 읽기(Service 조회)가 분리돼 있고, Writer(`ExecutionDispatcher`)
+는 Reader(`DashboardRepository`)를 전혀 모른다. 단, **Reader가 다른
+Reader를 참조하는 것은 CQRS 위반이 아니다** — `DashboardService`가
+`AutomationService`/`HealthMonitor`를 선택적으로 참조하는 것이 그
+예(M21/M22).
+
+## EventBus
+
+인메모리 pub/sub(`InMemoryEventBus`). `ExecutionDispatcher`가
+`ENGINE_EXECUTION_STARTED`/`ENGINE_EXECUTION_COMPLETED`/
+`ENGINE_AUTHENTICATION_FAILED`를 발행하고, `DashboardRepository`와
+`AutomationScheduler`가 각자 독립적으로 구독한다. Event Store는
+이 Bus의 **독립 구독자**일 뿐 특별한 전달 경로를 갖지 않는다.
+
+## Repository 패턴
+
+`ProjectRepository`/`AgentRepository`/`EventStore`/
+`KnowledgeRepository`/`DashboardRepository`/`AutomationRepository`
+등 — 전부 `load`/`get` + `save`(upsert) + `list_*`(방어적 복사)
+스타일을 공유한다. 파일 기반 구현체(`storage/`)와 인메모리
+구현체(`runtime/*/`)가 같은 Interface를 만족한다.
+
+## Interface 개수
+
+**총 27종**(2026-07-27 기준, ADR-0034 시점). Milestone 21에서
+`AutomationRepository`가 27번째로 추가된 뒤 Milestone 22는 새
+Interface를 추가하지 않았다. 전체 목록은 GitHub `docs/
+ARCHITECTURE.md` §7 참고.
+
+## 관련 문서
+
+- [[Overview]]
+- [[ADR Index]]
+- [[Backend Index]]
+- [[Dashboard Index]]
+- [[Automation Index]]
+- [[Production Index]]
+- [[Architecture Map]]
+
+## 원문
+
+- docs/ARCHITECTURE.md

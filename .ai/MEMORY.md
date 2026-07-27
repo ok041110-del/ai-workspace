@@ -469,6 +469,355 @@
   확장(ADR-0009/0015와 동일 계열)** — ADR-0026으로 정식 기록. 이월
   부채는 M13과 동일하게 유지(Effort 라우팅 신규 이월, Codex/Gemini
   실연동 계속 이월).
+- **Milestone 15(Token & Cost Optimization) 완료 — 2026-07-27
+  사용자 승인.** 목표는 "`EngineAdapter.estimate_cost()`를 실제로
+  활용하는 Workspace 차원 Budget 정책을 도입해 Task 실행 전에 예산을
+  확인하고 초과 시 막는다"(MVP, Provider 독립). **핵심 발견**:
+  `estimate_cost()`는 M3부터 있었지만 `EngineRuntime`도 Agent도 호출한
+  적이 없었다(M12의 `WorkflowEngine.plan()`, M13의 `AgentScheduler.
+  select()`와 동일한 "만들어졌지만 쓰인 적 없는 기능" 패턴). `domain/
+  budget.py`에 `Budget`/`BudgetDecision`(Provider 독립) 신규,
+  `interfaces/budget_policy_engine.py`에 `BudgetPolicyEngine`
+  Interface 신규(`LLMPolicyEngine`과 동일 설계 원칙 — side-effect
+  없음, 정책 없으면 항상 허용), `InMemoryBudgetPolicyEngine` 최소
+  구현. `EngineRuntime`(RULES §1.2 보호 자산)에 `estimate_cost(task,
+  required_capabilities) -> CostEstimate`를 신규 추가(세션 미생성,
+  `run()`과 동일한 선택 규칙, 신규 **ADR-0027**) — `InMemoryEngineRuntime`
+  /`ManagedEngineRuntime`은 기존 선택 로직 재사용, `RecoveringEngineRuntime`
+  은 순수 위임. `CodingAgent`에 선택적 `budget_policy_engine` DI 추가 —
+  실행 직전 `estimate_cost()` → `check()`를 거쳐 예산 초과 시 Approval/
+  Retry 없이 Task를 `BLOCKED`로 전환하고 실행하지 않는다. 실제
+  `ManagedEngineRuntime`+`ClaudeCodeEngineAdapter`+`CodingAgent` 조합
+  으로 예산 내/초과/미설정 3가지 시나리오를 통합 테스트로 증명
+  (M15-T03). 새 소스 파일 3개(`domain/budget.py`, `interfaces/
+  budget_policy_engine.py`, `engines/budget_policy_engine.py`), 기존
+  파일 수정 5개(`EngineRuntime` Interface 1·구현체 3·`CodingAgent` 1).
+  전체 `pytest` 511개(M14 완료 489개 → M15에서 22개 신규) 통과,
+  `ruff`/`mypy` 클린. **새 최상위 Interface 1개(`BudgetPolicyEngine`)
+  추가 + 기존 `EngineRuntime` 계약 확장** — 새 Interface 추가(M5/M11과
+  동일 계열)와 기존 계약 확장(M14와 동일 계열)이 겹친 첫 Milestone.
+  이월 부채는 M14와 동일하게 유지(여러 Task에 걸친 누적 예산 추적,
+  예산 초과 시 Approval 흐름, 실제 API 과금 조회는 신규 이월 후보로
+  기록했으나 전부 "사용자가 이번 범위에서 의도적으로 제외"한 항목이라
+  기존 5개 부채 목록에는 추가하지 않음).
+- **Milestone 16(Project Knowledge System) 완료 — 2026-07-27
+  사용자 승인.** 목표는 "프로젝트 기존 문서(ARCHITECTURE/DECISIONS/
+  RULES/TASKS/ROADMAP/PRD)를 Workspace 전용 Knowledge로 노출하고
+  Agent가 Keyword 검색으로 참고하게 한다"(MVP, Provider/Engine
+  독립). **핵심 설계 결정**: `interfaces/memory_engine.py`의
+  `MemoryEngine`(M1부터 존재, `ContextManager`가 감싸 Mission 요약/
+  세션 연속성에 사용)은 완전히 다른 개념이라 손대지 않고, 새 이름의
+  컴포넌트 계열(`KnowledgeRepository`/`KnowledgeSearch`/
+  `KnowledgeProvider`)을 신설(신규 **ADR-0028**). `domain/knowledge.py`
+  에 `KnowledgeDocument`/`KnowledgeKind`(ARCHITECTURE/ADR/RULE/TASK/
+  PROJECT 5종, Provider 독립), `storage/file_knowledge_repository.py`
+  의 `FileKnowledgeRepository`가 고정 파일→kind 매핑으로 파일 하나를
+  문서 하나로 노출(문단 파싱 없음, YAGNI). `engines/knowledge_search.py`
+  의 `InMemoryKnowledgeSearch`(Keyword 포함 검색, `KnowledgeIndexer`는
+  문서 수가 적어 이번 범위에서 제외), `engines/knowledge_provider.py`
+  의 `InMemoryKnowledgeProvider`(Agent의 유일한 진입점, `ContextManager`
+  가 `MemoryEngine`을 감싸는 것과 동일한 패턴). `domain/
+  development_context.py`에 `related_knowledge` 필드 추가.
+  `CodingAgent`에 선택적 `knowledge_provider` DI 추가 — 실제
+  `docs/ARCHITECTURE.md`에 등장하는 키워드로 검색한 결과가 실행
+  프롬프트에 그대로 반영됨을 실제 `FileKnowledgeRepository`(프로젝트
+  루트) 기반 통합 테스트로 증명(M16-T03). 새 소스 파일 7개(domain 1·
+  interfaces 3·storage 1·engines 2), 기존 파일 수정 2개
+  (`development_context.py`/`coding_agent.py`) — M5(신규 6)보다 넓은,
+  지금까지 중 가장 넓은 신규 파일 폭. 전체 `pytest` 532개(M15 완료
+  511개 → M16에서 21개 신규) 통과, `ruff`/`mypy` 클린. **새 최상위
+  Interface 3개**(`KnowledgeRepository`/`KnowledgeSearch`/
+  `KnowledgeProvider`) 추가 — M1 이후 가장 큰 Interface 확장,
+  ADR-0017/0025와 동일한 "신규 계층 도입" 계열로 ADR-0028 기록.
+  이월 부채는 M15와 동일하게 유지(신규 이월 없음 — Review/
+  Documentation Agent로의 확장, `KnowledgeIndexer`, Semantic
+  Search는 전부 "사용자가 이번 범위에서 의도적으로 제외"한 항목).
+- **Milestone 17(Intelligent Engine Selection) 완료 — 2026-07-27
+  사용자 승인.** 목표는 "Task+Budget(M15)+Knowledge(M16)+등록된
+  Engine 후보를 종합해 최적 Engine을 결정만 한다"(Decision Only,
+  실행 연결은 M18). **핵심 발견**: `EngineRuntime`은 `required_
+  capabilities`를 만족하는 등록된 Engine 중 첫 매칭만 고를 뿐, 여러
+  후보를 나열·비교하는 방법이 없었다. **사용자 승인 조건**: (1)
+  Decision Only 유지, (2) `EngineSelectionDecision`에 `reason` 포함,
+  (3) 가능하면 `EngineRuntime.list_candidates()` 대신 기존 Registry/
+  Manager 계층 활용 — 조사 결과 `AgentRegistry`에 대응하는 기존
+  Engine Registry가 없어 `AgentManager`/`AgentRegistry` 분리와 동일한
+  패턴으로 신규 `EngineRegistry`를 도입(신규 **ADR-0029**,
+  `EngineRuntime`의 실행 계약은 전혀 확장하지 않음). `domain/
+  engine_selection.py`에 `EngineCandidate`/`EngineSelectionDecision`
+  (Provider 독립), `interfaces/engine_registry.py`의
+  `EngineRegistry`(`register`/`get`/`list_candidates`, 세션 미생성),
+  `interfaces/engine_selection_policy.py`의 `EngineSelectionPolicy`
+  (후보가 어디서 왔는지 모름 — 조회/판단 책임 분리). `engines/
+  engine_selection_policy.py`의 `InMemoryEngineSelectionPolicy`가
+  `BudgetPolicyEngine.check()`를 재사용(M15, 예산 비교 로직 중복
+  없음)해 예산 내 최저 비용 후보를 선택, Knowledge는 `reason`에만
+  참고 반영. **결정과 실행의 분리**를 실제 `CodingAgent` 파이프라인
+  실행 결과 + `inspect.signature()` 이중 증명(다른 Engine을 추천해도
+  실제 실행은 영향받지 않음, `CodingAgent` 생성자에 관련 파라미터
+  자체가 없음). 신규 소스 파일 5개, **기존 소스 파일 수정 0개**(M1
+  이후 유일하게 기존 파일을 전혀 건드리지 않은 Milestone). 전체
+  `pytest` 553개(M16 완료 532개 → M17에서 21개 신규) 통과, `ruff`/
+  `mypy` 클린. **새 최상위 Interface 2개**(`EngineRegistry`/
+  `EngineSelectionPolicy`) 추가, 기존 Interface는 하나도 확장하지
+  않음(M14/M15/M16과 다른 패턴) — ADR-0017/0025/0028과 동일한 "신규
+  계층 도입" 계열로 ADR-0029 기록. 이월 부채는 M16과 동일하게 유지
+  (신규 이월: 실행 연결은 M18 예정으로 명시적으로 분리, Model 수준
+  결정/ML 기반 고급 판단은 "사용자가 이번 범위에서 의도적으로 제외"
+  한 항목이라 기존 부채 목록에는 추가하지 않음).
+- **Milestone 18(Multi-Engine Execution Integration) 완료 —
+  2026-07-27 사용자 승인.** 목표는 "M17의 `EngineSelectionDecision`
+  을 실제 실행으로 연결하는 `ExecutionDispatcher`를 도입해, 선택된
+  Engine을 인증 상태 확인 후 실행한다"(MVP). **핵심 발견**: 요청받은
+  새 "ExecutionResult" Domain(success/output/error/engine/
+  execution_time)이 M11 `interfaces/execution_environment.py`의
+  기존 `ExecutionResult`(returncode/stdout/stderr, 프로세스 결과)와
+  이름이 겹쳐 **`EngineExecutionResult`**로 명명(사용자 승인, M16
+  `MemoryEngine` 충돌 발견과 같은 종류의 사전 점검). **사용자 승인
+  조건**: (1) `EngineExecutionResult` 명명, (2) `ExecutionDispatcher`
+  는 Interface가 아닌 구체 클래스(M12 `WorkflowRunner`와 동일
+  패턴), (3) 인증 실패=`AuthenticationRequiredError` 예외/Decision
+  부재=`EngineExecutionResult(success=False)`로 구분, (4)
+  `CodingAgent`는 수정하지 않고 `ExecutionDispatcher`를 독립적으로
+  구현·검증. `domain/execution_result.py`에 `EngineExecutionResult`
+  (Provider 독립), `interfaces/authentication_manager.py`의
+  `AuthenticationManager`(`is_authenticated`/`authentication_status`
+  만 — `login`/`logout` 없음, "로그인 수행"이 아니라 "상태 확인"만
+  담당, 신규 **ADR-0030**)/`AuthenticationRequiredError`,
+  `engines/authentication_manager.py`의
+  `InMemoryAuthenticationManager`(실제 로그인/OAuth/Credential
+  없음). `runtime/execution/execution_dispatcher.py`의
+  `ExecutionDispatcher`가 `dispatch(decision, task)`로 `decision`이
+  `None`이면 Registry/Auth 어느 쪽도 호출하지 않고 즉시 실패 결과를,
+  미인증이면 예외를, 인증되면 `EngineRegistry.get()`으로 정확히
+  하나의 Adapter만 실행한다. 실제 `ClaudeCodeEngineAdapter`+
+  `ExecutionEnvironment`로 실행됨(명령이 실제로 기록됨)과
+  `EngineSelectionPolicy` 소스 코드에 `ExecutionDispatcher` 참조가
+  없음을 모두 통합 테스트로 증명(M18-T03) — Task→Selection Policy→
+  Decision→Dispatcher→Authentication→Registry→Adapter→
+  ExecutionEnvironment→`EngineExecutionResult`로 이어지는 **첫
+  End-to-End 실행 경로 완성**(M11/M15/M16/M17이 실행까지 연결됨).
+  신규 소스 파일 4개, **기존 소스 파일 수정 0개**(M17에 이어 두
+  번째로 기존 파일 무수정). 전체 `pytest` 567개(M17 완료 553개 →
+  M18에서 14개 신규) 통과, `ruff`/`mypy` 클린. **새 최상위 Interface
+  1개**(`AuthenticationManager`) 추가(`ExecutionDispatcher`는 구체
+  클래스라 ADR 대상 아님) — ADR-0017/0025/0028/0029와 동일한 "신규
+  계층 도입" 계열로 ADR-0030 기록. 이월 부채는 M17과 동일하게 유지
+  (신규 이월: 실제 로그인/OAuth/Credential/Token Refresh, `CodingAgent`
+  연결은 사용자가 명시적으로 후속 Milestone으로 분리).
+- **Milestone 19(Reliability Layer) 완료 — 2026-07-27 사용자 승인.**
+  목표는 "M18 Execution Layer의 안정성 확보 — 정책 기반 Retry,
+  Timeout, 안전한 Cancellation"(MVP). **핵심 발견 3가지**: (1)
+  `domain/retry_policy.py`의 `RetryPolicy`(M3)가 이미 있고
+  `RecoveringEngineRuntime`이 "무조건 재시도"에 쓰고 있어 — M16/M18과
+  달리 이번엔 같은 개념의 확장이라 새 이름 대신 기존 클래스에 필드
+  추가(`retry_delay_seconds`/`non_retryable_exceptions`, 기본값 있어
+  `RecoveringEngineRuntime` 무영향) + `decide() -> RetryDecision`.
+  (2) `ClaudeCodeEngineAdapter.run()`이 Timeout과 다른 실행 오류를
+  같은 예외 타입(`EngineExecutionError`)으로 던져 "EngineAdapter
+  인터페이스 변경 금지" 제약과 충돌 — `timed_out`은 메시지 텍스트
+  휴리스틱으로만 판정 가능(**신규 기술 부채, ADR-0031에 명시**). (3)
+  DoD의 `NoSuitableEngineError`(`EngineRuntime` 시절)는 이 경로에
+  실제로 나타나지 않음 — M18이 `EngineRegistry`를 직접 써서 실제로는
+  `EngineNotRegisteredError` 발생. `runtime/execution/
+  retry_executor.py`의 `RetryExecutor`(제네릭, `EngineExecutionResult`
+  를 모름)가 "인증 확인→Registry 조회→Adapter 실행" 전체를 한 시도로
+  묶어 재시도(`ExecutionDispatcher`는 재시도를 직접 구현하지 않음).
+  `AuthenticationRequiredError`/`EngineNotRegisteredError`/
+  `NoSuitableEngineError`는 기본적으로 재시도 안 함. 취소는
+  `EngineAdapter`가 이미 쓰는 sentinel(`error == "cancelled"`, 사용자
+  승인 조건)을 그대로 재사용해 즉시 반영, 재시도 루프 자체를 타지
+  않음. `EngineExecutionResult`에 `retry_count`/`cancelled`/
+  `timed_out` 확장(기본값 있어 M18 호출부 무영향). 실제
+  `ClaudeCodeEngineAdapter`+`ExecutionEnvironment`로 Timeout 재시도·
+  소진 후 반영, Cancellation 즉시 반영을 통합 테스트로 증명(M19-T03).
+  신규 소스 파일 1개, 기존 파일 수정 3개(M17/M18에 이어 세 번째로
+  작은 변경 폭). 전체 `pytest` 588개(M18 완료 567개 → M19에서 21개
+  신규) 통과, `ruff`/`mypy` 클린. **새 최상위 Interface는 0개**이나
+  사용자가 명시적으로 요구해 ADR-0031 작성(RetryPolicy 확장 근거 +
+  timed_out 휴리스틱 기술 부채 정식 기록). 이월 부채는 M18과 동일,
+  신규 이월 1건(timed_out 휴리스틱).
+- **Milestone 20(Real-time Dashboard Platform) 완료 — 2026-07-27
+  사용자 승인.** 목표는 "AI Workspace 운영 상태를 실시간으로
+  관찰하는 Dashboard(CQRS Read Model, Task 미실행)"(MVP). 이
+  프로젝트가 **처음으로 "서버"·외부 런타임 의존성·Web UI를
+  도입**했다(기존엔 `pyyaml` 하나뿐이던 런타임 의존성에
+  `fastapi`/`uvicorn` 추가). 사용자가 3단계로 승인한 설계: (1)
+  `workspace start` 서버 런타임 도입, 기존 CLI 명령은 무영향. (2)
+  `ExecutionDispatcher`에 `event_bus: EventBus | None = None` 선택적
+  DI — Event만 발행하고 `DashboardRepository`를 직접 참조하지
+  않음(M13부터 이어진 "선택적 DI로 기존 컴포넌트 무변경 확장"
+  패턴), `InMemoryDashboardRepository`가 스스로 구독해 Read Model을
+  갱신, API/WebSocket/Web UI는 `DashboardService`만 사용. (3) Task
+  구조 T01~T07을 사용자가 직접 확정, "Core 계층은 웹 프레임워크를
+  모르도록 유지하고 FastAPI는 Infrastructure 계층(`web/`)에서만
+  사용" 원칙 명시. `domain/dashboard.py`(`EngineStatus`/
+  `WorkspaceStatus`/`ExecutionRecord`/`ExecutionStats`/
+  `ReliabilityStats`, `EngineExecutionResult`를 그대로 참조하지 않고
+  필요 필드만 옮겨 담음), `interfaces/dashboard_repository.py`의
+  `DashboardRepository`(**신규 최상위 Interface, 26번째** — 쓰기
+  3개/읽기 5개 메서드를 한 Interface에 함께 정의, 구현체가 하나뿐이라
+  물리적 분리는 과설계로 판단), `InMemoryDashboardRepository`(통계는
+  조회 시점 계산 없이 매 Event마다 미리 갱신 — "Dashboard는 통계를
+  계산하지 않는다"), `DashboardService`(`web/`을 전혀 import하지
+  않음을 `ast` 기반 검증으로 증명), `web/`(신규 최상위 패키지 —
+  `DashboardViewModel`/`DashboardBroadcaster`(WebSocket 연결 시점에
+  캡처한 `asyncio.get_running_loop()`+`loop.call_soon_threadsafe()`로
+  동기 `EventBus.publish()`→비동기 WebSocket 전송 경계를 넘김)/
+  `routes.py`(REST 4종)/`app.py`/`server.py`/`static/`(정적
+  HTML/CSS/Vanilla JS, 빌드 도구 없음, 현재 시각·경과 시간은
+  브라우저가 1초마다 직접 계산·Polling 없음)). `cli/main.py`에
+  `start` 서브커맨드(지연 import로 다른 CLI 명령은 FastAPI 몰라도
+  됨). 실제 `ClaudeCodeEngineAdapter` 실행 결과가 Event→Repository→
+  Service→REST API/WebSocket까지 그대로 반영됨을 통합 테스트로
+  증명(M20-T06), FastAPI `response_model`이 stdlib `@dataclass`를
+  문제없이 직렬화함도 실증(사전 불확실했던 리스크 해소). 신규 소스/
+  정적 파일 13개, 기존 파일 수정 4개(전부 선택적 DI/신규 서브커맨드로
+  하위 호환 유지). 전체 `pytest` 635개(M19 완료 588개 → M20에서
+  47개 신규) 통과, `ruff`/`mypy` 클린(`mypy`는 이 환경에서
+  `--python-executable "$(which python3)"` 필요 — 환경 설치 방식
+  때문, 코드 문제 아님). **새 최상위 Interface 1개**
+  (`DashboardRepository`) 추가로 ADR-0032 기록. 새로 발생한 기술
+  부채 없음. 이월 부채는 M19와 동일하게 유지, 신규 이월 없음.
+- **Milestone 21(Automation Engine) 완료 — 2026-07-27 사용자 승인.**
+  목표는 "조건/일정에 따라 Task를 자동 실행하는 Automation(Dashboard와
+  독립적인 Domain, `ExecutionDispatcher`를 통해서만 Task 실행)"
+  (MVP). **핵심 발견**: M4-T07에 이미 `AutomationEngine`
+  (trigger_id↔Workflow 연결 관리만 담당, "언제 발동할지"·"실제
+  실행"은 원래부터 호출자 책임으로 명시적으로 떠넘겨져 있었음)이
+  존재 — M21이 요청한 `AutomationRule`(4종 Trigger+Action)/
+  `AutomationScheduler`(실제 일정 평가+자동 실행)는 그 떠넘겨진
+  책임을 처음 구현하는 것이라 M16 `KnowledgeRepository`/M18
+  `EngineExecutionResult`와 같은 "이름은 유사하지만 다른 개념"
+  패턴으로 판단해 완전히 새 컴포넌트 세트를 도입(기존
+  `AutomationEngine`은 무수정 유지). 사용자 최종 승인 조건 6개:
+  (1) `AutomationScheduler`와 Trigger 책임 분리, (2) Dashboard는
+  계속 Read Model 유지, (3) Automation CRUD는 API를 통해서만, (4)
+  Dashboard는 Automation 미제어, (5) `ExecutionDispatcher` 유일한
+  실행 진입점 유지, (6) `last_executed_at`/`next_execution_at`을
+  도메인에 내장해 M23 Mobile과 연계. `domain/automation.py`
+  (`TriggerKind`/`Trigger`/`ActionKind`/`Action` — kind로 태그된
+  Flat 구조, `AutomationRule`은 `Task`처럼 가변 엔티티),
+  `interfaces/automation_repository.py`의 `AutomationRepository`
+  (**신규 최상위 Interface, 27번째**), `runtime/automation/`
+  (`InMemoryAutomationRepository`/`AutomationService`(CRUD 유일
+  진입점)/`TriggerEvaluator` 계층(Time/Interval/Startup/Event 4종,
+  "언제 발동할지" 판단 전담)/`AutomationScheduler`(Rule을 별도
+  보관하지 않고 매 호출마다 Repository 재조회 — CRUD가 API를
+  거치기만 하면 자동 반영)/`AutomationActionExecutor`(RUN_TASK를
+  M17/M18 파이프라인 `EngineSelectionPolicy.select()`→
+  `ExecutionDispatcher.dispatch()`로 그대로 실행, RUN_WORKFLOW는
+  `AutomationActionNotSupportedError`로 이번 범위 밖 명시)).
+  Dashboard 연계는 **Reader→Reader** 패턴으로 확장 —
+  `DashboardService`가 선택적 `automation_service` DI로
+  `AutomationService.list_rules()`(읽기 전용)만 호출해
+  `AutomationStatus` 집계(CQRS "쓰기측이 읽기측을 모른다" 방향성만
+  유지). `web/automation_routes.py` REST API 8종, `web/app.py`를
+  `lifespan` Context Manager로 전환해 서버 기동 시 Startup Trigger
+  평가+주기적 `tick()` 백그라운드 Task 실행. 실제
+  `ClaudeCodeEngineAdapter` 조합으로 Event Trigger→실제 Task
+  실행까지 이어짐과 REST API로 만든 Rule이 Dashboard에 반영됨을
+  통합 테스트로 증명(M21-T07). **실제 브라우저 검증**(Playwright,
+  세션 한정 설치)에서 Web UI 다중 필드 표시 버그(`querySelector`
+  단일 요소 한계)를 발견해 `querySelectorAll`로 즉시 수정 — pytest
+  로는 잡히지 않는 정적 JS 결함을 실제 조작으로 잡은 사례. 신규
+  소스/정적 파일 11개, 기존 파일 수정 5개(전부 선택적 DI/기본값
+  유지로 하위 호환). 전체 `pytest` 720개(M20 완료 635개 → M21에서
+  85개 신규) 통과, `ruff`/`mypy` 클린. **새 최상위 Interface 1개**
+  (`AutomationRepository`) 추가로 ADR-0033 기록. 신규 기술 부채
+  2건: RUN_WORKFLOW 미지원(`ExecutionDispatcher` 유일 진입점 원칙과
+  정합성 있는 설계를 후속 Milestone으로 이월), Dashboard 서버의
+  `InMemoryEngineRegistry`에 실제 `EngineAdapter`가 등록돼 있지
+  않음(Workspace Core/CLI 경로와의 실제 통합은 Out of Scope로 이월).
+- **Milestone 22(Production Platform) 완료 — 2026-07-27 사용자
+  승인.** 목표는 "AI Workspace를 실제 운영 가능한 Production
+  Platform으로 확장 — 비즈니스 로직 추가 없음, Server Runtime의
+  Lifecycle/Configuration/Health/Logging만 담당"(MVP). 사용자 최종
+  승인 조건 5개: (1) Configuration은 Infrastructure Layer의
+  Immutable 설정 객체, (2) `LifecycleManager`는 생성이 아닌
+  생명주기(Startup/Shutdown)만 관리, (3) `HealthMonitor`는 조회
+  전용(Read Model), (4) Dashboard Health는 기존 `DashboardService`
+  를 확장, (5) `uptime`/`started_at`/`version`/`health_status`를
+  표준 상태 정보로 제공해 M23 재사용 대비. Kickoff 논의에서 추가
+  확정: Version API는 `pyproject.toml`의 아키텍처 기준선 버전
+  (ADR-0024)과 별개의 `WORKSPACE_VERSION` 상수로 관리, Health
+  Monitor의 "Engine" 항목은 `EngineRegistry` Interface를 확장하지
+  않고 구조적 연결 여부만 확인, Graceful Shutdown은 별도 계측 없이
+  기존 `DashboardService.workspace_status()`(M20)를 폴링해 구현.
+  `runtime/production/`(신규 패키지)에 `ProductionConfig`(frozen
+  dataclass)+`load_production_config()`(기본값→YAML 파일→
+  `AI_WORKSPACE_` Env Var 순으로 겹쳐 씀, `storage/
+  llm_policy_loader.py`와 동일한 로더 분리 패턴)/`configure_logging()`
+  (표준 `logging`, Console+File)/`LifecycleManager`(STARTUP/
+  RUNNING/SHUTDOWN, Graceful Shutdown은 실행 중 Task 완료를
+  기다리되 타임아웃 후 강제 개입 없음)/`HealthMonitor`(Server/
+  Dashboard/Automation/EventBus/Engine 5개 컴포넌트를 가장 나쁜
+  상태로 집계)/`WORKSPACE_VERSION`+`get_git_commit_hash()`. Dashboard
+  Health는 **기존 `DashboardService`를 확장**(선택적
+  `health_monitor` DI + `production_status()`, M21
+  `automation_service`와 동일한 Reader→Reader 패턴)해 구현했는데,
+  이 과정에서 `DashboardService`↔`HealthMonitor`(및
+  `LifecycleManager`)가 서로를 참조하고 싶어 하는 이 프로젝트 첫
+  순환 참조 상황이 발생 — `TYPE_CHECKING` 가드로 타입 힌트만
+  지연 import해 런타임 순환을 없애고, `DashboardService.
+  attach_health_monitor()`(생성 후 연결)로 조립 순서 문제를 풀었다
+  (실제 순환 의존은 아님을 ADR-0034에 명시). `web/production_routes.py`
+  에 `GET /api/health`(컴포넌트별 상세)/`GET /api/config`/
+  `GET /api/version`/`GET /api/status`(4개 표준 필드만 담은 경량
+  요약, M23 재사용 대비) 4종 추가. `web/app.py`가 `production_config`
+  /`lifecycle_manager`/`health_monitor` 3개 모두 주입해야만
+  Production 라우터를 등록(기존 M20/M21 호출부 무영향), `lifespan`
+  이 `LifecycleManager`에 위임해 Graceful Shutdown을 tick Task
+  취소보다 먼저 수행. `web/server.py`가 Configuration을 로드해
+  전체 스택을 조립, CLI `--host`/`--port` 기본값을 `None`으로
+  바꿔 미지정 시 Configuration이 살아있게 함. 실제 `uvicorn.run()`
+  서버에 `curl`로 Lifecycle 전이·CLI 오버라이드를 확인, 실제
+  Chromium(Playwright)으로 "Production 현황" 화면 렌더링을 확인.
+  신규 소스 파일 7개, 기존 파일 수정 6개(전부 선택적 DI/기본값
+  유지). 전체 `pytest` 771개(M21 완료 720개 → M22에서 51개 신규)
+  통과, `ruff`/`mypy` 클린. **새 최상위 Interface 0개**(전부 구체
+  클래스/dataclass, M19에 이어 두 번째 "새 Interface 없이도 ADR
+  작성" 사례)로 ADR-0034 기록. 새로 발생한 기술 부채 없음(순환
+  참조는 우회가 아니라 `TYPE_CHECKING`으로 근본 해결).
+- **M23-Preparation(Obsidian Knowledge Base 구축) 전체 완료
+  (2026-07-27, T01~T07 + T01A~T01D).** T01~T07(저장소 루트
+  `Vault/`에 PARA 구조로 GitHub 요약+링크 Index를 구축 — Overview/
+  Architecture/ADR/Backend/API/Dashboard/Automation/Production/
+  iOS·Android/Milestones/Decisions). 2026-07-27 사용자 지시로
+  **T01A(Vault Retrieval/Prompt
+  효율화)** 추가 완료: `PROJECT_INDEX.md`(작업 종류→문서 라우팅
+  표, Vault 최초 진입점) 신규, `AI_CONTEXT.md`를 "현재 상태" 절이
+  최상단에 오도록 개편, `AI_RULES.md`에 Context Retrieval Rule/
+  Prompt Rules 추가, `PROMPT_PROFILE.md`(짧은 프롬프트 패턴)/
+  `DESIGN_TEMPLATE.md`(표준 설계 템플릿, `99 Templates/`) 신규 —
+  Retrieval First/Short Prompt Workflow/Template First 3원칙 도입.
+  기존 Backlink/Tag/원문 규칙과 문서 구조는 그대로 유지, 변경된
+  파일만 수정. 이어서 **T01B(산출물별 작성 Template 5종)** 추가
+  완료: `TASK_TEMPLATE`/`IMPLEMENTATION_TEMPLATE`/`ADR_TEMPLATE`/
+  `API_TEMPLATE`/`DECISION_TEMPLATE.md` 신규 — T01에서 만든
+  `Template - X.md`(Vault Index 등록용)와 역할을 분리해 "GitHub
+  원문/실제 산출물 작성 전 계약 정리용"으로 위치시켰다.
+  `PROMPT_PROFILE.md`에 산출물 종류→템플릿 Mapping 표,
+  `PROJECT_INDEX.md`에 동일한 Template Index 절을 추가해 두 문서
+  모두에서 템플릿을 찾을 수 있게 했다. 이어서 **T01C(EXECUTION_
+  PROFILE 도입)** 추가 완료: `EXECUTION_PROFILE.md` 신규 —
+  Task Start/Context Retrieval/Template Selection/Task Execution/
+  Document Update/Validation/Completion Report 7단계 Standard
+  Workflow를 정의해, "무엇을 읽을지"(T01A)/"무엇으로 만들지"
+  (T01B)에 이어 "어떻게 처리할지"까지 문서화했다. `PROMPT_PROFILE.md`
+  /`PROJECT_INDEX.md`에 각각 연계 절을 추가. 마지막으로
+  **T01D(PREPARATION_SUMMARY + M23 Start Criteria)**로 마무리:
+  `PREPARATION_SUMMARY.md` 신규(구현 완료 항목/신규 시스템 구성요소/
+  템플릿 13종/운영 Workflow 4원칙/Baseline/M23 Start Criteria/
+  Deferred Items 종합), `PROJECT_INDEX.md`에 "Preparation Status"
+  절, `AI_CONTEXT.md`의 "현재 상태"를 M23 기준으로 갱신. Baseline:
+  코드/아키텍처는 v0.5.0 기준선(ADR-0024) + Interface 27종
+  (ADR-0034) 유지, Vault는 30개 문서 + 4개 운영 원칙(Retrieval
+  First/Short Prompt Workflow/Template First/Standard Execution
+  Workflow) 확정. M23 Start Criteria 5개 중 Client 저장소 위치/
+  서버 지원 범위/Push 발송 주체 3개는 "미정"으로 정직하게 남기고
+  M23 kickoff에서 재확인하기로 함. T08(Obsidian MCP 연동)만 Claude
+  Code 도입 시점으로 이월 보류.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -615,6 +964,11 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR-0024 | v0.5.0 아키텍처 기준선(Baseline) 선언 (`pyproject.toml` 버전 상향) | 승인됨 |
 | ADR-0025 | **ExecutionEnvironment**를 새 최상위 Layer 대신 `EngineAdapter` 하위 인터페이스로 도입, DI 기본 방향 | 승인됨 |
 | ADR-0026 | `EngineAdapter`/`EngineRuntime`에 `model` 파라미터 확장(Model 라우팅, `ClaudeCodeEngineAdapter`만 적용) | 승인됨 |
+| ADR-0027 | `EngineRuntime`에 `estimate_cost()` 추가 + `BudgetPolicyEngine` 신설(Token & Cost Optimization) | 승인됨 |
+| ADR-0028 | Project Knowledge System 도입(`KnowledgeRepository`/`KnowledgeSearch`/`KnowledgeProvider`), 기존 `MemoryEngine`과 분리 | 승인됨 |
+| ADR-0029 | Intelligent Engine Selection 도입(`EngineRegistry`+`EngineSelectionPolicy`, Decision Only), `EngineRuntime` 계약 미확장 | 승인됨 |
+| ADR-0030 | Execution Layer 도입(`ExecutionDispatcher` 구체 클래스 + `AuthenticationManager`), Decision-Execution 완전 분리, 첫 End-to-End 실행 경로 완성 | 승인됨 |
+| ADR-0031 | Reliability Layer 도입(`RetryPolicy` 확장 + `RetryExecutor`), `timed_out` 휴리스틱 기술 부채 명시 | 승인됨 |
 
 기술 스택(Python, dataclasses, 파일 기반 저장, CLI, 인메모리 Event Bus+파일
 Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
@@ -652,18 +1006,25 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-26)**: Milestone 1~14 전체 완료(사용자 승인).
-  Milestone 15는 아직 목표/DoD/Task List가 정의되지 않음. 버전 v0.5.0
-  유지(ADR-0024 기준선 — `ExecutionEnvironment`/`WorkflowRunner`/
-  `CodingAgent`의 자가 확인 가드/`model` 파라미터 확장 모두 새 최상위
-  Interface나 계층 구조 변경이 아니라 기존 계약 위에서의 추가·확장이라
-  기준선 재선언 대상이 아님). `pytest` 489개, `ruff`/`mypy` 클린.
-  Milestone 15는 아직 목표/DoD/Task List 미정의(Task Driven
-  Development 원칙).
+- **현재 상태(2026-07-27)**: Milestone 1~19 전체 완료(사용자 승인).
+  Milestone 20(Real-time Dashboard Platform)은 검토 시작 시점(Task
+  Driven Development 원칙). 버전 v0.5.0 유지(ADR-0024 기준선 —
+  M19까지의 변경은 전부 기존 계약 위에서의 추가·확장이거나 신규
+  계층 도입 계열이라 기준선 재선언 대상이 아니라고 판단했으나,
+  M16~M18에서 Interface가 19→25종으로 크게 늘어난 만큼 다음 기준선
+  재검토 시점에 누적 변화를 함께 검토할 필요가 있음). `pytest`
+  588개, `ruff`/`mypy` 클린. Task→Selection Policy→Decision→
+  Dispatcher→Authentication→Registry→Adapter→ExecutionEnvironment→
+  `EngineExecutionResult`로 이어지는 첫 End-to-End 실행 경로가
+  완성됐고(M11/M15/M16/M17/M18), M19에서 Retry/Timeout/Cancellation
+  Reliability까지 더해졌다. **참고**: `pyproject.toml`의 런타임
+  의존성은 지금까지 `pyyaml` 하나뿐이다 — M20(Dashboard, HTTP API+
+  WebSocket+Web UI)은 이 프로젝트 최초로 웹 프레임워크 의존성을
+  요구할 전망이다.
 - **이 환경의 제약(2026-07-26 확인)**: `claude` CLI만 설치되어 있고
   `codex`/`gemini` CLI는 설치되어 있지 않다(`which` 확인). Codex/Gemini
   관련 Task는 이 세션에서 실행 불가 — 실제 CLI가 설치된 환경이 필요하다.
-- **누적 Technical Debt(2026-07-26 기준, M14 완료 후)**: (1)
+- **누적 Technical Debt(2026-07-27 기준, M15 완료 후)**: (1)
   **Effort 수준 라우팅 미완성** — Model은 M14에서 해소됐지만(opus/
   sonnet/haiku가 `--model`까지 반영됨), Effort(low/medium/high)는
   Claude Code CLI에 대응하는 플래그가 없어 검증 불가능한 상태가 되는

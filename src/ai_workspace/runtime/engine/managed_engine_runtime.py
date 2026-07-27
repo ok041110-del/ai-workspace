@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_adapter import (
+    CostEstimate,
     EngineAdapter,
     EngineResult,
     EngineSessionStatus,
@@ -136,6 +137,12 @@ class ManagedEngineRuntime(EngineRuntime):
                 except BaseException as exc:
                     results.append(EngineResult(success=False, output="", error=str(exc)))
             return results
+
+    def estimate_cost(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> CostEstimate:
+        adapter = self._require_adapter(required_capabilities)
+        return adapter.estimate_cost(task)
 
     def cancel(self, task_id: str) -> None:
         if task_id not in self._task_status:

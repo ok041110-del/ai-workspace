@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from ai_workspace.domain.task import Task
-from ai_workspace.interfaces.engine_adapter import EngineAdapter, EngineResult, EngineSessionStatus
+from ai_workspace.interfaces.engine_adapter import (
+    CostEstimate,
+    EngineAdapter,
+    EngineResult,
+    EngineSessionStatus,
+)
 from ai_workspace.interfaces.engine_runtime import (
     DuplicateEngineError,
     EngineRuntime,
@@ -69,6 +74,12 @@ class InMemoryEngineRuntime(EngineRuntime):
             )
             results.append(result)
         return results
+
+    def estimate_cost(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> CostEstimate:
+        adapter = self._select(required_capabilities)
+        return adapter.estimate_cost(task)
 
     def cancel(self, task_id: str) -> None:
         if task_id not in self._task_status:

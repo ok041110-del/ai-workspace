@@ -886,3 +886,793 @@
   실제 `docs/llm_policy.example.yaml` 기반 통합 테스트로 증명
   (M14-T03). 이월 부채(Effort 라우팅, Codex/Gemini 실연동)는
   실제 대응 지점이 생기기 전까지 계속 이월한다.
+
+## ADR-0027: `EngineRuntime`에 `estimate_cost()` 추가 + `BudgetPolicyEngine` 신설 (Milestone 15)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: `EngineAdapter.estimate_cost(task) -> CostEstimate`는 M3부터
+  존재했지만, `EngineRuntime`도 어떤 Agent도 이를 호출한 적이 없었다
+  (M12의 `WorkflowEngine.plan()`, M13의 `AgentScheduler.select()`와
+  동일한 "만들어졌지만 쓰인 적 없는 기능" 패턴). `EngineRuntime`은
+  `.ai/RULES.md` §1.2가 보호하는 핵심 아키텍처 자산(`EngineAdapter`와
+  같은 층위)이라, 계약을 확장하는 이번 결정을 ADR-0009/ADR-0015/
+  ADR-0026(과거 `EngineAdapter`/`EngineRuntime` 계약 확장)과 동일하게
+  정식 기록한다.
+- 결정:
+  1. `interfaces/engine_runtime.py`에 `estimate_cost(task,
+     required_capabilities=frozenset()) -> CostEstimate`를 추가한다.
+     `run()`과 동일한 엔진 선택 규칙(등록 순서상 첫 매칭)을 따르되,
+     세션을 만들지 않는다(read-only, side-effect 없음).
+  2. `InMemoryEngineRuntime`/`ManagedEngineRuntime`은 각자의 기존
+     어댑터 선택 로직(`_select`/`_require_adapter`)을 재사용해
+     구현한다 — 새 선택 로직을 추가하지 않는다.
+  3. `RecoveringEngineRuntime`은 재시도 로직 없이 내부 Runtime에 순수
+     위임한다 — 추정은 실패할 side-effect가 없어 재시도할 이유가 없다.
+  4. `domain/budget.py`에 `Budget(max_tokens, max_cost_usd)`/
+     `BudgetDecision(allowed, reason)`을 신설한다. 둘 다 Provider/
+     Engine 개념을 전혀 참조하지 않는 순수 domain 객체다.
+  5. `interfaces/budget_policy_engine.py`에 `BudgetPolicyEngine`
+     Interface(`check(estimate) -> BudgetDecision`)를 신설한다.
+     `LLMPolicyEngine`(M5-T01)과 동일한 설계 원칙 — 정책이 없으면
+     예외가 아니라 항상 허용으로 표현.
+  6. `CodingAgent`에 선택적 `budget_policy_engine` DI를 추가한다.
+     주입되어 있으면 실행 직전 `estimate_cost()` → `check()`를 거쳐
+     초과 시 Task를 `BLOCKED`로 전환하고 실행하지 않는다(Approval/
+     Retry 없음, M15 MVP).
+- 대안:
+  - `EngineAdapter.estimate_cost()`를 Agent가 직접 호출 — 기각.
+    `.ai/RULES.md` §8 규칙 6("Engine 호출은 Agent → Engine Runtime →
+    Engine Adapter 순서로만")을 정면으로 위반한다.
+  - Budget을 `LLMPolicyEngine`에 병합(정책 하나로 통합) — 기각.
+    `LLMPolicyEngine`은 AgentRole→Provider/Model/Effort를 결정하는
+    책임이고, Budget은 Task 단위 CostEstimate를 검사하는 책임이라
+    서로 다른 관심사다(SRP) — `LLMPolicyDecision`에 예산 필드를
+    추가하면 "정책 하나가 두 가지 다른 질문에 답하는" 결합이 생긴다.
+  - 예산 초과 시 Approval Engine으로 승인 요청 — 기각(사용자 확정
+    범위 밖). Approval 비동기 처리는 기존에도 이월된 부채이며, 이번
+    Milestone에서 함께 처리하면 범위가 걷잡을 수 없이 커진다.
+  - 여러 Task에 걸친 누적 소비량 추적(Workspace 전체 잔여 예산) —
+    기각(YAGNI). 실제 필요성이 증명되지 않았고, Task 단위 개별 확인만
+    으로도 M15 목표("실행 전에 확인하고 초과하면 막는다")는 충족된다.
+- 이유: `estimate_cost()`를 `run()`과 동일한 위치(`EngineRuntime`
+  계약)에 두면 Agent가 이미 알고 있는 `required_capabilities`를 그대로
+  재사용할 수 있고, 실제로 선택될 Adapter와 항상 같은 Adapter의
+  추정치를 얻는다는 보장이 자연스럽게 성립한다. `BudgetPolicyEngine`을
+  별도 Interface로 분리하면 Provider 독립성이 타입 수준에서 보장된다
+  (`CostEstimate`만 알고 어떤 Provider/Engine인지 전혀 모름).
+- 결과/영향: `docs/ARCHITECTURE.md` v0.17.0 §3.9/§3.13/§7(19종)에 반영.
+  `EngineRuntime` 구현체 3종(`InMemoryEngineRuntime`/
+  `ManagedEngineRuntime`/`RecoveringEngineRuntime`) 및 기존
+  `EngineRuntime` 테스트 더블(`FakeEngineRuntime` 등) 전부 새 추상
+  메서드를 구현하도록 갱신(M15-T02). `CodingAgent`가 예산 초과 시
+  실행을 막음을 실제 `ManagedEngineRuntime`+`ClaudeCodeEngineAdapter`
+  조합으로 증명(M15-T03). Effort/Model 기반 비용 차등, 여러 Task
+  누적 예산 추적, 실시간 API 과금 조회는 실제 필요성이 생기기 전까지
+  이월한다.
+
+## ADR-0028: Project Knowledge System 도입 (KnowledgeRepository/KnowledgeSearch/KnowledgeProvider, 기존 MemoryEngine과 분리) (Milestone 16)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: 사용자가 "AI가 프로젝트의 구조와 설계 의도를 이해할 수 있는
+  Workspace 전용 Knowledge Layer"를 요청했다(M16 킥오프 프롬프트).
+  설계 검토 결과, `interfaces/memory_engine.py`의 `MemoryEngine`은
+  M1부터 이미 존재하지만 `ContextManager`가 감싸서 **Mission 요약/
+  세션 연속성**(M8-T03)에 쓰는 완전히 다른 개념임을 확인했다. 이름을
+  재사용하면 "세션 기억"(사용자가 명시적으로 범위 밖이라 한 Chat
+  History/Conversation Memory와 가까운 개념)과 "프로젝트 지식"이
+  섞인다고 판단해, 새 이름의 컴포넌트 계열로 분리하기로 사용자가
+  최종 승인했다.
+- 결정:
+  1. `domain/knowledge.py`에 `KnowledgeDocument`(document_id/kind/
+     title/content/source_path)/`KnowledgeKind`(ARCHITECTURE/ADR/
+     RULE/TASK/PROJECT 5종)를 신설한다. 어떤 Provider/Engine도
+     참조하지 않는다.
+  2. `interfaces/knowledge_repository.py`에 `KnowledgeRepository`
+     (`list_all`/`get`, 읽기 전용)를 신설한다.
+     `storage/file_knowledge_repository.py`의 `FileKnowledgeRepository`
+     가 고정 파일→kind 매핑으로 파일 하나를 문서 하나로 노출한다
+     (문단 단위 파싱 없음, YAGNI).
+  3. `interfaces/knowledge_search.py`에 `KnowledgeSearch`(Keyword
+     포함 검색)를 신설한다. `KnowledgeIndexer`(영속 Index 자료구조)는
+     문서 수가 적어(6개 안팎) 성능 문제가 없어 이번 범위에서
+     제외한다(YAGNI, 사용자 승인) — 필요해지면 `KnowledgeSearch`
+     계약은 그대로 두고 구현체만 교체 가능(OCP).
+  4. `interfaces/knowledge_provider.py`에 `KnowledgeProvider`(Agent가
+     의존하는 유일한 진입점)를 신설한다. `ContextManager`가
+     `MemoryEngine`을 감싸는 것과 동일한 패턴이다.
+  5. `CodingAgent`에 선택적 `knowledge_provider` DI를 추가한다.
+     주입 시 `task.title`로 검색한 결과를 `DevelopmentContext.
+     related_knowledge`에 실어 프롬프트에 반영하고, 미주입 시
+     기존과 완전히 동일하게 동작한다.
+  6. `docs/ARCHITECTURE.md` §8 의존성 규칙에 "Agent → Knowledge
+     Provider → Knowledge Search → Knowledge Repository" 경로를
+     신규 추가한다(기존 규칙 7 "Agent → Context Manager → Memory
+     Engine"과 나란히, 완전히 별도의 경로).
+- 대안:
+  - 기존 `MemoryEngine`을 확장해 Project Knowledge까지 다루게 함 —
+    기각. `MemoryEngine.search()`는 세션 요약을 위한 key-value 저장소
+    계약이라, 파일 기반 정적 문서(Markdown)를 다루기엔 계약 자체가
+    맞지 않고, 두 개념을 섞으면 SRP를 위반한다.
+  - `KnowledgeRepository`/`KnowledgeSearch`를 하나의 Interface로
+    통합 — 기각(사용자 명시적 요청: "저장/검색/제공 역할을 명확히
+    분리해야 합니다"). 저장은 "문서가 어디 있는지", 검색은 "어떻게
+    찾는지"로 관심사가 다르며, 향후 검색 알고리즘(예: Semantic
+    Search)만 교체하고 싶을 때 Repository는 그대로 둘 수 있어야
+    한다.
+  - `KnowledgeIndexer`까지 포함해 4개 컴포넌트 전부 구현 — 기각
+    (YAGNI). 현재 문서 수로는 매 검색 시 전체를 훑어도 성능 문제가
+    없고, 증명되지 않은 성능 요구를 앞서 처리하는 것은 프로젝트
+    원칙(YAGNI)에 어긋난다.
+  - Vector/Embedding 기반 Semantic Search 도입 — 기각(사용자 명시적
+    범위 밖). 초기 구현은 Markdown/Keyword/Index 기반으로 충분하며,
+    추후 확장 가능하도록 Interface(`KnowledgeSearch`)만 설계해 둔다.
+- 이유: 저장(Repository)/검색(Search)/제공(Provider) 역할을 분리하면
+  각 역할을 독립적으로 교체할 수 있다(SOLID의 OCP/SRP) — 예를 들어
+  나중에 Semantic Search가 필요해지면 `KnowledgeSearch` 구현체만
+  바꾸면 되고, `KnowledgeRepository`나 Agent 쪽 코드는 전혀 손대지
+  않는다. `KnowledgeProvider`를 Agent의 유일한 의존 지점으로 두면
+  `ContextManager`/`MemoryEngine`과 동일한 패턴이 되어 프로젝트
+  전체의 "Agent는 façade Interface만 안다"는 일관된 설계를 유지한다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.18.0 §3.14(신규)/§7(Interfaces
+  19→22종)/§8(의존성 규칙 11번 신규)/§9에 반영. `CodingAgent`가
+  `knowledge_provider` 주입 시 실제 프로젝트 문서(`docs/
+  ARCHITECTURE.md` 등)의 내용을 검색해 프롬프트에 반영함을 실제
+  `FileKnowledgeRepository` 기반 통합 테스트로 증명(M16-T03).
+  Review/Documentation Agent로의 확장, `KnowledgeIndexer` 도입,
+  Semantic Search는 실제 필요성이 증명되기 전까지 이월한다.
+
+## ADR-0029: Intelligent Engine Selection 도입 (EngineRegistry + EngineSelectionPolicy, Decision Only, `EngineRuntime` 계약 미확장) (Milestone 17)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: 사용자가 "Task + Budget(M15) + Project Knowledge(M16) +
+  Engine Capability + Selection Policy → 최적 Engine 선택"이라는
+  목표로 M17을 요청했다. 설계 검토 결과, `EngineRuntime.run()`/
+  `estimate_cost()`는 `required_capabilities`를 만족하는 등록된
+  Engine 중 **첫 번째 매칭만** 고르며, 여러 후보를 나열·비교하는
+  방법 자체가 없었다 — "선택"이라 부를 로직이 지금까지 없었다.
+  사용자는 최종 승인에서 세 조건을 명시했다: (1) M17은 Decision
+  Only Milestone으로 유지, (2) `EngineSelectionDecision`에 선택
+  이유(`reason`) 포함, (3) 가능하다면 `EngineRuntime.list_candidates()`
+  대신 기존 Engine 관리 계층(Registry/Manager)의 조회 기능을
+  활용해 조회(Registry)와 판단(Policy)의 책임을 분리. 조사 결과,
+  `AgentRegistry`에 대응하는 **Engine Registry는 이 저장소에 존재하지
+  않았다**(Engine 등록은 `EngineRuntime.register_engine()` 내부
+  dict가 전부였음) — 그래서 "기존 계층 활용"이 아니라 `AgentManager`/
+  `AgentRegistry` 분리와 동일한 패턴으로 **신규 계층을 도입**하는
+  결정이 됐다.
+- 결정:
+  1. `domain/engine_selection.py`에 `EngineCandidate`(engine_name/
+     capabilities/estimated_tokens/estimated_cost_usd/
+     supports_parallel)/`EngineSelectionDecision`(engine_name/model/
+     reason)을 신설한다. `CostEstimate`(interfaces 계층)를 그대로
+     참조하지 않고 값만 옮겨 담아 domain이 interfaces에 의존하지
+     않는 기존 원칙을 유지한다.
+  2. `interfaces/engine_registry.py`에 `EngineRegistry`(`register`/
+     `get`/`list_candidates`)를 신설한다. **`EngineRuntime`의 실행
+     계약(run/estimate_cost)은 전혀 확장하지 않는다** — 기존 3개
+     구현체(`InMemoryEngineRuntime`/`ManagedEngineRuntime`/
+     `RecoveringEngineRuntime`)의 내부 구현은 손대지 않는다. 후보
+     조회가 필요한 쪽이 같은 Adapter를 조립 시점에 `EngineRegistry`
+     에도 등록해 별도로 조회한다.
+  3. `interfaces/engine_selection_policy.py`에
+     `EngineSelectionPolicy`(`select(task, candidates, *,
+     budget_policy_engine=None, knowledge=None) ->
+     EngineSelectionDecision | None`)를 신설한다. 후보가 어디서
+     왔는지는 알지 못한다(조회와 판단의 책임 분리, 사용자 승인
+     조건).
+  4. `InMemoryEngineSelectionPolicy`는 `budget_policy_engine`이
+     주어지면 각 후보로 `CostEstimate`를 만들어 `BudgetPolicyEngine.
+     check()`에 위임(M15 재사용, 예산 비교 로직 중복 없음)하고,
+     예산 내 최저 비용 후보를 선택한다. `knowledge`는 `reason`에만
+     참고로 반영한다(후보를 걸러내지 않음, MVP).
+  5. **결정과 실행을 연결하지 않는다** — `CodingAgent`는
+     `EngineSelectionPolicy`/`EngineRegistry`를 이번 Milestone에서
+     전혀 모른다(생성자 파라미터 없음). 이 경계를 통합 테스트로
+     직접 증명한다(다른 Engine을 추천해도 실제 실행은 영향받지
+     않음 + `inspect.signature()`로 파라미터 부재 확인).
+- 대안:
+  - `EngineRuntime.list_candidates()`를 추가 — 사용자가 "가능하다면
+    피하라"고 명시. `EngineRuntime`을 M14(model)/M15(estimate_cost)
+    에 이어 세 번째로 확장하는 대신, 이번엔 완전히 별도 계층으로
+    분리해 `EngineRuntime`의 책임(실행)과 `EngineRegistry`의 책임
+    (조회)을 더 명확히 나눴다.
+  - `EngineSelectionPolicy`가 직접 `EngineRegistry`를 주입받아 후보를
+    스스로 조회 — 기각. Policy가 "어디서 후보를 가져오는지"까지
+    알게 되면 조회와 판단의 책임이 다시 섞인다. 호출자가 먼저
+    `EngineRegistry.list_candidates()`로 후보를 조회한 뒤 Policy에
+    넘기는 2단계 흐름을 유지한다.
+  - M17에서 곧바로 `CodingAgent`에 연결해 실제 실행까지 바꿈 —
+    기각(사용자 확정 범위 밖, "Decision Only"). 결정 로직과 실행
+    로직을 같은 Milestone에서 함께 바꾸면 두 책임이 다시 섞이고,
+    "M17=Decision, M18=Execution"이라는 사용자의 책임 분리 의도가
+    깨진다.
+- 이유: 조회(Registry)/판단(Policy)/실행(Runtime) 세 책임을 분리하면
+  각각 독립적으로 교체·검증할 수 있다(SRP). `EngineRuntime`을 건드리지
+  않아 기존 3개 실행 구현체에 회귀 위험이 전혀 없다(Surgical
+  Changes). Decision과 Execution을 Milestone 단위로 분리하면, M18에서
+  "어떻게 연결할지"(예: `CodingAgent`에 선택적 DI로 추가할지, 별도
+  조율자를 둘지)를 M17의 판단 로직 변경 없이 독립적으로 검토할 수
+  있다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.19.0 신규 §3.15/§7(Interfaces
+  22→24종)/§9에 반영. 실제 여러 Engine이 등록된 상태에서 Budget 내
+  최저 비용 후보 선택, 예산 초과 후보 제외, 전체 초과 시 `None`,
+  실제 `FileKnowledgeRepository` 기반 Knowledge 반영을 통합 테스트로
+  증명(M17-T03). "결정과 실행의 분리" 경계는 실제 `CodingAgent`
+  파이프라인 실행 결과로 직접 검증했다. Model 수준 결정, ML/휴리스틱
+  기반 고급 판단, `EngineRuntime`↔`EngineRegistry` 통합(중복 등록
+  제거)은 실제 필요성이 증명되기 전까지 이월한다.
+
+## ADR-0030: Execution Layer 도입 (`ExecutionDispatcher` 구체 클래스 + `AuthenticationManager` Interface), Decision-Execution 완전 분리 (Milestone 18)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: M17의 `EngineSelectionDecision`은 결정만 하고 실제 실행에는
+  전혀 연결되지 않았다(의도된 Decision Only 경계). 사용자가 "Task →
+  Selection Policy → EngineSelectionDecision → ExecutionDispatcher →
+  AuthenticationManager → EngineRegistry → EngineAdapter →
+  ExecutionEnvironment → AI Engine 실행 → ExecutionResult" 흐름으로
+  M18을 요청했다. 설계 검토 결과, 요청한 새 "ExecutionResult" Domain
+  (success/output/error/engine/execution_time)이 M11의
+  `interfaces/execution_environment.py`가 이미 쓰고 있는
+  `ExecutionResult`(returncode/stdout/stderr — OS 프로세스 결과)와
+  이름이 겹친다는 사실을 확인했다. 사용자는 최종 승인에서 네 가지를
+  확정했다: (1) 새 Domain은 `EngineExecutionResult`로 명명해 기존
+  `ExecutionResult`와 분리, (2) `ExecutionDispatcher`는 Interface가
+  아닌 구체 클래스로 구현, (3) 인증 실패는
+  `AuthenticationRequiredError` 예외, `SelectionDecision` 부재는
+  `EngineExecutionResult(success=False)`로 구분, (4) 이번
+  Milestone은 `CodingAgent`를 수정하지 않고 `ExecutionDispatcher`를
+  독립적으로 구현·검증.
+- 결정:
+  1. `domain/execution_result.py`에 `EngineExecutionResult`(success/
+     output/error/engine/execution_time, Provider 독립)를 신설한다.
+  2. `interfaces/authentication_manager.py`에
+     `AuthenticationStatus`(AUTHENTICATED/UNAUTHENTICATED)/
+     `AuthenticationRequiredError`/`AuthenticationManager`(`is_
+     authenticated`/`authentication_status`만 — `login`/`logout`은
+     의도적으로 이 계약에 없음)를 신설한다. "로그인을 수행"하는
+     것이 아니라 "실행 가능한 인증 상태인지 확인"만 한다.
+     `InMemoryAuthenticationManager`는 생성 시 주어진 "인증된 것으로
+     간주할 Engine 이름" 집합만 보관하고, 실제 로그인/OAuth/API Key/
+     Credential 저장/Token Refresh는 전혀 다루지 않는다.
+  3. `runtime/execution/execution_dispatcher.py`에
+     `ExecutionDispatcher`(구체 클래스, M12 `WorkflowRunner`와 동일
+     패턴)를 신설한다. `dispatch(decision, task) ->
+     EngineExecutionResult`: `decision`이 `None`이면
+     `EngineRegistry`/`AuthenticationManager` 어느 쪽도 호출하지
+     않고 즉시 실패 결과를 반환하고, 인증되지 않았으면
+     `AuthenticationRequiredError`를 던지며, 인증됐으면
+     `EngineRegistry.get(decision.engine_name)`으로 정확히 하나의
+     `EngineAdapter`만 얻어 실행한다.
+  4. `ExecutionDispatcher`는 `EngineRegistry`/`EngineAdapter`/
+     `AuthenticationManager` **Interface만** 사용하고 구현체를 직접
+     참조하지 않는다(OCP). `EngineSelectionPolicy`는 전혀 참조하지
+     않는다(Decision과 Execution의 완전한 분리) — 반대 방향도
+     마찬가지로, `EngineSelectionPolicy`의 실제 소스 코드에
+     `ExecutionDispatcher` 참조가 없음을 통합 테스트가 직접
+     검증한다(M18-T03).
+  5. `ExecutionDispatcher`는 `ExecutionEnvironment`를 직접 생성하지
+     않는다 — `ClaudeCodeEngineAdapter`가 M11부터 이미 생성자
+     주입으로 갖고 있으므로 `EngineAdapter.run()`만 호출하면 된다.
+  6. 이번 Milestone은 `CodingAgent`를 수정하지 않는다.
+     `ExecutionDispatcher`는 독립적으로 구현·검증하며, Agent
+     파이프라인 연결은 후속 Milestone의 책임이다.
+- 대안:
+  - 새 Domain을 그대로 `ExecutionResult`로 명명 — 기각(이름 충돌).
+    M11의 `ExecutionResult`(프로세스 결과)와 이번 `EngineExecutionResult`
+    (Engine 실행 결과)는 서로 다른 추상화 층위라, 같은 이름을 쓰면
+    "무엇의 결과인지" 코드만 봐서는 알 수 없게 된다.
+  - `ExecutionDispatcher`를 Interface로 정의하고 여러 구현체를 허용 —
+    기각(사용자 명시적 요청, YAGNI). 이 Dispatcher는 조합 로직
+    (Registry 조회 → 인증 확인 → 실행)만 담당하고 교체 가능한 정책이
+    아니다 — `WorkflowRunner`가 Interface가 아닌 것과 같은 이유.
+  - 인증 실패도 `EngineExecutionResult(success=False)`로 통일 —
+    기각. "Decision 없음"은 정상적인 입력(아무것도 선택되지 않음)
+    이지만, "선택은 됐는데 인증이 안 됨"은 실행 전제조건 위반이라
+    이 저장소가 일관되게 써온 예외 기반 패턴(`NoSuitableEngineError`,
+    `SessionNotFoundError` 등)과 맞춘다.
+  - M18에서 `CodingAgent`에 바로 연결 — 기각(사용자 확정 범위 밖).
+    Decision Only였던 M17에 이어, M18도 "Execution Layer 완성"에만
+    집중해 범위를 명확히 유지한다.
+- 이유: `ExecutionDispatcher`가 세 Interface(Registry/Adapter/
+  Authentication)만 의존하면 새 Engine 추가 시 이 클래스를 전혀
+  수정하지 않아도 된다(OCP). Decision과 Execution을 물리적으로
+  분리된 두 컴포넌트로 유지하면(서로가 서로를 모름) 어느 한쪽만
+  교체·재검증할 수 있다. 인증을 "상태 확인"으로 좁히면 이번
+  Milestone은 실행 파이프라인 연결에만 집중할 수 있고, 실제
+  로그인/OAuth라는 훨씬 큰 관심사는 후속 Milestone(Authentication
+  Layer)으로 명확히 미룰 수 있다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.20.0 신규 §3.16/§7(Interfaces
+  24→25종)/§9에 반영. 실제 `ClaudeCodeEngineAdapter`+
+  `ExecutionEnvironment`로 실행됨을 통합 테스트로 증명(M18-T03,
+  `ExecutionEnvironment.executed_commands`에 실제 명령 기록 확인).
+  Task → Selection Policy → Decision → Dispatcher →
+  Authentication → Registry → Adapter → ExecutionEnvironment →
+  EngineExecutionResult로 이어지는 첫 End-to-End 실행 경로가 완성됐다
+  (M11/M15/M16/M17이 실행까지 연결됨). 실제 로그인/OAuth/Credential
+  관리/Token Refresh, `CodingAgent` 연결, Retry/Timeout/Recovery/
+  Approval/병렬 실행은 실제 필요성이 생기기 전까지 이월한다.
+
+## ADR-0031: Reliability Layer 도입 (`RetryPolicy` 확장 + `RetryExecutor`), `timed_out` 휴리스틱 기술 부채 명시 (Milestone 19)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: M18로 완성된 Execution Layer는 실패를 감지·복구하는 능력이
+  없었다. 사용자가 "Task → Selection Policy → Decision →
+  ExecutionDispatcher → RetryExecutor → AuthenticationManager →
+  EngineRegistry → EngineAdapter → ExecutionEnvironment →
+  EngineExecutionResult" 흐름으로 M19를 요청했다. 설계 검토 결과
+  세 가지를 확인했다: (1) `domain/retry_policy.py`의 `RetryPolicy`
+  (M3)가 이미 존재하고 `RecoveringEngineRuntime`이 "무조건 재시도"
+  에 쓰고 있다 — 이번엔 M16/M18과 달리 **같은 개념의 확장**이라
+  판단해 새 이름 대신 기존 클래스에 필드를 추가하기로 했다. (2)
+  `ClaudeCodeEngineAdapter.run()`은 Timeout과 다른 실행 오류를 모두
+  같은 `EngineExecutionError`로 던지고 메시지 텍스트로만 구분되는데,
+  "`EngineAdapter` 인터페이스는 변경하지 않는다"는 이번 Milestone의
+  제약과 정면으로 부딪힌다 — 완전한 구분이 불가능하다. (3) DoD가
+  언급한 `NoSuitableEngineError`(`EngineRuntime` 시절 예외)는 이
+  경로에 실제로 나타나지 않는다 — M18이 `EngineRuntime`을 건너뛰고
+  `EngineRegistry`를 직접 쓰기 때문에 실제로는
+  `EngineNotRegisteredError`가 발생한다. 사용자는 최종 승인에서
+  두 조건을 확정했다: `timed_out`은 휴리스틱임을 이 ADR과
+  ARCHITECTURE.md에 기술 부채로 명시할 것, `cancelled`는 새 문자열
+  규칙을 만들지 않고 `EngineAdapter`가 이미 쓰는 sentinel을 그대로
+  이어받을 것.
+- 결정:
+  1. `domain/retry_policy.py`의 기존 `RetryPolicy`에
+     `retry_delay_seconds: float = 0.0`/`non_retryable_exceptions:
+     tuple[type[BaseException], ...] = ()`(둘 다 기본값)와
+     `decide(exception) -> RetryDecision`을 추가한다. 도메인
+     계층은 구체 예외 타입을 몰라도 되도록 `type[BaseException]`
+     튜플만 받는다 — 실제 재시도 불가 예외 목록은 호출자
+     (`ExecutionDispatcher`)가 구성한다. `RecoveringEngineRuntime`
+     의 기존 호출부(모두 `max_attempts`만 지정)는 전혀 영향받지
+     않는다.
+  2. `RetryDecision`(should_retry/reason)을 신설한다 —
+     `EngineSelectionDecision`/`BudgetDecision`과 동일한 명명
+     패턴.
+  3. `runtime/execution/retry_executor.py`에 `RetryExecutor`(구체
+     클래스, 제네릭 `Callable[[], T]`를 받아 재시도)를 신설한다.
+     `EngineExecutionResult`를 전혀 알지 못하는 순수 재시도
+     메커니즘이다.
+  4. `ExecutionDispatcher`는 "인증 확인→`EngineRegistry` 조회→
+     `EngineAdapter` 실행" 전체를 한 번의 시도로 묶어
+     `RetryExecutor.execute()`에 위임한다(재시도 로직을 직접
+     구현하지 않음). 기본 `RetryPolicy`는
+     `non_retryable_exceptions=(AuthenticationRequiredError,
+     EngineNotRegisteredError, NoSuitableEngineError)`로 구성한다
+     — `NoSuitableEngineError`는 이 경로에 실제로 발생하지 않지만
+     전방 호환을 위해 포함해 뒀다(해가 없음).
+  5. `domain/execution_result.py`의 `EngineExecutionResult`에
+     `retry_count: int = 0`/`cancelled: bool = False`/`timed_out:
+     bool = False`(전부 기본값, M18 호출부 무영향)를 추가한다.
+  6. `EngineExecutionError`가 재시도를 소진하면 예외를 그대로
+     전파하는 대신 `EngineExecutionResult(success=False,
+     timed_out=<휴리스틱>)`로 변환한다 — `_looks_like_timeout()`이
+     Timeout 메시지의 한국어 마커("응답하지 않았습니다") 문자열
+     매칭으로만 판정한다. **이것은 알려진 기술 부채다** — Adapter가
+     메시지 문구를 바꾸면 이 판정은 깨진다.
+  7. 취소는 `EngineResult.error == "cancelled"`(`EngineAdapter`가
+     이미 쓰는 sentinel)로 판정하고, 재시도 루프를 타지 않고 즉시
+     `cancelled=True`로 반영한다.
+- 대안:
+  - `RetryPolicy`를 새 이름(예: `ExecutionRetryPolicy`)으로 분리 —
+    기각. M16(`MemoryEngine`/Knowledge)·M18(`ExecutionResult`)의
+    이름 충돌과 달리, 이번엔 "실행 재시도 정책"이라는 **같은
+    개념**을 다루므로 확장이 SRP를 지키면서도 더 단순하다
+    (YAGNI — 불필요하게 유사 개념을 두 이름으로 쪼개지 않음).
+  - `EngineAdapter` 인터페이스를 확장해 Timeout을 구조적으로 표현
+    (예: `EngineExecutionTimeoutError` 서브타입 도입) — 기각(사용자
+    확정 범위 밖, "이번 Milestone에서는 EngineAdapter 인터페이스를
+    변경하지 않는다"). 근본 해결은 후속 Milestone으로 이월하고,
+    이번엔 메시지 기반 휴리스텍으로 최소 기능만 제공하며 한계를
+    투명하게 기록한다.
+  - `cancelled` 판정에 새로운 전용 필드나 예외 타입 도입 — 기각
+    (사용자 확정 조건). `EngineAdapter`가 이미 `error="cancelled"`
+    라는 값으로 취소를 인코딩하고 있으므로, 새 규칙을 만들지 않고
+    그 값을 그대로 이어받는 것이 최소 변경 원칙에 맞는다.
+  - 모든 실행 실패(성공하지 못한 `EngineResult`)를 자동 재시도 —
+    기각. DoD의 재시도 대상은 전부 예외 기반(Timeout/Process
+    Error)이라, 정상적으로 반환된 실패 결과(예: LLM이 "이 작업은
+    할 수 없습니다"라고 응답한 경우)까지 재시도하면 의미 없는
+    반복 호출만 늘어난다 — 이번 MVP는 인프라 수준 실패만 재시도
+    대상으로 좁혔다.
+- 이유: `RetryExecutor`를 제네릭·독립 컴포넌트로 두면
+  `ExecutionDispatcher` 외의 다른 곳에서도 재시도가 필요해질 때
+  재사용할 수 있다. 재시도 판단을 예외 타입 기반으로 구성 가능하게
+  하면(`non_retryable_exceptions`) `ExecutionDispatcher`가 판단
+  로직을 직접 갖지 않아도 되고, 정책만 교체하면 재시도 대상을
+  바꿀 수 있다(OCP). Timeout 휴리스틱의 한계를 숨기지 않고 ADR과
+  ARCHITECTURE.md에 명시적으로 기록해, 향후 `EngineAdapter` 개선
+  Milestone에서 이 부채를 해소할 근거를 남긴다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.21.0 신규 §3.17(Reliability)에
+  반영(§7 Interfaces는 새 Interface가 없어 25종 그대로 — `RetryExecutor`
+  는 구체 클래스, `RetryPolicy`/`RetryDecision`은 domain 확장).
+  실제 `ClaudeCodeEngineAdapter`+`ExecutionEnvironment` 조합으로
+  Timeout 재시도·소진 후 `timed_out` 반영, Cancellation 즉시 반영을
+  통합 테스트로 증명(M19-T03). `EngineAdapter` 구조적 Timeout 신호,
+  Backoff 전략 고도화, 다른 컴포넌트(예: `KnowledgeRepository`)로의
+  `RetryExecutor` 재사용은 실제 필요성이 생기기 전까지 이월한다.
+
+## ADR-0032: Real-time Dashboard Platform 도입 — `DashboardRepository` Interface, 첫 외부 런타임 의존성(FastAPI/uvicorn), Core-Web 계층 분리 (Milestone 20)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: M11~M19로 완성된 Execution/Reliability 계층은 실행 상태를
+  확인할 방법이 CLI 로그뿐이었다. 사용자가 "Task 실행/엔진/안정성
+  현황을 실시간으로 보여주는 Dashboard"를 CQRS Read Model로
+  요청했다 — Dashboard는 Task를 실행하지 않고 오직 조회만 한다.
+  사용자의 3단계 승인으로 설계가 확정됐다: (1) `workspace start`
+  서버 런타임 도입, 기존 CLI는 변경 없음. (2)
+  `ExecutionDispatcher`에 `event_bus: EventBus | None = None`을
+  선택적으로 주입 — `ExecutionDispatcher`는 이벤트만 발행하고
+  Dashboard를 직접 참조하지 않으며, `DashboardRepository`가 이벤트를
+  구독해 스스로 Read Model을 갱신한다. API/WebSocket/Web UI는
+  `DashboardService`만 사용한다. (3) Task 구조를 사용자가 직접
+  T01~T07로 확정하고, "Core 계층은 웹 프레임워크를 모르도록
+  유지하고, FastAPI는 Infrastructure 계층에서만 사용한다"는 원칙을
+  명시했다. AskUserQuestion으로 웹 프레임워크(FastAPI+uvicorn)와
+  Web UI 방식(정적 HTML/CSS/Vanilla JS, 빌드 도구 없음)을 확인했다.
+- 결정:
+  1. `domain/dashboard.py`에 `EngineStatus`(READY/RUNNING/
+     AUTH_REQUIRED/ERROR)/`WorkspaceStatus`/`ExecutionRecord`/
+     `ExecutionStats`/`ReliabilityStats`를 신설한다. `EngineExecutionResult`
+     (M18/M19)를 그대로 참조하지 않고 Dashboard가 필요한 필드만
+     옮겨 담는다 — Dashboard는 Execution 계층에 대한 쓰기 접근이
+     없는 순수 Read Model이다.
+  2. `runtime/execution/events.py`에 `ENGINE_EXECUTION_STARTED`/
+     `ENGINE_EXECUTION_COMPLETED`/`ENGINE_AUTHENTICATION_FAILED`
+     Event 타입 상수를 신설한다. `ExecutionDispatcher`는 이 Event를
+     발행하기만 하고 누가 구독하는지 모른다.
+  3. `interfaces/dashboard_repository.py`에 `DashboardRepository`
+     Interface(신규 26번째 Interface)를 신설한다 —
+     `record_execution_started`/`record_execution_completed`/
+     `record_authentication_failure`(쓰기, Event 구독 경로 전용)와
+     `workspace_status`/`engine_statuses`/`recent_executions`/
+     `execution_stats`/`reliability_stats`(읽기, `DashboardService`
+     경로 전용)로 CQRS 쓰기/읽기 메서드를 한 Interface 안에 함께
+     정의한다 — 구현체가 하나(`InMemoryDashboardRepository`)뿐이고
+     내부적으로 같은 상태를 갱신·조회하므로 Interface를 둘로
+     쪼개는 것은 과설계로 판단했다.
+  4. `runtime/dashboard/dashboard_repository.py`의
+     `InMemoryDashboardRepository`가 생성자에서 스스로
+     `event_bus.subscribe()`한다(`ExecutionDispatcher`는 이 클래스의
+     존재를 모름). 통계(`ExecutionStats`/`ReliabilityStats`)는 조회
+     시점에 계산하지 않고 매 Event마다 미리 갱신해 둔다("Dashboard는
+     통계를 계산하지 않는다", 사용자 설계 원칙) — `_RECENT_EXECUTIONS_KEPT
+     = 100`으로 이력을 제한한다.
+  5. `runtime/dashboard/dashboard_service.py`의 `DashboardService`는
+     `DashboardRepository`를 조합해 조회 요청에 응답하는 순수
+     서비스다 — `web/`을 전혀 import하지 않는다(M20-T06에서 `ast`
+     기반 의존성 검증으로 증명). `KNOWN_ENGINES` 목록으로 아직 한
+     번도 실행되지 않은 Engine도 기본 상태(`READY`)로 표시한다.
+  6. `web/`(신규 최상위 패키지, Infrastructure 계층)에
+     `DashboardViewModel`(한국어 라벨 DTO,
+     `DashboardService`/`domain`은 이 타입을 모름) +
+     `DashboardBroadcaster`(WebSocket 연결 관리 + `EventBus` 구독 +
+     `asyncio.get_running_loop()`를 연결 시점에 캡처해
+     `loop.call_soon_threadsafe()`로 동기 이벤트 콜백에서 비동기
+     전송을 예약) + FastAPI `routes.py`(`/api/dashboard`,
+     `/api/summary`, `/api/history`, `/api/engines`) + `app.py`
+     (`create_app`, `/health`, `/ws/dashboard`, `StaticFiles` 정적
+     마운트) + `server.py`(`build_app`/`run_server`) + `static/`
+     (`index.html`/`style.css`/`app.js`, 빌드 도구 없는 Vanilla JS)
+     를 둔다. 현재 시각·경과 시간(`현재 시각 - started_at`)은
+     브라우저가 1초마다 직접 계산한다 — 서버는 Polling하지 않는다.
+  7. `pyproject.toml`에 이 프로젝트 최초의 외부 런타임 의존성
+     `fastapi>=0.115`/`uvicorn[standard]>=0.30`을 추가한다(기존엔
+     `pyyaml`뿐이었다). dev 의존성에 `httpx`(`TestClient`용)를
+     추가한다. `domain`/`interfaces`/`engines`/`runtime`(단, `runtime/
+     dashboard/`도 포함)은 FastAPI/uvicorn을 import하지 않는다 —
+     오직 `web/`만 이 두 패키지를 안다.
+  8. `cli/main.py`에 `start` 서브커맨드(`--host`/`--port`)를
+     추가하되, `web.server.run_server`를 지연 import한다 — 다른
+     기존 CLI 명령은 FastAPI/uvicorn 설치 여부와 무관하게 동작한다.
+- 대안:
+  - `DashboardRepository`를 쓰기 전용/읽기 전용 두 Interface로 분리
+    (엄격한 CQRS) — 기각. 구현체가 하나뿐이고 내부 상태를
+    공유하므로 분리는 간접 계층만 늘리고 실질적 이득이 없다(YAGNI).
+    필요해지면(예: 쓰기와 읽기가 물리적으로 다른 저장소를 쓰게
+    되면) 이 ADR을 갱신해 분리한다.
+  - `ExecutionDispatcher`가 `DashboardRepository`를 직접 호출 —
+    기각(사용자 확정 조건). Event 기반 간접 결합을 유지해야
+    `ExecutionDispatcher`가 Dashboard의 존재 여부와 무관하게 독립적
+    으로 테스트·재사용 가능하다.
+  - WebSocket 갱신 대신 클라이언트 Polling — 기각(사용자 명시 요구
+    "Repository를 Polling하지 않는다"). Event 발생 시점에만 갱신을
+    밀어 불필요한 요청을 없앤다.
+  - React/Vue 등 빌드 도구 기반 Web UI — 기각(사용자 선택). 이
+    프로젝트 규모에서는 정적 HTML/CSS/Vanilla JS로 충분하고, 빌드
+    파이프라인을 새로 들이는 비용이 더 크다.
+- 이유: CQRS(쓰기는 Event, 읽기는 Service 메서드)로 Dashboard가
+  Execution 계층에 어떤 결합도 강제하지 않으면서 실시간성을
+  얻는다. `DashboardService`가 `web/`을 모르게 유지하면, 동일한
+  Read Model을 향후 다른 Presentation(M23 Mobile 등)이 재사용할 수
+  있다. FastAPI/uvicorn을 `web/`에만 가두면 Core 계층의 프레임워크
+  독립성(이 프로젝트가 M1부터 지켜온 원칙)이 첫 외부 런타임
+  의존성 도입에도 깨지지 않는다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.22.0 신규 §3.18(Real-time
+  Dashboard Platform)에 반영, §7 Interfaces 26종으로 갱신
+  (`DashboardRepository` 추가), §8 의존성 규칙에 Dashboard Event
+  구독 경로 추가, §9 디렉터리 구조에 `runtime/dashboard/`/`web/`
+  반영. 실제 `ClaudeCodeEngineAdapter` 실행 결과가 Event → Repository
+  → Service → REST API/WebSocket까지 그대로 반영됨을 통합 테스트로
+  증명(M20-T06). `DashboardRepository` 쓰기/읽기 분리, 실제
+  프로덕션 배포 구성(HTTPS/인증/역방향 프록시), M23 Mobile
+  Presentation은 실제 필요성이 생기기 전까지 이월한다.
+
+## ADR-0033: Automation Engine 도입 — `AutomationRepository` Interface, 기존 `AutomationEngine`과의 명시적 분리, Reader→Reader CQRS 확장 (Milestone 21)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: M20으로 완성된 Dashboard는 실행 상태를 "보여주기"만 했다.
+  사용자가 "조건/일정에 따라 Task를 자동 실행하는 Automation"을
+  `AutomationRule → AutomationRepository → AutomationService →
+  AutomationScheduler → ExecutionDispatcher → EventBus → Dashboard`
+  흐름으로 요청했다. 설계 검토에서 M4-T07에 이미 `AutomationEngine`
+  Interface + `InMemoryAutomationEngine`이 존재함을 발견했다 — 하지만
+  그 책임은 "어떤 trigger가 어떤 Workflow와 연결돼 있는가"만 관리하는
+  **연결 관리**뿐이고, trigger가 **언제** 발동해야 하는지 판단하는
+  조건/일정 평가와 실제 실행은 M4-T07 설계 당시부터 명시적으로
+  호출자에게 떠넘겨져 있었다. M21이 요청한 `AutomationRule`(4종
+  Trigger+Action)과 `AutomationScheduler`(실제 일정 평가+자동 실행)
+  는 바로 그 떠넘겨진 책임을 처음 구현하는 것이라, M16
+  `KnowledgeRepository`/M18 `EngineExecutionResult`와 같은 "이름은
+  유사하지만 다른 개념" 패턴으로 판단해 새 컴포넌트 세트를 도입하기로
+  했다(기존 `AutomationEngine`은 수정 없이 그대로 유지). 사용자는
+  최종 승인에서 6개 조건을 확정했다: (1) `AutomationScheduler`와
+  Trigger의 책임을 분리한다, (2) Dashboard는 계속 Read Model을
+  유지한다, (3) Automation CRUD는 Automation API를 통해서만
+  수행한다, (4) Dashboard는 Automation을 직접 제어하지 않는다, (5)
+  `ExecutionDispatcher`를 유일한 실행 진입점으로 유지한다, (6)
+  `last_executed_at`/`next_execution_at`을 도메인 모델에 포함해 M23
+  Mobile Experience와 자연스럽게 연계한다.
+- 결정:
+  1. `domain/automation.py`에 `TriggerKind`(TIME/INTERVAL/EVENT/
+     STARTUP)/`Trigger`/`ActionKind`(RUN_TASK/RUN_WORKFLOW/
+     DASHBOARD_REFRESH/NOTIFICATION)/`Action`을 kind로 태그된 Flat
+     구조로 정의한다(`ExecutionRecord`(M20)와 동일 스타일 — Trigger/
+     Action은 종류별로 필드 모양이 크게 달라 "언제/무엇을" 판단
+     로직과 무관하게 순수 데이터로만 존재한다). `AutomationRule`은
+     `last_executed_at`/`next_execution_at`을 포함하고(사용자 승인
+     조건 6) `enable()`/`disable()`을 갖는 가변 엔티티(`Task`와
+     동일 패턴)다.
+  2. `interfaces/automation_repository.py`에 `AutomationRepository`
+     (신규 27번째 Interface, `get`/`save`/`delete`/`list_rules` —
+     `ProjectRepository`와 동일한 upsert 스타일)를 신설한다.
+  3. `runtime/automation/`에 `InMemoryAutomationRepository`(저장),
+     `AutomationService`(CRUD 유일 진입점, 사용자 승인 조건 3),
+     `TriggerEvaluator` 계층(`TimeTriggerEvaluator`/
+     `IntervalTriggerEvaluator`/`StartupTriggerEvaluator`/
+     `EventTriggerEvaluator` — "언제 발동할지" 판단을 전담),
+     `AutomationScheduler`(오케스트레이션만 — Trigger 평가는
+     `TriggerEvaluator`에 위임, 사용자 승인 조건 1)를 신설한다.
+     `AutomationScheduler`는 Rule을 별도로 등록/보관하지 않고 매
+     호출마다 `AutomationRepository`를 다시 조회한다 — `Automation
+     Service`가 같은 Repository로 CRUD하면 자동 반영되어 별도 동기화
+     계층이 필요 없다.
+  4. `AutomationActionExecutor`(신규, `runtime/automation/`)가
+     RUN_TASK Action을 M17/M18 파이프라인(`EngineSelectionPolicy.
+     select()` → `ExecutionDispatcher.dispatch()`)에 그대로 실어
+     실행한다(사용자 승인 조건 5, 새 실행 경로를 만들지 않음).
+     `AutomationScheduler`는 이 실행기를 `action_executor:
+     Callable[[AutomationRule], None]`로 주입받을 뿐
+     `ExecutionDispatcher`를 알지 못한다. RUN_WORKFLOW는 이번
+     Milestone이 Task 단위 실행 경로만 다루므로
+     `AutomationActionNotSupportedError`로 명시적으로 아직 지원하지
+     않는다(향후 Milestone 이월).
+  5. Event Trigger는 `AutomationScheduler.bind_event_bus(event_bus)`
+     로 `EventBus`를 구독해 처리한다(Automation은 EventBus를 그대로
+     재사용한다는 사용자 요구). Rule 실행(`action_executor` 호출)
+     실패는 `InMemoryEventBus.publish()`와 동일한 원칙으로
+     `try/except Exception: pass`로 삼켜 다른 Rule 평가나 호출자에
+     영향을 주지 않는다 — `last_executed_at`은 "실행 시도 시점"만
+     기록한다.
+  6. Dashboard 연계는 **Reader가 다른 Reader를 참조하는 방식**으로
+     확장한다: `DashboardService`가 선택적으로 `automation_service`
+     를 주입받아(M15/M16과 동일한 선택적 DI 패턴) 등록/활성 Rule
+     수와 마지막/다음 실행 시각을 `AutomationService.list_rules()`
+     (읽기 전용)로만 조회해 집계한다(사용자 승인 조건 4 — Dashboard
+     는 Automation을 제어하지 않는다). `ExecutionDispatcher`(Writer)
+     가 Dashboard를 직접 참조하는 것은 여전히 금지된다 — CQRS
+     경계는 "쓰기측이 읽기측을 모른다"는 방향으로만 유지된다.
+  7. Automation API(`web/automation_routes.py`) 8종을 신설하고,
+     `AutomationScheduler.run_now(rule_id)`(Trigger 조건 무시,
+     즉시 발동)를 추가해 `POST /{id}/run`이 위임한다. `web/app.py`
+     의 `create_app()`을 `lifespan` Context Manager로 전환해(기존
+     `on_event` 대신) 서버 기동 시 `AutomationScheduler.start()`
+     (Startup Trigger 1회)를 호출하고, 서버 생존 동안
+     `automation_tick_seconds`(기본 30초)마다 `tick()`을 도는
+     백그라운드 asyncio Task를 두어 "Scheduler는 Server Runtime과
+     함께 실행된다"는 DoD를 충족한다.
+- 대안:
+  - 기존 `AutomationEngine`을 확장(M19 `RetryPolicy` 패턴처럼) —
+    기각. `AutomationEngine`은 "trigger_id↔Workflow 연결 관리"라는
+    좁고 다른 책임을 갖고, `bind_workflow`/`fire`의 계약(즉시 반환,
+    실행은 호출자 책임)이 M21이 요구하는 "조건 평가+자동 실행"과
+    근본적으로 다르다 — 억지로 확장하면 한 Interface가 두 가지
+    무관한 책임을 지게 된다(SRP 위반).
+  - `AutomationScheduler`가 Rule을 자체 목록으로 등록/관리(사용자
+    프롬프트의 "Rule 등록/제거/활성화/비활성화" 문구를 문자 그대로
+    별도 API로 구현) — 기각. `AutomationService`(CRUD 유일
+    진입점, 조건 3)와 책임이 중복되고 두 컴포넌트의 상태가 어긋날
+    위험이 생긴다. 매 호출마다 공유 `AutomationRepository`를
+    재조회하면 문구가 요구하는 "효과"(등록/제거/활성화가 Scheduler
+    동작에 반영됨)는 동일하게 달성하면서 이중 관리를 없앤다.
+  - RUN_WORKFLOW를 `WorkflowRunner`(M12)로 연결 — 기각(이번
+    Milestone 범위 밖). `ExecutionDispatcher`를 유일한 실행
+    진입점으로 못박은 조건과 정합성을 유지하려면 Workflow 실행
+    경로도 이 원칙 안에서 설계해야 하는데, 이번 Milestone에서는
+    그 설계까지 확정하지 않았다 — 억지로 연결하면 "유일한 진입점"
+    원칙이 두 갈래로 쪼개진다. 명시적 예외로 남겨 후속 Milestone의
+    판단 대상으로 이월한다.
+- 이유: Trigger 평가를 `TriggerEvaluator`로 분리하면 새 Trigger
+  종류(예: Cron 표현식)가 필요해져도 `AutomationScheduler`를 건드리지
+  않고 평가기만 추가하면 된다(OCP). `AutomationScheduler`가 Rule
+  상태를 자체 보관하지 않고 매번 Repository를 재조회하는 설계는
+  "CRUD는 오직 API를 통해서만"이라는 사용자 조건을 코드 구조로
+  강제한다 — Scheduler를 우회해 Rule을 바꿀 방법이 없다.
+  `last_executed_at`/`next_execution_at`을 도메인에 내장해 두면
+  향후 M23 Mobile이 별도 계산 없이 그대로 표시할 수 있다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.23.0 신규 §3.19(Automation
+  Engine)에 반영, §7 Interfaces 27종으로 갱신(`AutomationRepository`
+  추가), §8 의존성 규칙에 Automation Event 구독 경로 + Dashboard의
+  선택적 Automation 조회 추가, §9 디렉터리 구조에 `runtime/
+  automation/`/`web/automation_routes.py` 반영. 실제
+  `ClaudeCodeEngineAdapter` 조합으로 Event Trigger가 실제 Task
+  실행까지 이어짐과, REST API로 만든 Rule이 Dashboard Automation
+  현황에 반영됨을 통합 테스트로 증명(M21-T07). `ast` 기반 import
+  검사로 Automation Core가 `web/`을 모르고, `ExecutionDispatcher`가
+  Automation을 모른다는 단방향 결합도 재확인. RUN_WORKFLOW 실행
+  경로, `AutomationRepository`의 파일/DB 구현체, Cron Expression
+  기반 Trigger, Distributed/Multi-node Scheduler는 실제 필요성이
+  생기기 전까지 이월한다.
+
+## ADR-0034: Production Platform 도입 — `ProductionConfig`/`LifecycleManager`/`HealthMonitor`, Dashboard Reader→Reader 확장, `TYPE_CHECKING` 지연 import로 순환 의존 회피 (Milestone 22)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: M20/M21로 완성된 Dashboard/Automation은 실행 상태는
+  보여줬지만 서버 자체의 운영 정보(설정/생명주기/상태/버전)는
+  다루지 않았다. 사용자가 "AI Workspace를 실제 운영 가능한
+  Production Platform으로 확장한다 — 비즈니스 로직은 추가하지
+  않는다"는 목표로 M22를 요청했다. 사용자 최종 승인 조건 5개:
+  (1) Configuration은 Infrastructure Layer의 Immutable 설정 객체로
+  유지, (2) `LifecycleManager`는 생성이 아닌 생명주기(Startup/
+  Shutdown)만 관리, (3) `HealthMonitor`는 조회 전용(Read Model)으로
+  유지, (4) Dashboard Health는 기존 `DashboardService`를 확장하여
+  구현, (5) `uptime`/`started_at`/`version`/`health_status`를
+  표준 상태 정보로 제공해 M23이 재사용할 수 있도록 함. Kickoff
+  논의에서 추가로 확정한 사항: Version API는 `pyproject.toml`의
+  아키텍처 기준선 버전(ADR-0024)과 다른 별도 상수로 관리, Health
+  Monitor의 "Engine" 항목은 `EngineRegistry` Interface를 확장하지
+  않고 구조적 연결 여부만 확인, Configuration/Lifecycle/Health는
+  `runtime/production/`(FastAPI를 모름)에, 실제 REST 엔드포인트는
+  `web/production_routes.py`에 배치, Graceful Shutdown은 별도
+  계측 없이 기존 `DashboardService.workspace_status()`(M20이
+  이미 Event로 추적)를 폴링해 구현.
+- 결정:
+  1. `runtime/production/config.py`에 `ProductionConfig`(frozen
+     dataclass — `host`/`port`/`log_level`/`dashboard_enabled`/
+     `automation_enabled`/`automation_tick_seconds`/
+     `engine_settings`, `__post_init__`에서 값 검증)를 신설한다.
+     `runtime/production/config_loader.py`의
+     `load_production_config(config_path=, env=)`가 기본값→설정
+     파일(YAML)→Environment Variable(`AI_WORKSPACE_` 접두사) 순으로
+     겹쳐 쓴다 — `storage/llm_policy_loader.py`와 동일하게 "로더만
+     PyYAML/`os.environ`을 안다" 원칙을 지킨다.
+  2. `runtime/production/logging_setup.py`의 `configure_logging()`
+     이 `ProductionConfig.log_level`로 표준 `logging.Logger`
+     (`ai_workspace`)를 설정한다(Console 항상 켜짐, `log_file` 선택
+     지원). `domain`/`interfaces`/`engines`는 이 모듈을 참조하지
+     않는다 — "Logging은 Domain에 침투하지 않는다"(사용자 원칙).
+  3. `runtime/production/lifecycle.py`의 `LifecycleManager`
+     (STARTUP/RUNNING/SHUTDOWN)는 이미 조립된
+     `AutomationScheduler`/`DashboardService`를 선택적으로
+     주입받을 뿐 스스로 컴포넌트를 만들지 않는다(사용자 승인 조건
+     2). `startup()`이 `started_at`을 기록하고 `AutomationScheduler.
+     start()`(Startup Trigger 1회)를 호출한다. `shutdown()`(비동기)
+     은 `DashboardService.workspace_status()`를 폴링해 실행 중
+     Task가 끝나길 기다리되, `graceful_shutdown_timeout_seconds`를
+     넘기면 **강제로 개입하지 않고** 그대로 진행한다(사용자 DoD
+     "강제 종료를 수행하지 않는다").
+  4. `runtime/production/health.py`의 `HealthMonitor`는 조회
+     전용이다(사용자 승인 조건 3) — Server(`LifecycleManager.
+     state` 기반)/Dashboard/Automation/EventBus/Engine 5개
+     컴포넌트를 각각 "연결돼 있는가"로 판정하고 가장 나쁜 상태로
+     전체 `health_status`를 집계한다. Engine 항목은 `EngineRegistry`
+     Interface를 확장하지 않고 구조적 연결 여부만 본다(Kickoff
+     합의). `ProductionStatus`에 사용자 승인 조건 5의 4개 표준
+     필드(`health_status`/`version`/`started_at`/`uptime_seconds`)
+     를 담는다.
+  5. `runtime/production/version.py`에 `WORKSPACE_VERSION`(제품
+     릴리스 버전, `pyproject.toml`의 아키텍처 기준선 버전과 별개)
+     과 `get_git_commit_hash()`(실패 시 `None`, git 저장소가 아니어도
+     Version API가 항상 동작)를 신설한다.
+  6. Dashboard Health는 **기존 `DashboardService`를 확장**해
+     구현한다(사용자 승인 조건 4) — 선택적 `health_monitor` DI +
+     `production_status()`(M21 `automation_service` DI와 동일한
+     Reader→Reader 패턴). `DashboardSnapshot`/`DashboardViewModel`
+     에 `production_status` 필드를 추가(기본값 `None`)해 `/api/
+     dashboard`·`/api/summary`에 자동 포함시킨다.
+  7. **순환 의존 처리**: `HealthMonitor`/`LifecycleManager`가 타입
+     힌트로만 `DashboardService`를 참조하도록(`from __future__
+     import annotations` + `TYPE_CHECKING` 가드) 바꿔, `dashboard_
+     service.py` → `health.py`/`lifecycle.py` → `dashboard_
+     service.py`로 되돌아오는 런타임 순환 import를 없앴다. 또한
+     `HealthMonitor` 생성에는 이미 만들어진 `DashboardService`가
+     필요하지만 `DashboardService`도 `HealthMonitor`를 참조하고
+     싶어 하는 조립 순서 문제는 `DashboardService.
+     attach_health_monitor(health_monitor)`(생성 후 연결)로
+     풀었다 — 실제 순환 의존이 아니라 순수한 조립 순서 문제임을
+     이 ADR과 코드 주석에 명시적으로 기록한다.
+  8. Production API(`web/production_routes.py`)는 `GET /api/health`
+     (컴포넌트별 상세)/`GET /api/config`(`ProductionConfig` 그대로,
+     비밀값 없음)/`GET /api/version`/`GET /api/status`(사용자 승인
+     조건 5의 4개 표준 필드만 담은 경량 요약 — M23이 그대로 재사용
+     하도록 `/api/health`의 상세 `components`와 분리) 4종을
+     제공한다. `web/app.py`의 `create_app()`은 `production_config`/
+     `lifecycle_manager`/`health_monitor` 3개 모두 주입해야만
+     Production 라우터를 등록한다(기존 M20/M21 호출부 무영향).
+     `lifecycle_manager`가 주어지면 `lifespan`이 `automation_
+     scheduler.start()`를 직접 호출하는 대신 위임하고, 종료 시
+     `await lifecycle_manager.shutdown()`(Graceful Shutdown)을
+     tick Task 취소보다 먼저 수행한다.
+  9. `web/server.py`의 `build_app()`이 `config` 미지정 시
+     `load_production_config()`로 채우고 Production 컴포넌트까지
+     전부 조립한다. `run_server()`는 CLI `host`/`port`가 주어지면
+     Configuration보다 우선(가장 구체적인 값)하고, `configure_
+     logging()`을 호출한 뒤 `uvicorn.run()`한다. `cli/main.py`의
+     `start` 서브커맨드 `--host`/`--port` 기본값을 하드코딩된
+     문자열에서 `None`으로 바꿔 미지정 시 Configuration이 살아
+     있게 했다.
+- 대안:
+  - `LifecycleManager`가 컴포넌트까지 직접 조립 — 기각(사용자 확정
+    조건). `web/server.py`의 `build_app()`이 여전히 유일한 조립
+    지점으로 남아야 "조립 로직이 여러 곳에 흩어지는" 문제를 막는다.
+  - `HealthMonitor`가 `EngineRegistry`에 새 조회 메서드를 추가해
+    등록된 Engine 개수/이름까지 점검 — 기각(Kickoff 합의). 아직
+    실제 Engine이 등록되지 않는 알려진 한계(M21 Review) 위에 새
+    Interface 계약을 얹는 것은 시기상조라고 판단했다 — 실제 Engine
+    등록이 이뤄지는 후속 Milestone에서 재검토한다.
+  - Version API가 `pyproject.toml`의 `version`을 그대로 재사용 —
+    기각. 그 값은 ADR-0024가 관리하는 "아키텍처 기준선 버전"이라
+    Milestone이 끝날 때마다 반드시 바뀌는 값이 아니고, 사용자 예시
+    (`2.0.0`)가 가리키는 "제품 릴리스 버전"과 의미가 다르다 — 두
+    개념을 억지로 합치면 어느 한쪽이 오염된다.
+  - `DashboardService`↔`HealthMonitor`의 순환 참조를 완전히 없애기
+    위해 Dashboard Health를 별도 독립 컴포넌트로 분리 — 기각(사용자
+    확정 조건 4, "기존 DashboardService를 확장"). `TYPE_CHECKING`
+    지연 import + `attach_health_monitor()`로 실제 순환 import 없이
+    확장 요구를 그대로 만족시킬 수 있어, 사용자 조건을 어기지 않고
+    문제를 해결했다.
+- 이유: Configuration을 불변으로 유지하면 서버 실행 중 예기치 않게
+  설정이 바뀌는 버그 클래스를 원천 차단한다. `LifecycleManager`/
+  `HealthMonitor`를 각각 "생명주기만"/"조회만"으로 좁혀 두면 두
+  컴포넌트의 책임이 겹치지 않고, 향후 실제 프로덕션 배포 요구
+  (Docker/K8s/HTTPS 등, 이번엔 Out of Scope)가 들어와도 이 경계
+  안에서 확장할 수 있다. Dashboard Health를 별도 API 대신 기존
+  `DashboardService`의 확장으로 구현하면 Web UI/모바일이 한 번의
+  `/api/dashboard` 호출로 Workspace/Engine/실행/Automation/
+  Production 상태를 전부 받을 수 있어 M23 Mobile Experience의
+  API 설계 부담을 줄인다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.24.0 신규 §3.20(Production
+  Platform)에 반영. §7 Interfaces는 새 Interface가 없어 27종
+  그대로(`ProductionConfig`/`LifecycleManager`/`HealthMonitor`
+  전부 구체 클래스/dataclass) — M19에 이어 "새 Interface 없이도
+  DoD가 요구해 ADR을 작성"한 두 번째 사례. §8 의존성 규칙에
+  Production 관련 경로 추가, §9 디렉터리 구조에 `runtime/
+  production/`/`web/production_routes.py` 반영. 실제
+  `ClaudeCodeEngineAdapter`+`ExecutionDispatcher`+`uvicorn`
+  lifespan 조합으로 서버 기동→Healthy 전이, Graceful Shutdown이
+  실행 중 Task를 실제로 기다림, Environment Variable이 실제
+  `/api/config`까지 전달됨을 통합 테스트로 증명(M22-T07). `ast`
+  기반 import 검사로 `runtime/production/`이 `web/`을 모르고,
+  Core Domain(`domain`/`interfaces`/`engines`)이 Production을
+  전혀 모르며, `LifecycleManager`가 구체 구현체를 직접 생성하지
+  않음을 재확인. Docker/Kubernetes/CI/CD/HTTPS/Reverse Proxy/
+  Database/Authentication/Authorization/Multi-node Cluster/
+  Mobile 관련 위젯류는 실제 필요성이 생기기 전까지 이월한다.

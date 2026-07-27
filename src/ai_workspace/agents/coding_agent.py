@@ -11,8 +11,10 @@ from ai_workspace.domain.llm_policy import model_name, required_capabilities
 from ai_workspace.domain.task import TaskStatus
 from ai_workspace.interfaces.agent_registry import AgentRegistry
 from ai_workspace.interfaces.agent_scheduler import AgentScheduler
+from ai_workspace.interfaces.budget_policy_engine import BudgetPolicyEngine
 from ai_workspace.interfaces.engine_runtime import EngineRuntime
 from ai_workspace.interfaces.event_bus import Event, EventBus
+from ai_workspace.interfaces.knowledge_provider import KnowledgeProvider
 from ai_workspace.interfaces.task_engine import TaskEngine
 from ai_workspace.runtime.agent.agent_runtime import AgentRuntime
 
@@ -46,7 +48,22 @@ class CodingAgent:
     실제로 처리한다(`is_agent_selected()`로 자가 확인). 새로운 중앙
     디스패처는 없다 — 선택이 결정적이라는 전제 하에 모든 인스턴스가
     같은 질문에 같은 답을 얻는다. 둘 중 하나라도 주어지지 않으면(기본값
-    `None`) 이 확인을 건너뛰어 기존 동작과 완전히 동일하다."""
+    `None`) 이 확인을 건너뛰어 기존 동작과 완전히 동일하다.
+
+    **Token & Cost Optimization(M15)**: `budget_policy_engine`을
+    주입하면, 실제로 실행(`engine_runtime.run()`)하기 전에
+    `engine_runtime.estimate_cost()`로 예상 비용을 조회하고
+    `BudgetPolicyEngine.check()`로 예산 내인지 확인한다. 초과하면
+    Approval/Retry 없이 Task를 `BLOCKED`로 전환하고 실행하지 않는다
+    (M15 MVP — 승인 요청이나 재시도 흐름은 범위 밖). 주입하지 않으면
+    (기본값 `None`) 이 확인을 건너뛰어 기존 동작과 완전히 동일하다.
+
+    **Project Knowledge System(M16)**: `knowledge_provider`를 주입하면,
+    `task.title`로 `KnowledgeProvider.provide()`를 호출해 관련
+    Knowledge를 검색하고 `DevelopmentContext.related_knowledge`에
+    실어 프롬프트에 반영한다. Memory는 LLM을 호출하지 않는다 — 검색
+    결과를 그대로 프롬프트에 얹을 뿐이다. 미주입 시(기본값 `None`)
+    검색 자체를 건너뛰어 기존 동작과 완전히 동일하다."""
 
     def __init__(
         self,
@@ -57,12 +74,16 @@ class CodingAgent:
         engine_runtime: EngineRuntime,
         agent_registry: AgentRegistry | None = None,
         agent_scheduler: AgentScheduler | None = None,
+        budget_policy_engine: BudgetPolicyEngine | None = None,
+        knowledge_provider: KnowledgeProvider | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._task_engine = task_engine
         self._engine_runtime = engine_runtime
         self._agent_registry = agent_registry
         self._agent_scheduler = agent_scheduler
+        self._budget_policy_engine = budget_policy_engine
+        self._knowledge_provider = knowledge_provider
         self._session = agent_runtime.start_agent(
             AgentRole.CODING, frozenset({AgentCapability.CODING})
         )
@@ -82,14 +103,27 @@ class CodingAgent:
         task_id = event.payload["task_id"]
         task = self._task_engine.get_task(task_id)
         self._task_engine.transition(task, TaskStatus.IN_PROGRESS)
+        related_knowledge = None
+        if self._knowledge_provider is not None:
+            related_knowledge = [
+                document.content for document in self._knowledge_provider.provide(task.title)
+            ]
         context = DevelopmentContext(
             task_id=task_id,
             instructions=task.title,
             prior_output=event.payload.get("rework_reason"),
+            related_knowledge=related_knowledge,
         )
+        prepared_task = replace(task, title=context.to_prompt())
+        capabilities = required_capabilities(self._session.llm_policy_decision)
+        if self._budget_policy_engine is not None:
+            estimate = self._engine_runtime.estimate_cost(prepared_task, capabilities)
+            if not self._budget_policy_engine.check(estimate).allowed:
+                self._task_engine.transition(task, TaskStatus.BLOCKED)
+                return
         result = self._engine_runtime.run(
-            replace(task, title=context.to_prompt()),
-            required_capabilities=required_capabilities(self._session.llm_policy_decision),
+            prepared_task,
+            required_capabilities=capabilities,
             model=model_name(self._session.llm_policy_decision),
         )
         self._task_engine.transition(task, TaskStatus.REVIEW)

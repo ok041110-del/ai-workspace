@@ -4,19 +4,25 @@ from tests.interfaces.fakes import (
     FakeAgentManager,
     FakeAgentRegistry,
     FakeAgentScheduler,
+    FakeKnowledgeProvider,
     FakeTaskEngine,
 )
 
 from ai_workspace.agents.coding_agent import CodingAgent
 from ai_workspace.agents.events import CODE_COMPLETED, MISSION_PLANNED
 from ai_workspace.domain.agent import AgentRole
+from ai_workspace.domain.budget import Budget
+from ai_workspace.domain.knowledge import KnowledgeDocument, KnowledgeKind
 from ai_workspace.domain.llm_policy import LLMEffort, LLMModel, LLMPolicyDecision, LLMProvider
 from ai_workspace.domain.task import Task, TaskStatus
+from ai_workspace.engines.budget_policy_engine import InMemoryBudgetPolicyEngine
 from ai_workspace.engines.llm_policy_engine import InMemoryLLMPolicyEngine
 from ai_workspace.events.event_bus import InMemoryEventBus
-from ai_workspace.interfaces.engine_adapter import EngineResult
+from ai_workspace.interfaces.budget_policy_engine import BudgetPolicyEngine
+from ai_workspace.interfaces.engine_adapter import CostEstimate, EngineResult
 from ai_workspace.interfaces.engine_runtime import EngineRuntime
 from ai_workspace.interfaces.event_bus import Event
+from ai_workspace.interfaces.knowledge_provider import KnowledgeProvider
 from ai_workspace.interfaces.llm_policy_engine import LLMPolicyEngine
 from ai_workspace.runtime.agent.agent_runtime import AgentRuntime
 
@@ -25,8 +31,13 @@ class RecordingEngineRuntime(EngineRuntime):
     """실제로 넘어온 Task(특히 title)와 required_capabilities(M6-T02)/
     model(M14-T03)을 기록하는 테스트 더블."""
 
-    def __init__(self, result: EngineResult) -> None:
+    def __init__(
+        self, result: EngineResult, cost_estimate: CostEstimate | None = None
+    ) -> None:
         self._result = result
+        self._cost_estimate = (
+            cost_estimate if cost_estimate is not None else CostEstimate(0, 0.0)
+        )
         self.received_tasks: list[Task] = []
         self.received_required_capabilities: list[frozenset[str]] = []
         self.received_models: list[str | None] = []
@@ -51,6 +62,11 @@ class RecordingEngineRuntime(EngineRuntime):
     ):
         raise NotImplementedError
 
+    def estimate_cost(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> CostEstimate:
+        return self._cost_estimate
+
     def cancel(self, task_id: str) -> None:
         raise NotImplementedError
 
@@ -62,6 +78,8 @@ def build_coding_agent(
     engine_runtime: RecordingEngineRuntime,
     *,
     llm_policy_engine: LLMPolicyEngine | None = None,
+    budget_policy_engine: BudgetPolicyEngine | None = None,
+    knowledge_provider: KnowledgeProvider | None = None,
 ) -> tuple[CodingAgent, InMemoryEventBus, FakeTaskEngine]:
     agent_runtime = AgentRuntime(
         agent_manager=FakeAgentManager(),
@@ -75,6 +93,8 @@ def build_coding_agent(
         event_bus=event_bus,
         task_engine=task_engine,
         engine_runtime=engine_runtime,
+        budget_policy_engine=budget_policy_engine,
+        knowledge_provider=knowledge_provider,
     )
     return agent, event_bus, task_engine
 
@@ -262,3 +282,116 @@ def test_coding_agent_ignores_mission_planned_when_not_selected_by_scheduler() -
     # 일어난다(선택되지 않은 인스턴스는 조용히 return).
     assert len(engine_runtime.received_tasks) == 1
     assert task_engine.get_task(task.task_id).status == TaskStatus.REVIEW
+
+
+def test_coding_agent_runs_when_no_budget_policy_engine() -> None:
+    """M15-T02: budget_policy_engine을 주입하지 않으면(기존 모든 조립
+    코드) 예산 확인 자체를 건너뛰어 기존 동작과 완전히 하위 호환된다."""
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="완료"))
+    _agent, event_bus, task_engine = build_coding_agent(engine_runtime)
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=MISSION_PLANNED, payload={"task_id": task.task_id})
+    )
+
+    assert len(engine_runtime.received_tasks) == 1
+    assert task_engine.get_task(task.task_id).status == TaskStatus.REVIEW
+
+
+def test_coding_agent_runs_when_estimate_is_within_budget() -> None:
+    engine_runtime = RecordingEngineRuntime(
+        EngineResult(success=True, output="완료"), cost_estimate=CostEstimate(100, 0.1)
+    )
+    budget_policy_engine = InMemoryBudgetPolicyEngine(Budget(max_tokens=1000))
+    _agent, event_bus, task_engine = build_coding_agent(
+        engine_runtime, budget_policy_engine=budget_policy_engine
+    )
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=MISSION_PLANNED, payload={"task_id": task.task_id})
+    )
+
+    assert len(engine_runtime.received_tasks) == 1
+    assert task_engine.get_task(task.task_id).status == TaskStatus.REVIEW
+
+
+def test_coding_agent_blocks_task_and_does_not_run_when_budget_exceeded() -> None:
+    """M15 DoD 4번: 예산 초과 시 Approval/Retry 없이 실행을 막고
+    Task를 BLOCKED로 전환한다."""
+    engine_runtime = RecordingEngineRuntime(
+        EngineResult(success=True, output="완료"), cost_estimate=CostEstimate(2000, 0.1)
+    )
+    budget_policy_engine = InMemoryBudgetPolicyEngine(Budget(max_tokens=1000))
+    _agent, event_bus, task_engine = build_coding_agent(
+        engine_runtime, budget_policy_engine=budget_policy_engine
+    )
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+    received: list[Event] = []
+    event_bus.subscribe(received.append)
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=MISSION_PLANNED, payload={"task_id": task.task_id})
+    )
+
+    assert len(engine_runtime.received_tasks) == 0
+    assert task_engine.get_task(task.task_id).status == TaskStatus.BLOCKED
+    assert not any(e.event_type == CODE_COMPLETED for e in received)
+
+
+def test_coding_agent_runs_when_no_knowledge_provider() -> None:
+    """M16-T02: knowledge_provider를 주입하지 않으면(기존 모든 조립
+    코드) Knowledge 검색 자체를 건너뛰어 기존 동작과 완전히 하위
+    호환된다."""
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="완료"))
+    _agent, event_bus, task_engine = build_coding_agent(engine_runtime)
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=MISSION_PLANNED, payload={"task_id": task.task_id})
+    )
+
+    assert engine_runtime.received_tasks[0].title == "로그인 기능 구현하기"
+
+
+def test_coding_agent_includes_related_knowledge_in_prompt() -> None:
+    """M16 DoD 5번: knowledge_provider가 주입되어 있으면, 검색된
+    Knowledge가 실행 프롬프트에 반영된다."""
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="완료"))
+    document = KnowledgeDocument(
+        document_id="architecture",
+        kind=KnowledgeKind.ARCHITECTURE,
+        title="ARCHITECTURE",
+        content="EngineRuntime은 엔진 선택/세션 풀/병렬 실행을 담당한다.",
+        source_path="docs/ARCHITECTURE.md",
+    )
+    knowledge_provider = FakeKnowledgeProvider([document])
+    _agent, event_bus, task_engine = build_coding_agent(
+        engine_runtime, knowledge_provider=knowledge_provider
+    )
+    task = task_engine.create_task("p1", "EngineRuntime 확장하기")
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=MISSION_PLANNED, payload={"task_id": task.task_id})
+    )
+
+    prompt = engine_runtime.received_tasks[0].title
+    assert "EngineRuntime 확장하기" in prompt
+    assert "EngineRuntime은 엔진 선택/세션 풀/병렬 실행을 담당한다." in prompt
+    assert knowledge_provider.received_queries == ["EngineRuntime 확장하기"]
+
+
+def test_coding_agent_knowledge_provider_returning_no_match_adds_no_section() -> None:
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="완료"))
+    knowledge_provider = FakeKnowledgeProvider([])
+    _agent, event_bus, task_engine = build_coding_agent(
+        engine_runtime, knowledge_provider=knowledge_provider
+    )
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=MISSION_PLANNED, payload={"task_id": task.task_id})
+    )
+
+    assert engine_runtime.received_tasks[0].title == "로그인 기능 구현하기"

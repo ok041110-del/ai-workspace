@@ -70,6 +70,24 @@ def test_status_unknown_task_raises_not_found() -> None:
         runtime.status("unknown")
 
 
+def test_estimate_cost_returns_selected_adapters_estimate() -> None:
+    runtime = InMemoryEngineRuntime()
+    adapter = MockEngineAdapter()
+    runtime.register_engine("mock", adapter)
+
+    estimate = runtime.estimate_cost(make_task())
+
+    assert estimate == adapter.estimate_cost(make_task())
+
+
+def test_estimate_cost_raises_no_suitable_engine_when_capability_unmatched() -> None:
+    runtime = InMemoryEngineRuntime()
+    runtime.register_engine("mock", MockEngineAdapter(frozenset({"code_generation"})))
+
+    with pytest.raises(NoSuitableEngineError):
+        runtime.estimate_cost(make_task(), required_capabilities=frozenset({"vision"}))
+
+
 def test_run_parallel_preserves_order() -> None:
     runtime = InMemoryEngineRuntime()
     runtime.register_engine("mock", MockEngineAdapter())

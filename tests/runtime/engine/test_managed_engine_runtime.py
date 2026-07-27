@@ -293,6 +293,30 @@ def test_run_capability_mismatch_raises_no_suitable_engine() -> None:
         runtime.run(make_task(), required_capabilities=frozenset({"vision"}))
 
 
+def test_estimate_cost_selects_matching_adapter_without_creating_a_session() -> None:
+    """M15-T02: estimate_cost()는 run()과 같은 선택 규칙을 쓰되, 세션을
+    만들거나 실제로 실행하지 않는다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    claude_adapter = RecordingEngineAdapter(frozenset({"claude_code"}))
+    codex_adapter = RecordingEngineAdapter(frozenset({"codex"}))
+    runtime.register_engine("claude_code", claude_adapter)
+    runtime.register_engine("codex", codex_adapter)
+
+    estimate = runtime.estimate_cost(make_task(), required_capabilities=frozenset({"codex"}))
+
+    assert estimate == codex_adapter.estimate_cost(make_task())
+    assert codex_adapter.run_count == 0
+    assert claude_adapter.run_count == 0
+
+
+def test_estimate_cost_raises_no_suitable_engine_when_capability_unmatched() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("mock", MockEngineAdapter(frozenset({"code_generation"})))
+
+    with pytest.raises(NoSuitableEngineError):
+        runtime.estimate_cost(make_task(), required_capabilities=frozenset({"vision"}))
+
+
 def test_status_reflects_completed_after_successful_run() -> None:
     runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
     runtime.register_engine("mock", MockEngineAdapter())

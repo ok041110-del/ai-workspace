@@ -177,3 +177,24 @@ def test_run_parallel_converts_individual_task_exception_to_failed_result() -> N
     assert results[0].success is True
     assert results[1].success is False
     assert results[2].success is True
+
+
+def test_estimate_cost_selects_engine_matching_required_capabilities() -> None:
+    """M15-T02: estimate_cost()는 run()과 동일한 엔진 선택 규칙을
+    따르고, 세션을 만들지 않고 선택된 Adapter의 CostEstimate를 반환한다."""
+    runtime = FakeEngineRuntime()
+    runtime.register_engine("claude_code", FakeEngineAdapter(frozenset({"code_generation"})))
+
+    estimate = runtime.estimate_cost(
+        make_task(), required_capabilities=frozenset({"code_generation"})
+    )
+
+    assert estimate == CostEstimate(estimated_tokens=100, estimated_cost_usd=0.01)
+
+
+def test_estimate_cost_raises_no_suitable_engine_when_capability_unmatched() -> None:
+    runtime = FakeEngineRuntime()
+    runtime.register_engine("claude_code", FakeEngineAdapter(frozenset({"code_generation"})))
+
+    with pytest.raises(NoSuitableEngineError):
+        runtime.estimate_cost(make_task(), required_capabilities=frozenset({"vision"}))

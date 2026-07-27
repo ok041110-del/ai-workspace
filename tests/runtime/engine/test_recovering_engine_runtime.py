@@ -143,6 +143,11 @@ class ScriptedEngineRuntime(EngineRuntime):
     ) -> list[EngineResult]:
         raise NotImplementedError
 
+    def estimate_cost(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> CostEstimate:
+        raise NotImplementedError
+
     def cancel(self, task_id: str) -> None:
         self._task_status[task_id] = EngineSessionStatus.CANCELLED
 
@@ -228,6 +233,14 @@ def test_cancel_delegates_to_inner_runtime() -> None:
     runtime.cancel("t1")
 
     assert inner.status("t1") == EngineSessionStatus.CANCELLED
+
+
+def test_estimate_cost_delegates_to_inner_runtime() -> None:
+    inner = FakeEngineRuntime()
+    inner.register_engine("mock", MockEngineAdapter())
+    runtime = RecoveringEngineRuntime(inner=inner, retry_policy=RetryPolicy())
+
+    assert runtime.estimate_cost(make_task("t1")) == inner.estimate_cost(make_task("t1"))
 
 
 def test_register_engine_delegates_to_inner_runtime() -> None:

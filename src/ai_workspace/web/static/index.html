@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>AI Workspace Dashboard</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Workspace Dashboard</h1>
+    <div id="clock">--:--:--</div>
+  </header>
+
+  <main>
+    <section id="production">
+      <h2>Production 현황</h2>
+      <ul id="production-list"></ul>
+    </section>
+
+    <section id="workspace">
+      <h2>Workspace 현황</h2>
+      <p>프로젝트: <span id="project-name">-</span></p>
+      <p>현재 작업: <span id="current-task">-</span></p>
+      <p>상태: <span id="workspace-status">-</span></p>
+      <p>경과 시간: <span id="elapsed-time">-</span></p>
+    </section>
+
+    <section id="engines">
+      <h2>엔진 현황</h2>
+      <ul id="engine-list"></ul>
+    </section>
+
+    <section id="execution-stats">
+      <h2>실행 현황</h2>
+      <ul id="stats-list"></ul>
+    </section>
+
+    <section id="history">
+      <h2>최근 실행 내역</h2>
+      <ul id="history-list"></ul>
+    </section>
+
+    <section id="reliability">
+      <h2>안정성 현황</h2>
+      <ul id="reliability-list"></ul>
+    </section>
+
+    <section id="automation-summary">
+      <h2>Automation 현황</h2>
+      <ul id="automation-summary-list"></ul>
+    </section>
+
+    <section id="automation" class="wide">
+      <h2>Automation Rule</h2>
+      <table id="automation-table">
+        <thead>
+          <tr>
+            <th>이름</th>
+            <th>Trigger</th>
+            <th>Action</th>
+            <th>상태</th>
+            <th>마지막 실행</th>
+            <th>다음 실행 예정</th>
+            <th>작업</th>
+          </tr>
+        </thead>
+        <tbody id="automation-rule-list"></tbody>
+      </table>
+
+      <h3>새 Rule 만들기</h3>
+      <form id="automation-form">
+        <label>이름 <input type="text" id="rule-name" required /></label>
+        <label>설명 <input type="text" id="rule-description" required /></label>
+
+        <label>
+          Trigger 종류
+          <select id="rule-trigger-kind">
+            <option value="time">Time</option>
+            <option value="interval">Interval</option>
+            <option value="event">Event</option>
+            <option value="startup">Startup</option>
+          </select>
+        </label>
+        <label class="trigger-field trigger-time">
+          시각(HH:MM) <input type="text" id="rule-trigger-time-of-day" placeholder="09:00" />
+        </label>
+        <label class="trigger-field trigger-interval">
+          주기(초) <input type="number" id="rule-trigger-interval-seconds" placeholder="300" />
+        </label>
+        <label class="trigger-field trigger-event">
+          Event 종류
+          <input
+            type="text"
+            id="rule-trigger-event-type"
+            placeholder="engine_execution_completed"
+          />
+        </label>
+
+        <label>
+          Action 종류
+          <select id="rule-action-kind">
+            <option value="run_task">Task 실행</option>
+            <option value="run_workflow">Workflow 실행</option>
+            <option value="dashboard_refresh">Dashboard Refresh</option>
+            <option value="notification">Notification</option>
+          </select>
+        </label>
+        <label class="action-field action-run_task">
+          Project ID <input type="text" id="rule-action-project-id" />
+        </label>
+        <label class="action-field action-run_task">
+          Task 제목 <input type="text" id="rule-action-task-title" />
+        </label>
+        <label class="action-field action-run_workflow">
+          Workflow ID <input type="text" id="rule-action-workflow-id" />
+        </label>
+        <label class="action-field action-notification">
+          알림 메시지 <input type="text" id="rule-action-notification-message" />
+        </label>
+
+        <button type="submit">Rule 생성</button>
+      </form>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
