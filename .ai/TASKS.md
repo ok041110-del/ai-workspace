@@ -5142,11 +5142,11 @@ M14의 정적 정책이 담당 — 이 Decision은 Engine 선택에만 집중),
 | Task | 내용 | 상태 |
 |---|---|---|
 | M17-T01 | `EngineCandidate`/`EngineSelectionDecision` domain + `EngineRegistry` Interface + `InMemoryEngineRegistry` | **완료** |
-| M17-T02 | `EngineSelectionPolicy` Interface + `InMemoryEngineSelectionPolicy`(Budget 내 최저 비용 우선) | 진행 예정 |
+| M17-T02 | `EngineSelectionPolicy` Interface + `InMemoryEngineSelectionPolicy`(Budget 내 최저 비용 우선) | **완료** |
 | M17-T03 | End-to-End 통합 테스트(다중 Engine 후보 선택 + 실행과의 비연결 증명) | 진행 예정 |
 | M17-T04 | 문서화 + Milestone 17 Review | 진행 예정 |
 
-**진행 상태**: M17-T01 완료. M17-T02 진행 중.
+**진행 상태**: M17-T01~T02 완료. M17-T03 진행 중.
 
 #### M17-T01: `EngineCandidate`/`EngineSelectionDecision` domain + `EngineRegistry` Interface + 구현체
 - 상태: **DONE (2026-07-27)** — `domain/engine_selection.py`에
@@ -5164,6 +5164,25 @@ M14의 정적 정책이 담당 — 이 Decision은 Engine 선택에만 집중),
   runtime/engine 6개). `pytest`(540개), `ruff`, `mypy` 통과. 다음
   Task: **M17-T02**.
 - 의존성: 없음.
+
+#### M17-T02: `EngineSelectionPolicy` Interface + `InMemoryEngineSelectionPolicy`
+- 상태: **DONE (2026-07-27)** — `interfaces/engine_selection_policy.py`
+  에 `EngineSelectionPolicy`(`select(task, candidates, *,
+  budget_policy_engine=None, knowledge=None) -> EngineSelectionDecision
+  | None`, `LLMPolicyEngine`/`BudgetPolicyEngine`과 동일한 설계
+  원칙 — 규칙 기반, side-effect 없음) 신규. `engines/
+  engine_selection_policy.py`의 `InMemoryEngineSelectionPolicy` —
+  `budget_policy_engine`이 주어지면 각 후보의 `estimated_tokens`/
+  `estimated_cost_usd`로 `CostEstimate`를 만들어 `BudgetPolicyEngine.
+  check()`에 그대로 위임(M15 재사용, 예산 비교 로직 중복 없음),
+  예산 내 후보 중 `estimated_cost_usd`(동률이면 `estimated_tokens`)가
+  가장 낮은 후보를 선택. `knowledge`는 결정 사유(`reason`)에만 참고로
+  반영(후보를 걸러내지 않음, MVP 범위 명시). 후보가 없거나 예산 내
+  후보가 하나도 없으면 `None`. 단위 테스트 6개 신규(빈 후보/최저
+  비용 선택/예산 초과 제외/전체 초과 시 None/Knowledge 반영/동률
+  시 등록 순서 유지). `pytest`(546개), `ruff`, `mypy` 통과. 다음
+  Task: **M17-T03**(End-to-End 통합 테스트).
+- 의존성: M17-T01.
 
 ---
 
