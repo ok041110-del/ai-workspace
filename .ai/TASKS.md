@@ -4571,11 +4571,64 @@ Debt 정리 완료(5절), 문서 갱신 완료(6절) — 6개 조건 모두 만�
 
 **Milestone 14 종료 — 2026-07-26 사용자 승인.**
 
-**Milestone 15 상태**: 아직 목표/DoD/Task List가 전혀 정의되지 않았다.
-`docs/ROADMAP.md`가 원래 그려둔 다음 단계는 M15(Token/Cost
-Optimization)이지만, 이는 사전 논의 없이 확정된 것이 아니며 Milestone
-15는 착수 시점에 이 문서에 목표/DoD/Task List를 새로 정의한다(Task
-Driven Development 원칙, M2~M14가 그래왔듯).
+**Milestone 15 상태**: 착수 확정. 아래 "Milestone 15" 절 참고.
+
+---
+
+## Milestone 15 — Token & Cost Optimization
+
+**목표**: `EngineAdapter.estimate_cost()`가 실제로 사용되는 Workspace
+차원의 Budget(예산) 정책을 도입해, Task를 실행하기 **전에** 예상
+비용/토큰을 확인하고 예산을 초과하면 실행을 막는다. Provider(Claude/
+GPT/Gemini)에 상관없이 동일하게 동작해야 한다(2026-07-27 사용자 확정).
+
+> **설계 검토에서 발견한 사실**: `EngineAdapter.estimate_cost(task) ->
+> CostEstimate`는 M3부터 이미 존재하고 `ClaudeCodeEngineAdapter`/
+> `CLIEngineAdapter`/`MockEngineAdapter` 모두 구현하고 있었지만,
+> `EngineRuntime`도 어떤 Agent도 이를 호출한 적이 없었다 — M12의
+> `WorkflowEngine.plan()`, M13의 `AgentScheduler.select()`와 동일한
+> "만들어졌지만 쓰인 적 없는 기능" 패턴. M15는 새 추정 로직을 새로
+> 만드는 게 아니라, 이미 있는 `estimate_cost()`를 실제로 활용하는
+> Workspace 정책을 얹는 작업이다.
+
+**설계 방향**: Provider와 무관한 순수 domain 객체 `Budget`/
+`BudgetDecision`(`domain/budget.py`)을 새로 정의한다. `BudgetPolicyEngine`
+Interface(`LLMPolicyEngine`과 동일한 설계 원칙 — 규칙 기반, side-effect
+없음, 정책 없으면 허용)를 신설하고 `InMemoryBudgetPolicyEngine`으로
+최소 구현한다. `EngineRuntime`에 세션을 만들지 않고 예상 비용을 조회할
+수 있는 `estimate_cost(task, required_capabilities) -> CostEstimate`를
+추가한다(기존 계약 확장, ADR 필요 여부는 M15-T04에서 판단). `CodingAgent`
+가 실행 직전 `estimate_cost()` → `BudgetPolicyEngine.check()`를 거쳐
+초과 시 실행하지 않는 경로를 선택적으로(DI 기본값 None) 가진다.
+
+**Non-goal(범위 밖)**: 실제 API 과금 조회/실시간 가격표 연동, Memory
+Engine, Knowledge Base, MCP, Approval(예산 초과 시 승인 요청 흐름),
+Retry, Dashboard, Provider별 과금 API 연동, 예산 누적 추적(Task 단위
+개별 확인만, 여러 Task에 걸친 소비량 합산은 범위 밖).
+
+**Milestone Definition of Done**
+1. `Budget`/`BudgetDecision` domain 객체가 어떤 Provider에도 속하지
+   않는다(Provider 독립 검증).
+2. `BudgetPolicyEngine`이 `LLMPolicyEngine`과 동일하게 side-effect
+   없이 동작하고, 정책이 없으면(예산 미설정) 항상 허용한다(하위 호환).
+3. `EngineRuntime.estimate_cost()`가 세션을 만들지 않고 `run()`과
+   동일한 엔진 선택 로직으로 `CostEstimate`를 반환한다.
+4. `CodingAgent`가 예산 초과 시 Approval/Retry 없이 실행을 막음이
+   통합 테스트로 증명된다.
+5. `estimate_cost()`/Budget을 지정하지 않으면 기존과 완전히 동일하게
+   동작한다(회귀 없음).
+6. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M15-T01 | `Budget`/`BudgetDecision` domain + `BudgetPolicyEngine` Interface + `InMemoryBudgetPolicyEngine` | 진행 예정 |
+| M15-T02 | `EngineRuntime.estimate_cost()` 추가 + `CodingAgent` 연동 | 진행 예정 |
+| M15-T03 | End-to-End 통합 테스트 | 진행 예정 |
+| M15-T04 | 문서화 + Milestone 15 Review | 진행 예정 |
+
+**진행 상태**: Task List 승인 완료, 구현 착수.
 
 ---
 

@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~14 완료, v0.5.0 아키텍처 기준선 선언, Milestone 15 목표 미정) |
+| 상태 | Draft (Milestone 1~14 완료, v0.5.0 아키텍처 기준선 선언, Milestone 15(Token & Cost Optimization) 착수) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -645,6 +645,38 @@ str | None = None`을 선택적으로 추가. `ClaudeCodeEngineAdapter`만 실�
 **진행 상태**: M14-T01~T04 전체 완료. Milestone DoD 1~5번 전부 충족
 확인됨. Milestone 14 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 14
 Review" 참고). **Milestone 14 완료 — 2026-07-26 사용자 승인.**
+
+---
+
+## Milestone 15 — Token & Cost Optimization
+
+**목표**: `EngineAdapter.estimate_cost()`를 실제로 활용하는 Workspace
+차원의 Budget 정책을 도입해, Task 실행 전에 예상 비용/토큰을 확인하고
+초과 시 실행을 막는다(Provider 독립).
+
+**설계 방향**: `domain/budget.py`(`Budget`/`BudgetDecision`) +
+`BudgetPolicyEngine` Interface + `InMemoryBudgetPolicyEngine`.
+`EngineRuntime.estimate_cost()` 신설. `CodingAgent`에 선택적 DI로 연동.
+
+**Milestone Definition of Done**
+1. `Budget`/`BudgetDecision`이 Provider 독립.
+2. `BudgetPolicyEngine`이 side-effect 없이 동작, 정책 없으면 항상 허용.
+3. `EngineRuntime.estimate_cost()`가 세션 없이 `CostEstimate` 반환.
+4. `CodingAgent`가 예산 초과 시 실행을 막음이 통합 테스트로 증명.
+5. Budget 미지정 시 기존과 완전히 동일하게 동작(회귀 없음).
+6. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-27 확정, 상세는 `.ai/TASKS.md`의 "Milestone 15"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M15-T01 | `Budget`/`BudgetDecision` domain + `BudgetPolicyEngine` Interface + 구현체 | 진행 예정 |
+| M15-T02 | `EngineRuntime.estimate_cost()` + `CodingAgent` 연동 | 진행 예정 |
+| M15-T03 | End-to-End 통합 테스트 | 진행 예정 |
+| M15-T04 | 문서화 + Milestone 15 Review | 진행 예정 |
+
+**진행 상태**: Task List 승인 완료, 구현 착수.
 
 ---
 
