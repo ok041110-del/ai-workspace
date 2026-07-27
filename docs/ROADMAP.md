@@ -711,10 +711,10 @@ ROADMAP/PRD)를 Workspace 전용 Knowledge로 노출하고, Agent가 Keyword
 |---|---|---|
 | M16-T01 | `KnowledgeDocument`/`KnowledgeKind` domain + `KnowledgeRepository` + `FileKnowledgeRepository` | **완료** |
 | M16-T02 | `KnowledgeSearch`/`KnowledgeProvider` + `CodingAgent` 연동 | **완료** |
-| M16-T03 | End-to-End 통합 테스트 | 진행 예정 |
+| M16-T03 | End-to-End 통합 테스트 | **완료** |
 | M16-T04 | 문서화 + Milestone 16 Review | 진행 예정 |
 
-**진행 상태**: M16-T01~T02 완료, M16-T03 진행 중.
+**진행 상태**: M16-T01~T03 완료, M16-T04(문서화 + Review) 진행 중.
 
 ---
 

@@ -4877,10 +4877,10 @@ MCP, 외부 Knowledge 연동, Obsidian API 연동, `KnowledgeIndexer`
 |---|---|---|
 | M16-T01 | `KnowledgeDocument`/`KnowledgeKind` domain + `KnowledgeRepository` Interface + `FileKnowledgeRepository` | **완료** |
 | M16-T02 | `KnowledgeSearch`/`KnowledgeProvider` + `CodingAgent` 연동(선택적 DI) | **완료** |
-| M16-T03 | End-to-End 통합 테스트(실제 Markdown 문서 검색 + Agent Prompt 반영) | 진행 예정 |
+| M16-T03 | End-to-End 통합 테스트(실제 Markdown 문서 검색 + Agent Prompt 반영) | **완료** |
 | M16-T04 | 문서화 + Milestone 16 Review | 진행 예정 |
 
-**진행 상태**: M16-T01~T02 완료. M16-T03 진행 중.
+**진행 상태**: M16-T01~T03 완료. M16-T04(문서화 + Review) 진행 중.
 
 #### M16-T01: `KnowledgeDocument`/`KnowledgeKind` domain + `KnowledgeRepository` Interface + 구현체
 - 상태: **DONE (2026-07-27)** — `domain/knowledge.py`에
@@ -4920,6 +4920,24 @@ MCP, 외부 Knowledge 연동, Obsidian API 연동, `KnowledgeIndexer`
   2개, coding_agent 3개). `pytest`(529개), `ruff`, `mypy` 통과. 다음
   Task: **M16-T03**.
 - 의존성: M16-T01.
+
+#### M16-T03: End-to-End 통합 테스트
+- 상태: **DONE (2026-07-27)** — `tests/integration/
+  test_m16_project_knowledge_system.py` 신규. 실제 프로젝트 문서를
+  읽는 `FileKnowledgeRepository`(프로젝트 루트) + 실제
+  `InMemoryKnowledgeSearch`/`InMemoryKnowledgeProvider` + 실제
+  `CodingAgent`를 조립(Mock인 것은 `MockEngineAdapter` — 실제 LLM/CLI
+  프로세스 실행 경계뿐). 3가지 시나리오 검증: (1) 실제
+  `docs/ARCHITECTURE.md`에 등장하는 키워드("ExecutionEnvironment")로
+  Task를 만들면 파이프라인이 정상 완주(`CodeCompleted.success=True`),
+  (2) `MockEngineAdapter`를 상속한 `RecordingAdapter`로 실제 전달된
+  Task를 가로채, 검색된 실제 `ARCHITECTURE.md` 문서의 `content`가
+  그대로 프롬프트에 포함됐음을 직접 확인(Milestone DoD 5번 증명),
+  (3) 매칭되지 않는 검색어("완전히-무관한-검색어-xyz123")를 써도
+  파이프라인이 정상 동작(회귀 없음). `pytest`(532개, 기존 529개 +
+  신규 3개), `ruff`, `mypy` 통과. 다음 Task: **M16-T04**(문서화 +
+  Milestone 16 Review).
+- 의존성: M16-T02.
 
 ---
 
