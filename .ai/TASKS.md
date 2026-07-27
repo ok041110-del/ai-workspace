@@ -6315,13 +6315,41 @@ Rule 추천.
 |---|---|---|
 | M21-T01 | Automation 도메인 + `AutomationRepository` Interface + `InMemoryAutomationRepository` | **완료** |
 | M21-T02 | `AutomationService`(CRUD) 구현 | **완료** |
-| M21-T03 | `AutomationScheduler` + Time/Interval/Startup Trigger 구현 | 진행 예정 |
+| M21-T03 | `AutomationScheduler` + Time/Interval/Startup Trigger 구현 | **완료** |
 | M21-T04 | Event Trigger + `ExecutionDispatcher` 연동 | 진행 예정 |
 | M21-T05 | Automation API + Dashboard 연계 | 진행 예정 |
 | M21-T06 | Dashboard Web UI Automation 화면 | 진행 예정 |
 | M21-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M21-T01~T02 완료. M21-T03 진행 예정.
+**진행 상태**: M21-T01~T03 완료. M21-T04 진행 예정.
+
+#### M21-T03: AutomationScheduler + Time/Interval/Startup Trigger
+- 상태: **DONE (2026-07-27)** — `runtime/automation/trigger_evaluator.py`
+  에 `TriggerEvaluator` ABC(`should_fire`/`compute_next_execution_at`)
+  + `TimeTriggerEvaluator`(요일/일자 제약 지원, 같은 날 중복 발동
+  방지는 `last_executed_at`의 날짜 비교로 판정 — tick 주기가 정확한
+  분과 맞지 않아도 놓치지 않음)/`IntervalTriggerEvaluator`
+  (`last_executed_at`, 없으면 `created_at` 기준 경과 시간 계산)/
+  `StartupTriggerEvaluator`(`last_executed_at is None`으로 최초
+  1회만 발동 판정) 신규 — 사용자 승인 조건 1(Scheduler·Trigger
+  책임 분리)에 따라 "언제 발동할지" 판단을 전담. `runtime/
+  automation/automation_scheduler.py`의 `AutomationScheduler`
+  (`start()`는 Startup Trigger 1회 평가, `tick(now=...)`은 Time/
+  Interval Trigger를 평가) 신규 — Rule을 별도로 등록/보관하지
+  않고 매 호출마다 `AutomationRepository.list_rules()`를 다시
+  조회한다(`AutomationService`가 같은 Repository로 CRUD하면 자동
+  반영, 사용자 승인 조건 3). Action 실행은 생성자로 주입된
+  `action_executor: Callable[[AutomationRule], None]`에 위임 —
+  이 클래스는 `ExecutionDispatcher`를 전혀 모른다(실제 연동은
+  M21-T04, 사용자 승인 조건 5). `tick()`은 고정된 `now`를 받아
+  결정적으로 테스트 가능(실제 주기적 백그라운드 루프 연결은
+  M21-T05, Server Runtime 기동 시). Event Trigger는 `tick()`이
+  다루지 않는다(주기 평가 대상이 아니라 `EventBus` 구독 필요,
+  M21-T04). 단위 테스트 26개 신규(trigger_evaluator 20개,
+  scheduler 10개 — 일부 중복 제외 실제 26개). `pytest`(688개),
+  `ruff`, `mypy` 통과. 다음 Task: **M21-T04**(Event Trigger +
+  `ExecutionDispatcher` 연동).
+- 의존성: M21-T01, M21-T02.
 
 #### M21-T02: AutomationService(CRUD)
 - 상태: **DONE (2026-07-27)** — `runtime/automation/automation_service.py`
