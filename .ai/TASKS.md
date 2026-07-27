@@ -7152,10 +7152,67 @@ Optional)로 이월한다.
 | M23-Prep-T06 | Client 및 프로젝트 이력 정리 | **완료** |
 | M23-Prep-T07 | 운영 문서 및 검증 | **완료** |
 | M23-Prep-T01A | Vault Retrieval/Prompt 효율화(Router+Template) | **완료** |
+| M23-Prep-T01B | 산출물별 작성 Template 5종 + Template Mapping | **완료** |
 | M23-Prep-T08 (Optional) | Obsidian MCP 연동 — Claude Code 도입 시점으로 이월 | 보류 |
 
 **진행 상태**: M23-Prep-T01~T07 전체 완료(아래 "M23-Preparation
-Review" 참고) + T01A(2026-07-27 사용자 지시로 추가) 완료.
+Review" 참고) + T01A/T01B(2026-07-27 사용자 지시로 추가) 완료.
+
+#### M23-Prep-T01B: 산출물별 작성 Template 5종 + Template Mapping
+
+**목표**: T01A가 도입한 Template First 원칙을, Milestone/기능 설계
+(DESIGN_TEMPLATE)뿐 아니라 개발 과정에서 반복 생성되는 산출물
+(Task 기록/구현 보고/ADR/API 설계/가벼운 판단 기록)까지 확장한다.
+"GitHub 원문 작성용 템플릿"과 "Vault Index 등록용 템플릿"(T01의
+`Template - X.md` 6종)을 명확히 구분해 혼동을 없앤다.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `IMPLEMENTATION_TEMPLATE.md` 신규 | ✅ |
+| 2 | `ADR_TEMPLATE.md` 신규 | ✅ |
+| 3 | `API_TEMPLATE.md` 신규 | ✅ |
+| 4 | `DECISION_TEMPLATE.md` 신규 | ✅ |
+| 5 | `TASK_TEMPLATE.md` 신규 | ✅ |
+| 6 | `PROMPT_PROFILE.md`에 Template Mapping 절 추가 | ✅ |
+| 7 | `PROJECT_INDEX.md`에 Template Index 절 추가 | ✅ |
+| 8 | 기존 구조·Backlink·Tag·원문 규칙 유지(검증 완료, 미해결 링크 0건) | ✅ |
+| 9 | 변경된 파일만 수정 | ✅ |
+| 10 | `.ai/TASKS.md`/`docs/ROADMAP.md`/`.ai/MEMORY.md` 반영 | ✅ |
+
+**구현 내용**
+
+- `99 Templates/TASK_TEMPLATE.md`(신규): Task List 행/DoD 표/완료
+  write-up 3단 구조 — TASKS.md의 실제 작성 패턴을 그대로 템플릿화.
+- `99 Templates/IMPLEMENTATION_TEMPLATE.md`(신규): 변경 파일/핵심
+  변경/설계 결정/테스트·검증/문서 갱신 5절 — 커밋 전 정리
+  체크리스트, [[TASK_TEMPLATE]] 완료 write-up으로 압축해 들어감.
+- `99 Templates/ADR_TEMPLATE.md`(신규): `.ai/DECISIONS.md`의 실제
+  ADR 형식(상태/날짜/배경/결정/대안/이유/결과·영향) — 기존
+  [[Template - ADR Summary]](Vault 3줄 요약 등록용)와 역할을
+  명확히 구분.
+- `99 Templates/API_TEMPLATE.md`(신규): 구현 전 계약 설계용
+  (Request/Response/에러 처리/CQRS 분류/테스트 계획) — 기존
+  [[Template - API]](완료된 엔드포인트의 회고적 카탈로그 등록용)와
+  구분.
+- `99 Templates/DECISION_TEMPLATE.md`(신규): ADR보다 가벼운 판단
+  기록(Status/질문/답/근거) — 기존 [[Template - Decision]](Vault
+  등록용)과 구분, "미정" 상태를 정직하게 남기는 것을 허용.
+- `00 System/PROMPT_PROFILE.md`(수정): "Template Mapping" 절 추가
+  — 산출물 종류(11행) → 템플릿 매핑 표 + "`_TEMPLATE.md`는 원문
+  작성 전 계약 정리용, `Template - X.md`는 Vault 등록용"이라는
+  구분 원칙 명문화.
+- `00 System/PROJECT_INDEX.md`(수정): "Template Index" 절 추가 —
+  Retrieval First 라우팅 표(작업 종류 기준)와 별개로, 산출물 종류
+  기준의 템플릿 선택표를 보완.
+- Vault 전체 재검증: 미해결 Backlink 0건(기존과 동일한 3건의
+  텍스트 설명 오탐 외 신규 문제 없음).
+
+**의존성**: M23-Prep-T01A(Template First 원칙과 DESIGN_TEMPLATE이
+먼저 존재해야 함).
+
+---
 
 #### M23-Prep-T01A: Vault Retrieval/Prompt 효율화(Router+Template)
 

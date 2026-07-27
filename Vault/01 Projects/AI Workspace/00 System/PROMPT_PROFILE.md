@@ -27,6 +27,31 @@ Rules가 원칙이고, 이 문서는 그 원칙을 반복 작업 유형별 짧�
 | Milestone 이력 확인 | "[[Milestones Index]]에서 <Milestone 번호> 요약 보여줘" |
 | 새 Task 착수 | "TASKS.md에 <Task ID> DoD 작성하고 승인 요청해줘" |
 
+## Template Mapping(만들려는 것 → 쓸 템플릿)
+
+작업 종류가 아니라 **지금 만들려는 산출물 종류**로 템플릿을
+고를 때는 이 표를 쓴다(작업 종류→문서 라우팅은
+[[PROJECT_INDEX]]의 Template Index 참고).
+
+| 만들려는 것 | 쓸 템플릿 | 용도 |
+|---|---|---|
+| 새 Milestone/기능 설계 착수 | [[DESIGN_TEMPLATE]] | 목표/DoD 정의 |
+| Task DoD 등록·완료 기록(TASKS.md) | [[TASK_TEMPLATE]] | GitHub 원문 작성 |
+| 구현 결과 정리(커밋 전) | [[IMPLEMENTATION_TEMPLATE]] | 보고 전 체크리스트 |
+| 새 ADR 원문 작성(DECISIONS.md) | [[ADR_TEMPLATE]] | GitHub 원문 작성 |
+| ADR을 Vault Index에 요약 등록 | [[Template - ADR Summary]] | Vault 요약 등록 |
+| 새 API 엔드포인트 설계 | [[API_TEMPLATE]] | 구현 전 계약 정리 |
+| API를 Vault Catalog에 등록 | [[Template - API]] | Vault 요약 등록 |
+| 가벼운 "왜?" 판단 기록 | [[DECISION_TEMPLATE]] | 판단 정리 |
+| 판단을 Vault Index에 등록 | [[Template - Decision]] | Vault 요약 등록 |
+| Milestone을 Vault Index에 등록 | [[Template - Milestone]] | Vault 요약 등록 |
+| Daily Note 작성 | [[Template - Daily]] | 일일 기록 |
+
+**구분 원칙**: `_TEMPLATE.md`(대문자, 밑줄)는 GitHub 원문/실제
+구현물을 작성하기 **전** 계약을 정리하는 용도, `Template - X.md`
+(공백, `-`)는 그 결과를 Vault Index에 요약으로 **등록**할 때
+쓰는 용도다. 둘은 역할이 다르며 서로 대체하지 않는다.
+
 ## 안티패턴(피할 것)
 
 - GitHub 파일 전체 내용을 프롬프트에 복사해 붙여넣기 — 대신

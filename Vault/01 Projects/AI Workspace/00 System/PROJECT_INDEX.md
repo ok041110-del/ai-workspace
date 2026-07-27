@@ -43,6 +43,22 @@ Automation 연동 부분 확인해줘"(O) vs GitHub 파일 전체를 프롬프�
 템플릿을 먼저 사용한다. 설계 착수는 [[DESIGN_TEMPLATE]]을 복사하는
 것으로 시작한다.
 
+## Template Index — 만들려는 산출물 → 쓸 템플릿
+
+| 산출물 | 템플릿 |
+|---|---|
+| Milestone/기능 설계 착수 | [[DESIGN_TEMPLATE]] |
+| Task DoD/완료 기록 | [[TASK_TEMPLATE]] |
+| 구현 결과 정리 | [[IMPLEMENTATION_TEMPLATE]] |
+| 새 ADR 원문 | [[ADR_TEMPLATE]] |
+| 새 API 엔드포인트 설계 | [[API_TEMPLATE]] |
+| 가벼운 판단 기록 | [[DECISION_TEMPLATE]] |
+| ADR/API/Milestone/Decision을 Vault Index에 요약 등록 | [[Template - ADR Summary]] / [[Template - API]] / [[Template - Milestone]] / [[Template - Decision]] |
+| Daily Note | [[Template - Daily]] |
+
+산출물별 선택 기준과 "원문 작성용 vs Vault 등록용" 구분은
+[[PROMPT_PROFILE]]의 Template Mapping 절 참고.
+
 ## 관련 문서
 
 - [[AI_CONTEXT]]

@@ -791,7 +791,14 @@
   `DESIGN_TEMPLATE.md`(표준 설계 템플릿, `99 Templates/`) 신규 —
   Retrieval First/Short Prompt Workflow/Template First 3원칙 도입.
   기존 Backlink/Tag/원문 규칙과 문서 구조는 그대로 유지, 변경된
-  파일만 수정.
+  파일만 수정. 이어서 **T01B(산출물별 작성 Template 5종)** 추가
+  완료: `TASK_TEMPLATE`/`IMPLEMENTATION_TEMPLATE`/`ADR_TEMPLATE`/
+  `API_TEMPLATE`/`DECISION_TEMPLATE.md` 신규 — T01에서 만든
+  `Template - X.md`(Vault Index 등록용)와 역할을 분리해 "GitHub
+  원문/실제 산출물 작성 전 계약 정리용"으로 위치시켰다.
+  `PROMPT_PROFILE.md`에 산출물 종류→템플릿 Mapping 표,
+  `PROJECT_INDEX.md`에 동일한 Template Index 절을 추가해 두 문서
+  모두에서 템플릿을 찾을 수 있게 했다.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
