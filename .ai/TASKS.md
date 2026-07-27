@@ -5676,10 +5676,10 @@ Credential 관리, Engine Selection/Budget/Knowledge 개선,
 |---|---|---|
 | M19-T01 | Reliability Domain 정의(`RetryPolicy` 확장, `RetryDecision`, `RetryExecutor`) | **완료** |
 | M19-T02 | Execution Reliability 구현(Retry/Timeout/Cancellation, `ExecutionDispatcher` 연동) | **완료** |
-| M19-T03 | End-to-End 통합 테스트 | 진행 예정 |
+| M19-T03 | End-to-End 통합 테스트 | **완료** |
 | M19-T04 | 문서화 + Milestone 19 Review | 진행 예정 |
 
-**진행 상태**: M19-T01~T02 완료. M19-T03 진행 중.
+**진행 상태**: M19-T01~T03 완료. M19-T04(문서화 + Review) 진행 중.
 
 #### M19-T02: Execution Reliability 구현
 - 상태: **DONE (2026-07-27)** — `domain/execution_result.py`의
@@ -5704,6 +5704,23 @@ Credential 관리, Engine Selection/Budget/Knowledge 개선,
   없음/소스 검사로 RetryExecutor 위임 확인). `pytest`(584개), `ruff`,
   `mypy` 통과. 다음 Task: **M19-T03**(End-to-End 통합 테스트).
 - 의존성: M19-T01.
+
+#### M19-T03: End-to-End 통합 테스트
+- 상태: **DONE (2026-07-27)** — `tests/integration/
+  test_m19_reliability_layer.py` 신규, 4개 테스트. 실제
+  `ClaudeCodeEngineAdapter` + 실제 `FakeExecutionEnvironment`
+  조합으로 (1) `timed_out=True`를 반환하도록 구성하면 3회 모두
+  재시도되고(`executed_commands` 길이 3) 소진 후
+  `timed_out=True`/`retry_count=2`인 실패 결과를 반환함을 증명(DoD
+  10번), (2) `cancelled=True`를 반환하도록 구성하면 재시도 없이
+  즉시 `cancelled=True`/`retry_count=0`(`executed_commands` 길이
+  1)로 반영됨을 증명(DoD 11번), (3) `FileNotFoundError`로도 동일한
+  재시도 정책이 적용됨을 확인(Process Error 경로), (4) M18에서
+  검증한 정상 실행 경로가 M19 필드 확장 후에도 회귀 없이 그대로
+  동작함(`retry_count=0`/`cancelled=False`/`timed_out=False`)을
+  재확인. `pytest`(588개, 기존 584개 + 신규 4개), `ruff`, `mypy`
+  통과. 다음 Task: **M19-T04**(문서화 + Milestone 19 Review).
+- 의존성: M19-T02.
 
 #### M19-T01: Reliability Domain 정의
 - 상태: **DONE (2026-07-27)** — `domain/retry_policy.py`의 기존
