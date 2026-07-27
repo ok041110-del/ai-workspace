@@ -1,0 +1,51 @@
+---
+tags: [milestone]
+---
+
+# Milestones Index
+
+> Milestone 1~22 전체 이력 요약. 상세 Task 목록/Review는 GitHub
+> `.ai/TASKS.md` 원문 참고. [[ADR Index]]와 교차 참고하면 각 결정의
+> 배경을 알 수 있다.
+
+| Milestone | 이름 | 핵심 결과 | 관련 ADR |
+|---|---|---|---|
+| M1 | 기반 구축(Foundation) | 27종 중 다수 Interface 최초 정의, 도메인 모델 확립, Multi-Agent First 구조 확정 | ADR-0006, 0010~0013 |
+| M2 | 멀티 에이전트 코어(Multi-Agent Core) | Agent Runtime 실제 구현, Capability 기반 선택 | ADR-0012, 0019 |
+| M3 | 실행 엔진 연동 & 상호작용 | EngineAdapter 실제 구현, Interaction Layer 구현 | ADR-0002, 0013, 0015 |
+| M4 | 자동화 및 확장 | AutomationEngine(T1-07), `run_parallel()` 실제 동시성. v0.5.0 아키텍처 기준선 선언 | ADR-0023, 0024 |
+| M5 | 실제 개발 수행 | LLMPolicyEngine 구현, 실제 코드 작성 파이프라인 검증 | — |
+| M6 | Policy 기반 실행 라우팅 | Policy Rule 기반 Provider/Model/Effort 결정 고도화 | — |
+| M7 | Memory 요약 | Memory 요약 기능 도입 | — |
+| M8 | 세션 연속성 | WorkspaceSession 연속성 보강 | — |
+| M9 | 세션 견고성 | 세션 실패 복구 검증 | — |
+| M10 | 실행 복원력 | 실행 실패에 대한 초기 복원력 확보 | — |
+| M11 | Execution Environment | `ExecutionEnvironment` Interface 도입, `LocalExecutionEnvironment` 구현 | ADR-0025 |
+| M12 | Workflow Automation | `WorkflowRunner` 구현, End-to-End 워크플로 자동화 검증 | — |
+| M13 | Multi-Agent Collaboration | Scheduler 가드(`is_agent_selected()`) 도입 | — |
+| M14 | LLM Routing(Model 수준 라우팅) | EngineAdapter/EngineRuntime 계약에 `model` 파라미터 확장 | ADR-0026 |
+| M15 | Token & Cost Optimization | `EngineRuntime.estimate_cost()` + `BudgetPolicyEngine` 신설 | ADR-0027 |
+| M16 | Project Knowledge System | `KnowledgeRepository`/`KnowledgeSearch`/`KnowledgeProvider` 도입(MemoryEngine과 분리) | ADR-0028 |
+| M17 | Intelligent Engine Selection | `EngineRegistry` + `EngineSelectionPolicy` 도입 | ADR-0029 |
+| M18 | Multi-Engine Execution Integration | `ExecutionDispatcher` + `AuthenticationManager` 도입, 유일한 실행 진입점 확정 | ADR-0030 |
+| M19 | Reliability Layer | `RetryPolicy` 확장 + `RetryExecutor` 도입 | ADR-0031 |
+| M20 | Real-time Dashboard Platform | `DashboardRepository`(26번째 Interface) 도입, 첫 외부 런타임 의존성(FastAPI/uvicorn) | ADR-0032 |
+| M21 | Automation Engine | `AutomationRepository`(27번째 Interface) 도입, AutomationScheduler | ADR-0033 |
+| M22 | Production Platform | `ProductionConfig`/`LifecycleManager`/`HealthMonitor` 도입, 새 Interface 없음 | ADR-0034 |
+
+## M23-Preparation
+
+**Obsidian Knowledge Base 구축**(이 Vault 자체). Milestone 번호가
+아닌 M23 착수 전 준비 단계. 상세는 GitHub `.ai/TASKS.md`의
+"M23-Preparation" 절 참고.
+
+## 관련 문서
+
+- [[ADR Index]]
+- [[Architecture Overview]]
+- [[Overview]]
+
+## 원문
+
+- `.ai/TASKS.md`
+- `docs/ROADMAP.md`

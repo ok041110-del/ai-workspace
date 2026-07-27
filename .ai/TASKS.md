@@ -7149,11 +7149,21 @@ Optional)로 이월한다.
 | M23-Prep-T03 | ADR 정리 | **완료** |
 | M23-Prep-T04 | Backend/API 문서화 | **완료** |
 | M23-Prep-T05 | 서버 구성 문서화 | **완료** |
-| M23-Prep-T06 | Client 및 프로젝트 이력 정리 | 진행 예정 |
+| M23-Prep-T06 | Client 및 프로젝트 이력 정리 | **완료** |
 | M23-Prep-T07 | 운영 문서 및 검증 | 진행 예정 |
 | M23-Prep-T08 (Optional) | Obsidian MCP 연동 — Claude Code 도입 시점으로 이월 | 보류 |
 
-**진행 상태**: M23-Prep-T01~T05 완료. M23-Prep-T06 진행 예정.
+**진행 상태**: M23-Prep-T01~T06 완료. M23-Prep-T07 진행 예정.
+
+#### M23-Prep-T06: Client 및 프로젝트 이력 정리
+- 상태: **DONE (2026-07-27)** — `09 iOS/iOS Design.md` 신규(범위
+  계획 — Home/Lock Screen Widget/Live Activity/Push, 사용할 서버
+  API 목록, 미결정 사항 명시, "아직 구현하지 않는다" 원칙 준수).
+  `10 Android/Android Placeholder.md` 신규(미착수 상태 기록).
+  `11 Milestones/Milestones Index.md` 신규(M1~M22 전체를 이름/핵심
+  결과/관련 ADR 표로 정리 + M23-Preparation 안내). 다음 Task:
+  **M23-Prep-T07**(운영 문서 및 검증).
+- 의존성: M23-Prep-T05.
 
 #### M23-Prep-T05: 서버 구성 문서화
 - 상태: **DONE (2026-07-27)** — `06 Dashboard/Dashboard Index.md`
