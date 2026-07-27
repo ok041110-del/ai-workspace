@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.17.0 |
+| 문서 버전 | v0.18.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~20 완료, v0.5.0 아키텍처 기준선 선언, Milestone 20에서 첫 외부 런타임 의존성(FastAPI/uvicorn) 도입 — ADR-0032. Milestone 21(Automation Engine) 진행 중, M21-T01 완료) |
+| 상태 | Draft (Milestone 1~21 완료, v0.5.0 아키텍처 기준선 선언, Milestone 21에서 `AutomationRepository` Interface 신설(27종) — ADR-0033. 기존 `AutomationEngine`(M4-T07)과 명시적으로 분리. Milestone 21 사용자 승인 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -879,9 +879,10 @@ Domain이며, `ExecutionDispatcher`를 통해서만 Task를 실행하고,
 | M21-T04 | Event Trigger + `ExecutionDispatcher` 연동 | **완료** |
 | M21-T05 | Automation API + Dashboard 연계 | **완료** |
 | M21-T06 | Dashboard Web UI Automation 화면 | **완료** |
-| M21-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
+| M21-T07 | 전체 흐름 검증 + 문서화 | **완료** |
 
-**진행 상태**: M21-T01~T06 완료, M21-T07 진행 예정.
+**진행 상태**: M21-T01~T07 전체 완료. Milestone 21 Review 상세는
+`.ai/TASKS.md`의 "Milestone 21 Review" 참고(사용자 승인 대기).
 
 ---
 

@@ -6319,9 +6319,45 @@ Rule 추천.
 | M21-T04 | Event Trigger + `ExecutionDispatcher` 연동 | **완료** |
 | M21-T05 | Automation API + Dashboard 연계 | **완료** |
 | M21-T06 | Dashboard Web UI Automation 화면 | **완료** |
-| M21-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
+| M21-T07 | 전체 흐름 검증 + 문서화 | **완료** |
 
-**진행 상태**: M21-T01~T06 완료. M21-T07 진행 예정.
+**진행 상태**: M21-T01~T07 전체 완료.
+
+#### M21-T07: 전체 흐름 검증 + 문서화
+- 상태: **DONE (2026-07-27)** —
+  `tests/integration/test_m21_automation_engine.py` 신규(M18~M20과
+  동일하게 실제 `ClaudeCodeEngineAdapter` + `FakeExecutionEnvironment`
+  조합, Fake Automation 컴포넌트 없음). 사용자 Architecture
+  다이어그램("Task Completed → Automation Rule 확인 → 조건 만족 →
+  ExecutionDispatcher → 새 Task 실행")을 실제 컴포넌트로 증명 —
+  `AutomationScheduler.bind_event_bus()`로 구독한 EventBus에 외부
+  이벤트가 발행되면 EVENT Trigger가 실제 RUN_TASK Action을
+  실행함을 `execution_environment.executed_commands`로 확인
+  (트리거 event_type을 `ExecutionDispatcher`가 스스로 발행하는
+  이벤트와 다르게 둬서, Rule의 실행 결과가 자기 자신을 재귀적으로
+  재발동시키는 경로를 테스트 설계 단계에서 원천 차단함). REST
+  API(`POST /api/automation`, `POST /{id}/run`)로 만든 Rule의 실행
+  결과가 `/api/dashboard`의 Automation 현황에 실제 HTTP 요청으로
+  반영됨도 증명. `ast` 기반 import 그래프 검사로 CQRS/계층 경계
+  재확인: Automation Core(`domain`/`interfaces`/`runtime/automation/`
+  전체)가 `web/`이나 `fastapi`/`uvicorn`을 import하지 않음,
+  `AutomationScheduler`/`AutomationActionExecutor`가
+  `runtime.dashboard`나 `web`을 참조하지 않음(Automation은 Dashboard와
+  독립적인 Domain, 사용자 확정), `ExecutionDispatcher`가
+  `runtime.automation`을 전혀 모름(단방향 결합 — Automation이
+  Event를 구독해 호출하는 방향으로만 연결). 신규 테스트 5개.
+  `pytest`(720개), `ruff`, `mypy` 통과.
+
+  ADR-0033(`.ai/DECISIONS.md`) 신규 작성 — 기존 `AutomationEngine`
+  (M4-T07)과의 관계, 6개 사용자 승인 조건 반영 근거, 대안 검토를
+  전부 기록. `docs/ARCHITECTURE.md` v0.23.0: 신규 §3.19(Automation
+  Engine, 흐름 다이어그램 포함), §7 Interfaces 26→27종
+  (`AutomationRepository` 추가, 기존 `AutomationEngine` 행에
+  M21과 다른 개념임을 명시하는 주석 추가), §8 의존성 규칙에 13/14번
+  (Automation 실행 경로, Dashboard의 Automation 조회는 Reader→Reader)
+  추가, §9 디렉터리 구조에 `runtime/automation/`/
+  `web/automation_routes.py` 반영. 아래 Milestone 21 Review 작성.
+- 의존성: M21-T06.
 
 #### M21-T06: Dashboard Web UI Automation 화면
 - 상태: **DONE (2026-07-27)** — `web/static/index.html`에 "Automation
@@ -6497,6 +6533,164 @@ Rule 추천.
   interfaces 7개). `pytest`(652개), `ruff`, `mypy` 통과. 다음 Task:
   **M21-T02**(`AutomationService` CRUD).
 - 의존성: 없음.
+
+---
+
+## Milestone 21 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | Automation Domain 구현 | ✅ (M21-T01) |
+| 2 | `AutomationRepository` Interface 구현 | ✅ (M21-T01) |
+| 3 | `InMemoryAutomationRepository` 구현 | ✅ (M21-T01) |
+| 4 | `AutomationService` 구현 | ✅ (M21-T02) |
+| 5 | `AutomationScheduler` 구현 | ✅ (M21-T03) |
+| 6 | Time Trigger 구현 | ✅ (M21-T03) |
+| 7 | Interval Trigger 구현 | ✅ (M21-T03) |
+| 8 | Event Trigger 구현 | ✅ (M21-T04) |
+| 9 | Startup Trigger 구현 | ✅ (M21-T03) |
+| 10 | Automation API 구현 | ✅ (M21-T05, 8종) |
+| 11 | Dashboard Automation 화면 구현 | ✅ (M21-T06) |
+| 12 | `EventBus` 연동 | ✅ (M21-T04, `bind_event_bus`) |
+| 13 | `ExecutionDispatcher` 연동 | ✅ (M21-T04, `AutomationActionExecutor`) |
+| 14 | End-to-End 테스트 | ✅ (M21-T07) |
+| 15 | `ruff` 통과 | ✅ (아래 4절) |
+| 16 | `mypy` 통과 | ✅ (아래 4절) |
+| 17 | 전체 `pytest` 통과 | ✅ (아래 4절) |
+
+Task List(M21-T01~T07) 전체 완료. 사용자 승인 조건 6개(Scheduler·
+Trigger 책임 분리/Dashboard Read Model 유지/Automation CRUD는 API
+전용/Dashboard는 Automation 미제어/ExecutionDispatcher 유일 진입점/
+`last_executed_at`·`next_execution_at` 도메인 내장) 모두 충족됨.
+
+**2. Architecture Review**
+
+- **신규 컴포넌트**: `domain/automation.py`, `interfaces/
+  automation_repository.py`, `runtime/automation/`(전체 신규
+  패키지 — `automation_repository.py`/`automation_service.py`/
+  `trigger_evaluator.py`/`automation_scheduler.py`/
+  `automation_action_executor.py`), `web/automation_routes.py`,
+  `web/static/` Automation 화면 추가분 — 8개 신규 소스 파일 +
+  정적 파일 갱신 3개.
+- **변경된 기존 컴포넌트**: `domain/dashboard.py`(`AutomationStatus`
+  추가), `runtime/dashboard/dashboard_service.py`(선택적
+  `automation_service` DI), `web/app.py`(선택적 Automation 라우터
+  등록 + `lifespan` 전환), `web/server.py`(Automation 실행
+  파이프라인까지 전부 조립), `web/routes.py`(`/api/summary`에
+  `automation_status` 추가) — 5개 소스 파일 수정, 전부 선택적
+  DI/기본값으로 기존 호출부 무영향.
+- **핵심 설계 결정**: (1) M4-T07 `AutomationEngine`(trigger_id↔
+  Workflow 연결 관리)과 M21 Automation Engine(조건 평가+자동 실행)
+  을 이름만 유사한 별개 컴포넌트로 명확히 분리했다 — 기존
+  Interface는 손대지 않았다. (2) `AutomationScheduler`(오케스트
+  레이션)와 `TriggerEvaluator`(평가 로직)의 책임을 물리적으로
+  분리해(사용자 승인 조건 1) 새 Trigger 종류 추가가 Scheduler
+  수정 없이 가능하도록 했다. (3) `AutomationScheduler`가 Rule을
+  자체 보관하지 않고 매 호출마다 `AutomationRepository`를
+  재조회하는 설계로 "CRUD는 API를 통해서만"이라는 조건을 코드
+  구조로 강제했다(우회 경로 자체가 존재하지 않음). (4) Dashboard
+  연계를 "Reader가 다른 Reader를 참조"하는 방향으로 확장해, 기존
+  CQRS 원칙("쓰기측이 읽기측을 모른다")을 깨지 않으면서 새로운
+  조회 요구를 수용했다.
+
+`git diff --stat`(M20 종료 커밋 대비)로 확인한 결과 신규 소스/정적
+파일 11개, 기존 파일 수정 5개 — M20과 유사한 규모(새 층위 전체가
+신규이면서 기존 컴포넌트 변경은 최소).
+
+**3. Interface First 원칙 검토**
+
+M21은 `AutomationRepository`라는 **새 최상위 Interface**를
+추가했다(총 26→27종) — ADR-0033을 작성했다.
+`AutomationService`/`AutomationScheduler`/`TriggerEvaluator`
+계열/`AutomationActionExecutor`는 모두 구체 클래스다(기존
+`WorkflowRunner`/`ExecutionDispatcher`/`RetryExecutor`/
+`DashboardService`와 동일한 패턴 — 단일 구현이 확실한 조합 로직은
+구체 클래스로 유지). 기존 `AutomationEngine` Interface는 계약을
+전혀 확장하지 않았다(완전히 별개 컴포넌트이므로) — ADR-0033은
+"새 Interface 추가"에 더해 "이름이 유사한 기존 컴포넌트와의 관계를
+명시적으로 정리"하는 근거로도 작성됐다(M16 ADR-0028/M18 ADR-0030과
+동일한 사전 점검 전통).
+
+**4. 테스트 결과**
+
+- `pytest`: **720개 전부 통과**(M20 완료 시점 635개 → M21에서 85개
+  신규: M21-T01 +17, M21-T02 +10, M21-T03 +26, M21-T04 +8,
+  M21-T05 +19, M21-T06 +0(정적 파일, 실제 브라우저로 검증),
+  M21-T07 +5)
+- `ruff check src tests`: 클린
+- `mypy --python-executable "$(which python3)" src`: 클린(128개
+  소스 파일)
+- 신규 외부 런타임 의존성 없음(M20에서 도입한 FastAPI/uvicorn을
+  그대로 사용)
+- **실제 브라우저 검증**(M21-T06): 이 세션에 한해 `playwright`를
+  임시 설치해(프로젝트 의존성에는 추가하지 않음) 사전 설치된
+  Chromium으로 실제 서버를 띄우고 Rule 생성/토글/목록 갱신/요약
+  갱신을 직접 조작해 확인 — 그 과정에서 `updateVisibleFields()`의
+  `querySelector`(단일 요소) 버그를 실제 조작 중 발견해 즉시
+  `querySelectorAll`로 수정함(정적 JS라 pytest로는 잡히지 않는
+  종류의 결함).
+
+**5. Technical Debt 정리**
+
+*M21에서 새로 발생한 기술 부채*
+- **RUN_WORKFLOW 미지원**: `AutomationActionExecutor`가 RUN_TASK만
+  실제로 실행하고 RUN_WORKFLOW는 `AutomationActionNotSupportedError`
+  를 던진다 — `ExecutionDispatcher`를 유일한 실행 진입점으로
+  못박은 조건과 정합성을 유지하려면 Workflow 실행 경로도 그 원칙
+  안에서 별도로 설계해야 하는데, 이번 Milestone은 그 설계까지
+  확정하지 않았다(ADR-0033에 대안 검토로 기록). 후속 Milestone에서
+  `WorkflowRunner`(M12) 연동 여부를 판단해야 한다.
+- **Dashboard 서버의 실제 Engine 미등록**: `web/server.py`가
+  조립하는 `InMemoryEngineRegistry`에는 시작 시점에 등록된
+  `EngineAdapter`가 없다 — 실제 Engine 등록/인증은 Workspace
+  Core(CLI 경로)의 책임이라 Out of Scope로 뒀다. 현재는 RUN_TASK가
+  발동해도 `EngineNotRegisteredError`가 나고 `AutomationScheduler`
+  가 삼킬 뿐이다. Dashboard/Automation 서버와 Workspace Core를
+  실제로 통합하는 것은 이후 Milestone 과제다.
+
+*M21 범위 밖으로 명시적으로 제외한 것(사용자 확정, 계속 이월)*
+- Cron Expression, Database 저장(`AutomationRepository`의 File/DB
+  구현체), Distributed/Multi-node Scheduler, Retry Policy 변경,
+  Mobile Push Notification/Home Widget/Lock Screen Widget/Live
+  Activity/Dynamic Island, AI 기반 Rule 추천.
+
+*계속 이월되는 기존 항목*
+- Effort 라우팅, `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임
+  워크 미통합, Codex/Gemini 실연동 미검증, `MemoryEngine.search()`
+  선형 스캔, 여러 Task에 걸친 누적 예산 추적, 예산 초과 시 Approval
+  흐름, `KnowledgeIndexer`, Review/Documentation Agent로의
+  `knowledge_provider` 확장, `EngineRuntime`↔`EngineRegistry` 중복
+  등록, 실제 로그인/OAuth/Credential/Token Refresh, `CodingAgent`
+  ↔`ExecutionDispatcher` 연결, `ShellAgent` 화이트리스트 코드 고정,
+  `timed_out` 휴리스틱(ADR-0031), `DashboardRepository` 쓰기/읽기
+  Interface 물리적 분리, 실제 프로덕션 배포 구성.
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M21-T01~T07 상세 섹션) / `docs/ROADMAP.md`
+(M21 Task List·진행 상태 반영) / `docs/ARCHITECTURE.md`(v0.23.0, 신규
+§3.19, §7 27종, §8 규칙 13/14번, §9 디렉터리 구조 갱신) /
+`.ai/DECISIONS.md`(ADR-0033 신규) 완료. `pyproject.toml` 변경 없음
+(신규 외부 의존성 없음). `.ai/MEMORY.md`는 이 Review 승인 직후
+M1~M20과 동일한 방식으로 압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절, 17개 항목 전부), Architecture Review
+완료(2절, 신규 8개 소스+정적 3개/수정 5개 소스 파일, "기존
+AutomationEngine과 명시적 분리 + Scheduler/Trigger 책임 분리 +
+Reader→Reader CQRS 확장" 설계 결정 기록), Interface First 검토
+완료(3절, 새 Interface `AutomationRepository` 추가로 ADR-0033
+작성), 테스트 결과 문서화 완료(4절, 720개 전부 통과 + 실제
+브라우저 검증에서 발견한 버그를 즉시 수정한 이력 포함), Technical
+Debt 정리 완료(5절, RUN_WORKFLOW 미지원과 Dashboard 서버의 실제
+Engine 미등록을 신규 부채로 정식 등재), 문서 갱신 완료(6절) — 6개
+조건 모두 만족. Review 중 코드 변경이 필요한 치명적 문제(버그·계약
+위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 21 Completed를 선언한다.**
 
 ---
 

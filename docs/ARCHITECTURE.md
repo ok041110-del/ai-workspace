@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.22.0 |
+| 문서 버전 | v0.23.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~19 완료, Milestone 20 완료 — ADR-0032로 신규 §3.18 Real-time Dashboard Platform 도입, `DashboardRepository` Interface 신설(26종), 첫 외부 런타임 의존성(FastAPI/uvicorn) 도입) |
+| 상태 | Draft (Milestone 1~20 완료, Milestone 21 완료 — ADR-0033으로 신규 §3.19 Automation Engine 도입, `AutomationRepository` Interface 신설(27종), 기존 `AutomationEngine`(M4-T07)과 명시적으로 분리) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -695,6 +695,102 @@ CQRS Read Model — Dashboard는 Task를 실행하지 않고 오직 조회만
   (`domain`/`interfaces`/`engines`/`runtime`, `runtime/dashboard/`
   포함)은 FastAPI/uvicorn을 모른다 — 오직 `web/`만 안다(ADR-0032).
 
+### 3.19 Automation Engine (Milestone 21, ADR-0033)
+사용자의 명시적 요청 없이 조건/일정에 따라 Task를 자동 실행하는
+시스템. Dashboard와 독립적인 Domain이며, `ExecutionDispatcher`를
+통해서만 Task를 실행하고 `EventBus`/Dashboard는 그대로 재사용한다.
+
+> **M4-T07 `AutomationEngine`과의 관계**: 이름이 비슷하지만 다른
+> 개념이다. `AutomationEngine`(`interfaces/automation_engine.py`)은
+> "trigger_id가 어떤 Workflow와 연결돼 있는가"만 관리하는 연결
+> 관리 계약이고, trigger가 **언제** 발동해야 하는지 판단(조건/일정
+> 평가)과 실제 실행은 원래부터 호출자 책임으로 명시돼 있었다. M21은
+> 그 떠넘겨진 책임을 처음 구현한다 — `AutomationEngine`은 수정 없이
+> 그대로 유지된다(M16 `KnowledgeRepository`/M18 `EngineExecutionResult`
+> 와 같은 "이름은 유사하지만 다른 개념" 패턴).
+
+```text
+AutomationRule
+    │
+    ▼
+AutomationRepository
+    │
+    ▼
+AutomationService (CRUD 유일 진입점)
+    │
+    ▼
+AutomationScheduler (Trigger 평가 오케스트레이션, Infrastructure)
+    │
+    ▼
+AutomationActionExecutor → ExecutionDispatcher (유일한 실행 진입점)
+    │
+    ▼
+EventBus → Dashboard (Reader → Reader)
+```
+
+- **`domain/automation.py`**: `TriggerKind`(TIME/INTERVAL/EVENT/
+  STARTUP)/`Trigger`, `ActionKind`(RUN_TASK/RUN_WORKFLOW/
+  DASHBOARD_REFRESH/NOTIFICATION)/`Action` — 둘 다 kind로 태그된
+  Flat 구조(`ExecutionRecord`(M20)와 동일 스타일). `AutomationRule`
+  은 `last_executed_at`/`next_execution_at`을 포함하는 가변
+  엔티티(`Task`와 동일 패턴, `enable()`/`disable()`) — M23 Mobile
+  Experience가 그대로 재사용할 수 있도록 이 필드를 도메인에 내장해
+  둔다.
+- **`AutomationRepository`(Interface, 신규 27번째)**: `get`/`save`
+  (upsert)/`delete`/`list_rules` — `ProjectRepository`와 동일한
+  스타일. `InMemoryAutomationRepository`가 최소 구현체.
+- **`AutomationService`(`runtime/automation/`)**: Rule CRUD의 유일한
+  진입점(사용자 승인 조건 3) — Action을 실제로 실행하지 않는다.
+- **`TriggerEvaluator` 계층(`runtime/automation/trigger_evaluator.py`)**:
+  "지금 발동해야 하는가"/"다음 예정 시각"을 전담(사용자 승인 조건
+  1 — Scheduler와 Trigger 책임 분리). `TimeTriggerEvaluator`(요일/
+  일자 제약, 같은 날 중복 발동 방지)/`IntervalTriggerEvaluator`
+  (`last_executed_at` 또는 `created_at` 기준 경과 시간)/
+  `StartupTriggerEvaluator`(`last_executed_at is None`으로 최초
+  1회만)/`EventTriggerEvaluator`(사전 필터링된 뒤 호출되므로 항상
+  발동).
+- **`AutomationScheduler`(`runtime/automation/`, Infrastructure
+  Layer)**: Rule을 별도로 등록/보관하지 않고 매 `tick()`/`start()`
+  /Event 수신마다 `AutomationRepository`를 다시 조회한다 —
+  `AutomationService`가 같은 Repository로 CRUD하면 자동 반영되어
+  별도 동기화가 필요 없다. `start()`(Startup Trigger 1회), `tick(now)`
+  (Time/Interval Trigger, 순수 함수라 고정 시각으로 결정적 테스트
+  가능), `bind_event_bus(event_bus)`(Event Trigger 구독),
+  `run_now(rule_id)`(Trigger 조건 무시, 즉시 발동 — API의 `/run`이
+  위임). Action 실행 실패는 `InMemoryEventBus.publish()`와 동일한
+  원칙으로 삼켜(swallow) 다른 Rule 평가에 영향을 주지 않는다.
+- **`AutomationActionExecutor`(`runtime/automation/`)**: RUN_TASK를
+  M17/M18 파이프라인(`EngineSelectionPolicy.select()` →
+  `ExecutionDispatcher.dispatch()`)에 그대로 실어 실행한다(사용자
+  승인 조건 5 — 새 실행 경로를 만들지 않음). DASHBOARD_REFRESH/
+  NOTIFICATION은 실행할 Task가 없어 아무것도 하지 않는다.
+  RUN_WORKFLOW는 이번 Milestone이 Task 단위 실행 경로만 다뤄
+  `AutomationActionNotSupportedError`로 아직 지원하지 않는다(후속
+  Milestone 이월).
+- **Dashboard 연계(Reader → Reader)**: `DashboardService`가 선택적
+  으로 `automation_service`를 주입받아(M15/M16과 동일한 선택적 DI
+  패턴) `AutomationService.list_rules()`(읽기 전용)만 호출해
+  `AutomationStatus`(등록/활성 Rule 수, 마지막/다음 실행 시각)를
+  집계한다. Dashboard는 Automation을 제어하지 않는다(사용자 승인
+  조건 4) — `ExecutionDispatcher`(Writer)가 Dashboard를 직접
+  참조하는 것은 여전히 금지되지만, 두 Reader(`DashboardService`/
+  `AutomationService`)가 서로 참조하는 것은 CQRS 위반이 아니다.
+- **`web/automation_routes.py`**: Automation REST API 8종(목록/
+  조회/생성/수정/삭제/활성화/비활성화/즉시 실행). Web UI(정적
+  HTML/CSS/Vanilla JS)는 이 API만 사용해 Rule을 생성·수정·삭제·
+  활성화한다.
+- **Server Runtime 연동**: `web/app.py`의 `create_app()`이
+  `lifespan` Context Manager로 서버 기동 시 `AutomationScheduler.
+  start()`를 호출하고, 서버가 살아 있는 동안 `automation_tick_seconds`
+  (기본 30초)마다 `tick()`을 도는 백그라운드 asyncio Task를 두어
+  종료 시 정리한다 — "Scheduler는 Server Runtime과 함께 실행된다".
+- **의존 방향**: `AutomationScheduler`(EventBus 구독) →
+  `AutomationActionExecutor` → `ExecutionDispatcher`(Automation을
+  전혀 모름, 단방향) → `EventBus` → `InMemoryDashboardRepository`
+  (기존 M20 경로 그대로). `DashboardService` → `AutomationService`
+  (읽기 전용). Automation Core(`domain`/`interfaces`/`runtime/
+  automation/`)는 `web/`이나 FastAPI/uvicorn을 모른다(ADR-0033).
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -745,10 +841,11 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentCapability` | Coordination/Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP … |
 | `AgentStatus` | 생명주기 상태 |
 
-## 7. Interfaces (추상 계약, 총 26종)
+## 7. Interfaces (추상 계약, 총 27종)
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
+| `AutomationRepository` | `AutomationRule` 저장/조회(CRUD는 `AutomationService`가 유일하게 사용) | Milestone 21 (M21-T01 계약, `InMemoryAutomationRepository` 구현) | **완료(계약+구현)** |
 | `DashboardRepository` | Execution 결과를 Event로 받아 Dashboard Read Model에 기록 + 조회 | Milestone 20 (M20-T01 계약, `InMemoryDashboardRepository` 구현) | **완료(계약+구현)** |
 | `LLMPolicyEngine` | AgentRole별 LLM Provider/Model/Effort Rule 기반 결정 | Milestone 5 (M5-T01) | **완료(계약+구현)** |
 | `BudgetPolicyEngine` | `CostEstimate` vs `Budget` 대조로 실행 허용 여부 결정 | Milestone 15 (M15-T01 계약, `InMemoryBudgetPolicyEngine` 구현) | **완료(계약+구현)** |
@@ -763,7 +860,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `TaskEngine` | Task 생성/상태 전이 + Step 실행 이력(M5-T06) | 이후 | 기존 |
 | `MemoryEngine` | Memory 저장/검색 (Snapshot 제외) | Milestone 1 (T1-15, T1-20 재확인) | 기존(축소, 변경 없음) |
 | `ApprovalEngine` | 승인 대상 판별/차단 | 이후 | 기존 |
-| `AutomationEngine` | 조건/일정 트리거 | 이후 | 기존 |
+| `AutomationEngine` | trigger_id↔Workflow 연결 관리(`bind_workflow`/`fire`, M4-T07) — §3.19 Automation Engine(M21)과는 다른 개념, 그대로 유지 | Milestone 1 (T1-15), M4-T07 확장 | **완료(계약+구현)** |
 | `EngineAdapter` | per-engine 세션 계약 (create_session/run/cancel/status/destroy_session/capabilities/supports_parallel/estimate_cost) | Milestone 1 (T1-19) 계약, Milestone 3 구현 | **완료(계약)** |
 | `AgentManager` | Agent 생성/생명주기/상태 | Milestone 1 (T1-18) | **완료(계약)** |
 | `AgentRepository` | Agent 조회/저장 | Milestone 1 (T1-18 계약, T1-23 `FileAgentRepository` 구현) | **완료(계약+구현)** |
@@ -810,6 +907,18 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
     호출하고, `domain`/`interfaces`/`engines`/`runtime`(Core 계층)은
     `web/`이나 FastAPI/uvicorn을 참조하지 않는다 — 이 프로젝트에서
     프레임워크를 아는 유일한 계층은 `web/`이다.
+13. **Automation Rule 실행은 `AutomationScheduler` → `AutomationActionExecutor`
+    → `ExecutionDispatcher`** 순서로만 이루어진다(Milestone 21).
+    `AutomationScheduler`는 `EventBus`를 구독할 뿐 Dashboard를 직접
+    참조하지 않는다. Automation CRUD는 `AutomationService`(API 전용
+    진입점)를 통해서만 이루어진다 — `AutomationScheduler`는 Rule을
+    직접 생성/수정/삭제하지 않고 조회만 한다.
+14. **Dashboard의 Automation 조회는 `DashboardService` → `AutomationService`
+    (읽기 전용)** 순서로만 이루어진다(Milestone 21) — Reader가 다른
+    Reader를 참조하는 것은 CQRS 위반이 아니다(§8 규칙 12의 "쓰기측이
+    읽기측을 모른다"는 방향성만 유지하면 된다). Dashboard는
+    `AutomationService`의 조회 메서드만 호출하고 Automation을
+    제어하지 않는다.
 
 ## 9. 디렉터리 구조와 컴포넌트 매핑
 
@@ -818,7 +927,7 @@ src/ai_workspace/
 ├── domain/            # Project, Mission, Workflow, Task, Step,
 │                       #   WorkspaceSession, Agent, AgentRole, AgentCapability, AgentStatus
 │                       #   (구현됨, T1-14~T1-17)
-├── interfaces/         # 추상 계약 (26종, §7) (구현됨, T1-15~T1-21, M11-T01, M15-T01/T02, M16-T01/T02, M17-T01/T02, M18-T01, M20-T01)
+├── interfaces/         # 추상 계약 (27종, §7) (구현됨, T1-15~T1-21, M11-T01, M15-T01/T02, M16-T01/T02, M17-T01/T02, M18-T01, M20-T01, M21-T01)
 ├── core/              # Workspace Core (WorkspaceSession 관리, Runtime 초기화)
 │                       #   (구현됨, T1-22)
 ├── runtime/           # (Milestone 2 이후)
@@ -830,6 +939,11 @@ src/ai_workspace/
 │   │                   #   + events.py (Dashboard Event 상수, Milestone 20)
 │   ├── dashboard/     #   InMemoryDashboardRepository + DashboardService
 │   │                   #   (Read Model, Core 계층, web/을 모름, Milestone 20)
+│   │                   #   + 선택적 AutomationService DI (Milestone 21)
+│   ├── automation/    #   InMemoryAutomationRepository + AutomationService
+│   │                   #   + trigger_evaluator.py(TriggerEvaluator 계층)
+│   │                   #   + AutomationScheduler + AutomationActionExecutor
+│   │                   #   (Dashboard와 독립적인 Domain, web/을 모름, Milestone 21)
 │   └── workflow/      #   WorkflowRunner: Workflow 순차 자동 실행 (Milestone 12)
 ├── agents/            # 능력별 Agent 구현체 (Milestone 2 이후)
 ├── engines/           # Core Engines 구현 (Task/Workflow/Approval/Automation, Milestone 2 이후)
@@ -851,6 +965,8 @@ src/ai_workspace/
 │                       #   (Milestone 20): dashboard_viewmodel.py, routes.py,
 │                       #   dashboard_broadcaster.py, app.py, server.py,
 │                       #   static/(index.html/style.css/app.js, 빌드 도구 없음)
+│                       #   + automation_routes.py(Automation REST API 8종,
+│                       #   Milestone 21) — static/에 Automation 화면 추가
 └── cli/               # CLI 진입점 (UI Surface의 하나) — main.py (구현됨, T1-24)
 │                       #   + start 서브커맨드로 web.server.run_server 지연 import (Milestone 20)
 ```

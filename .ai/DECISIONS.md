@@ -1403,3 +1403,130 @@
   증명(M20-T06). `DashboardRepository` 쓰기/읽기 분리, 실제
   프로덕션 배포 구성(HTTPS/인증/역방향 프록시), M23 Mobile
   Presentation은 실제 필요성이 생기기 전까지 이월한다.
+
+## ADR-0033: Automation Engine 도입 — `AutomationRepository` Interface, 기존 `AutomationEngine`과의 명시적 분리, Reader→Reader CQRS 확장 (Milestone 21)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: M20으로 완성된 Dashboard는 실행 상태를 "보여주기"만 했다.
+  사용자가 "조건/일정에 따라 Task를 자동 실행하는 Automation"을
+  `AutomationRule → AutomationRepository → AutomationService →
+  AutomationScheduler → ExecutionDispatcher → EventBus → Dashboard`
+  흐름으로 요청했다. 설계 검토에서 M4-T07에 이미 `AutomationEngine`
+  Interface + `InMemoryAutomationEngine`이 존재함을 발견했다 — 하지만
+  그 책임은 "어떤 trigger가 어떤 Workflow와 연결돼 있는가"만 관리하는
+  **연결 관리**뿐이고, trigger가 **언제** 발동해야 하는지 판단하는
+  조건/일정 평가와 실제 실행은 M4-T07 설계 당시부터 명시적으로
+  호출자에게 떠넘겨져 있었다. M21이 요청한 `AutomationRule`(4종
+  Trigger+Action)과 `AutomationScheduler`(실제 일정 평가+자동 실행)
+  는 바로 그 떠넘겨진 책임을 처음 구현하는 것이라, M16
+  `KnowledgeRepository`/M18 `EngineExecutionResult`와 같은 "이름은
+  유사하지만 다른 개념" 패턴으로 판단해 새 컴포넌트 세트를 도입하기로
+  했다(기존 `AutomationEngine`은 수정 없이 그대로 유지). 사용자는
+  최종 승인에서 6개 조건을 확정했다: (1) `AutomationScheduler`와
+  Trigger의 책임을 분리한다, (2) Dashboard는 계속 Read Model을
+  유지한다, (3) Automation CRUD는 Automation API를 통해서만
+  수행한다, (4) Dashboard는 Automation을 직접 제어하지 않는다, (5)
+  `ExecutionDispatcher`를 유일한 실행 진입점으로 유지한다, (6)
+  `last_executed_at`/`next_execution_at`을 도메인 모델에 포함해 M23
+  Mobile Experience와 자연스럽게 연계한다.
+- 결정:
+  1. `domain/automation.py`에 `TriggerKind`(TIME/INTERVAL/EVENT/
+     STARTUP)/`Trigger`/`ActionKind`(RUN_TASK/RUN_WORKFLOW/
+     DASHBOARD_REFRESH/NOTIFICATION)/`Action`을 kind로 태그된 Flat
+     구조로 정의한다(`ExecutionRecord`(M20)와 동일 스타일 — Trigger/
+     Action은 종류별로 필드 모양이 크게 달라 "언제/무엇을" 판단
+     로직과 무관하게 순수 데이터로만 존재한다). `AutomationRule`은
+     `last_executed_at`/`next_execution_at`을 포함하고(사용자 승인
+     조건 6) `enable()`/`disable()`을 갖는 가변 엔티티(`Task`와
+     동일 패턴)다.
+  2. `interfaces/automation_repository.py`에 `AutomationRepository`
+     (신규 27번째 Interface, `get`/`save`/`delete`/`list_rules` —
+     `ProjectRepository`와 동일한 upsert 스타일)를 신설한다.
+  3. `runtime/automation/`에 `InMemoryAutomationRepository`(저장),
+     `AutomationService`(CRUD 유일 진입점, 사용자 승인 조건 3),
+     `TriggerEvaluator` 계층(`TimeTriggerEvaluator`/
+     `IntervalTriggerEvaluator`/`StartupTriggerEvaluator`/
+     `EventTriggerEvaluator` — "언제 발동할지" 판단을 전담),
+     `AutomationScheduler`(오케스트레이션만 — Trigger 평가는
+     `TriggerEvaluator`에 위임, 사용자 승인 조건 1)를 신설한다.
+     `AutomationScheduler`는 Rule을 별도로 등록/보관하지 않고 매
+     호출마다 `AutomationRepository`를 다시 조회한다 — `Automation
+     Service`가 같은 Repository로 CRUD하면 자동 반영되어 별도 동기화
+     계층이 필요 없다.
+  4. `AutomationActionExecutor`(신규, `runtime/automation/`)가
+     RUN_TASK Action을 M17/M18 파이프라인(`EngineSelectionPolicy.
+     select()` → `ExecutionDispatcher.dispatch()`)에 그대로 실어
+     실행한다(사용자 승인 조건 5, 새 실행 경로를 만들지 않음).
+     `AutomationScheduler`는 이 실행기를 `action_executor:
+     Callable[[AutomationRule], None]`로 주입받을 뿐
+     `ExecutionDispatcher`를 알지 못한다. RUN_WORKFLOW는 이번
+     Milestone이 Task 단위 실행 경로만 다루므로
+     `AutomationActionNotSupportedError`로 명시적으로 아직 지원하지
+     않는다(향후 Milestone 이월).
+  5. Event Trigger는 `AutomationScheduler.bind_event_bus(event_bus)`
+     로 `EventBus`를 구독해 처리한다(Automation은 EventBus를 그대로
+     재사용한다는 사용자 요구). Rule 실행(`action_executor` 호출)
+     실패는 `InMemoryEventBus.publish()`와 동일한 원칙으로
+     `try/except Exception: pass`로 삼켜 다른 Rule 평가나 호출자에
+     영향을 주지 않는다 — `last_executed_at`은 "실행 시도 시점"만
+     기록한다.
+  6. Dashboard 연계는 **Reader가 다른 Reader를 참조하는 방식**으로
+     확장한다: `DashboardService`가 선택적으로 `automation_service`
+     를 주입받아(M15/M16과 동일한 선택적 DI 패턴) 등록/활성 Rule
+     수와 마지막/다음 실행 시각을 `AutomationService.list_rules()`
+     (읽기 전용)로만 조회해 집계한다(사용자 승인 조건 4 — Dashboard
+     는 Automation을 제어하지 않는다). `ExecutionDispatcher`(Writer)
+     가 Dashboard를 직접 참조하는 것은 여전히 금지된다 — CQRS
+     경계는 "쓰기측이 읽기측을 모른다"는 방향으로만 유지된다.
+  7. Automation API(`web/automation_routes.py`) 8종을 신설하고,
+     `AutomationScheduler.run_now(rule_id)`(Trigger 조건 무시,
+     즉시 발동)를 추가해 `POST /{id}/run`이 위임한다. `web/app.py`
+     의 `create_app()`을 `lifespan` Context Manager로 전환해(기존
+     `on_event` 대신) 서버 기동 시 `AutomationScheduler.start()`
+     (Startup Trigger 1회)를 호출하고, 서버 생존 동안
+     `automation_tick_seconds`(기본 30초)마다 `tick()`을 도는
+     백그라운드 asyncio Task를 두어 "Scheduler는 Server Runtime과
+     함께 실행된다"는 DoD를 충족한다.
+- 대안:
+  - 기존 `AutomationEngine`을 확장(M19 `RetryPolicy` 패턴처럼) —
+    기각. `AutomationEngine`은 "trigger_id↔Workflow 연결 관리"라는
+    좁고 다른 책임을 갖고, `bind_workflow`/`fire`의 계약(즉시 반환,
+    실행은 호출자 책임)이 M21이 요구하는 "조건 평가+자동 실행"과
+    근본적으로 다르다 — 억지로 확장하면 한 Interface가 두 가지
+    무관한 책임을 지게 된다(SRP 위반).
+  - `AutomationScheduler`가 Rule을 자체 목록으로 등록/관리(사용자
+    프롬프트의 "Rule 등록/제거/활성화/비활성화" 문구를 문자 그대로
+    별도 API로 구현) — 기각. `AutomationService`(CRUD 유일
+    진입점, 조건 3)와 책임이 중복되고 두 컴포넌트의 상태가 어긋날
+    위험이 생긴다. 매 호출마다 공유 `AutomationRepository`를
+    재조회하면 문구가 요구하는 "효과"(등록/제거/활성화가 Scheduler
+    동작에 반영됨)는 동일하게 달성하면서 이중 관리를 없앤다.
+  - RUN_WORKFLOW를 `WorkflowRunner`(M12)로 연결 — 기각(이번
+    Milestone 범위 밖). `ExecutionDispatcher`를 유일한 실행
+    진입점으로 못박은 조건과 정합성을 유지하려면 Workflow 실행
+    경로도 이 원칙 안에서 설계해야 하는데, 이번 Milestone에서는
+    그 설계까지 확정하지 않았다 — 억지로 연결하면 "유일한 진입점"
+    원칙이 두 갈래로 쪼개진다. 명시적 예외로 남겨 후속 Milestone의
+    판단 대상으로 이월한다.
+- 이유: Trigger 평가를 `TriggerEvaluator`로 분리하면 새 Trigger
+  종류(예: Cron 표현식)가 필요해져도 `AutomationScheduler`를 건드리지
+  않고 평가기만 추가하면 된다(OCP). `AutomationScheduler`가 Rule
+  상태를 자체 보관하지 않고 매번 Repository를 재조회하는 설계는
+  "CRUD는 오직 API를 통해서만"이라는 사용자 조건을 코드 구조로
+  강제한다 — Scheduler를 우회해 Rule을 바꿀 방법이 없다.
+  `last_executed_at`/`next_execution_at`을 도메인에 내장해 두면
+  향후 M23 Mobile이 별도 계산 없이 그대로 표시할 수 있다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.23.0 신규 §3.19(Automation
+  Engine)에 반영, §7 Interfaces 27종으로 갱신(`AutomationRepository`
+  추가), §8 의존성 규칙에 Automation Event 구독 경로 + Dashboard의
+  선택적 Automation 조회 추가, §9 디렉터리 구조에 `runtime/
+  automation/`/`web/automation_routes.py` 반영. 실제
+  `ClaudeCodeEngineAdapter` 조합으로 Event Trigger가 실제 Task
+  실행까지 이어짐과, REST API로 만든 Rule이 Dashboard Automation
+  현황에 반영됨을 통합 테스트로 증명(M21-T07). `ast` 기반 import
+  검사로 Automation Core가 `web/`을 모르고, `ExecutionDispatcher`가
+  Automation을 모른다는 단방향 결합도 재확인. RUN_WORKFLOW 실행
+  경로, `AutomationRepository`의 파일/DB 구현체, Cron Expression
+  기반 Trigger, Distributed/Multi-node Scheduler는 실제 필요성이
+  생기기 전까지 이월한다.
