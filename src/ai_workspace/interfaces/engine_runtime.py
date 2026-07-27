@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_adapter import (
+    CostEstimate,
     EngineAdapter,
     EngineResult,
     EngineSessionStatus,
@@ -94,6 +95,24 @@ class EngineRuntime(ABC):
              않는다 — 위 "예외" 항목(NoSuitableEngineError 등 Runtime 자체의
              치명적 오류)만 예외로 전파되며, 그 외에는 항상 EngineResult
              목록을 정상 반환한다.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def estimate_cost(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> CostEstimate:
+        """
+        입력: task (비용을 추정할 Task), required_capabilities (run()과 동일한
+              선택 기준 — 어떤 엔진이 선택될지가 추정치에 영향을 준다)
+        출력: 선택된 엔진의 CostEstimate(estimated_tokens, estimated_cost_usd)
+        예외: required_capabilities를 모두 만족하는 등록된 엔진이 없으면
+              NoSuitableEngineError(run()과 동일한 선택 규칙)
+        보장: side-effect 없음(세션을 생성하지 않는다 — run()과 달리 실제
+              실행이나 세션 생명주기에 관여하지 않는다, M15-T02). 엔진 선택은
+              run()과 동일한 규칙(등록 순서상 첫 매칭)을 따르므로, 같은
+              required_capabilities로 run()을 호출했을 때 선택될 엔진과
+              항상 같은 엔진의 추정치를 반환한다.
         """
         raise NotImplementedError
 

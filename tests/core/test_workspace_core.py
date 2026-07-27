@@ -20,7 +20,12 @@ from ai_workspace.domain.project import Project
 from ai_workspace.domain.task import Task
 from ai_workspace.domain.workflow import Workflow
 from ai_workspace.events.event_bus import InMemoryEventBus
-from ai_workspace.interfaces.engine_adapter import EngineAdapter, EngineResult, EngineSessionStatus
+from ai_workspace.interfaces.engine_adapter import (
+    CostEstimate,
+    EngineAdapter,
+    EngineResult,
+    EngineSessionStatus,
+)
 from ai_workspace.interfaces.engine_runtime import EngineRuntime
 from ai_workspace.interfaces.event_bus import Event
 from ai_workspace.interfaces.project_repository import ProjectNotFoundError
@@ -41,6 +46,11 @@ class SpyEngineRuntime(EngineRuntime):
     def run_parallel(
         self, tasks: list[Task], required_capabilities: frozenset[str] = frozenset()
     ) -> list[EngineResult]:
+        raise AssertionError("Workspace Core는 Task를 직접 실행하면 안 된다.")
+
+    def estimate_cost(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> CostEstimate:
         raise AssertionError("Workspace Core는 Task를 직접 실행하면 안 된다.")
 
     def cancel(self, task_id: str) -> None:
