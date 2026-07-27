@@ -779,6 +779,19 @@
   클래스/dataclass, M19에 이어 두 번째 "새 Interface 없이도 ADR
   작성" 사례)로 ADR-0034 기록. 새로 발생한 기술 부채 없음(순환
   참조는 우회가 아니라 `TYPE_CHECKING`으로 근본 해결).
+- **M23-Preparation(Obsidian Knowledge Base 구축) 진행 중.** T01~T07
+  완료(저장소 루트 `Vault/`에 PARA 구조로 GitHub 요약+링크 Index를
+  구축 — Overview/Architecture/ADR/Backend/API/Dashboard/Automation/
+  Production/iOS·Android/Milestones/Decisions), 사용자 최종 승인
+  대기 중. 2026-07-27 사용자 지시로 **T01A(Vault Retrieval/Prompt
+  효율화)** 추가 완료: `PROJECT_INDEX.md`(작업 종류→문서 라우팅
+  표, Vault 최초 진입점) 신규, `AI_CONTEXT.md`를 "현재 상태" 절이
+  최상단에 오도록 개편, `AI_RULES.md`에 Context Retrieval Rule/
+  Prompt Rules 추가, `PROMPT_PROFILE.md`(짧은 프롬프트 패턴)/
+  `DESIGN_TEMPLATE.md`(표준 설계 템플릿, `99 Templates/`) 신규 —
+  Retrieval First/Short Prompt Workflow/Template First 3원칙 도입.
+  기존 Backlink/Tag/원문 규칙과 문서 구조는 그대로 유지, 변경된
+  파일만 수정.
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는

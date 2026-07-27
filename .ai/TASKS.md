@@ -7151,10 +7151,60 @@ Optional)로 이월한다.
 | M23-Prep-T05 | 서버 구성 문서화 | **완료** |
 | M23-Prep-T06 | Client 및 프로젝트 이력 정리 | **완료** |
 | M23-Prep-T07 | 운영 문서 및 검증 | **완료** |
+| M23-Prep-T01A | Vault Retrieval/Prompt 효율화(Router+Template) | **완료** |
 | M23-Prep-T08 (Optional) | Obsidian MCP 연동 — Claude Code 도입 시점으로 이월 | 보류 |
 
-**진행 상태**: M23-Prep-T01~T07 전체 완료. 아래 "M23-Preparation
-Review" 참고.
+**진행 상태**: M23-Prep-T01~T07 전체 완료(아래 "M23-Preparation
+Review" 참고) + T01A(2026-07-27 사용자 지시로 추가) 완료.
+
+#### M23-Prep-T01A: Vault Retrieval/Prompt 효율화(Router+Template)
+
+**목표**: M23-Preparation 완료 후 실사용 과정에서, 매 세션이 Vault
+전체 구조를 다시 파악하거나 프롬프트에 문서 내용을 다시 붙여넣는
+비효율을 줄인다. Retrieval First(문서를 다시 읽지 말고 라우팅부터)/
+Short Prompt Workflow(문서 링크만 참조)/Template First(자유 서술
+대신 표준 템플릿)를 Vault 운영 원칙에 추가한다.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `PROJECT_INDEX.md` 신규 — 작업 종류→문서 라우팅 표 | ✅ |
+| 2 | `AI_CONTEXT.md`를 "현재 상태" 섹션이 최상단에 오도록 개편 | ✅ |
+| 3 | `AI_RULES.md`에 Context Retrieval Rule/Prompt Rules 추가 | ✅ |
+| 4 | `PROMPT_PROFILE.md` 신규 — 짧은 프롬프트 패턴 예시 | ✅ |
+| 5 | `DESIGN_TEMPLATE.md` 신규(`99 Templates/`) — 표준 설계 템플릿 | ✅ |
+| 6 | 기존 구조·Backlink·Tag·원문 규칙 유지(검증 완료, 미해결 링크 0건) | ✅ |
+| 7 | 변경된 파일만 수정(불필요한 리팩터 없음) | ✅ |
+| 8 | `.ai/TASKS.md`/`docs/ROADMAP.md`/`.ai/MEMORY.md` 반영 | ✅ |
+
+**구현 내용**
+
+- `00 System/PROJECT_INDEX.md`(신규): "작업 종류 → 읽을 문서" 표
+  13행, Short Prompt Workflow/Template First 절 포함. Vault 진입
+  순서에서 `AI_CONTEXT`보다 앞선 최초 진입점으로 위치시킴.
+- `00 System/AI_CONTEXT.md`(수정): "현재 상태(가장 먼저 확인)" 절을
+  최상단으로 이동(완료/진행 중/최근 변경 3줄 요약), "이 Vault를
+  읽는 순서" 절은 전체 흐름을 다시 설명하지 않고 [[PROJECT_INDEX]]
+  로 위임하도록 축약. 기존 "Source of Truth는 GitHub다" 절과
+  원문/관련 문서 링크는 그대로 유지.
+- `00 System/AI_RULES.md`(수정): "Context Retrieval Rule(Retrieval
+  First)"/"Prompt Rules(Short Prompt Workflow)" 2개 절을 "관련
+  문서" 절 앞에 추가. 기존 6개 절(이 Vault가 아닌 것/하는 것/
+  Backlink/Tag/GitHub Link/AI Reading Rule)은 변경 없음.
+- `00 System/PROMPT_PROFILE.md`(신규): 반복 작업 유형 7종의 짧은
+  프롬프트 예시 표 + 안티패턴 3종.
+- `99 Templates/DESIGN_TEMPLATE.md`(신규): 지금까지 모든 Milestone
+  Kickoff가 실제로 써온 구조(목표/배경/설계 원칙/범위/Out of Scope/
+  DoD)를 `{{placeholder}}` 템플릿으로 정식화.
+- Vault 전체 재검증: 미해결 Backlink 0건(순수 텍스트 설명 중
+  "링크"/"문서 제목"/"이중 대괄호" 3건은 오탐 — 실제 `[[]]` 링크가
+  아니라 문법을 설명하는 프롬프트/규칙 텍스트).
+
+**의존성**: M23-Prep-T01~T07(모든 Index 문서가 이미 존재해야
+PROJECT_INDEX 라우팅 표가 유효함).
+
+---
 
 #### M23-Prep-T07: 운영 문서 및 검증
 - 상태: **DONE (2026-07-27)** — `12 Decisions/Decisions Index.md`

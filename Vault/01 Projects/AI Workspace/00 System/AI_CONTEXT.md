@@ -4,9 +4,22 @@ tags: [system]
 
 # AI_CONTEXT
 
-이 문서는 AI(Claude 등)가 이 Vault를 처음 열었을 때 가장 먼저 읽어야
-하는 문서다. "이 프로젝트가 무엇인지"와 "이 Vault를 어떻게 써야
-하는지"만 담는다.
+이 문서는 [[PROJECT_INDEX]] 다음으로 읽는 문서다. "지금 프로젝트가
+어떤 상태인가"를 가장 먼저 보여주고, 그 다음에만 프로젝트 자체를
+설명한다 — 매 세션마다 정적인 설명을 다시 읽기보다 "지금 무엇이
+바뀌었는가"를 먼저 파악하도록 순서를 둔다.
+
+## 현재 상태(가장 먼저 확인)
+
+- **완료**: Milestone 1~22 전체, M23-Preparation(Obsidian Knowledge
+  Base 구축, T01~T07 + T01A) 완료.
+- **진행 중/다음**: Milestone 23(Mobile Experience) 목표 검토 —
+  서버 전용 지원/PWA/네이티브 앱 코드 중 범위가 아직 확정되지 않음.
+- **최근 변경**: [[PROJECT_INDEX]](Router)/[[PROMPT_PROFILE]]/
+  [[DESIGN_TEMPLATE]] 신규(M23-Prep-T01A) — Retrieval First/Short
+  Prompt Workflow/Template First 원칙 도입.
+- 상세 진행률·이력은 [[Overview]]와 [[Milestones Index]] 참고
+  (이 섹션이 바뀔 때마다 그 문서들도 함께 갱신한다).
 
 ## 프로젝트 한 줄 정의
 
@@ -26,28 +39,15 @@ tags: [system]
 이 Vault(Obsidian)는 위 GitHub 문서를 **대체하지도, 복사하지도**
 않는다. 요약과 링크만 제공하는 Knowledge Index다.
 
-## 이 Vault를 읽는 순서 ([[AI_RULES]] 참고)
+## 이 Vault를 읽는 순서
 
-Vault 전체를 읽지 않는다. 작업 종류에 따라 최소 문서만 읽는다:
-
-```
-어떤 작업이든 시작 → [[Overview]] → [[Architecture Overview]]
-                                          ↓
-                         작업 영역에 맞는 Index (예: [[Dashboard Index]])
-                                          ↓
-                              필요하면 GitHub 원문
-```
-
-## 현재 상태 (요약)
-
-- Milestone 1~22 완료(2026-07-27 기준), Milestone 23(Mobile
-  Experience) 목표 검토 중.
-- 이 Vault(M23-Preparation)는 M23 착수 전 지식 허브를 먼저
-  구축하는 준비 단계다.
-- 상세 진행률은 [[Overview]]와 [[Milestones Index]] 참고.
+작업별 상세 라우팅은 [[PROJECT_INDEX]]의 표를 따른다. 이 문서는
+그 표에서 참조하는 진입점 중 하나일 뿐, 매번 전체 흐름을 다시
+설명하지 않는다.
 
 ## 관련 문서
 
+- [[PROJECT_INDEX]]
 - [[AI_RULES]]
 - [[Overview]]
 - [[Architecture Overview]]

@@ -95,8 +95,29 @@ Vault 문서를 읽고도 판단이 서지 않으면(예: 정확한 필드명, �
 함수 시그니처) 반드시 GitHub 원문을 확인한다 — 이 Vault의 요약은
 근사치이지 계약(Contract)이 아니다.
 
+## Context Retrieval Rule(Retrieval First)
+
+작업을 시작하기 전, GitHub 전체를 다시 훑거나 코드베이스를 처음부터
+탐색하지 않는다. 항상 [[PROJECT_INDEX]]의 라우팅 표에서 작업과 가장
+가까운 문서를 먼저 찾고, 그 문서(들)만 읽은 뒤에도 판단이 서지
+않을 때만 GitHub 원문으로 내려간다(AI Reading Rule과 동일한 순서,
+[[PROJECT_INDEX]]가 그 진입점을 표로 명시한 것뿐이다). 이미 같은
+세션에서 읽은 문서는 다시 읽지 않는다.
+
+## Prompt Rules(Short Prompt Workflow)
+
+- 문서 내용을 프롬프트에 다시 붙여넣지 않는다 — 문서 제목(`[[링크]]`
+  형태)이나 경로만 언급한다.
+- 새 설계를 요청/작성할 때는 자유 서술 대신 [[DESIGN_TEMPLATE]]의
+  섹션 구조를 따른다(Template First).
+- 반복되는 요청 패턴(새 Milestone 시작/버그 수정/문서 갱신 등)은
+  [[PROMPT_PROFILE]]에 정리된 짧은 형식을 우선 사용한다.
+- 자세한 예시는 [[PROMPT_PROFILE]] 참고.
+
 ## 관련 문서
 
+- [[PROJECT_INDEX]]
+- [[PROMPT_PROFILE]]
 - [[AI_CONTEXT]]
 - [[Overview]]
 
