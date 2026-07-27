@@ -1,0 +1,34 @@
+{
+  "main": {
+    "id": "main-split-mobile",
+    "type": "split",
+    "children": [
+      {
+        "id": "main-leaf-mobile",
+        "type": "leaf",
+        "state": {
+          "type": "empty",
+          "state": {}
+        }
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "left-split-mobile",
+    "type": "split",
+    "children": [
+      {
+        "id": "file-explorer-leaf-mobile",
+        "type": "leaf",
+        "state": {
+          "type": "file-explorer",
+          "state": {}
+        }
+      }
+    ],
+    "direction": "horizontal"
+  },
+  "active": "main-leaf-mobile",
+  "lastOpenFiles": []
+}
