@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.17.0 |
+| 문서 버전 | v0.18.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~14 완료, Milestone 15 완료 — ADR-0027로 §3.9/§3.13에 Budget 정책 반영) |
+| 상태 | Draft (Milestone 1~15 완료, Milestone 16 완료 — ADR-0028로 신규 §3.14 Knowledge Layer 도입) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -257,6 +257,9 @@ Agent의 실행을 담당하는 계층.
   `budget_policy_engine`(§3.13)을 주입받는다. 주입되어 있으면 실행
   직전 예상 비용을 확인해 예산 초과 시 Task를 `BLOCKED`로 전환하고
   실행하지 않는다.
+- **Project Knowledge System(M16)**: `CodingAgent`는 선택적으로
+  `knowledge_provider`(§3.14)를 주입받는다. 주입되어 있으면
+  `task.title`로 관련 Knowledge를 검색해 실행 프롬프트에 반영한다.
 
 ### 3.7 Core Engines (Services)
 Task · Workflow · Approval · Automation Engine. Agent가 사용하는 능력 서비스.
@@ -457,6 +460,42 @@ Core Engine도 아닌 별도 컴포넌트다.
   특정 LLM Provider나 Engine 개념이 등장하지 않는다 — Claude/GPT/
   Gemini 어떤 조합이든 동일하게 동작한다.
 
+### 3.14 Knowledge Layer — Project Knowledge System (Milestone 16, ADR-0028)
+프로젝트의 기존 문서(ARCHITECTURE/DECISIONS/RULES/TASKS/ROADMAP/PRD)를
+Workspace 전용 Knowledge로 노출하고, Agent가 Keyword 기반으로 검색해
+실행 컨텍스트에 참고하게 하는 계층. **§3.8 Memory 계열(`MemoryEngine`)
+과는 완전히 다른 개념**이다 — `MemoryEngine`은 Mission 요약/세션
+연속성(대화·세션 기억)을 다루고, Knowledge Layer는 **프로젝트가 이미
+갖고 있는 정적 문서**를 다룬다. 이름과 역할을 섞지 않기 위해 별도
+컴포넌트 계열로 신설했다(ADR-0028).
+- **저장(`KnowledgeRepository`)**: 문서를 어디서 읽어오는지 아는
+  유일한 계층. `FileKnowledgeRepository`(M16-T01)는 고정 파일→
+  `KnowledgeKind` 매핑(`docs/ARCHITECTURE.md`→ARCHITECTURE,
+  `.ai/DECISIONS.md`→ADR, `.ai/RULES.md`→RULE, `.ai/TASKS.md`→TASK,
+  `docs/ROADMAP.md`/`docs/PRD.md`→PROJECT)으로 파일 하나를
+  `KnowledgeDocument` 하나로 노출한다(문단 단위 파싱 없음, YAGNI).
+- **검색(`KnowledgeSearch`)**: `KnowledgeRepository`의 문서를 대상으로
+  Keyword(포함) 검색만 한다(`InMemoryKnowledgeSearch`, 기존
+  `MemoryEngine.search()`와 동일한 단순성). Vector/Embedding/Semantic
+  Search는 다루지 않는다. 문서 수가 적어 영속 `KnowledgeIndexer`는
+  이번 범위에서 제외했다(YAGNI) — 필요해지면 `KnowledgeSearch` 계약은
+  그대로 두고 구현체만 교체하면 된다(OCP).
+- **제공(`KnowledgeProvider`)**: **Agent가 Knowledge에 접근하는 유일한
+  진입점**(`InMemoryKnowledgeProvider`가 `KnowledgeSearch`에 위임).
+  `ContextManager`가 `MemoryEngine`을 감싸 Agent에게 노출하는 것과
+  동일한 패턴 — Agent는 `KnowledgeRepository`/`KnowledgeSearch`를
+  직접 호출하지 않는다.
+- **연동 지점**: `CodingAgent`에 `knowledge_provider`를 선택적으로
+  주입하면, `task.title`로 `KnowledgeProvider.provide()`를 호출해
+  검색 결과를 `DevelopmentContext.related_knowledge`에 실어 실행
+  프롬프트에 반영한다. 미주입 시(기본값 `None`) 검색 자체를
+  건너뛰어 M16 이전과 완전히 동일하게 동작한다.
+- **Memory는 LLM을 호출하지 않는다**: `KnowledgeSearch`/
+  `KnowledgeProvider` 어디도 LLM을 호출하지 않는다 — Keyword 검색
+  결과를 그대로 반환/전달할 뿐이다.
+- **의존 방향**: Agent → Knowledge Provider → Knowledge Search →
+  Knowledge Repository(§8 의존성 규칙에 신규 추가).
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -507,12 +546,15 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentCapability` | Coordination/Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP … |
 | `AgentStatus` | 생명주기 상태 |
 
-## 7. Interfaces (추상 계약, 총 19종)
+## 7. Interfaces (추상 계약, 총 22종)
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
 | `LLMPolicyEngine` | AgentRole별 LLM Provider/Model/Effort Rule 기반 결정 | Milestone 5 (M5-T01) | **완료(계약+구현)** |
 | `BudgetPolicyEngine` | `CostEstimate` vs `Budget` 대조로 실행 허용 여부 결정 | Milestone 15 (M15-T01 계약, `InMemoryBudgetPolicyEngine` 구현) | **완료(계약+구현)** |
+| `KnowledgeRepository` | 프로젝트 문서를 `KnowledgeDocument`로 조회 | Milestone 16 (M16-T01 계약, `FileKnowledgeRepository` 구현) | **완료(계약+구현)** |
+| `KnowledgeSearch` | `KnowledgeRepository` 문서의 Keyword 검색 | Milestone 16 (M16-T02 계약, `InMemoryKnowledgeSearch` 구현) | **완료(계약+구현)** |
+| `KnowledgeProvider` | Agent가 Knowledge에 접근하는 유일한 진입점 | Milestone 16 (M16-T02 계약, `InMemoryKnowledgeProvider` 구현) | **완료(계약+구현)** |
 | `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 (T1-15 계약, T1-23 `FileProjectRepository` 구현) | **완료(계약+구현)** |
 | `WorkflowEngine` | Mission→…→Step 협업 흐름 | 이후 | 기존 |
 | `TaskEngine` | Task 생성/상태 전이 + Step 실행 이력(M5-T06) | 이후 | 기존 |
@@ -543,8 +585,8 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 3. Workspace Core → Agent Runtime, Engine Runtime, Interfaces에만 의존. Task를
    직접 실행하지 않고 Agent Runtime에 위임.
 4. Agent Runtime 컴포넌트는 서로 및 해당 인터페이스, `AgentRepository`에 의존.
-5. Agent는 **Core Engines, Context Manager, Engine Runtime, Event Bus**에 의존.
-   Agent끼리 직접 호출 금지(Event Bus만).
+5. Agent는 **Core Engines, Context Manager, Engine Runtime, Event Bus,
+   Knowledge Provider**에 의존. Agent끼리 직접 호출 금지(Event Bus만).
 6. **Engine 호출은 Agent → Engine Runtime → Engine Adapter → 구현 엔진** 순서로만
    이루어진다. Agent가 Engine Adapter를 직접 부르지 않는다.
 7. **Memory 접근은 Agent → Context Manager → Memory Engine** 순서로만 이루어진다.
@@ -554,6 +596,10 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 9. Memory/Automation은 Agent가 아니라 Core Engine(서비스)이다.
 10. Persistence는 `ProjectRepository`/`AgentRepository`/`EventStore` 인터페이스를
     통해서만 접근한다.
+11. **Project Knowledge 접근은 Agent → Knowledge Provider → Knowledge Search →
+    Knowledge Repository** 순서로만 이루어진다(Milestone 16). Agent는
+    Knowledge Search/Knowledge Repository를 직접 호출하지 않는다 — §8
+    규칙 7(Memory 접근)과 같은 층위이나 완전히 별도의 경로다.
 
 ## 9. 디렉터리 구조와 컴포넌트 매핑
 
@@ -562,7 +608,7 @@ src/ai_workspace/
 ├── domain/            # Project, Mission, Workflow, Task, Step,
 │                       #   WorkspaceSession, Agent, AgentRole, AgentCapability, AgentStatus
 │                       #   (구현됨, T1-14~T1-17)
-├── interfaces/         # 추상 계약 (19종, §7) (구현됨, T1-15~T1-21, M11-T01, M15-T01/T02)
+├── interfaces/         # 추상 계약 (22종, §7) (구현됨, T1-15~T1-21, M11-T01, M15-T01/T02, M16-T01/T02)
 ├── core/              # Workspace Core (WorkspaceSession 관리, Runtime 초기화)
 │                       #   (구현됨, T1-22)
 ├── runtime/           # (Milestone 2 이후)
@@ -571,6 +617,8 @@ src/ai_workspace/
 │   └── workflow/      #   WorkflowRunner: Workflow 순차 자동 실행 (Milestone 12)
 ├── agents/            # 능력별 Agent 구현체 (Milestone 2 이후)
 ├── engines/           # Core Engines 구현 (Task/Workflow/Approval/Automation, Milestone 2 이후)
+│                       #   + knowledge_search.py/knowledge_provider.py
+│                       #   (InMemoryKnowledgeSearch/InMemoryKnowledgeProvider, Milestone 16)
 ├── memory/            # Context Manager + Memory Engine 구현 (Milestone 2 이후)
 ├── events/            # Event Bus + Event Store 구현 (Milestone 2 이후)
 ├── interaction/        # Interaction Layer 구현 (Milestone 3 이후)
@@ -578,7 +626,7 @@ src/ai_workspace/
 │                       #   + local_execution_environment.py (ExecutionEnvironment
 │                       #   구현, Milestone 11)
 ├── storage/           # FileProjectRepository/FileAgentRepository/FileEventStore
-│                       #   (구현됨, T1-23)
+│                       #   (구현됨, T1-23) + FileKnowledgeRepository (Milestone 16)
 └── cli/               # CLI 진입점 (UI Surface의 하나) — main.py (구현됨, T1-24)
 ```
 

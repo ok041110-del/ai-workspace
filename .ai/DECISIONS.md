@@ -950,3 +950,75 @@
   조합으로 증명(M15-T03). Effort/Model 기반 비용 차등, 여러 Task
   누적 예산 추적, 실시간 API 과금 조회는 실제 필요성이 생기기 전까지
   이월한다.
+
+## ADR-0028: Project Knowledge System 도입 (KnowledgeRepository/KnowledgeSearch/KnowledgeProvider, 기존 MemoryEngine과 분리) (Milestone 16)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: 사용자가 "AI가 프로젝트의 구조와 설계 의도를 이해할 수 있는
+  Workspace 전용 Knowledge Layer"를 요청했다(M16 킥오프 프롬프트).
+  설계 검토 결과, `interfaces/memory_engine.py`의 `MemoryEngine`은
+  M1부터 이미 존재하지만 `ContextManager`가 감싸서 **Mission 요약/
+  세션 연속성**(M8-T03)에 쓰는 완전히 다른 개념임을 확인했다. 이름을
+  재사용하면 "세션 기억"(사용자가 명시적으로 범위 밖이라 한 Chat
+  History/Conversation Memory와 가까운 개념)과 "프로젝트 지식"이
+  섞인다고 판단해, 새 이름의 컴포넌트 계열로 분리하기로 사용자가
+  최종 승인했다.
+- 결정:
+  1. `domain/knowledge.py`에 `KnowledgeDocument`(document_id/kind/
+     title/content/source_path)/`KnowledgeKind`(ARCHITECTURE/ADR/
+     RULE/TASK/PROJECT 5종)를 신설한다. 어떤 Provider/Engine도
+     참조하지 않는다.
+  2. `interfaces/knowledge_repository.py`에 `KnowledgeRepository`
+     (`list_all`/`get`, 읽기 전용)를 신설한다.
+     `storage/file_knowledge_repository.py`의 `FileKnowledgeRepository`
+     가 고정 파일→kind 매핑으로 파일 하나를 문서 하나로 노출한다
+     (문단 단위 파싱 없음, YAGNI).
+  3. `interfaces/knowledge_search.py`에 `KnowledgeSearch`(Keyword
+     포함 검색)를 신설한다. `KnowledgeIndexer`(영속 Index 자료구조)는
+     문서 수가 적어(6개 안팎) 성능 문제가 없어 이번 범위에서
+     제외한다(YAGNI, 사용자 승인) — 필요해지면 `KnowledgeSearch`
+     계약은 그대로 두고 구현체만 교체 가능(OCP).
+  4. `interfaces/knowledge_provider.py`에 `KnowledgeProvider`(Agent가
+     의존하는 유일한 진입점)를 신설한다. `ContextManager`가
+     `MemoryEngine`을 감싸는 것과 동일한 패턴이다.
+  5. `CodingAgent`에 선택적 `knowledge_provider` DI를 추가한다.
+     주입 시 `task.title`로 검색한 결과를 `DevelopmentContext.
+     related_knowledge`에 실어 프롬프트에 반영하고, 미주입 시
+     기존과 완전히 동일하게 동작한다.
+  6. `docs/ARCHITECTURE.md` §8 의존성 규칙에 "Agent → Knowledge
+     Provider → Knowledge Search → Knowledge Repository" 경로를
+     신규 추가한다(기존 규칙 7 "Agent → Context Manager → Memory
+     Engine"과 나란히, 완전히 별도의 경로).
+- 대안:
+  - 기존 `MemoryEngine`을 확장해 Project Knowledge까지 다루게 함 —
+    기각. `MemoryEngine.search()`는 세션 요약을 위한 key-value 저장소
+    계약이라, 파일 기반 정적 문서(Markdown)를 다루기엔 계약 자체가
+    맞지 않고, 두 개념을 섞으면 SRP를 위반한다.
+  - `KnowledgeRepository`/`KnowledgeSearch`를 하나의 Interface로
+    통합 — 기각(사용자 명시적 요청: "저장/검색/제공 역할을 명확히
+    분리해야 합니다"). 저장은 "문서가 어디 있는지", 검색은 "어떻게
+    찾는지"로 관심사가 다르며, 향후 검색 알고리즘(예: Semantic
+    Search)만 교체하고 싶을 때 Repository는 그대로 둘 수 있어야
+    한다.
+  - `KnowledgeIndexer`까지 포함해 4개 컴포넌트 전부 구현 — 기각
+    (YAGNI). 현재 문서 수로는 매 검색 시 전체를 훑어도 성능 문제가
+    없고, 증명되지 않은 성능 요구를 앞서 처리하는 것은 프로젝트
+    원칙(YAGNI)에 어긋난다.
+  - Vector/Embedding 기반 Semantic Search 도입 — 기각(사용자 명시적
+    범위 밖). 초기 구현은 Markdown/Keyword/Index 기반으로 충분하며,
+    추후 확장 가능하도록 Interface(`KnowledgeSearch`)만 설계해 둔다.
+- 이유: 저장(Repository)/검색(Search)/제공(Provider) 역할을 분리하면
+  각 역할을 독립적으로 교체할 수 있다(SOLID의 OCP/SRP) — 예를 들어
+  나중에 Semantic Search가 필요해지면 `KnowledgeSearch` 구현체만
+  바꾸면 되고, `KnowledgeRepository`나 Agent 쪽 코드는 전혀 손대지
+  않는다. `KnowledgeProvider`를 Agent의 유일한 의존 지점으로 두면
+  `ContextManager`/`MemoryEngine`과 동일한 패턴이 되어 프로젝트
+  전체의 "Agent는 façade Interface만 안다"는 일관된 설계를 유지한다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.18.0 §3.14(신규)/§7(Interfaces
+  19→22종)/§8(의존성 규칙 11번 신규)/§9에 반영. `CodingAgent`가
+  `knowledge_provider` 주입 시 실제 프로젝트 문서(`docs/
+  ARCHITECTURE.md` 등)의 내용을 검색해 프롬프트에 반영함을 실제
+  `FileKnowledgeRepository` 기반 통합 테스트로 증명(M16-T03).
+  Review/Documentation Agent로의 확장, `KnowledgeIndexer` 도입,
+  Semantic Search는 실제 필요성이 증명되기 전까지 이월한다.

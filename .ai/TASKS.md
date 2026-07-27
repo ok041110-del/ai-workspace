@@ -4939,6 +4939,152 @@ MCP, 외부 Knowledge 연동, Obsidian API 연동, `KnowledgeIndexer`
   Milestone 16 Review).
 - 의존성: M16-T02.
 
+#### M16-T04: 문서화 + Milestone 16 Review
+- 목적: 문서와 구현을 일치시키고 Milestone 종료 승인을 받는다.
+- 작업 내용: `docs/ARCHITECTURE.md`에 신규 §3.14(Knowledge Layer) +
+  §3.6(CodingAgent 한 줄 요약) + §7(Interfaces 19→22종) + §8(의존성
+  규칙 11번 신규) + §9 갱신, `.ai/DECISIONS.md`에 ADR-0028 신규(새
+  최상위 Interface 3개 추가 + 기존 §8 의존성 규칙 확장), `docs/
+  ROADMAP.md`/`.ai/MEMORY.md` 갱신, Review 작성.
+- 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
+- 상태: **DONE (2026-07-27)** — `docs/ARCHITECTURE.md` v0.18.0 신규
+  §3.14(Knowledge Layer — 저장/검색/제공 역할 분리, `MemoryEngine`과
+  다른 개념임을 명시, `KnowledgeIndexer` 제외 근거)/§3.6(`CodingAgent`
+  의 `knowledge_provider` 한 줄 요약)/§7(Interfaces 총 22종,
+  `KnowledgeRepository`/`KnowledgeSearch`/`KnowledgeProvider` 3행
+  추가)/§8(의존성 규칙 11번 "Agent → Knowledge Provider → Knowledge
+  Search → Knowledge Repository" 신규, 규칙 5에도 Knowledge Provider
+  추가)/§9(디렉터리 매핑에 `storage/file_knowledge_repository.py`/
+  `engines/knowledge_search.py`/`engines/knowledge_provider.py`
+  반영). `.ai/DECISIONS.md`에 **ADR-0028**(배경/결정 6개 항목/대안
+  4개/이유/결과) 신규 작성. 아래 "Milestone 16 Review" 절 참고.
+- 의존성: M16-T01~T03.
+
+---
+
+## Milestone 16 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `KnowledgeDocument`/`KnowledgeKind`가 Provider/Engine 독립 | ✅ (M16-T01) |
+| 2 | `KnowledgeRepository`가 프로젝트 문서를 `KnowledgeDocument`로 노출 | ✅ (M16-T01) |
+| 3 | `KnowledgeSearch`가 Keyword 기반으로 검색 | ✅ (M16-T02) |
+| 4 | `KnowledgeProvider`가 Agent의 유일한 진입점 | ✅ (M16-T02) |
+| 5 | `CodingAgent`가 주입 시 Knowledge를 프롬프트에 반영, 미주입 시 하위 호환 | ✅ (M16-T02/T03) |
+| 6 | LLM 호출 없음(side-effect 없는 순수 조회) | ✅ (M16-T01/T02, `KnowledgeSearch`/`KnowledgeProvider` 어디도 EngineRuntime을 참조하지 않음) |
+| 7 | 전체 `pytest`/`ruff`/`mypy` 통과 | ✅ (아래 4절) |
+
+Task List(M16-T01~T04) 전체 완료. 사용자 승인 조건("`KnowledgeIndexer`
+제외", "기존 `MemoryEngine`과 이름·역할 분리", "파일 단위 문서화")
+그대로 충족됨.
+
+**2. Architecture Review**
+
+- **신규 컴포넌트**: `domain/knowledge.py`(`KnowledgeDocument`/
+  `KnowledgeKind`), `interfaces/knowledge_repository.py`
+  (`KnowledgeRepository`), `interfaces/knowledge_search.py`
+  (`KnowledgeSearch`), `interfaces/knowledge_provider.py`
+  (`KnowledgeProvider`), `storage/file_knowledge_repository.py`
+  (`FileKnowledgeRepository`), `engines/knowledge_search.py`
+  (`InMemoryKnowledgeSearch`), `engines/knowledge_provider.py`
+  (`InMemoryKnowledgeProvider`) — 총 7개 신규 소스 파일.
+- **변경된 기존 컴포넌트**: `domain/development_context.py`
+  (`related_knowledge` 필드 추가) + `CodingAgent`(선택적
+  `knowledge_provider` DI).
+- **핵심 설계 결정**: 기존 `MemoryEngine`(세션 연속성)과 이름·역할을
+  완전히 분리했다 — `MemoryEngine`을 확장하는 대신 별도 컴포넌트
+  계열을 신설해, "세션 기억"과 "프로젝트 지식"이라는 서로 다른
+  개념이 하나의 계약 아래 섞이지 않게 했다(SRP). 저장(Repository)/
+  검색(Search)/제공(Provider) 3역할 분리는 향후 검색 알고리즘만
+  교체(예: Semantic Search)할 수 있는 여지를 남긴다(OCP) —
+  `KnowledgeIndexer`는 현재 문서 수(6개 안팎)로는 성능 이점이 없어
+  이번 범위에서 뺐다(YAGNI).
+
+`git diff --stat`(M15 종료 커밋 대비)로 확인한 결과 신규 소스 파일
+7개, 기존 소스 파일 수정 2개(`development_context.py`,
+`coding_agent.py`) — M5(신규 6)보다 넓은, 지금까지 중 가장 넓은
+신규 파일 폭이다. Interface 3개가 한 번에 추가된 것도 M1 이후 처음.
+
+**3. Interface First 원칙 검토**
+
+M16은 **새 최상위 Interface 3개(`KnowledgeRepository`/
+`KnowledgeSearch`/`KnowledgeProvider`)를 추가**했다 — M5(6개 신규
+파일)와 M11(`ExecutionEnvironment`)에 이어 이번까지 중 가장 큰
+Interface 확장이다. 기존 `EngineAdapter`/`EngineRuntime`처럼 계약을
+"확장"한 것이 아니라 완전히 새로운 계층을 추가한 것이라 ADR-0009/
+0015/0026/0027과는 다른 종류의 결정이며, ADR-0017(Context Manager
+도입)·ADR-0025(ExecutionEnvironment 도입)과 같은 "신규 계층 도입"
+계열로 ADR-0028에 기록했다. `docs/ARCHITECTURE.md` §8 의존성
+규칙에도 신규 경로(11번)를 추가해, Agent가 `KnowledgeRepository`/
+`KnowledgeSearch`를 직접 호출하지 못하게 하는 경계를 문서로 명시했다.
+새 매개변수(`knowledge_provider`)는 기본값이 있는 키워드 전용
+인자라 기존 호출부와 100% 호환된다.
+
+**4. 테스트 결과**
+
+- `pytest`: **532개 전부 통과**(M15 완료 시점 511개 → M16에서 21개
+  신규: M16-T01 +8, M16-T02 +10, M16-T03 +3)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(신규 소스 파일 7개 포함, `storage/
+  llm_policy_loader.py`의 `types-PyYAML` 미설치 경고 1건은 M16 이전
+  부터 존재하는 무관한 항목)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M16 범위 밖으로 명시적으로 제외한 것(사용자 확정, 계속 이월)*
+- **`KnowledgeIndexer`(영속 Index)** — 문서 수가 적어 성능 문제가
+  없어 제외(YAGNI). 문서량이 커지면 재검토.
+- **Chat History/Conversation Memory/User Profile Memory** — 사용자
+  확정 범위 밖, 기존 `MemoryEngine`의 책임 영역이며 M16과 무관.
+- **Vector/Embedding/Semantic Search/RAG/MCP/외부 Knowledge 연동/
+  Obsidian API 연동** — 사용자 확정 범위 밖.
+- **Review/Documentation Agent로의 `knowledge_provider` 확장** —
+  이번엔 `CodingAgent` 하나에만 적용(M12/M13과 동일한 MVP 원칙,
+  YAGNI). 실제 필요성이 증명되면 후속 Milestone에서 확장.
+
+*계속 이월되는 기존 항목*
+- Effort 라우팅, `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임
+  워크 미통합, Codex/Gemini 실연동 미검증, `MemoryEngine.search()`
+  선형 스캔, 여러 Task에 걸친 누적 예산 추적, 예산 초과 시 Approval
+  흐름, Retry Backoff/Persistent Runtime Recovery/Approval 비동기
+  처리/Process Timeout 정책 고도화, `ShellAgent` 화이트리스트 코드
+  고정.
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M16-T01~T04 상세 섹션) / `docs/ROADMAP.md`
+(M16 Task List·목표·DoD 반영) / `docs/ARCHITECTURE.md`(v0.18.0, 신규
+§3.14/§3.6/§7/§8/§9 갱신) / `.ai/DECISIONS.md`(ADR-0028 신규) 완료.
+`pyproject.toml` 버전은 v0.5.0 그대로 유지(ADR-0024 기준선 — 새
+Interface 3개 추가는 M5/M11/ADR-0017과 같은 종류의 "신규 계층 도입"
+이라 기준선 재선언 대상은 아니라고 판단했으나, Interface 수가 크게
+늘어난 만큼 다음 기준선 재검토 시점에 M16까지의 누적 변화를 함께
+검토할 필요가 있다). `.ai/MEMORY.md`는 이 Review 승인 직후 M1~M15와
+동일한 방식으로 압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 7/
+수정 2 소스 파일, "MemoryEngine과 이름·역할 분리 + 저장/검색/제공
+3역할 분리" 설계 결정 명시), Interface First 검토 완료(3절, 새
+Interface 3개를 "신규 계층 도입" 계열 ADR로 투명하게 기록), 테스트
+결과 문서화 완료(4절), Technical Debt 정리 완료(5절), 문서 갱신
+완료(6절) — 6개 조건 모두 만족. Review 중 코드 변경이 필요한 치명적
+문제(버그·계약 위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 16 Completed를 선언한다.**
+
+**Milestone 17 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
+않았다. 사용자가 예고한 다음 단계는 자동 AI 선택(Selection Policy)
+이며, `KnowledgeProvider`를 통해 프로젝트 규칙·설계 정보를 참조할
+수 있는 기반이 이번 Milestone으로 마련됐다 — 다만 이는 사전 논의
+없이 확정된 것이 아니며, Milestone 17은 착수 시점에 이 문서에
+목표/DoD/Task List를 새로 정의한다(Task Driven Development 원칙,
+M2~M16이 그래왔듯).
+
 ---
 
 ## 진행 로그
