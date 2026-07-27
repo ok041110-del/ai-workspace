@@ -5077,6 +5077,8 @@ Interface 3개를 "신규 계층 도입" 계열 ADR로 투명하게 기록), 테
 
 **사용자 승인을 조건으로 Milestone 16 Completed를 선언한다.**
 
+**Milestone 16 종료 — 2026-07-27 사용자 승인.**
+
 **Milestone 17 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
 않았다. 사용자가 예고한 다음 단계는 자동 AI 선택(Selection Policy)
 이며, `KnowledgeProvider`를 통해 프로젝트 규칙·설계 정보를 참조할

@@ -500,6 +500,38 @@
   예산 초과 시 Approval 흐름, 실제 API 과금 조회는 신규 이월 후보로
   기록했으나 전부 "사용자가 이번 범위에서 의도적으로 제외"한 항목이라
   기존 5개 부채 목록에는 추가하지 않음).
+- **Milestone 16(Project Knowledge System) 완료 — 2026-07-27
+  사용자 승인.** 목표는 "프로젝트 기존 문서(ARCHITECTURE/DECISIONS/
+  RULES/TASKS/ROADMAP/PRD)를 Workspace 전용 Knowledge로 노출하고
+  Agent가 Keyword 검색으로 참고하게 한다"(MVP, Provider/Engine
+  독립). **핵심 설계 결정**: `interfaces/memory_engine.py`의
+  `MemoryEngine`(M1부터 존재, `ContextManager`가 감싸 Mission 요약/
+  세션 연속성에 사용)은 완전히 다른 개념이라 손대지 않고, 새 이름의
+  컴포넌트 계열(`KnowledgeRepository`/`KnowledgeSearch`/
+  `KnowledgeProvider`)을 신설(신규 **ADR-0028**). `domain/knowledge.py`
+  에 `KnowledgeDocument`/`KnowledgeKind`(ARCHITECTURE/ADR/RULE/TASK/
+  PROJECT 5종, Provider 독립), `storage/file_knowledge_repository.py`
+  의 `FileKnowledgeRepository`가 고정 파일→kind 매핑으로 파일 하나를
+  문서 하나로 노출(문단 파싱 없음, YAGNI). `engines/knowledge_search.py`
+  의 `InMemoryKnowledgeSearch`(Keyword 포함 검색, `KnowledgeIndexer`는
+  문서 수가 적어 이번 범위에서 제외), `engines/knowledge_provider.py`
+  의 `InMemoryKnowledgeProvider`(Agent의 유일한 진입점, `ContextManager`
+  가 `MemoryEngine`을 감싸는 것과 동일한 패턴). `domain/
+  development_context.py`에 `related_knowledge` 필드 추가.
+  `CodingAgent`에 선택적 `knowledge_provider` DI 추가 — 실제
+  `docs/ARCHITECTURE.md`에 등장하는 키워드로 검색한 결과가 실행
+  프롬프트에 그대로 반영됨을 실제 `FileKnowledgeRepository`(프로젝트
+  루트) 기반 통합 테스트로 증명(M16-T03). 새 소스 파일 7개(domain 1·
+  interfaces 3·storage 1·engines 2), 기존 파일 수정 2개
+  (`development_context.py`/`coding_agent.py`) — M5(신규 6)보다 넓은,
+  지금까지 중 가장 넓은 신규 파일 폭. 전체 `pytest` 532개(M15 완료
+  511개 → M16에서 21개 신규) 통과, `ruff`/`mypy` 클린. **새 최상위
+  Interface 3개**(`KnowledgeRepository`/`KnowledgeSearch`/
+  `KnowledgeProvider`) 추가 — M1 이후 가장 큰 Interface 확장,
+  ADR-0017/0025와 동일한 "신규 계층 도입" 계열로 ADR-0028 기록.
+  이월 부채는 M15와 동일하게 유지(신규 이월 없음 — Review/
+  Documentation Agent로의 확장, `KnowledgeIndexer`, Semantic
+  Search는 전부 "사용자가 이번 범위에서 의도적으로 제외"한 항목).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -647,6 +679,7 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR-0025 | **ExecutionEnvironment**를 새 최상위 Layer 대신 `EngineAdapter` 하위 인터페이스로 도입, DI 기본 방향 | 승인됨 |
 | ADR-0026 | `EngineAdapter`/`EngineRuntime`에 `model` 파라미터 확장(Model 라우팅, `ClaudeCodeEngineAdapter`만 적용) | 승인됨 |
 | ADR-0027 | `EngineRuntime`에 `estimate_cost()` 추가 + `BudgetPolicyEngine` 신설(Token & Cost Optimization) | 승인됨 |
+| ADR-0028 | Project Knowledge System 도입(`KnowledgeRepository`/`KnowledgeSearch`/`KnowledgeProvider`), 기존 `MemoryEngine`과 분리 | 승인됨 |
 
 기술 스택(Python, dataclasses, 파일 기반 저장, CLI, 인메모리 Event Bus+파일
 Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
@@ -684,13 +717,15 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-27)**: Milestone 1~15 전체 완료(사용자 승인).
-  Milestone 16(Project Knowledge System/Memory Engine)은 착수
-  시점(Task Driven Development 원칙, 목표/DoD/Task List는 착수 시
-  새로 정의). 버전 v0.5.0 유지(ADR-0024 기준선 — M15까지의 변경은
-  전부 기존 계약 위에서의 추가·확장이거나 그와 동급의 신규 Interface
-  1개 추가라 기준선 재선언 대상이 아님). `pytest` 511개, `ruff`/`mypy`
-  클린.
+- **현재 상태(2026-07-27)**: Milestone 1~16 전체 완료(사용자 승인).
+  Milestone 17(Intelligent Engine Selection)은 착수 시점(Task
+  Driven Development 원칙, 목표/DoD/Task List는 착수 시 새로 정의).
+  버전 v0.5.0 유지(ADR-0024 기준선 — M16까지의 변경은 전부 기존
+  계약 위에서의 추가·확장이거나 M5/M11/M17과 같은 "신규 계층 도입"
+  계열이라 기준선 재선언 대상이 아니라고 판단했으나, M16에서
+  Interface가 19→22종으로 크게 늘어난 만큼 다음 기준선 재검토 시점에
+  M16까지의 누적 변화를 함께 검토할 필요가 있음). `pytest` 532개,
+  `ruff`/`mypy` 클린.
 - **이 환경의 제약(2026-07-26 확인)**: `claude` CLI만 설치되어 있고
   `codex`/`gemini` CLI는 설치되어 있지 않다(`which` 확인). Codex/Gemini
   관련 Task는 이 세션에서 실행 불가 — 실제 CLI가 설치된 환경이 필요하다.
