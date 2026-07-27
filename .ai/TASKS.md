@@ -5948,11 +5948,41 @@ Approval UI, 사용자 인증/권한 관리.
 | M20-T02 | 실행 계층과 Dashboard 연결(`ExecutionDispatcher` Event 발행 + `InMemoryDashboardRepository` 구독) | **완료** |
 | M20-T03 | Read Model 및 ViewModel(`DashboardService` + `DashboardViewModel`) | **완료** |
 | M20-T04 | 서버 런타임 구축(`workspace start`, FastAPI app 골격) | **완료** |
-| M20-T05 | API 및 Web UI(REST 라우터 + WebSocket + 정적 UI) | 진행 예정 |
+| M20-T05 | API 및 Web UI(REST 라우터 + WebSocket + 정적 UI) | **완료** |
 | M20-T06 | 전체 흐름 검증(End-to-End 통합 테스트 + 의존성 검증) | 진행 예정 |
 | M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
 
-**진행 상태**: M20-T01~T04 완료. M20-T05 진행 중.
+**진행 상태**: M20-T01~T05 완료. M20-T06 진행 예정.
+
+#### M20-T05: API 및 Web UI
+- 상태: **DONE (2026-07-27)** — `web/routes.py`에 `/api/dashboard`
+  (5개 영역 전체), `/api/summary`(목록류 제외 요약), `/api/history`
+  (`limit` 쿼리 파라미터), `/api/engines` 4개 REST 엔드포인트 추가.
+  `web/dashboard_broadcaster.py`의 `DashboardBroadcaster`가
+  `EventBus`를 구독해(`register_event_bus`) 연결된 WebSocket마다
+  최신 `DashboardViewModel` 스냅샷을 민다 — 연결 시점에
+  `asyncio.get_running_loop()`를 캡처해 두고 동기 이벤트 핸들러에서
+  `loop.call_soon_threadsafe()`로 비동기 전송을 예약하는 방식으로
+  동기 `EventBus.publish()` → 비동기 WebSocket 전송 경계를 넘김.
+  `web/app.py`에 `/ws/dashboard` 엔드포인트와 라우터 등록, 정적
+  파일(`web/static/`) 마운트 추가. `web/static/index.html` +
+  `style.css`(다크 테마, CSS Grid) + `app.js`(정적 HTML/CSS/Vanilla
+  JS, 빌드 도구 없음) — `app.js`는 `/api/dashboard`로 초기 상태를
+  가져오고 `/ws/dashboard`로 실시간 갱신을 수신하며, 현재 시각과
+  경과 시간(`현재 시각 - started_at`)은 브라우저에서 1초마다
+  `setInterval`로 직접 계산(서버 Polling 없음, 사용자 설계 원칙
+  준수). 단위 테스트 12개 신규(`test_routes.py` 4개 — REST 응답
+  스키마, `test_dashboard_broadcaster.py` 3개 — WebSocket 최초
+  스냅샷 수신/이벤트 후 갱신 수신/무관한 이벤트 무시,
+  `TestClient.websocket_connect()`로 실제 WebSocket 핸드셰이크
+  검증). `FastAPI`의 `response_model`이 stdlib `@dataclass`
+  (`DashboardViewModel` 등, Pydantic `BaseModel` 아님)를 문제없이
+  직렬화함을 실제 테스트로 확인. `pytest`(631개), `ruff`,
+  `mypy --python-executable`(119개 파일) 통과. `TestClient`로
+  `build_app()`이 만든 실제 앱에서 `/`, `/app.js`, `/style.css`,
+  `/api/dashboard`가 모두 정상 응답함을 수동 검증. 다음 Task:
+  **M20-T06**(전체 흐름 검증).
+- 의존성: M20-T04.
 
 #### M20-T04: 서버 런타임 구축
 - 상태: **DONE (2026-07-27)** — `pyproject.toml`에 첫 런타임 의존성

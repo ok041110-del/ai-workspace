@@ -1,0 +1,46 @@
+body {
+  font-family: -apple-system, "Malgun Gothic", sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #0f1115;
+  color: #e6e6e6;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #2a2d34;
+}
+
+main {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+section {
+  background: #171a21;
+  border: 1px solid #2a2d34;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+h2 {
+  margin-top: 0;
+  font-size: 1rem;
+  color: #9aa0aa;
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+li {
+  padding: 0.25rem 0;
+  border-bottom: 1px solid #23262d;
+}

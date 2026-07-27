@@ -25,7 +25,7 @@ def build_app(*, project_name: str | None = None) -> FastAPI:
         event_bus=event_bus, project_name=project_name
     )
     dashboard_service = DashboardService(dashboard_repository=dashboard_repository)
-    return create_app(dashboard_service=dashboard_service)
+    return create_app(dashboard_service=dashboard_service, event_bus=event_bus)
 
 
 def run_server(

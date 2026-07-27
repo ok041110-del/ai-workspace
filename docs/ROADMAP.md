@@ -851,11 +851,11 @@ Dashboard(CQRS Read Model)를 구축한다. FastAPI+uvicorn(신규 런타임
 | M20-T02 | 실행 계층과 Dashboard 연결 | **완료** |
 | M20-T03 | Read Model 및 ViewModel | **완료** |
 | M20-T04 | 서버 런타임 구축 | **완료** |
-| M20-T05 | API 및 Web UI | 진행 예정 |
+| M20-T05 | API 및 Web UI | **완료** |
 | M20-T06 | 전체 흐름 검증 | 진행 예정 |
 | M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
 
-**진행 상태**: M20-T01~T04 완료, M20-T05 진행 중.
+**진행 상태**: M20-T01~T05 완료, M20-T06 진행 예정.
 
 ---
 

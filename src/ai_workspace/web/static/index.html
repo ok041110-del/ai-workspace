@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>AI Workspace Dashboard</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Workspace Dashboard</h1>
+    <div id="clock">--:--:--</div>
+  </header>
+
+  <main>
+    <section id="workspace">
+      <h2>Workspace 현황</h2>
+      <p>프로젝트: <span id="project-name">-</span></p>
+      <p>현재 작업: <span id="current-task">-</span></p>
+      <p>상태: <span id="workspace-status">-</span></p>
+      <p>경과 시간: <span id="elapsed-time">-</span></p>
+    </section>
+
+    <section id="engines">
+      <h2>엔진 현황</h2>
+      <ul id="engine-list"></ul>
+    </section>
+
+    <section id="execution-stats">
+      <h2>실행 현황</h2>
+      <ul id="stats-list"></ul>
+    </section>
+
+    <section id="history">
+      <h2>최근 실행 내역</h2>
+      <ul id="history-list"></ul>
+    </section>
+
+    <section id="reliability">
+      <h2>안정성 현황</h2>
+      <ul id="reliability-list"></ul>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
