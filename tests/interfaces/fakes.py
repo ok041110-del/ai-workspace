@@ -4,6 +4,7 @@ import itertools
 from collections.abc import Callable
 
 from ai_workspace.domain.agent import Agent, AgentCapability, AgentRole, AgentStatus
+from ai_workspace.domain.budget import Budget, BudgetDecision
 from ai_workspace.domain.llm_policy import LLMPolicyDecision
 from ai_workspace.domain.project import Project
 from ai_workspace.domain.session import WorkspaceSession
@@ -32,6 +33,7 @@ from ai_workspace.interfaces.automation_engine import (
     TriggerNotBoundError,
     TriggerNotFoundError,
 )
+from ai_workspace.interfaces.budget_policy_engine import BudgetPolicyEngine
 from ai_workspace.interfaces.context_manager import ContextManager, SnapshotNotFoundError
 from ai_workspace.interfaces.engine_adapter import (
     CostEstimate,
@@ -400,6 +402,12 @@ class FakeEngineRuntime(EngineRuntime):
             results.append(result)
         return results
 
+    def estimate_cost(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> CostEstimate:
+        adapter = self._select(required_capabilities)
+        return adapter.estimate_cost(task)
+
     def cancel(self, task_id: str) -> None:
         if task_id not in self._task_status:
             raise EngineTaskNotFoundError(task_id)
@@ -584,3 +592,23 @@ class FakeLLMPolicyEngine(LLMPolicyEngine):
 
     def select(self, role: AgentRole) -> LLMPolicyDecision | None:
         return self._rules.get(role)
+
+
+class FakeBudgetPolicyEngine(BudgetPolicyEngine):
+    def __init__(self, budget: Budget | None = None) -> None:
+        self._budget = budget
+
+    def check(self, estimate: CostEstimate) -> BudgetDecision:
+        if self._budget is None:
+            return BudgetDecision(allowed=True)
+        if (
+            self._budget.max_tokens is not None
+            and estimate.estimated_tokens > self._budget.max_tokens
+        ):
+            return BudgetDecision(allowed=False, reason="max_tokens exceeded")
+        if (
+            self._budget.max_cost_usd is not None
+            and estimate.estimated_cost_usd > self._budget.max_cost_usd
+        ):
+            return BudgetDecision(allowed=False, reason="max_cost_usd exceeded")
+        return BudgetDecision(allowed=True)
