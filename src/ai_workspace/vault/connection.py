@@ -3,7 +3,13 @@
 M23까지 `vault_root`는 항상 호출자가 넘겨주는 `Path`였다(단위 테스트의
 `tmp_path`, 통합 테스트가 직접 계산한 실제 경로). 이 모듈은 "실제
 Obsidian Vault"를 안정적으로 찾고, 연결 가능 여부(존재/디렉터리 여부/
-쓰기 권한)를 검증하는 표준 진입점을 제공한다."""
+쓰기 권한)를 검증하는 표준 진입점을 제공한다.
+
+Milestone 26(Obsidian Vault Root Refactoring)부터 **Vault Root == 이
+Git 저장소의 Root**다(Git Vault Sync/Obsidian Mobile·macOS가 요구하는
+"Vault == Repository Root" 조건). 그래서 별도 하위 경로를 찾는 대신,
+Vault Root에만 존재하는 표식 파일(`00 System/PROJECT_INDEX.md`)이 있는
+첫 조상 디렉터리를 Vault Root로 판단한다."""
 
 from __future__ import annotations
 
@@ -11,7 +17,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-_DEFAULT_RELATIVE_VAULT_PATH = Path("Vault") / "01 Projects" / "AI Workspace"
+_VAULT_ROOT_MARKER = Path("00 System") / "PROJECT_INDEX.md"
 
 
 class VaultConnectionError(RuntimeError):
@@ -26,16 +32,15 @@ class VaultConnection:
 
 def resolve_default_vault_root(start: Path | None = None) -> Path:
     """`start`(기본값: 현재 작업 디렉터리)에서 상위로 올라가며
-    `Vault/01 Projects/AI Workspace`가 실제로 존재하는 첫 조상 경로를
-    찾는다. 이 저장소의 루트 위치를 가정하지 않는다."""
+    `00 System/PROJECT_INDEX.md`(Vault Root 표식)가 실제로 존재하는
+    첫 조상 경로를 찾는다. 이 저장소의 루트 위치를 가정하지 않는다."""
     current = (start or Path.cwd()).resolve()
     for candidate in (current, *current.parents):
-        candidate_vault = candidate / _DEFAULT_RELATIVE_VAULT_PATH
-        if candidate_vault.is_dir():
-            return candidate_vault
+        if (candidate / _VAULT_ROOT_MARKER).is_file():
+            return candidate
     raise VaultConnectionError(
         f"'{current}'의 상위 경로 어디에서도 "
-        f"'{_DEFAULT_RELATIVE_VAULT_PATH}'를 찾지 못했습니다."
+        f"'{_VAULT_ROOT_MARKER}'를 찾지 못했습니다."
     )
 
 

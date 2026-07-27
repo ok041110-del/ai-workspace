@@ -1259,3 +1259,61 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   선언은 M23/M24와 동일하게 사용자의 별도 확인을 거쳐야 하므로
   이번 턴에서는 선언하지 않음** — Task List(T01~T05)만 구현
   완료로 기록.
+- **중대 발견: M23~M25 전체가 feature branch에만 존재하고 한 번도
+  merge되지 않았음(2026-07-27, 사용자 보고 — 로컬 Obsidian이
+  Vault를 "1개 파일, 0개 폴더"로 표시)**. 확인 결과 `claude/
+  m23-t01-reading-profiles-pmnpue`가 `origin`에 push는 돼 있었지만
+  PR이 한 번도 생성/병합된 적이 없었다. 저장소에 `main`은 존재하지
+  않고, 과거 병합된 PR 2건 모두 `claude/ai-workspace-docs-setup-
+  aj3jvo`를 base로 사용해 그것이 실질적 default 브랜치임을 확인.
+  **조치**: (1) 비교 — base는 이 브랜치가 갈라진 뒤 커밋 0개(behind
+  0), 43개 파일/+3671·-70줄/12커밋의 순수 선형 연장선. (2) 충돌
+  분석 — `git merge-base --is-ancestor`로 fast-forward 가능 확인
+  + 로컬 dry-run 병합(`--no-commit --no-ff`)으로 충돌 0건 확인.
+  (3) PR #3 생성(Merge 안전성 검토 + Test plan 포함). (4) 사용자
+  승인 후 `merge` 방식으로 병합(커밋 `4882fc4`). (5) 병합된 base
+  브랜치로 로컬 checkout을 재설정(`git checkout -B claude/m23-t01-
+  reading-profiles-pmnpue origin/claude/ai-workspace-docs-setup-
+  aj3jvo`, 이 세션의 지정 브랜치가 이미 병합된 경우 default 브랜치
+  기준으로 재시작하는 규칙을 따름) 후 `pytest`(46개)/실제 Vault
+  Backlink·Frontmatter 재검증 — merge 전후 완전히 동일함을 확인.
+  **Milestone 23/24/25 전부 최종 Completed로 확정.** 로컬 Obsidian
+  이 여전히 비어 보인다면, 그 앱이 여는 Vault 폴더가 `claude/
+  ai-workspace-docs-setup-aj3jvo` 브랜치를 반영하는 clone인지
+  사용자가 직접 확인해야 한다(이 세션은 사용자의 로컬 파일시스템에
+  접근할 수 없음).
+- **Milestone 26(Obsidian Vault Root Refactoring) M26-T01 구현
+  완료(2026-07-27, ADR-0037, 사용자 요청)**. Git Vault Sync(iOS)/
+  Obsidian Mobile·macOS가 요구하는 "Vault == Repository Root"
+  조건을 만족시키기 위해 `Vault/01 Projects/AI Workspace/`의 15개
+  디렉터리(`00 System`~`13 Daily`, `99 Templates`)를 전부 `git mv`
+  로 저장소 root에 승격(History Rename으로 보존, Delete+Create
+  아님), 이제 필요 없는 PARA 뼈대(`Vault/00 Inbox`/`02 Resources`/
+  `03 Archives`, `.gitkeep`만 있던 빈 폴더)는 제거. 사용자가 이
+  Task를 "M24-T01"로 불렀지만 그 ID는 이미 완료된 Milestone 24의
+  다른 Task가 쓰고 있어 **Milestone 26/M26-T01로 새로 번호를
+  매김**(기존 기록 보존, 투명하게 보고).
+  **핵심 발견**: `vault/mapping.py`가 ADR-0035부터 이미
+  `vault_root` 기준 상대 경로로 설계돼 있었고 Backlink도 전부
+  Wikilink(파일명 기준)라, "Vault Root를 옮긴다"는 근본적 변경이
+  실제로는 `vault/connection.py`(Vault Root 표식 파일 `00 System/
+  PROJECT_INDEX.md` 기준 탐색으로 재작성) 1개 파일 교체 수준으로
+  끝남. **부수 발견·수정**: `vault_root`가 저장소 root와 같아지며
+  제한 없는 `rglob("*.md")`가 `docs/`/`.claude/`/`.agents/`의
+  마크다운(특히 서드파티 Skill 문서 수백 개)까지 Validation에
+  끌어들이는 잠재 버그를 미리 발견해, 신규 `VAULT_CONTENT_
+  DIRECTORIES`(15종, `mapping.py`)로 `validation.py`/`sync.py`의
+  스캔 범위를 명시적으로 제한. `tests/vault/`(Mock) 9개 fixture를
+  새 스캔 범위(파일이 `00 System/` 등 실제 폴더 이름 아래 있어야
+  함)에 맞춰 조정(assertion은 무변경), `tests/integration/
+  test_m23_vault_environment_integration.py`/`test_m24_real_vault_
+  e2e.py`가 저장소 root를 직접 Vault Root로 쓰도록 갱신. `.ai/
+  TASKS.md`/`.ai/DECISIONS.md`의 **기존 역사적 기록은 소급 수정하지
+  않음**(그 시점엔 실제로 맞는 경로였음 — 대신 이 항목으로 전환
+  시점을 명시). 실제 Vault(34개 파일) 재검증 결과 Backlink 9건
+  (전부 기존에 알려진 프롬프트 예시 텍스트, 신규 0건)/Missing
+  tags 0건. `poetry run ruff`/`mypy`/`pytest`(46개) 전부 통과.
+  `.obsidian/`은 이 세션이 Obsidian을 실행할 수 없어 만들지 않음
+  (Obsidian이 처음 열 때 자동 생성). **Milestone 26 자체의
+  "Completed" 선언은 이전 Milestone들과 동일하게 사용자의 최종
+  확인을 거친다.**

@@ -1898,3 +1898,79 @@
   테스트 종료 시 스스로 정리해 실제 Vault에는 영구 변경을 남기지
   않는다. `docs/ARCHITECTURE.md` §3.21 갱신, Vault `Vault
   Integration Architecture.md`에 반영.
+
+## ADR-0037: Obsidian Vault Root Refactoring — Vault Root를 저장소 Root로 승격, `Vault/01 Projects/AI Workspace` 계층 제거 (Milestone 26)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: 사용자가 로컬 Obsidian 앱에서 이 저장소의 Vault를 열려고
+  했을 때, Git Vault Sync(iOS)/Obsidian Mobile·macOS가 공통으로
+  요구하는 "Vault == Repository Root" 조건을 `Vault/01 Projects/
+  AI Workspace/`처럼 저장소 하위에 중첩된 구조가 만족하지 못한다는
+  점이 드러났다. 또한 AI Workspace가 "프로젝트 하나 = 저장소 하나
+  = Vault 하나" 전략(여러 프로젝트를 하나의 저장소/Vault 아래
+  두지 않는 구조)으로 갈 것이 확정되면서, 애초에 여러 프로젝트를
+  가정한 PARA 4단 구조(`00 Inbox`/`01 Projects`/`02 Resources`/
+  `03 Archives`)도 더 이상 맞지 않게 됐다.
+- 결정:
+  1. `Vault/01 Projects/AI Workspace/` 아래 15개 디렉터리(`00
+     System`~`13 Daily`, `99 Templates`)를 `git mv`로 저장소 root로
+     승격한다(파일별 History가 Rename으로 보존됨, Delete+Create
+     방식 미사용).
+  2. 비어 있던 PARA 뼈대(`Vault/00 Inbox/.gitkeep`, `Vault/02
+     Resources/.gitkeep`, `Vault/03 Archives/.gitkeep`)와 이제
+     완전히 빈 `Vault/`/`Vault/01 Projects/` 디렉터리는 제거한다
+     (다시 필요해지면 그때 새로 만든다 — YAGNI).
+  3. `vault/connection.py`의 `resolve_default_vault_root()`가 더
+     이상 `Vault/01 Projects/AI Workspace` 하위 경로를 찾지 않고,
+     Vault Root에서만 존재하는 표식 파일(`00 System/PROJECT_INDEX.md`)
+     이 있는 첫 조상 디렉터리를 찾도록 바꾼다 — Vault Root와 저장소
+     root가 이제 같으므로 자연스럽게 일치한다.
+  4. `vault/mapping.py`의 `VAULT_DIRECTORY_MAP` 상대 경로(`"03 ADR/
+     ADR Index.md"` 등)는 처음부터 `vault_root` 기준 상대 경로였기
+     때문에 **변경하지 않는다** — 이 설계(ADR-0035)가 이번 리팩토링을
+     사실상 무비용으로 만들었다.
+  5. `vault/validation.py`(`_iter_markdown_files`)와 `vault/sync.py`
+     (`_iter_vault_markdown_files`, 신규)가 `rglob("*.md")`를
+     `vault_root` 전체가 아니라 새로 정의한 `VAULT_DIRECTORY_MAP`
+     의 형제 상수 `VAULT_CONTENT_DIRECTORIES`(15종)로 제한하도록
+     바꾼다 — `vault_root`가 저장소 root와 같아진 이상, 제한 없는
+     `rglob`은 `docs/`/`.claude/`/`.agents/`의 마크다운까지
+     Backlink/Tag Validation에 끌어들여 결과를 오염시키기 때문이다.
+  6. Backlink는 `[[Wikilink]]`(파일명 기준, 위치 무관) 방식만
+     쓰고 있음을 재확인했다 — 이번 이동으로 Wikilink는 전혀 깨지지
+     않는다. Vault 안에 마크다운 스타일 상대경로 링크(`[텍스트]
+     (경로)`)가 있는지 전수 검색한 결과 0건이라, "Broken Link 0건"
+     조건이 애초에 이동 자체로는 위협받지 않았다.
+  7. `.obsidian/`은 이번에 만들지 않는다 — 이 세션은 Obsidian 앱을
+     실행할 수 없고, Obsidian이 저장소 root를 Vault로 처음 열 때
+     자동 생성하는 파일이라 미리 만들 근거가 없다(추측성 설정 파일
+     생성 금지).
+- 대안:
+  - `Vault/` 한 단계만 남기고(`Vault/AI Workspace/` 등) `01
+    Projects` 계층만 제거 — 기각. "Vault == Repository Root"
+    조건은 중첩 자체를 허용하지 않는다.
+  - PARA 4단 구조(`00 Inbox`/`02 Resources`/`03 Archives`)를
+    유지 — 기각. AI Workspace가 다중 프로젝트를 한 Vault에 담는
+    구조를 포기하기로 한 이상(배경 참고), 그 구조를 위해 만든
+    빈 뼈대를 남겨 둘 이유가 없다.
+  - `vault/validation.py`/`sync.py`의 스캔 범위를 계속 `vault_root`
+    전체로 유지 — 기각. `vault_root`가 저장소 root와 같아진 순간
+    이 가정이 깨지므로, 범위를 명시적으로 좁히지 않으면 Validation
+    결과가 신뢰할 수 없어진다.
+- 이유: `vault/mapping.py`의 상대 경로 설계(ADR-0035)와 `[[Wikilink]]`
+  전용 Backlink 관행(AI_RULES) 덕분에, "Vault Root를 옮긴다"는
+  근본적인 구조 변경이 실제로는 `connection.py` 1개 파일의 탐색
+  로직 교체 + Validation 스캔 범위 제한 정도로 끝났다 — 처음부터
+  경로를 하드코딩하지 않고 상대 경로/파일명 기준으로 설계해 둔
+  이전 결정들이 이번 리팩토링의 위험을 크게 낮췄다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.32.0 §3.21에 Milestone 26
+  구현 상태 반영, Vault `Vault Integration Architecture.md`에도
+  동일하게 반영. `vault/connection.py`(교체)/`mapping.py`(상수
+  추가, 로직 무변경)/`validation.py`/`sync.py`(스캔 범위 제한) 수정.
+  `tests/vault/`(Mock) 46개 중 새 스캔 범위에 맞춰 9개 fixture를
+  조정(assertion·검증 대상 함수는 그대로, fixture 파일 위치만
+  `00 System/` 하위로 이동), `tests/integration/test_m23_vault_
+  environment_integration.py`/`test_m24_real_vault_e2e.py`가
+  저장소 root를 직접 Vault Root로 쓰도록 갱신. 새 Interface 없음
+  (27종 그대로).

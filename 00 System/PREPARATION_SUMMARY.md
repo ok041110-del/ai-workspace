@@ -63,7 +63,8 @@ M23-Preparation(Obsidian Knowledge Base 구축, T01~T07 + T01A~T01C)
   기준, M20/M21에서 2종 추가 후 M22는 추가 없음). v0.5.0 아키텍처
   기준선(ADR-0024) 이후 구조 변경 없이 기능만 확장.
 - **지식 관리**: M23-Preparation으로 GitHub Source of Truth를
-  요약+링크로 Index화한 Obsidian Vault(`Vault/`, 30개 문서) 구축
+  요약+링크로 Index화한 Obsidian Vault(30개 문서 — Milestone 26부터
+  이 저장소 root 자체가 Vault Root) 구축
   완료. Retrieval/Prompt/Template/Execution 4개 효율화 원칙 도입.
 - **문서 버전**: `docs/ARCHITECTURE.md` v0.25.0, `docs/ROADMAP.md`
   v0.26.0.

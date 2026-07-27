@@ -10,6 +10,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from ai_workspace.vault.mapping import VAULT_CONTENT_DIRECTORIES
+
 _BACKLINK_PATTERN = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
 _TAGS_LINE_PATTERN = re.compile(r"^tags:\s*\[.*\]\s*$", re.MULTILINE)
 
@@ -21,7 +23,16 @@ class VaultValidationIssue:
 
 
 def _iter_markdown_files(vault_root: Path) -> list[Path]:
-    return sorted(p for p in vault_root.rglob("*.md"))
+    """`vault_root` 바로 아래 Vault 콘텐츠 디렉터리(15종)만 스캔한다.
+    Milestone 26부터 `vault_root`가 저장소 root와 같아서, 무조건
+    `rglob("*.md")`를 하면 `docs/`/`.claude/`/`.agents/` 등 Vault가
+    아닌 마크다운까지 걸려 Backlink/Tag Validation을 오염시킨다."""
+    files: list[Path] = []
+    for name in VAULT_CONTENT_DIRECTORIES:
+        directory = vault_root / name
+        if directory.is_dir():
+            files.extend(directory.rglob("*.md"))
+    return sorted(files)
 
 
 def _document_titles(vault_root: Path) -> set[str]:

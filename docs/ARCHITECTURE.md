@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.31.0 |
+| 문서 버전 | v0.32.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed(T01~T07 + Verification). **Milestone 24(Real Obsidian Vault Integration) 진행 중** — ADR-0036으로 §3.21 Vault Integration Layer에 Connection/Filesystem Adapter/Atomic Write 추가, Auto Save Validation을 Incremental로 전환. 새 Interface 없이 27종 유지) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. **Milestone 26(Obsidian Vault Root Refactoring) — ADR-0037: Obsidian Vault Root가 이 저장소 root로 승격됨**(Vault == Repository Root, `Vault/01 Projects/AI Workspace/` 15개 디렉터리를 `git mv`로 저장소 root에 이동, PARA 뼈대 제거). 새 Interface 없이 27종 유지) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -874,7 +874,8 @@ Configuration      Lifecycle Manager      Health Monitor
 
 ### 3.21 Vault Integration Layer (Milestone 23, ADR-0035, M23-T02 설계 + M23-T03 구현)
 
-Obsidian Vault(`Vault/`)로의 문서 저장을 자동화하는 계층. **Core
+Obsidian Vault(Milestone 26부터 이 저장소 root 자체 — Vault ==
+Repository Root)로의 문서 저장을 자동화하는 계층. **Core
 Domain·`web/` 양쪽 모두 이 계층을 모르고, 이 계층도 Core Domain에
 의존하지 않는다** — Production Platform(§3.20)이 지킨 "위 계층이
 아래 계층을 모른다"는 원칙과 반대 방향으로 완전히 독립된, AI
@@ -895,7 +896,7 @@ GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
                       대상 섹션만 치환, 전체 재작성 금지)
         │
         ▼
-        Vault/ (git-tracked Markdown)
+    저장소 root(= Vault Root, git-tracked Markdown)
 ```
 
 - **패키지 위치**: `vault/`(신규, `storage/`와 나란히 존재하되
@@ -975,6 +976,29 @@ GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
   (신규, 5개)가 `tmp_path` 없이 이 저장소의 실제 `Vault/`를 대상으로
   Connect/Create/Update/Rename/Delete/Auto Save 왕복을 검증하고
   종료 시 스스로 정리한다(기존 문서 영구 변경 없음).
+
+- **구현 상태(Milestone 26, ADR-0037, Obsidian Vault Root
+  Refactoring)**: 위 M24 서술의 `Vault/`(`Vault/01 Projects/
+  AI Workspace/`)는 **이 시점 이후 저장소 root로 승격**됐다 — Git
+  Vault Sync/Obsidian Mobile·macOS가 요구하는 "Vault == Repository
+  Root" 조건을 만족시키기 위해 `00 System`~`13 Daily`/`99
+  Templates` 15개 디렉터리를 `git mv`로 저장소 root로 이동하고,
+  더 이상 필요 없는 PARA 뼈대(`Vault/00 Inbox`/`02 Resources`/
+  `03 Archives`)는 제거했다. `vault/connection.py`의
+  `resolve_default_vault_root()`는 이제 `00 System/PROJECT_INDEX.md`
+  표식 파일이 있는 조상 디렉터리를 찾고(이전처럼 `Vault/01
+  Projects/AI Workspace` 하위 경로를 찾지 않는다), `vault/mapping.py`
+  의 상대 경로는 처음부터 `vault_root` 기준이라 변경이 필요 없었다.
+  `vault_root`가 저장소 root와 같아짐에 따라 `vault/validation.py`/
+  `vault/sync.py`의 문서 스캔 범위를 `VAULT_CONTENT_DIRECTORIES`
+  (Vault 콘텐츠 15개 디렉터리)로 명시적으로 제한해 `docs/`/
+  `.claude/`/`.agents/` 등 Vault가 아닌 마크다운이 Validation에
+  섞이지 않게 했다. `[[Wikilink]]`는 파일명 기준이라 이동으로
+  전혀 깨지지 않았고, 마크다운 스타일 상대경로 링크는 Vault 안에
+  하나도 없었다(검증 완료). `tests/vault/`(Mock, 46개 중 9개
+  fixture를 새 스캔 범위에 맞춰 조정) 전부 통과, `tests/integration/
+  test_m23_vault_environment_integration.py`/`test_m24_real_vault_e2e.py`
+  는 저장소 root를 직접 Vault Root로 사용하도록 갱신.
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 

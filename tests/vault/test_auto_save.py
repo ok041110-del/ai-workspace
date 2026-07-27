@@ -8,9 +8,9 @@ def _make_vault(tmp_path: Path) -> Path:
     adr_index = tmp_path / "03 ADR" / "ADR Index.md"
     adr_index.parent.mkdir(parents=True)
     adr_index.write_text("# ADR Index\n\n## 관련 문서\n\n- [[Overview]]\n", encoding="utf-8")
-    (tmp_path / "Overview.md").write_text(
-        "---\ntags: [architecture]\n---\n\n# Overview\n", encoding="utf-8"
-    )
+    overview = tmp_path / "01 Overview" / "Overview.md"
+    overview.parent.mkdir(parents=True)
+    overview.write_text("---\ntags: [architecture]\n---\n\n# Overview\n", encoding="utf-8")
     return tmp_path
 
 

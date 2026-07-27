@@ -167,6 +167,43 @@ Adapter·원자적 쓰기 계층을 더했다.
   스스로 정리해 기존 문서에 영구 변경을 남기지 않는다(`git status`
   로 확인).
 
+## 구현 상태(Milestone 26, ADR-0037, Obsidian Vault Root Refactoring)
+
+**Vault Root == 이 Git 저장소의 Root로 승격됐다**(Git Vault Sync/
+Obsidian Mobile·macOS의 "Vault == Repository Root" 요구사항 충족).
+이전까지 `Vault/01 Projects/AI Workspace/` 아래 있던 15개 디렉터리
+(`00 System`~`13 Daily`, `99 Templates`)를 `git mv`로 저장소 root로
+승격하고, 사용하지 않던 PARA 뼈대(`Vault/00 Inbox`/`02 Resources`/
+`03 Archives`)는 제거했다 — AI Workspace는 "프로젝트 하나 =
+저장소 하나 = Vault 하나" 구조로 전환됐기 때문에 여러 프로젝트를
+한 Vault 아래 두는 구조가 더 이상 필요 없다.
+
+- `vault/connection.py`의 `resolve_default_vault_root()`는 이제
+  `Vault/01 Projects/AI Workspace` 하위 경로를 찾는 대신, Vault
+  Root 표식 파일(`00 System/PROJECT_INDEX.md`)이 있는 첫 조상
+  디렉터리를 찾는다 — Vault Root가 곧 저장소 root이므로 자연스럽게
+  일치한다.
+- `vault/mapping.py`의 `VAULT_DIRECTORY_MAP` 상대 경로(`"03 ADR/ADR
+  Index.md"` 등)는 처음부터 `vault_root` 기준 상대 경로였기 때문에
+  **변경이 필요 없었다**.
+- `vault/validation.py`/`vault/sync.py`의 문서 스캔 범위를
+  `vault_root` 바로 아래 Vault 콘텐츠 디렉터리 15종(`VAULT_CONTENT_
+  DIRECTORIES`)으로 명시적으로 제한했다 — `vault_root`가 저장소
+  root와 같아진 만큼, 제한 없이 `rglob("*.md")`를 하면 `docs/`/
+  `.claude/`/`.agents/` 같은 Vault가 아닌 마크다운까지 Backlink/
+  Tag Validation에 끼어드는 문제가 생기기 때문이다.
+- Wikilink 방식 Backlink(이중 대괄호로 문서 제목을 감싸는 표기)는
+  파일 위치가 아니라 파일명 기준
+  이라 이번 이동으로 전혀 깨지지 않았다 — Vault 안에 마크다운
+  스타일 상대경로 링크(`[텍스트](경로)`)는 애초에 하나도 없었다
+  (검증 완료).
+- **`.obsidian/`**: 이 세션은 실제 Obsidian 앱을 실행할 수 없어
+  `.obsidian/` 설정 파일을 직접 만들지 않았다 — Obsidian이 이
+  저장소 root를 Vault로 처음 열 때 자동 생성한다. 사용자가 처음
+  열 때 `src/`/`tests/`/`docs/`/`.claude/`/`.agents/`/`.git`을
+  "Excluded files"에 추가하면 Vault 콘텐츠만 보이게 정리할 수
+  있다(선택 사항, 코드 동작에는 영향 없음).
+
 ## 관련 문서
 
 - [[Architecture Overview]]
@@ -176,5 +213,5 @@ Adapter·원자적 쓰기 계층을 더했다.
 
 ## 원문
 
-- `.ai/DECISIONS.md` (ADR-0035, ADR-0036)
+- `.ai/DECISIONS.md` (ADR-0035, ADR-0036, ADR-0037)
 - `docs/ARCHITECTURE.md` (§3.21)

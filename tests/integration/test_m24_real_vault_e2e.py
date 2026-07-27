@@ -1,7 +1,7 @@
 """M24-T08: End-to-End Integration Test — 이 저장소의 실제 Obsidian
-Vault(`Vault/01 Projects/AI Workspace`)를 대상으로 한다. `tmp_path`는
-전혀 쓰지 않는다(M24 DoD 요구사항 — "tmp_path만 쓰는 테스트는 M24
-완료 기준으로 인정하지 않는다").
+Vault(Milestone 26부터 저장소 root 자체가 Vault Root)를 대상으로
+한다. `tmp_path`는 전혀 쓰지 않는다(M24 DoD 요구사항 — "tmp_path만
+쓰는 테스트는 M24 완료 기준으로 인정하지 않는다").
 
 이 모듈이 만드는 파일은 전부 존재할 수 없는 미래 날짜/고유 제목
 ("9999-...", "M24 E2E ...")을 써서 실제 문서와 절대 충돌하지 않게
@@ -24,8 +24,7 @@ from ai_workspace.vault.sync import delete_document, find_references, rename_doc
 from ai_workspace.vault.validation import find_broken_backlinks
 from ai_workspace.vault.writer import VaultWriter
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
-_VAULT_ROOT = (_PROJECT_ROOT / "Vault" / "01 Projects" / "AI Workspace").resolve()
+_VAULT_ROOT = Path(__file__).resolve().parents[2]
 
 _TEST_TITLE = "M24 E2E Scratch 9999-12-31"
 _TEST_TITLE_RENAMED = "M24 E2E Scratch 9999-12-31 Renamed"
@@ -33,8 +32,10 @@ _REFERRER_TITLE = "M24 E2E Scratch Referrer 9999-12-30"
 
 
 def _cleanup_scratch_docs() -> None:
+    daily_dir = _VAULT_ROOT / "13 Daily"
     for title in (_TEST_TITLE, _TEST_TITLE_RENAMED, _REFERRER_TITLE):
-        for path in _VAULT_ROOT.rglob(f"{title}.md"):
+        path = daily_dir / f"{title}.md"
+        if path.exists():
             path.unlink()
 
 
@@ -51,12 +52,12 @@ def test_connect_to_real_vault() -> None:
 
 
 def test_resolve_default_vault_root_finds_real_vault() -> None:
-    assert resolve_default_vault_root(_PROJECT_ROOT) == _VAULT_ROOT
+    assert resolve_default_vault_root(_VAULT_ROOT) == _VAULT_ROOT
 
 
 def test_connect_rejects_nonexistent_path() -> None:
     with pytest.raises(VaultConnectionError):
-        connect(_PROJECT_ROOT / "does-not-exist-vault")
+        connect(_VAULT_ROOT / "does-not-exist-vault")
 
 
 def test_real_vault_create_update_rename_delete_round_trip() -> None:
