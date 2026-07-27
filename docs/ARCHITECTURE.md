@@ -1029,6 +1029,17 @@ GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
 
 **Milestone 27(Obsidian Workspace Templates) 완료.**
 
+- **구현 상태(Milestone 28-T01, Task Lifecycle)**: `vault/
+  task_lifecycle.py`(신규) — `TaskStatus`(Todo/In Progress/Review/
+  Done/Archived) + `transition_task_status()`가 Task 문서의 상태
+  전이·`updated` 자동 갱신·Archive 이동(`14 Tasks/Archive/
+  {task_id}.md`)을 처리한다. `sync.py`(Rename/Delete)와 같은 "문서
+  생성 이후 관리" 계층으로 배치했고, Task 생성 자체(Router→
+  Generator→Writer→Engine)는 그대로다. Core Domain 참조 없음, 새
+  Interface 없음 — Milestone 28의 나머지 Task(자동 문서 갱신/
+  Integration Layer/Workflow·Agent 연동/Conversation Layer)는
+  진행 중이며 각 Task 완료마다 이 절에 추가한다.
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```

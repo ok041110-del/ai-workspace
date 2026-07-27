@@ -8762,6 +8762,78 @@ c6hudf`)과 PR 제목은 사용자 요청 원문 그대로 "M25" 표기를 유�
 
 ---
 
+## Milestone 28 — Live Task Management & Integration
+
+**목표**(2026-07-27 사용자 요청): Milestone 27이 만든 정적인
+Markdown Workspace를 실제로 동작하는 AI Workspace로 확장한다 —
+Task Lifecycle, 자동 문서 갱신, Vault↔Core Domain Integration
+Layer, Workflow Engine 연동, Agent Assignment, Conversation Layer
+연동. **Architecture Rule**(사용자 요청 원문): ADR-0035를 반드시
+유지한다 — Core Domain은 vault를 알지 못하고, vault는 Core Domain을
+알지 못한다. 경계를 넘는 통신은 반드시 Integration Layer(Vault
+Adapter/Workflow Adapter/Agent Adapter)를 통해서만 이뤄진다.
+
+**진행 방식**: `.ai/RULES.md` §2.2(One Task At A Time)에 따라
+T01부터 순서대로 완료하고 각 Task마다 테스트/문서화를 마친 뒤 다음
+Task로 진행한다.
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M28-T01 | Task Lifecycle(Status Transition, `updated` 자동 갱신, Archive 처리) | **완료** |
+| M28-T02 | Automatic Document Synchronization(Task 변경 → Daily/Decision/Roadmap/Milestone 갱신) | 착수 예정 |
+| M28-T03 | Integration Layer(Vault Adapter/Workflow Adapter/Agent Adapter) | 착수 예정 |
+| M28-T04 | Workflow Engine Integration | 착수 예정 |
+| M28-T05 | Agent Assignment | 착수 예정 |
+| M28-T06 | Conversation Layer Integration | 착수 예정 |
+
+### M28-T01: Task Lifecycle
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Status Transition(Todo→In Progress→Review→Done→Archived) | ✅ |
+| 2 | `updated` 자동 갱신 | ✅ |
+| 3 | Archive 처리 | ✅ |
+| 4 | Frontmatter 동기화 | ✅ |
+| 5 | Task 상태 변경 API | ✅ |
+| 6 | 테스트 통과 | ✅ |
+
+**구현 내용**
+
+- `vault/task_lifecycle.py`(신규): `TaskStatus` Enum(5개 상태),
+  `_ALLOWED_TRANSITIONS`(Todo→In Progress→Review→Done→Archived,
+  In Progress↔Todo/Review 되돌아가기 허용, Done은 Archived로만,
+  Archived는 종단 상태), `transition_task_status(vault_root,
+  task_id, new_status, *, today=None)` — Task 상태 변경 API.
+  `sync.py`(Rename/Delete)와 같은 성격의 "문서 생성 이후 관리"
+  계층으로 배치해 기존 Router→Generator→Writer→Engine Save Flow는
+  건드리지 않았다(Task 생성은 여전히 Milestone 27의
+  `VaultSaveEngine`/`render_task_file()` 몫).
+- Frontmatter 동기화는 파일 전체를 재작성하지 않고 `status`/
+  `updated` 두 줄만 정규식으로 치환한다(`writer.upsert_section()`이
+  Index 문서의 섹션만 치환하는 것과 같은 최소 변경 원칙).
+- Archive 처리: `ARCHIVED`로 전이하면 `14 Tasks/Archive/{task_id}.md`
+  로 파일을 옮긴다. 파일명(`task_id`)은 그대로이므로 그 문서를
+  가리키는 `[[task_id]]` Wikilink는 깨지지 않는다(`validation.py`/
+  `sync.py`가 이미 `14 Tasks/`를 `rglob("*.md")`로 재귀 스캔하므로
+  `mapping.py`/`VAULT_CONTENT_DIRECTORIES` 변경 불필요).
+- `99 Templates/Template - Task.md`의 Status 절을 5개 상태 +
+  Transition 다이어그램으로 갱신(기존 `blocked`는 M25 요청 5개
+  상태에 없어 제거).
+- 새 Interface 없음, Core Domain 참조 없음(ADR-0035 유지, vault
+  패키지 내부 확장).
+
+**검증**: `tests/vault/test_task_lifecycle.py`(신규 6개 — 정상
+전이/허용되지 않은 전이/Archive 이동/Archived 종단 상태/Task
+없음/frontmatter 없음), `ruff check src tests` 클린, `mypy
+src/ai_workspace/vault` 클린, `pytest`(812개, 기존 806개 + 신규 6개)
+전부 통과.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

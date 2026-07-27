@@ -16,6 +16,12 @@ Checklist)를 바로 보고 갱신하기 위한 것으로, Milestone 27
 전달해 생성한다(`vault/router.py`가 `fields["task_id"]`로 파일명을
 결정).
 
+상태 변경(Todo→In Progress→Review→Done→Archived)은 Frontmatter를
+직접 고치지 않고 `vault.task_lifecycle.transition_task_status()`
+를 통해서 한다(Milestone 28-T01) — 허용되지 않은 전이를 막고
+`updated`를 자동 갱신한다. `Archived`로 전이하면 문서가 `Archive/
+{task_id}.md`로 옮겨진다(같은 파일명이라 Wikilink는 유지).
+
 ## 관련 문서
 
 - [[Template - Task]]
