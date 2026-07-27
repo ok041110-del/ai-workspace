@@ -1166,3 +1166,22 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   통과, `ruff`/`mypy` 클린. **Milestone 23 전체 완료 — 다음은
   별도 Milestone(번호 미정, 원 M23 Mobile Experience 이월분) 착수
   또는 사용자가 지정하는 새 작업.**
+- **Milestone 23 Verification 완료(2026-07-27, 사용자 요청, 코드
+  변경 없음)**. 8개 검증 항목(Architecture/Save Engine/Auto Save
+  Workflow/Execution Engine/Routing/Mock Save/Synchronization/
+  Documentation)을 실제 코드·테스트·문서 기준으로 대조(Mock/
+  `tmp_path`만 사용, 실제 Vault 미변경). 핵심 파이프라인(Routing/
+  Save/Validation/Sync/Conflict Handling)은 설계대로 완성 확인.
+  **발견된 Gap 3건**(전부 이미 알려진 의도적 범위 축소를 재확인한
+  것, 새 문제 아님): (1) Markdown 형식 렌더링이 ADR/Decision
+  2종만 대상 문서 실제 관행과 검증됐고 나머지 10종(Milestone/
+  Backend 등 표 구조, Dashboard/Automation/iOS 등 주제별 절
+  구조)은 범용 "제목+요약" 형식이라 저장 **위치**는 항상 맞지만
+  **형식**이 기존 문서 관행과 다를 수 있음. (2) Auto Save는
+  시스템이 자동 호출하는 트리거가 아니라 AI가 EXECUTION_PROFILE
+  절차를 따라 수동으로 `run_auto_save()`를 호출하는 구조임을
+  `src/ai_workspace/` 전체 grep으로 재확인(`vault/` 밖에서 호출
+  0건). (3) `delete_document(force=True)` 이후 다른 문서에 남은
+  Orphan Backlink는 자동 정리되지 않음(다음 Validation에서만
+  발견). 상세 체크리스트는 `.ai/TASKS.md`의 "Milestone 23
+  Verification" 절 참고.
