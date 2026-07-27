@@ -7507,6 +7507,61 @@ Task List(M23-Prep-T01~T07) 전체 완료. 이후 T01A(Retrieval/Prompt
 
 ---
 
+## M23-T01 — Reading Profiles
+
+**목표**: M23-Prep-T01A~T01D에서 도입한 Retrieval First/Minimum
+Retrieval/Short Prompt Workflow/Template First/Standard Execution
+Workflow 원칙을 작업 유형별로 세분화한 **표준 Reading Profile**을
+정의한다. AI가 매 작업마다 무엇을 읽을지 새로 판단하지 않고, 15개
+작업 유형(Architecture Design/Feature Design/API Design/Backend·
+Frontend·Mobile Implementation/Dashboard·Automation Development/
+ADR·Decision 작성/Bug Fix/Refactoring/Documentation/Milestone
+Planning/Daily 기록) 각각에 대해 필수/선택/제외 문서, 쓸 Template,
+예상 Retrieval 순서, 예상 출력 문서를 고정된 형식으로 미리
+정해두어 최소 문서 Retrieval 기준을 제공한다.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `READING_PROFILES.md` 신규(15개 Profile, 항목별 목적/필수/선택/제외 문서/Template/Retrieval 순서/예상 출력 7항목 고정) | ✅ |
+| 2 | `PROJECT_INDEX.md`에 Reading Profiles Index 절 추가 | ✅ |
+| 3 | `EXECUTION_PROFILE.md`의 Context Retrieval/Template Selection 단계에 Reading Profile 적용 절차 추가 | ✅ |
+| 4 | `PROMPT_PROFILE.md`에 Reading Profile 연계 절 추가 | ✅ |
+| 5 | 기존 구조·Backlink·Tag·원문 규칙 유지, 변경된 파일만 수정 | ✅ |
+| 6 | `.ai/TASKS.md`/`docs/ROADMAP.md`/`.ai/MEMORY.md` 반영 | ✅ |
+
+**구현 내용**
+
+- `Vault/.../00 System/READING_PROFILES.md`(신규): 사용 원칙
+  (Retrieval First/Minimum Retrieval/Short Prompt Workflow/
+  Template First/Standard Execution Workflow) + Profile Index
+  표 + 15개 Profile 절. 각 Profile은 목적/필수 문서/선택 문서/
+  읽지 않는 문서/쓸 Template/예상 Retrieval 순서/예상 출력 문서
+  7항목을 동일한 형식으로 고정. Backend Implementation은
+  [[Backend Index]]를 필수로, iOS Design/Android Placeholder를
+  제외 문서로 두는 식으로 작업 간 경계를 명시해 불필요한 교차
+  Retrieval을 방지.
+- `00 System/PROJECT_INDEX.md`(수정): "Reading Profiles Index"
+  절 추가 — 기존 Retrieval First 표(작업→문서 1줄 라우팅)와
+  [[READING_PROFILES]](작업 유형별 세부 Retrieval 절차)의 역할
+  경계를 명시.
+- `00 System/EXECUTION_PROFILE.md`(수정): 2단계 Context Retrieval에
+  Reading Profile이 정의된 작업 유형이면 그 Profile의 필수 문서만
+  읽도록 절차 추가, 3단계 Template Selection에 Reading Profile의
+  "쓸 Template"도 동일한 Template Index/Mapping과 일치함을 명시.
+- `00 System/PROMPT_PROFILE.md`(수정): "Reading Profile 연계" 절
+  추가 — 프롬프트에 "[[READING_PROFILES]]의 <Profile 이름> 기준으로"
+  를 덧붙이는 패턴 예시 추가.
+- Vault 전체 재검증: 신규 문서의 Backlink/Tag/원문 섹션 확인,
+  기존 문서 대비 신규 미해결 Backlink 없음.
+
+**의존성**: M23-Prep-T01A(Retrieval First 라우팅 표)~T01D
+(Standard Execution Workflow 정착) 전부 완료돼야 세분화할 기반이
+존재함.
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |

@@ -23,15 +23,26 @@ DoD를 먼저 정리해 승인을 받는다(GitHub `.ai/RULES.md`의 승인
 ### 2. Context Retrieval
 
 [[PROJECT_INDEX]]의 "Retrieval First" 표에서 작업과 가장 가까운
-행을 찾아 그 문서만 읽는다. 전체 Vault나 GitHub 코드베이스를
-처음부터 훑지 않는다([[AI_RULES]]의 Context Retrieval Rule).
+행을 찾는다. 그 작업 유형이 [[READING_PROFILES]]에 정의돼 있으면
+(Architecture Design/Feature Design/API Design/Backend·Frontend·
+Mobile Implementation/Dashboard·Automation Development/ADR·Decision
+작성/Bug Fix/Refactoring/Documentation/Milestone Planning/Daily
+기록) 해당 Profile의 "필수 문서"만 그 순서대로 읽는다 — "선택
+문서"는 필수 문서만으로 판단이 서지 않을 때만 추가하고, "읽지
+않는 문서"는 임의로 읽지 않는다(Minimum Retrieval). 해당하는
+Profile이 없으면 기존대로 [[PROJECT_INDEX]] 라우팅 표의 문서만
+읽는다. 전체 Vault나 GitHub 코드베이스를 처음부터 훑지 않는다
+([[AI_RULES]]의 Context Retrieval Rule).
 
 ### 3. Template Selection
 
-만들려는 산출물 종류를 [[PROJECT_INDEX]]의 "Template Index" 또는
-[[PROMPT_PROFILE]]의 "Template Mapping"에서 찾아 해당 템플릿으로
-시작한다(Template First). 해당하는 템플릿이 없으면 가장 가까운
-기존 문서의 구조를 따른다 — 새 템플릿을 즉흥적으로 만들지 않는다.
+만들려는 산출물 종류를 [[PROJECT_INDEX]]의 "Template Index",
+[[PROMPT_PROFILE]]의 "Template Mapping", 또는 2단계에서 이미 확인한
+[[READING_PROFILES]] Profile의 "쓸 Template"에서 찾아 해당
+템플릿으로 시작한다(Template First) — 세 출처는 서로 일치하도록
+유지되므로 어느 쪽에서 찾아도 같은 템플릿에 도달한다. 해당하는
+템플릿이 없으면 가장 가까운 기존 문서의 구조를 따른다 — 새 템플릿을
+즉흥적으로 만들지 않는다.
 
 ### 4. Task Execution
 
@@ -65,6 +76,7 @@ Vault Index([[PROJECT_INDEX]]가 가리키는 문서, `Template - X.md`
 
 - [[PROJECT_INDEX]]
 - [[PROMPT_PROFILE]]
+- [[READING_PROFILES]]
 - [[TASK_TEMPLATE]]
 - [[AI_RULES]]
 

@@ -1043,3 +1043,20 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   (동시성 경쟁 조건)·M9-T03(세션 리셋)·M10-T02/T03(run_parallel 개별
   실패 격리+재시도, M4-T06 이월 부채)·M14(Model 라우팅)은 해소되어
   더 이상 부채 목록에 없다.
+- **M23-T01 완료: Reading Profiles(2026-07-27)**. M23-Preparation
+  (T01A~T01D)에서 도입한 Retrieval First/Minimum Retrieval/Short
+  Prompt Workflow/Template First/Standard Execution Workflow
+  원칙을 15개 작업 유형(Architecture Design/Feature Design/API
+  Design/Backend·Frontend·Mobile Implementation/Dashboard·
+  Automation Development/ADR·Decision 작성/Bug Fix/Refactoring/
+  Documentation/Milestone Planning/Daily 기록)별 표준 Reading
+  Profile로 세분화. Vault `00 System/READING_PROFILES.md` 신규 —
+  각 Profile은 목적/필수 문서/선택 문서/읽지 않는 문서/쓸 Template/
+  예상 Retrieval 순서/예상 출력 문서 7항목 고정. `PROJECT_INDEX`
+  (Reading Profiles Index 절)/`EXECUTION_PROFILE`(Context
+  Retrieval·Template Selection 단계에 적용 절차)/`PROMPT_PROFILE`
+  (Reading Profile 연계 절)에 연결해 기존 Router/Standard Workflow
+  체계와 일관되게 유지. Milestone 23(Mobile Experience) 본 기능
+  착수는 여전히 대기 상태(PREPARATION_SUMMARY의 Start Criteria
+  1~3 미해결) — 이번 Task는 그 착수 전 Retrieval 기반을 한 단계
+  더 다진 것.
