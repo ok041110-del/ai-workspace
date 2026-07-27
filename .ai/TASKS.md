@@ -7146,14 +7146,24 @@ Optional)로 이월한다.
 |---|---|---|
 | M23-Prep-T01 | Vault 초기 구성 및 시스템 문서 작성 | **완료** |
 | M23-Prep-T02 | 프로젝트 개요 및 아키텍처 작성 | **완료** |
-| M23-Prep-T03 | ADR 정리 | 진행 예정 |
+| M23-Prep-T03 | ADR 정리 | **완료** |
 | M23-Prep-T04 | Backend/API 문서화 | 진행 예정 |
 | M23-Prep-T05 | 서버 구성 문서화 | 진행 예정 |
 | M23-Prep-T06 | Client 및 프로젝트 이력 정리 | 진행 예정 |
 | M23-Prep-T07 | 운영 문서 및 검증 | 진행 예정 |
 | M23-Prep-T08 (Optional) | Obsidian MCP 연동 — Claude Code 도입 시점으로 이월 | 보류 |
 
-**진행 상태**: M23-Prep-T01~T02 완료. M23-Prep-T03 진행 예정.
+**진행 상태**: M23-Prep-T01~T03 완료. M23-Prep-T04 진행 예정.
+
+#### M23-Prep-T03: ADR 정리
+- 상태: **DONE (2026-07-27)** — `03 ADR/ADR Index.md` 신규. `.ai/
+  DECISIONS.md`의 ADR-0001~ADR-0034(34개, 템플릿 자리표시자
+  `ADR-000X` 제외) 전체를 전문 복사 없이 목적/결정/영향 3줄
+  요약으로 압축해 하나의 Index 문서에 담았다(개별 ADR 파일 34개로
+  쪼개지 않음 — 목표 검토 때 합의한 방식). 문서 끝에 `.ai/
+  DECISIONS.md` 전체를 가리키는 "원문" 섹션 추가. `.gitkeep` 제거.
+  다음 Task: **M23-Prep-T04**(Backend/API 문서화).
+- 의존성: M23-Prep-T02.
 
 #### M23-Prep-T02: 프로젝트 개요 및 아키텍처
 - 상태: **DONE (2026-07-27)** — `01 Overview/Overview.md`(프로젝트
