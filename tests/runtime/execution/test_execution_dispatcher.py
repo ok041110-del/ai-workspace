@@ -5,10 +5,17 @@ from ai_workspace.domain.engine_selection import EngineSelectionDecision
 from ai_workspace.domain.retry_policy import RetryPolicy
 from ai_workspace.domain.task import Task, TaskStatus
 from ai_workspace.engines.authentication_manager import InMemoryAuthenticationManager
+from ai_workspace.events.event_bus import InMemoryEventBus
 from ai_workspace.interfaces.authentication_manager import AuthenticationRequiredError
 from ai_workspace.interfaces.engine_adapter import EngineExecutionError, EngineResult
 from ai_workspace.interfaces.engine_registry import EngineNotRegisteredError
+from ai_workspace.interfaces.event_bus import Event
 from ai_workspace.runtime.engine.engine_registry import InMemoryEngineRegistry
+from ai_workspace.runtime.execution.events import (
+    ENGINE_AUTHENTICATION_FAILED,
+    ENGINE_EXECUTION_COMPLETED,
+    ENGINE_EXECUTION_STARTED,
+)
 from ai_workspace.runtime.execution.execution_dispatcher import ExecutionDispatcher
 
 
@@ -252,3 +259,75 @@ def test_dispatch_source_delegates_to_retry_executor_not_a_manual_loop() -> None
     source = inspect.getsource(ED)
     assert "RetryExecutor" in source
     assert "for " not in inspect.getsource(ED.dispatch)
+
+
+def test_dispatch_without_event_bus_behaves_like_before_m20() -> None:
+    """M20 DoD: event_bus 미주입 시 기존과 완전히 동일하게 동작한다."""
+    registry = InMemoryEngineRegistry()
+    registry.register("claude_code", MockEngineAdapter())
+    auth = InMemoryAuthenticationManager(frozenset({"claude_code"}))
+    dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
+    decision = EngineSelectionDecision(engine_name="claude_code", model=None, reason="test")
+
+    result = dispatcher.dispatch(decision, make_task())
+
+    assert result.success is True
+
+
+def test_dispatch_publishes_started_and_completed_events_on_success() -> None:
+    registry = InMemoryEngineRegistry()
+    registry.register("claude_code", MockEngineAdapter())
+    auth = InMemoryAuthenticationManager(frozenset({"claude_code"}))
+    event_bus = InMemoryEventBus()
+    received: list[Event] = []
+    event_bus.subscribe(received.append)
+    dispatcher = ExecutionDispatcher(
+        engine_registry=registry, authentication_manager=auth, event_bus=event_bus
+    )
+    decision = EngineSelectionDecision(engine_name="claude_code", model=None, reason="test")
+
+    dispatcher.dispatch(decision, make_task())
+
+    event_types = [event.event_type for event in received]
+    assert event_types == [ENGINE_EXECUTION_STARTED, ENGINE_EXECUTION_COMPLETED]
+    started = received[0]
+    assert started.payload["engine"] == "claude_code"
+    assert started.payload["task_title"] == "구현하기"
+    completed = received[1]
+    assert completed.payload["success"] is True
+    assert completed.payload["cancelled"] is False
+
+
+def test_dispatch_publishes_no_events_when_no_decision() -> None:
+    registry = InMemoryEngineRegistry()
+    auth = InMemoryAuthenticationManager()
+    event_bus = InMemoryEventBus()
+    received: list[Event] = []
+    event_bus.subscribe(received.append)
+    dispatcher = ExecutionDispatcher(
+        engine_registry=registry, authentication_manager=auth, event_bus=event_bus
+    )
+
+    dispatcher.dispatch(None, make_task())
+
+    assert received == []
+
+
+def test_dispatch_publishes_authentication_failed_event() -> None:
+    registry = InMemoryEngineRegistry()
+    registry.register("claude_code", MockEngineAdapter())
+    auth = InMemoryAuthenticationManager()  # 미인증
+    event_bus = InMemoryEventBus()
+    received: list[Event] = []
+    event_bus.subscribe(received.append)
+    dispatcher = ExecutionDispatcher(
+        engine_registry=registry, authentication_manager=auth, event_bus=event_bus
+    )
+    decision = EngineSelectionDecision(engine_name="claude_code", model=None, reason="test")
+
+    with pytest.raises(AuthenticationRequiredError):
+        dispatcher.dispatch(decision, make_task())
+
+    event_types = [event.event_type for event in received]
+    assert event_types == [ENGINE_EXECUTION_STARTED, ENGINE_AUTHENTICATION_FAILED]
+    assert received[1].payload["engine"] == "claude_code"

@@ -5945,14 +5945,33 @@ Approval UI, 사용자 인증/권한 관리.
 | Task | 내용 | 상태 |
 |---|---|---|
 | M20-T01 | Dashboard 도메인 및 이벤트 정의 | **완료** |
-| M20-T02 | 실행 계층과 Dashboard 연결(`ExecutionDispatcher` Event 발행 + `InMemoryDashboardRepository` 구독) | 진행 예정 |
+| M20-T02 | 실행 계층과 Dashboard 연결(`ExecutionDispatcher` Event 발행 + `InMemoryDashboardRepository` 구독) | **완료** |
 | M20-T03 | Read Model 및 ViewModel(`DashboardService` + `DashboardViewModel`) | 진행 예정 |
 | M20-T04 | 서버 런타임 구축(`workspace start`, FastAPI app 골격) | 진행 예정 |
 | M20-T05 | API 및 Web UI(REST 라우터 + WebSocket + 정적 UI) | 진행 예정 |
 | M20-T06 | 전체 흐름 검증(End-to-End 통합 테스트 + 의존성 검증) | 진행 예정 |
 | M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
 
-**진행 상태**: M20-T01 완료. M20-T02 진행 중.
+**진행 상태**: M20-T01~T02 완료. M20-T03 진행 중.
+
+#### M20-T02: 실행 계층과 Dashboard 연결
+- 상태: **DONE (2026-07-27)** — `runtime/execution/events.py`에
+  `ENGINE_AUTHENTICATION_FAILED` 추가. `ExecutionDispatcher`에 선택적
+  `event_bus: EventBus | None = None` DI 추가 — 실행 시작 시
+  `ENGINE_EXECUTION_STARTED`, 종료 시 `ENGINE_EXECUTION_COMPLETED`
+  (성공/실패/Timeout 소진/취소 전부 포함), 인증 실패 시
+  `ENGINE_AUTHENTICATION_FAILED`를 발행한다(예외는 그대로 재전파,
+  Event 발행은 부가 효과일 뿐 계약을 바꾸지 않음). `decision`이
+  `None`이면 Event를 전혀 발행하지 않는다(아무것도 선택되지 않음).
+  `ExecutionDispatcher`는 `DashboardRepository`를 전혀 모른다(CQRS
+  — Event만 발행). `runtime/dashboard/dashboard_repository.py`의
+  `InMemoryDashboardRepository`가 생성자에서 스스로 `EventBus`를
+  구독해 Read Model을 갱신 — 통계는 조회 시점에 계산하지 않고 매
+  Event마다 미리 갱신해 둔다("Dashboard는 통계를 계산하지 않는다").
+  단위 테스트 10개 신규(`ExecutionDispatcher` Event 발행 4개,
+  `InMemoryDashboardRepository` 6개). `pytest`(610개), `ruff`,
+  `mypy` 통과. 다음 Task: **M20-T03**(Read Model 및 ViewModel).
+- 의존성: M20-T01.
 
 #### M20-T01: Dashboard 도메인 및 이벤트 정의
 - 상태: **DONE (2026-07-27)** — `domain/dashboard.py`에 `EngineStatus`

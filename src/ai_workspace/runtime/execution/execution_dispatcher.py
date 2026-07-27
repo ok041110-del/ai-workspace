@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import time
+import uuid
+from datetime import UTC, datetime
 
 from ai_workspace.domain.engine_selection import EngineSelectionDecision
 from ai_workspace.domain.execution_result import EngineExecutionResult
@@ -13,6 +15,12 @@ from ai_workspace.interfaces.authentication_manager import (
 from ai_workspace.interfaces.engine_adapter import EngineExecutionError, EngineResult
 from ai_workspace.interfaces.engine_registry import EngineNotRegisteredError, EngineRegistry
 from ai_workspace.interfaces.engine_runtime import NoSuitableEngineError
+from ai_workspace.interfaces.event_bus import Event, EventBus
+from ai_workspace.runtime.execution.events import (
+    ENGINE_AUTHENTICATION_FAILED,
+    ENGINE_EXECUTION_COMPLETED,
+    ENGINE_EXECUTION_STARTED,
+)
 from ai_workspace.runtime.execution.retry_executor import RetryExecutor
 
 _DEFAULT_NON_RETRYABLE_EXCEPTIONS: tuple[type[BaseException], ...] = (
@@ -60,7 +68,15 @@ class ExecutionDispatcher:
     `RetryPolicy`를 쓴다(재정의하려면 `retry_policy`를 주입한다).
     취소는 `EngineAdapter`가 이미 쓰는 sentinel(`EngineResult.error
     == "cancelled"`)을 그대로 이어받아 판정한다 — 새 문자열 규칙을
-    만들지 않는다."""
+    만들지 않는다.
+
+    **Dashboard를 위한 Event 발행(M20)**: `event_bus`를 선택적으로
+    주입하면 실행 시작/완료/인증 실패 시점에
+    `runtime/execution/events.py`의 Event를 발행한다. 이 클래스는
+    누가 구독하는지 전혀 알지 못한다 — `DashboardRepository`(M20)를
+    직접 참조하지 않는다(Event만 발행, CQRS). 미주입 시(기본값
+    `None`) Event 발행 자체를 건너뛰어 M19 이전과 완전히 동일하게
+    동작한다."""
 
     def __init__(
         self,
@@ -68,6 +84,7 @@ class ExecutionDispatcher:
         engine_registry: EngineRegistry,
         authentication_manager: AuthenticationManager,
         retry_policy: RetryPolicy | None = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         self._engine_registry = engine_registry
         self._authentication_manager = authentication_manager
@@ -77,6 +94,7 @@ class ExecutionDispatcher:
             else RetryPolicy(non_retryable_exceptions=_DEFAULT_NON_RETRYABLE_EXCEPTIONS)
         )
         self._retry_executor = RetryExecutor(retry_policy=self._retry_policy)
+        self._event_bus = event_bus
 
     def dispatch(
         self, decision: EngineSelectionDecision | None, task: Task
@@ -89,6 +107,15 @@ class ExecutionDispatcher:
                 engine=None,
                 execution_time=0.0,
             )
+
+        self._publish(
+            ENGINE_EXECUTION_STARTED,
+            {
+                "engine": decision.engine_name,
+                "task_title": task.title,
+                "started_at": _now_iso(),
+            },
+        )
 
         attempts = 0
 
@@ -107,9 +134,14 @@ class ExecutionDispatcher:
         start = time.monotonic()
         try:
             result = self._retry_executor.execute(attempt)
+        except AuthenticationRequiredError:
+            self._publish(
+                ENGINE_AUTHENTICATION_FAILED, {"engine": decision.engine_name}
+            )
+            raise
         except EngineExecutionError as exc:
             execution_time = time.monotonic() - start
-            return EngineExecutionResult(
+            engine_result = EngineExecutionResult(
                 success=False,
                 output="",
                 error=str(exc),
@@ -118,9 +150,11 @@ class ExecutionDispatcher:
                 retry_count=attempts - 1,
                 timed_out=_looks_like_timeout(exc),
             )
+            self._publish_completed(engine_result)
+            return engine_result
         execution_time = time.monotonic() - start
 
-        return EngineExecutionResult(
+        engine_result = EngineExecutionResult(
             success=result.success,
             output=result.output,
             error=result.error,
@@ -129,3 +163,30 @@ class ExecutionDispatcher:
             retry_count=attempts - 1,
             cancelled=(result.error == "cancelled"),
         )
+        self._publish_completed(engine_result)
+        return engine_result
+
+    def _publish_completed(self, result: EngineExecutionResult) -> None:
+        self._publish(
+            ENGINE_EXECUTION_COMPLETED,
+            {
+                "engine": result.engine,
+                "success": result.success,
+                "cancelled": result.cancelled,
+                "timed_out": result.timed_out,
+                "retry_count": result.retry_count,
+                "error": result.error,
+                "completed_at": _now_iso(),
+            },
+        )
+
+    def _publish(self, event_type: str, payload: dict[str, object]) -> None:
+        if self._event_bus is None:
+            return
+        self._event_bus.publish(
+            Event(event_id=str(uuid.uuid4()), event_type=event_type, payload=payload)
+        )
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()

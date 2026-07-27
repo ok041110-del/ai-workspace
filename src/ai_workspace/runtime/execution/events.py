@@ -5,3 +5,4 @@
 
 ENGINE_EXECUTION_STARTED = "engine_execution_started"
 ENGINE_EXECUTION_COMPLETED = "engine_execution_completed"
+ENGINE_AUTHENTICATION_FAILED = "engine_authentication_failed"
