@@ -5950,9 +5950,18 @@ Approval UI, 사용자 인증/권한 관리.
 | M20-T04 | 서버 런타임 구축(`workspace start`, FastAPI app 골격) | **완료** |
 | M20-T05 | API 및 Web UI(REST 라우터 + WebSocket + 정적 UI) | **완료** |
 | M20-T06 | 전체 흐름 검증(End-to-End 통합 테스트 + 의존성 검증) | **완료** |
-| M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
+| M20-T07 | 문서화 및 아키텍처 정리 | **완료** |
 
-**진행 상태**: M20-T01~T06 완료. M20-T07 진행 예정.
+**진행 상태**: M20-T01~T07 전체 완료.
+
+#### M20-T07: 문서화 및 아키텍처 정리
+- 상태: **DONE (2026-07-27)** — ADR-0032(`.ai/DECISIONS.md`) 신규
+  작성. `docs/ARCHITECTURE.md` v0.22.0: 신규 §3.18(Real-time
+  Dashboard Platform), §7 Interfaces 25→26종(`DashboardRepository`
+  추가), §8 의존성 규칙에 12번(Dashboard Event 구독 경로, Core는
+  `web/`/FastAPI/uvicorn을 모름) 추가, §9 디렉터리 구조에
+  `runtime/dashboard/`/`web/`/`cli` `start` 서브커맨드 반영. 아래
+  Milestone 20 Review 작성.
 
 #### M20-T06: 전체 흐름 검증
 - 상태: **DONE (2026-07-27)** —
@@ -6084,6 +6093,149 @@ Approval UI, 사용자 인증/권한 관리.
   1개). `pytest`(600개), `ruff`, `mypy` 통과. 다음 Task:
   **M20-T02**(실행 계층과 Dashboard 연결).
 - 의존성: 없음.
+
+---
+
+## Milestone 20 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `DashboardRepository` Interface + `InMemoryDashboardRepository` 구현 | ✅ (M20-T01/T02) |
+| 2 | `DashboardService` 구현(UI를 모름) | ✅ (M20-T03) |
+| 3 | Dashboard API 구현(`/api/dashboard`, `/api/summary`, `/api/history`, `/api/engines`) | ✅ (M20-T05) |
+| 4 | WebSocket 구현(Event 기반 갱신, Polling 없음) | ✅ (M20-T05) |
+| 5 | Dashboard Web UI 구현(정적 파일, API/WebSocket만 사용) | ✅ (M20-T05) |
+| 6 | `DashboardViewModel` 구현(한국어 상태 라벨, Engine 이름은 영어 유지) | ✅ (M20-T03) |
+| 7 | `ExecutionDispatcher` 실행 결과가 자동으로 기록됨(Event 기반) | ✅ (M20-T02) |
+| 8 | Engine 상태/최근 실행/실행 통계/안정성 통계가 모두 Repository의 Read Model을 그대로 사용 | ✅ (M20-T02/T03) |
+| 9 | 현재 시각/경과 시간이 브라우저에서 1초마다 갱신(Polling 없음) | ✅ (M20-T05) |
+| 10 | Dashboard API가 자동 문서화됨(FastAPI OpenAPI) | ✅ (M20-T04, `/docs` 자동 생성) |
+| 11 | `DashboardService`가 `web/`을 참조하지 않음을 Architecture 의존성 검증으로 증명 | ✅ (M20-T06, `ast` 기반) |
+| 12 | `workspace start`로 서버가 실행되고 기존 CLI 명령은 영향받지 않음 | ✅ (M20-T04) |
+| 13 | 전체 `pytest`/`ruff`/`mypy` 통과 | ✅ (아래 4절) |
+
+Task List(M20-T01~T07) 전체 완료. 사용자 승인 조건(Server Runtime
+도입, EventBus 기반 실시간 갱신, `ExecutionDispatcher`→Event만
+발행/Dashboard 직접 참조 금지, API/WebSocket/Web UI는
+`DashboardService`만 사용, `pyproject.toml`에 `fastapi`/`uvicorn`만
+추가, Core 계층은 웹 프레임워크를 모름) 모두 충족됨.
+
+**2. Architecture Review**
+
+- **신규 컴포넌트**: `domain/dashboard.py`, `interfaces/
+  dashboard_repository.py`, `runtime/dashboard/dashboard_repository.py`,
+  `runtime/dashboard/dashboard_service.py`, `web/`(신규 최상위 패키지 —
+  `dashboard_viewmodel.py`, `routes.py`, `dashboard_broadcaster.py`,
+  `app.py`, `server.py`, `static/index.html`/`style.css`/`app.js`) —
+  10개 신규 소스 파일 + 정적 파일 3개.
+- **변경된 기존 컴포넌트**: `runtime/execution/events.py`(Event 타입
+  3개 추가), `runtime/execution/execution_dispatcher.py`(`event_bus`
+  선택적 DI + Event 발행), `cli/main.py`(`start` 서브커맨드),
+  `pyproject.toml`(첫 외부 런타임 의존성).
+- **핵심 설계 결정**: (1) CQRS로 쓰기(Event 구독)와 읽기
+  (`DashboardService`)를 분리하되, 구현체가 하나뿐이라
+  `DashboardRepository` Interface 자체는 쓰기/읽기 메서드를 함께
+  갖도록 했다(불필요한 Interface 분리를 피함, YAGNI). (2)
+  `ExecutionDispatcher`는 Event만 발행하고 Dashboard의 존재를
+  전혀 모른다 — M13(Scheduler)부터 이어진 "선택적 DI로 기존
+  컴포넌트를 건드리지 않고 확장" 패턴을 그대로 재사용했다. (3)
+  FastAPI/uvicorn을 `web/` 패키지에만 가둬 Core 계층(domain/
+  interfaces/engines/runtime, `runtime/dashboard/` 포함)이 여전히
+  웹 프레임워크를 몰라도 되게 유지했다 — 이 프로젝트가 M1부터
+  지켜온 프레임워크 독립 원칙이 첫 외부 런타임 의존성 도입에도
+  깨지지 않았다. (4) 동기 `EventBus.publish()`와 비동기 WebSocket
+  전송 사이의 경계는 연결 시점에 캡처한 `asyncio.get_running_loop()`
+  + `loop.call_soon_threadsafe()`로 넘겼다.
+
+`git diff --stat`(M19 종료 커밋 대비)로 확인한 결과 신규 소스/정적
+파일 13개, 기존 파일 수정 4개 — M11(서버/UI 없는 순수 백엔드
+milestone들) 이후 가장 큰 변경 폭이지만, 이는 이 Milestone이 처음
+도입한 "서버+Web UI"라는 새 층위 전체가 신규 컴포넌트이기 때문이며
+기존 컴포넌트 수정은 여전히 최소(4개, 전부 선택적 DI/신규
+서브커맨드로 하위 호환 유지)에 그쳤다.
+
+**3. Interface First 원칙 검토**
+
+M20은 `DashboardRepository`라는 **새 최상위 Interface**를
+추가했다(총 25→26종) — ADR-0032를 작성했다. Interface는 CQRS
+원칙에 따라 쓰기(Event 구독 경로 전용)와 읽기(`DashboardService`
+경로 전용) 메서드를 함께 갖되, 두 경로의 호출자가 겹치지 않도록
+설계해 실질적으로는 계약이 분리돼 있다. `DashboardBroadcaster`/
+`DashboardService`/`InMemoryDashboardRepository`는 모두 구체
+클래스다(기존 `WorkflowRunner`/`ExecutionDispatcher`/`RetryExecutor`
+와 동일한 패턴 — 이 프로젝트는 "여러 구현체가 필요할 가능성이 있는
+지점"에만 Interface를 두고, 단일 구현이 확실한 조합 로직은 구체
+클래스로 유지한다).
+
+**4. 테스트 결과**
+
+- `pytest`: **635개 전부 통과**(M19 완료 시점 588개 → M20에서 47개
+  신규: M20-T01 +12, M20-T02 +약간, M20-T03 +약간, M20-T04 +6,
+  M20-T05 +16, M20-T06 +4 — 누적으로 47개 순증)
+- `ruff check src tests`: 클린
+- `mypy --python-executable "$(which python3)" src`: 클린(119개
+  소스 파일). **환경 메모**: 이 세션의 `mypy` 실행 파일은 `uv tool
+  install`로 별도 가상환경에 설치돼 있어 `pip install`로 넣은
+  `fastapi`/`uvicorn`을 기본 명령(`mypy src`)으로는 못 찾는다 —
+  이 환경의 mypy 설치 방식 때문이며 코드/설정 문제가 아니다. 항상
+  `--python-executable "$(which python3)"`로 실행해야 한다(M20-T04
+  에서 최초 발견, TASKS.md에 기록됨).
+- 신규 외부 런타임 의존성: `fastapi>=0.115`, `uvicorn[standard]>=0.30`
+  (이 프로젝트 최초, 기존엔 `pyyaml`뿐). dev 의존성에 `httpx`
+  (`TestClient`용) 추가.
+- FastAPI `response_model`이 stdlib `@dataclass`(Pydantic
+  `BaseModel`이 아님)를 문제없이 직렬화함을 실제 `TestClient` 테스트로
+  확인(사전에 불확실했던 기술 리스크 해소).
+
+**5. Technical Debt 정리**
+
+*M20에서 새로 발생한 기술 부채*
+- 없음 — 새로운 휴리스틱이나 임시 우회는 도입하지 않았다.
+
+*M20 범위 밖으로 명시적으로 제외한 것(사용자 확정, 계속 이월)*
+- Mobile Dashboard/Home Screen Widget/Lock Screen Widget/Live
+  Activity/Dynamic Island/Push Notification(M23 예정), Budget/
+  Token/Billing/Telemetry 표시, Scheduler, Automation, Approval UI,
+  사용자 인증/권한 관리, `DashboardRepository` 쓰기/읽기 Interface
+  물리적 분리, 실제 프로덕션 배포 구성(HTTPS/역방향 프록시).
+
+*계속 이월되는 기존 항목*
+- Effort 라우팅, `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임
+  워크 미통합, Codex/Gemini 실연동 미검증, `MemoryEngine.search()`
+  선형 스캔, 여러 Task에 걸친 누적 예산 추적, 예산 초과 시 Approval
+  흐름, `KnowledgeIndexer`, Review/Documentation Agent로의
+  `knowledge_provider` 확장, `EngineRuntime`↔`EngineRegistry` 중복
+  등록, 실제 로그인/OAuth/Credential/Token Refresh, `CodingAgent`
+  ↔`ExecutionDispatcher` 연결, `ShellAgent` 화이트리스트 코드 고정,
+  `timed_out` 휴리스틱(ADR-0031, `EngineAdapter` 구조적 개선 필요).
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M20-T01~T07 상세 섹션) / `docs/ROADMAP.md`
+(M20 Task List·목표·DoD 반영) / `docs/ARCHITECTURE.md`(v0.22.0, 신규
+§3.18, §7 26종, §8 규칙 12번, §9 디렉터리 구조 갱신) /
+`.ai/DECISIONS.md`(ADR-0032 신규) 완료. `pyproject.toml` 버전은
+기존과 동일하게 유지하되 `dependencies`에 `fastapi`/`uvicorn`,
+`dev`에 `httpx`를 신규 추가(첫 외부 런타임 의존성 도입이므로 버전
+자체보다 의존성 목록 변경이 이 Milestone의 실질적 기준선 변경점).
+`.ai/MEMORY.md`는 이 Review 승인 직후 M1~M19와 동일한 방식으로
+압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절, 13개 항목 전부), Architecture Review
+완료(2절, 신규 10개 소스+정적 3개/수정 4개 소스 파일, "CQRS 경계+
+Core-Web 계층 분리 + 첫 외부 런타임 의존성을 web/에 격리" 설계
+결정 기록), Interface First 검토 완료(3절, 새 Interface
+`DashboardRepository` 추가로 ADR-0032 작성), 테스트 결과 문서화
+완료(4절, 635개 전부 통과 + 사전 불확실했던 dataclass response_model
+리스크 해소 확인), Technical Debt 정리 완료(5절, 신규 부채 없음),
+문서 갱신 완료(6절) — 6개 조건 모두 만족. Review 중 코드 변경이
+필요한 치명적 문제(버그·계약 위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 20 Completed를 선언한다.**
 
 ---
 

@@ -1296,3 +1296,110 @@
   통합 테스트로 증명(M19-T03). `EngineAdapter` 구조적 Timeout 신호,
   Backoff 전략 고도화, 다른 컴포넌트(예: `KnowledgeRepository`)로의
   `RetryExecutor` 재사용은 실제 필요성이 생기기 전까지 이월한다.
+
+## ADR-0032: Real-time Dashboard Platform 도입 — `DashboardRepository` Interface, 첫 외부 런타임 의존성(FastAPI/uvicorn), Core-Web 계층 분리 (Milestone 20)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: M11~M19로 완성된 Execution/Reliability 계층은 실행 상태를
+  확인할 방법이 CLI 로그뿐이었다. 사용자가 "Task 실행/엔진/안정성
+  현황을 실시간으로 보여주는 Dashboard"를 CQRS Read Model로
+  요청했다 — Dashboard는 Task를 실행하지 않고 오직 조회만 한다.
+  사용자의 3단계 승인으로 설계가 확정됐다: (1) `workspace start`
+  서버 런타임 도입, 기존 CLI는 변경 없음. (2)
+  `ExecutionDispatcher`에 `event_bus: EventBus | None = None`을
+  선택적으로 주입 — `ExecutionDispatcher`는 이벤트만 발행하고
+  Dashboard를 직접 참조하지 않으며, `DashboardRepository`가 이벤트를
+  구독해 스스로 Read Model을 갱신한다. API/WebSocket/Web UI는
+  `DashboardService`만 사용한다. (3) Task 구조를 사용자가 직접
+  T01~T07로 확정하고, "Core 계층은 웹 프레임워크를 모르도록
+  유지하고, FastAPI는 Infrastructure 계층에서만 사용한다"는 원칙을
+  명시했다. AskUserQuestion으로 웹 프레임워크(FastAPI+uvicorn)와
+  Web UI 방식(정적 HTML/CSS/Vanilla JS, 빌드 도구 없음)을 확인했다.
+- 결정:
+  1. `domain/dashboard.py`에 `EngineStatus`(READY/RUNNING/
+     AUTH_REQUIRED/ERROR)/`WorkspaceStatus`/`ExecutionRecord`/
+     `ExecutionStats`/`ReliabilityStats`를 신설한다. `EngineExecutionResult`
+     (M18/M19)를 그대로 참조하지 않고 Dashboard가 필요한 필드만
+     옮겨 담는다 — Dashboard는 Execution 계층에 대한 쓰기 접근이
+     없는 순수 Read Model이다.
+  2. `runtime/execution/events.py`에 `ENGINE_EXECUTION_STARTED`/
+     `ENGINE_EXECUTION_COMPLETED`/`ENGINE_AUTHENTICATION_FAILED`
+     Event 타입 상수를 신설한다. `ExecutionDispatcher`는 이 Event를
+     발행하기만 하고 누가 구독하는지 모른다.
+  3. `interfaces/dashboard_repository.py`에 `DashboardRepository`
+     Interface(신규 26번째 Interface)를 신설한다 —
+     `record_execution_started`/`record_execution_completed`/
+     `record_authentication_failure`(쓰기, Event 구독 경로 전용)와
+     `workspace_status`/`engine_statuses`/`recent_executions`/
+     `execution_stats`/`reliability_stats`(읽기, `DashboardService`
+     경로 전용)로 CQRS 쓰기/읽기 메서드를 한 Interface 안에 함께
+     정의한다 — 구현체가 하나(`InMemoryDashboardRepository`)뿐이고
+     내부적으로 같은 상태를 갱신·조회하므로 Interface를 둘로
+     쪼개는 것은 과설계로 판단했다.
+  4. `runtime/dashboard/dashboard_repository.py`의
+     `InMemoryDashboardRepository`가 생성자에서 스스로
+     `event_bus.subscribe()`한다(`ExecutionDispatcher`는 이 클래스의
+     존재를 모름). 통계(`ExecutionStats`/`ReliabilityStats`)는 조회
+     시점에 계산하지 않고 매 Event마다 미리 갱신해 둔다("Dashboard는
+     통계를 계산하지 않는다", 사용자 설계 원칙) — `_RECENT_EXECUTIONS_KEPT
+     = 100`으로 이력을 제한한다.
+  5. `runtime/dashboard/dashboard_service.py`의 `DashboardService`는
+     `DashboardRepository`를 조합해 조회 요청에 응답하는 순수
+     서비스다 — `web/`을 전혀 import하지 않는다(M20-T06에서 `ast`
+     기반 의존성 검증으로 증명). `KNOWN_ENGINES` 목록으로 아직 한
+     번도 실행되지 않은 Engine도 기본 상태(`READY`)로 표시한다.
+  6. `web/`(신규 최상위 패키지, Infrastructure 계층)에
+     `DashboardViewModel`(한국어 라벨 DTO,
+     `DashboardService`/`domain`은 이 타입을 모름) +
+     `DashboardBroadcaster`(WebSocket 연결 관리 + `EventBus` 구독 +
+     `asyncio.get_running_loop()`를 연결 시점에 캡처해
+     `loop.call_soon_threadsafe()`로 동기 이벤트 콜백에서 비동기
+     전송을 예약) + FastAPI `routes.py`(`/api/dashboard`,
+     `/api/summary`, `/api/history`, `/api/engines`) + `app.py`
+     (`create_app`, `/health`, `/ws/dashboard`, `StaticFiles` 정적
+     마운트) + `server.py`(`build_app`/`run_server`) + `static/`
+     (`index.html`/`style.css`/`app.js`, 빌드 도구 없는 Vanilla JS)
+     를 둔다. 현재 시각·경과 시간(`현재 시각 - started_at`)은
+     브라우저가 1초마다 직접 계산한다 — 서버는 Polling하지 않는다.
+  7. `pyproject.toml`에 이 프로젝트 최초의 외부 런타임 의존성
+     `fastapi>=0.115`/`uvicorn[standard]>=0.30`을 추가한다(기존엔
+     `pyyaml`뿐이었다). dev 의존성에 `httpx`(`TestClient`용)를
+     추가한다. `domain`/`interfaces`/`engines`/`runtime`(단, `runtime/
+     dashboard/`도 포함)은 FastAPI/uvicorn을 import하지 않는다 —
+     오직 `web/`만 이 두 패키지를 안다.
+  8. `cli/main.py`에 `start` 서브커맨드(`--host`/`--port`)를
+     추가하되, `web.server.run_server`를 지연 import한다 — 다른
+     기존 CLI 명령은 FastAPI/uvicorn 설치 여부와 무관하게 동작한다.
+- 대안:
+  - `DashboardRepository`를 쓰기 전용/읽기 전용 두 Interface로 분리
+    (엄격한 CQRS) — 기각. 구현체가 하나뿐이고 내부 상태를
+    공유하므로 분리는 간접 계층만 늘리고 실질적 이득이 없다(YAGNI).
+    필요해지면(예: 쓰기와 읽기가 물리적으로 다른 저장소를 쓰게
+    되면) 이 ADR을 갱신해 분리한다.
+  - `ExecutionDispatcher`가 `DashboardRepository`를 직접 호출 —
+    기각(사용자 확정 조건). Event 기반 간접 결합을 유지해야
+    `ExecutionDispatcher`가 Dashboard의 존재 여부와 무관하게 독립적
+    으로 테스트·재사용 가능하다.
+  - WebSocket 갱신 대신 클라이언트 Polling — 기각(사용자 명시 요구
+    "Repository를 Polling하지 않는다"). Event 발생 시점에만 갱신을
+    밀어 불필요한 요청을 없앤다.
+  - React/Vue 등 빌드 도구 기반 Web UI — 기각(사용자 선택). 이
+    프로젝트 규모에서는 정적 HTML/CSS/Vanilla JS로 충분하고, 빌드
+    파이프라인을 새로 들이는 비용이 더 크다.
+- 이유: CQRS(쓰기는 Event, 읽기는 Service 메서드)로 Dashboard가
+  Execution 계층에 어떤 결합도 강제하지 않으면서 실시간성을
+  얻는다. `DashboardService`가 `web/`을 모르게 유지하면, 동일한
+  Read Model을 향후 다른 Presentation(M23 Mobile 등)이 재사용할 수
+  있다. FastAPI/uvicorn을 `web/`에만 가두면 Core 계층의 프레임워크
+  독립성(이 프로젝트가 M1부터 지켜온 원칙)이 첫 외부 런타임
+  의존성 도입에도 깨지지 않는다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.22.0 신규 §3.18(Real-time
+  Dashboard Platform)에 반영, §7 Interfaces 26종으로 갱신
+  (`DashboardRepository` 추가), §8 의존성 규칙에 Dashboard Event
+  구독 경로 추가, §9 디렉터리 구조에 `runtime/dashboard/`/`web/`
+  반영. 실제 `ClaudeCodeEngineAdapter` 실행 결과가 Event → Repository
+  → Service → REST API/WebSocket까지 그대로 반영됨을 통합 테스트로
+  증명(M20-T06). `DashboardRepository` 쓰기/읽기 분리, 실제
+  프로덕션 배포 구성(HTTPS/인증/역방향 프록시), M23 Mobile
+  Presentation은 실제 필요성이 생기기 전까지 이월한다.

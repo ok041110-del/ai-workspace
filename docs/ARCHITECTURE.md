@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.21.0 |
+| 문서 버전 | v0.22.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~18 완료, Milestone 19 완료 — ADR-0031로 신규 §3.17 Reliability(Retry/Timeout/Cancellation) 도입, timed_out 휴리스틱 기술 부채 명시) |
+| 상태 | Draft (Milestone 1~19 완료, Milestone 20 완료 — ADR-0032로 신규 §3.18 Real-time Dashboard Platform 도입, `DashboardRepository` Interface 신설(26종), 첫 외부 런타임 의존성(FastAPI/uvicorn) 도입) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -641,6 +641,60 @@ Execution 위에서 동작한다 — `ExecutionDispatcher`는 재시도 로직�
   메커니즘, `EngineExecutionResult`를 모름) → (인증 확인→Registry
   조회→Adapter 실행을 하나의 시도로 묶은 클로저).
 
+### 3.18 Real-time Dashboard Platform (Milestone 20, ADR-0032)
+CQRS Read Model — Dashboard는 Task를 실행하지 않고 오직 조회만
+한다. Workspace 현황/엔진 현황/실행 현황/최근 실행 내역/안정성
+현황 5개 영역을 실시간으로 보여준다(Event 기반 갱신, Polling 없음).
+- **`domain/dashboard.py`**: `EngineStatus`(READY/RUNNING/
+  AUTH_REQUIRED/ERROR), `WorkspaceStatus`, `ExecutionRecord`,
+  `ExecutionStats`, `ReliabilityStats`. `EngineExecutionResult`
+  (M18/M19)를 그대로 참조하지 않고 필요한 필드만 옮겨 담는다 —
+  Dashboard는 Execution 계층에 대한 쓰기 접근이 없다.
+- **Event(`runtime/execution/events.py`)**: `ExecutionDispatcher`
+  (§3.16)가 `ENGINE_EXECUTION_STARTED`/`ENGINE_EXECUTION_COMPLETED`/
+  `ENGINE_AUTHENTICATION_FAILED`를 발행한다. `ExecutionDispatcher`는
+  `event_bus: EventBus | None = None`을 선택적으로 주입받고,
+  Event를 발행할 뿐 Dashboard의 존재를 전혀 모른다(§8 규칙 12).
+- **`DashboardRepository`(Interface, 신규 26번째)**: 쓰기
+  (`record_execution_started`/`record_execution_completed`/
+  `record_authentication_failure`, Event 구독 경로 전용)와 읽기
+  (`workspace_status`/`engine_statuses`/`recent_executions`/
+  `execution_stats`/`reliability_stats`, `DashboardService` 경로
+  전용)를 한 Interface에 함께 정의한다(ADR-0032 — 구현체가 하나뿐이라
+  분리는 과설계로 판단).
+- **`InMemoryDashboardRepository`(`runtime/dashboard/`)**: 생성자에서
+  스스로 `event_bus.subscribe()`한다. 통계는 조회 시점에 계산하지
+  않고 매 Event마다 미리 갱신해 둔다("Dashboard는 통계를 계산하지
+  않는다", 사용자 설계 원칙). 최근 실행 이력은 100건으로 제한한다.
+- **`DashboardService`(`runtime/dashboard/`)**: `DashboardRepository`를
+  조합해 조회에 응답하는 순수 서비스. **`web/`을 전혀 import하지
+  않는다**(M20-T06에서 `ast` 기반 검증으로 증명) — 동일한 Read
+  Model을 향후 다른 Presentation(M23 Mobile 등)이 재사용할 수 있게
+  한다. `KNOWN_ENGINES` 목록으로 아직 실행되지 않은 Engine도 기본
+  상태(`READY`)로 채운다.
+- **`web/`(신규 최상위 패키지, Infrastructure 계층, 이 프로젝트
+  최초의 서버/외부 런타임 의존성)**: `DashboardViewModel`(한국어
+  라벨 DTO — Engine 이름만 예외로 영어 유지) +
+  `DashboardBroadcaster`(WebSocket 연결 관리, `EventBus` 구독,
+  연결 시점에 캡처한 `asyncio.get_running_loop()`에
+  `loop.call_soon_threadsafe()`로 동기 이벤트 콜백→비동기 전송 경계를
+  넘김) + FastAPI `routes.py`(`/api/dashboard`, `/api/summary`,
+  `/api/history`, `/api/engines`) + `app.py`(`create_app`, `/health`,
+  `/ws/dashboard`, `StaticFiles` 정적 마운트) + `server.py`
+  (`build_app`/`run_server`, 앱 조립과 실제 소켓 기동을 분리해
+  `TestClient`로 테스트 가능) + `static/`(`index.html`/`style.css`/
+  `app.js`, 빌드 도구 없는 Vanilla JS). 현재 시각·경과 시간
+  (`현재 시각 - started_at`)은 브라우저가 1초마다 직접 계산한다 —
+  서버는 Polling하지 않는다.
+- **`cli/main.py`의 `start` 서브커맨드**: `--host`/`--port`로
+  `web.server.run_server`를 지연 import해 호출한다 — 기존 CLI
+  명령은 FastAPI/uvicorn 설치 여부와 무관하게 그대로 동작한다.
+- **의존 방향**: `ExecutionDispatcher` → (Event 발행, `EventBus`만
+  앎) ⇢ `InMemoryDashboardRepository`(스스로 구독) →
+  `DashboardService` → `web/`(REST/WebSocket/정적 UI). Core 계층
+  (`domain`/`interfaces`/`engines`/`runtime`, `runtime/dashboard/`
+  포함)은 FastAPI/uvicorn을 모른다 — 오직 `web/`만 안다(ADR-0032).
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -691,10 +745,11 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentCapability` | Coordination/Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP … |
 | `AgentStatus` | 생명주기 상태 |
 
-## 7. Interfaces (추상 계약, 총 25종)
+## 7. Interfaces (추상 계약, 총 26종)
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
+| `DashboardRepository` | Execution 결과를 Event로 받아 Dashboard Read Model에 기록 + 조회 | Milestone 20 (M20-T01 계약, `InMemoryDashboardRepository` 구현) | **완료(계약+구현)** |
 | `LLMPolicyEngine` | AgentRole별 LLM Provider/Model/Effort Rule 기반 결정 | Milestone 5 (M5-T01) | **완료(계약+구현)** |
 | `BudgetPolicyEngine` | `CostEstimate` vs `Budget` 대조로 실행 허용 여부 결정 | Milestone 15 (M15-T01 계약, `InMemoryBudgetPolicyEngine` 구현) | **완료(계약+구현)** |
 | `KnowledgeRepository` | 프로젝트 문서를 `KnowledgeDocument`로 조회 | Milestone 16 (M16-T01 계약, `FileKnowledgeRepository` 구현) | **완료(계약+구현)** |
@@ -748,6 +803,13 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
     Knowledge Repository** 순서로만 이루어진다(Milestone 16). Agent는
     Knowledge Search/Knowledge Repository를 직접 호출하지 않는다 — §8
     규칙 7(Memory 접근)과 같은 층위이나 완전히 별도의 경로다.
+12. **Dashboard 갱신은 `ExecutionDispatcher` → Event Bus → `DashboardRepository`
+    (구독)** 순서로만 이루어진다(Milestone 20). `ExecutionDispatcher`는
+    `DashboardRepository`를 직접 참조하지 않는다(CQRS 쓰기측 독립).
+    `web/`(API/WebSocket/Web UI)은 오직 `DashboardService`(읽기)만
+    호출하고, `domain`/`interfaces`/`engines`/`runtime`(Core 계층)은
+    `web/`이나 FastAPI/uvicorn을 참조하지 않는다 — 이 프로젝트에서
+    프레임워크를 아는 유일한 계층은 `web/`이다.
 
 ## 9. 디렉터리 구조와 컴포넌트 매핑
 
@@ -756,7 +818,7 @@ src/ai_workspace/
 ├── domain/            # Project, Mission, Workflow, Task, Step,
 │                       #   WorkspaceSession, Agent, AgentRole, AgentCapability, AgentStatus
 │                       #   (구현됨, T1-14~T1-17)
-├── interfaces/         # 추상 계약 (25종, §7) (구현됨, T1-15~T1-21, M11-T01, M15-T01/T02, M16-T01/T02, M17-T01/T02, M18-T01)
+├── interfaces/         # 추상 계약 (26종, §7) (구현됨, T1-15~T1-21, M11-T01, M15-T01/T02, M16-T01/T02, M17-T01/T02, M18-T01, M20-T01)
 ├── core/              # Workspace Core (WorkspaceSession 관리, Runtime 초기화)
 │                       #   (구현됨, T1-22)
 ├── runtime/           # (Milestone 2 이후)
@@ -765,6 +827,9 @@ src/ai_workspace/
 │   │                   #   + engine_registry.py (InMemoryEngineRegistry, Milestone 17)
 │   ├── execution/     #   ExecutionDispatcher: Decision -> Execution 연결 (Milestone 18)
 │   │                   #   + retry_executor.py (RetryExecutor, Milestone 19)
+│   │                   #   + events.py (Dashboard Event 상수, Milestone 20)
+│   ├── dashboard/     #   InMemoryDashboardRepository + DashboardService
+│   │                   #   (Read Model, Core 계층, web/을 모름, Milestone 20)
 │   └── workflow/      #   WorkflowRunner: Workflow 순차 자동 실행 (Milestone 12)
 ├── agents/            # 능력별 Agent 구현체 (Milestone 2 이후)
 ├── engines/           # Core Engines 구현 (Task/Workflow/Approval/Automation, Milestone 2 이후)
@@ -782,7 +847,12 @@ src/ai_workspace/
 │                       #   구현, Milestone 11)
 ├── storage/           # FileProjectRepository/FileAgentRepository/FileEventStore
 │                       #   (구현됨, T1-23) + FileKnowledgeRepository (Milestone 16)
+├── web/               # Infrastructure 계층 — FastAPI/uvicorn을 아는 유일한 곳
+│                       #   (Milestone 20): dashboard_viewmodel.py, routes.py,
+│                       #   dashboard_broadcaster.py, app.py, server.py,
+│                       #   static/(index.html/style.css/app.js, 빌드 도구 없음)
 └── cli/               # CLI 진입점 (UI Surface의 하나) — main.py (구현됨, T1-24)
+│                       #   + start 서브커맨드로 web.server.run_server 지연 import (Milestone 20)
 ```
 
 ## 10. 확장성 고려사항
