@@ -565,6 +565,46 @@
   (신규 이월: 실행 연결은 M18 예정으로 명시적으로 분리, Model 수준
   결정/ML 기반 고급 판단은 "사용자가 이번 범위에서 의도적으로 제외"
   한 항목이라 기존 부채 목록에는 추가하지 않음).
+- **Milestone 18(Multi-Engine Execution Integration) 완료 —
+  2026-07-27 사용자 승인.** 목표는 "M17의 `EngineSelectionDecision`
+  을 실제 실행으로 연결하는 `ExecutionDispatcher`를 도입해, 선택된
+  Engine을 인증 상태 확인 후 실행한다"(MVP). **핵심 발견**: 요청받은
+  새 "ExecutionResult" Domain(success/output/error/engine/
+  execution_time)이 M11 `interfaces/execution_environment.py`의
+  기존 `ExecutionResult`(returncode/stdout/stderr, 프로세스 결과)와
+  이름이 겹쳐 **`EngineExecutionResult`**로 명명(사용자 승인, M16
+  `MemoryEngine` 충돌 발견과 같은 종류의 사전 점검). **사용자 승인
+  조건**: (1) `EngineExecutionResult` 명명, (2) `ExecutionDispatcher`
+  는 Interface가 아닌 구체 클래스(M12 `WorkflowRunner`와 동일
+  패턴), (3) 인증 실패=`AuthenticationRequiredError` 예외/Decision
+  부재=`EngineExecutionResult(success=False)`로 구분, (4)
+  `CodingAgent`는 수정하지 않고 `ExecutionDispatcher`를 독립적으로
+  구현·검증. `domain/execution_result.py`에 `EngineExecutionResult`
+  (Provider 독립), `interfaces/authentication_manager.py`의
+  `AuthenticationManager`(`is_authenticated`/`authentication_status`
+  만 — `login`/`logout` 없음, "로그인 수행"이 아니라 "상태 확인"만
+  담당, 신규 **ADR-0030**)/`AuthenticationRequiredError`,
+  `engines/authentication_manager.py`의
+  `InMemoryAuthenticationManager`(실제 로그인/OAuth/Credential
+  없음). `runtime/execution/execution_dispatcher.py`의
+  `ExecutionDispatcher`가 `dispatch(decision, task)`로 `decision`이
+  `None`이면 Registry/Auth 어느 쪽도 호출하지 않고 즉시 실패 결과를,
+  미인증이면 예외를, 인증되면 `EngineRegistry.get()`으로 정확히
+  하나의 Adapter만 실행한다. 실제 `ClaudeCodeEngineAdapter`+
+  `ExecutionEnvironment`로 실행됨(명령이 실제로 기록됨)과
+  `EngineSelectionPolicy` 소스 코드에 `ExecutionDispatcher` 참조가
+  없음을 모두 통합 테스트로 증명(M18-T03) — Task→Selection Policy→
+  Decision→Dispatcher→Authentication→Registry→Adapter→
+  ExecutionEnvironment→`EngineExecutionResult`로 이어지는 **첫
+  End-to-End 실행 경로 완성**(M11/M15/M16/M17이 실행까지 연결됨).
+  신규 소스 파일 4개, **기존 소스 파일 수정 0개**(M17에 이어 두
+  번째로 기존 파일 무수정). 전체 `pytest` 567개(M17 완료 553개 →
+  M18에서 14개 신규) 통과, `ruff`/`mypy` 클린. **새 최상위 Interface
+  1개**(`AuthenticationManager`) 추가(`ExecutionDispatcher`는 구체
+  클래스라 ADR 대상 아님) — ADR-0017/0025/0028/0029와 동일한 "신규
+  계층 도입" 계열로 ADR-0030 기록. 이월 부채는 M17과 동일하게 유지
+  (신규 이월: 실제 로그인/OAuth/Credential/Token Refresh, `CodingAgent`
+  연결은 사용자가 명시적으로 후속 Milestone으로 분리).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
@@ -714,6 +754,7 @@ UI(CLI·Dashboard·Mobile·Voice·REST API·Slack·Discord·Webhook)
 | ADR-0027 | `EngineRuntime`에 `estimate_cost()` 추가 + `BudgetPolicyEngine` 신설(Token & Cost Optimization) | 승인됨 |
 | ADR-0028 | Project Knowledge System 도입(`KnowledgeRepository`/`KnowledgeSearch`/`KnowledgeProvider`), 기존 `MemoryEngine`과 분리 | 승인됨 |
 | ADR-0029 | Intelligent Engine Selection 도입(`EngineRegistry`+`EngineSelectionPolicy`, Decision Only), `EngineRuntime` 계약 미확장 | 승인됨 |
+| ADR-0030 | Execution Layer 도입(`ExecutionDispatcher` 구체 클래스 + `AuthenticationManager`), Decision-Execution 완전 분리, 첫 End-to-End 실행 경로 완성 | 승인됨 |
 
 기술 스택(Python, dataclasses, 파일 기반 저장, CLI, 인메모리 Event Bus+파일
 Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
@@ -751,15 +792,17 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   승인). 남은 진행 경로: M5-T02(Agent가 실제로 이 Engine을 참조하도록
   연결) → M6+(Self Optimizer 자동 최적화, 원래 M5 목표였으나 이관됨).
   자세한 내용은 `.ai/RULES.md` §7 "Temporary LLM Policy" 참고.
-- **현재 상태(2026-07-27)**: Milestone 1~17 전체 완료(사용자 승인).
-  Milestone 18(Multi-Engine Execution Integration)은 검토 시작 시점
-  (Task Driven Development 원칙, 목표/DoD/Task List는 착수 시 새로
-  정의). 버전 v0.5.0 유지(ADR-0024 기준선 — M17까지의 변경은 전부
-  기존 계약 위에서의 추가·확장이거나 M5/M11/M16/M17과 같은 "신규
-  계층 도입" 계열이라 기준선 재선언 대상이 아니라고 판단했으나,
-  M16+M17에서 Interface가 19→24종으로 크게 늘어난 만큼 다음 기준선
-  재검토 시점에 누적 변화를 함께 검토할 필요가 있음). `pytest` 553개,
-  `ruff`/`mypy` 클린.
+- **현재 상태(2026-07-27)**: Milestone 1~18 전체 완료(사용자 승인).
+  Milestone 19는 아직 목표/DoD/Task List가 정의되지 않음(Task Driven
+  Development 원칙). 버전 v0.5.0 유지(ADR-0024 기준선 — M18까지의
+  변경은 전부 기존 계약 위에서의 추가·확장이거나 M5/M11/M16~M18과
+  같은 "신규 계층 도입" 계열이라 기준선 재선언 대상이 아니라고
+  판단했으나, M16~M18에서 Interface가 19→25종으로 크게 늘어난 만큼
+  다음 기준선 재검토 시점에 누적 변화를 함께 검토할 필요가 있음).
+  `pytest` 567개, `ruff`/`mypy` 클린. Task→Selection Policy→Decision→
+  Dispatcher→Authentication→Registry→Adapter→ExecutionEnvironment→
+  `EngineExecutionResult`로 이어지는 첫 End-to-End 실행 경로가
+  완성됐다(M11/M15/M16/M17/M18).
 - **이 환경의 제약(2026-07-26 확인)**: `claude` CLI만 설치되어 있고
   `codex`/`gemini` CLI는 설치되어 있지 않다(`which` 확인). Codex/Gemini
   관련 Task는 이 세션에서 실행 불가 — 실제 CLI가 설치된 환경이 필요하다.

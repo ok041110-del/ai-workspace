@@ -5599,6 +5599,8 @@ First 검토 완료(3절, 새 Interface 1개를 "신규 계층 도입" 계열 AD
 
 **사용자 승인을 조건으로 Milestone 18 Completed를 선언한다.**
 
+**Milestone 18 종료 — 2026-07-27 사용자 승인.**
+
 **Milestone 19 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
 않았다. M18로 Task→...→`EngineExecutionResult`까지 이어지는 첫
 End-to-End 실행 경로가 완성됐다 — 다만 다음 단계(예: 실제
