@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 
 from ai_workspace.adapters.codex_provider import CodexProvider
-from ai_workspace.adapters.process_runner import ProcessResult
 from ai_workspace.domain.task import Task, TaskStatus
+from ai_workspace.interfaces.execution_environment import ExecutionResult
 
 
 def make_task(title: str = "구현하기") -> Task:
@@ -35,9 +35,9 @@ def test_parse_result_extracts_content_field_from_last_ndjson_line() -> None:
             json.dumps({"type": "final", "content": "완료된 결과"}),
         ]
     )
-    process_result = ProcessResult(returncode=0, stdout=stdout, stderr="")
+    execution_result = ExecutionResult(returncode=0, stdout=stdout, stderr="")
 
-    result = provider.parse_result(process_result)
+    result = provider.parse_result(execution_result)
 
     assert result.success is True
     assert result.output == "완료된 결과"
@@ -45,9 +45,9 @@ def test_parse_result_extracts_content_field_from_last_ndjson_line() -> None:
 
 def test_parse_result_falls_back_to_raw_stdout_when_not_json() -> None:
     provider = CodexProvider()
-    process_result = ProcessResult(returncode=0, stdout="일반 텍스트 출력", stderr="")
+    execution_result = ExecutionResult(returncode=0, stdout="일반 텍스트 출력", stderr="")
 
-    result = provider.parse_result(process_result)
+    result = provider.parse_result(execution_result)
 
     assert result.success is True
     assert result.output == "일반 텍스트 출력"
@@ -55,9 +55,9 @@ def test_parse_result_falls_back_to_raw_stdout_when_not_json() -> None:
 
 def test_parse_result_returns_failure_for_nonzero_exit_without_json() -> None:
     provider = CodexProvider()
-    process_result = ProcessResult(returncode=1, stdout="", stderr="에러 발생")
+    execution_result = ExecutionResult(returncode=1, stdout="", stderr="에러 발생")
 
-    result = provider.parse_result(process_result)
+    result = provider.parse_result(execution_result)
 
     assert result.success is False
     assert result.error == "에러 발생"

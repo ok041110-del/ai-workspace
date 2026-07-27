@@ -36,11 +36,15 @@ class InMemoryEngineRuntime(EngineRuntime):
         raise NoSuitableEngineError(required_capabilities)
 
     def run(
-        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
     ) -> EngineResult:
         adapter = self._select(required_capabilities)
         session_id = adapter.create_session()
-        result = adapter.run(session_id, task)
+        result = adapter.run(session_id, task, model=model)
         adapter.destroy_session(session_id)
         self._task_status[task.task_id] = (
             EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED
@@ -48,13 +52,17 @@ class InMemoryEngineRuntime(EngineRuntime):
         return result
 
     def run_parallel(
-        self, tasks: list[Task], required_capabilities: frozenset[str] = frozenset()
+        self,
+        tasks: list[Task],
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
     ) -> list[EngineResult]:
         adapter = self._select(required_capabilities, require_parallel=True)
         results: list[EngineResult] = []
         for task in tasks:
             session_id = adapter.create_session()
-            result = adapter.run(session_id, task)
+            result = adapter.run(session_id, task, model=model)
             adapter.destroy_session(session_id)
             self._task_status[task.task_id] = (
                 EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED

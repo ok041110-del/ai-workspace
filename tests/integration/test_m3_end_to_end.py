@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import pytest
-from tests.adapters.test_claude_code_engine_adapter import FakeProcessRunner, success_result
+from tests.adapters.test_claude_code_engine_adapter import success_result
 from tests.interfaces.fakes import (
     FakeAgentManager,
     FakeAgentRegistry,
     FakeAgentScheduler,
+    FakeExecutionEnvironment,
     FakeProjectRepository,
     FakeWorkflowEngine,
 )
@@ -25,17 +26,19 @@ from ai_workspace.runtime.engine.managed_engine_runtime import ManagedEngineRunt
 from ai_workspace.runtime.engine.recovering_engine_runtime import RecoveringEngineRuntime
 
 
-def assemble() -> tuple[WorkspaceCore, EngineApprovalPipeline, InMemoryEventBus, FakeProcessRunner]:
+def assemble() -> (
+    tuple[WorkspaceCore, EngineApprovalPipeline, InMemoryEventBus, FakeExecutionEnvironment]
+):
     """M3 전체 계층을 실제 구현으로 조립한다: WorkspaceCore ↔
     RecoveringEngineRuntime(ManagedEngineRuntime(ClaudeCodeEngineAdapter))
     ↔ EngineApprovalPipeline, 모두 같은 EventBus를 공유한다.
     ClaudeCodeEngineAdapter만 실제 `claude` 프로세스 대신
-    `FakeProcessRunner`를 주입받는다(비용·비결정성 방지, 명령 조립·JSON
-    파싱 등 실제 코드 경로는 그대로 거친다)."""
+    `FakeExecutionEnvironment`를 주입받는다(비용·비결정성 방지, 명령 조립·
+    JSON 파싱 등 실제 코드 경로는 그대로 거친다)."""
     event_bus = InMemoryEventBus()
-    process_runner = FakeProcessRunner()
-    process_runner.result = success_result("완료")
-    adapter = ClaudeCodeEngineAdapter(process_runner=process_runner)
+    execution_environment = FakeExecutionEnvironment()
+    execution_environment.result = success_result("완료")
+    adapter = ClaudeCodeEngineAdapter(execution_environment=execution_environment)
     managed_runtime = ManagedEngineRuntime(event_bus=event_bus)
     managed_runtime.register_engine("claude_code", adapter)
     recovering_runtime = RecoveringEngineRuntime(inner=managed_runtime, retry_policy=RetryPolicy())
@@ -53,11 +56,11 @@ def assemble() -> tuple[WorkspaceCore, EngineApprovalPipeline, InMemoryEventBus,
         event_bus=event_bus,
         engine_runtime=recovering_runtime,
     )
-    return core, pipeline, event_bus, process_runner
+    return core, pipeline, event_bus, execution_environment
 
 
 def test_full_stack_approve_and_execute_publishes_events_in_order() -> None:
-    core, pipeline, event_bus, process_runner = assemble()
+    core, pipeline, event_bus, execution_environment = assemble()
     received: list[Event] = []
     event_bus.subscribe(received.append)
     task = Task(task_id="t1", project_id="p1", title="문서화하기")
@@ -74,12 +77,12 @@ def test_full_stack_approve_and_execute_publishes_events_in_order() -> None:
         "engine_task_started",
         "engine_task_completed",
     ]
-    assert process_runner.received_commands[0][:3] == ["claude", "-p", "문서화하기"]
+    assert execution_environment.executed_commands[0][:3] == ["claude", "-p", "문서화하기"]
     assert core.engine_runtime.status("t1").name == "COMPLETED"
 
 
 def test_full_stack_reject_blocks_execution_and_stops_event_chain() -> None:
-    _core, pipeline, event_bus, process_runner = assemble()
+    _core, pipeline, event_bus, execution_environment = assemble()
     received: list[Event] = []
     event_bus.subscribe(received.append)
     task = Task(task_id="t1", project_id="p1", title="문서화하기")
@@ -93,13 +96,13 @@ def test_full_stack_reject_blocks_execution_and_stops_event_chain() -> None:
         "approval_requested",
         "approval_rejected",
     ]
-    assert process_runner.received_commands == []
+    assert execution_environment.executed_commands == []
 
 
 def test_workspace_core_engine_session_tracks_the_approved_task() -> None:
     """EngineSession 연동은 이번 E2E 테스트의 핵심이 아니므로 부수적으로만
     확인한다 — 정상 실행 흐름 자체는 위 테스트가 이미 검증한다."""
-    core, pipeline, _event_bus, _process_runner = assemble()
+    core, pipeline, _event_bus, _execution_environment = assemble()
     ws_session = core.start_session(project_id="p1")
     task = Task(task_id="t1", project_id="p1", title="문서화하기")
     engine_session = core.start_engine_session(task_id=task.task_id)

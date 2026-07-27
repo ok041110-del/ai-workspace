@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.13.0 |
-| 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1~4 완료, v0.5.0 아키텍처 기준선 선언, Milestone 5 구현 완료 — 사용자 승인 대기) |
+| 문서 버전 | v0.15.0 |
+| 작성일 | 2026-07-26 |
+| 상태 | Draft (Milestone 1~14 완료, v0.5.0 아키텍처 기준선 선언, Milestone 15 목표 미정) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -49,6 +49,11 @@ Roadmap
 | M3. 실행 엔진 연동 & 상호작용 (Engine Integration & Interaction) | Engine Runtime & Engine Adapter(Claude Code 우선) 구현 | **완료 (2026-07-25 사용자 승인)** — Interaction Layer·Coding Agent 실제 경로 통합은 M4로 공식 이관 |
 | M4. 자동화 및 확장 (Automation & Scale) | 다중 프로젝트, 메모리 고도화, 자동화 시나리오 | **완료 (2026-07-26 사용자 승인)** — v0.5.0 아키텍처 기준선 선언(ADR-0024) |
 | M5. 실제 개발 수행 (Real Development Execution) | LLM Policy Engine, DevelopmentContext+Agent 강화, ShellAgent, Multi-Engine(Codex/Gemini), Workflow 조건부 분기 | **완료 (2026-07-26 사용자 승인)** |
+| M6. Policy 기반 실행 라우팅 (Policy-Driven Engine Routing) | `LLMPolicyDecision`에 따라 실제 등록된 `EngineAdapter`(Claude Code/Codex/Gemini CLI)를 자동 선택해 실행 — RULES §7 로드맵의 "Policy Engine 자동 선택" 단계 완성 | **완료 (2026-07-26 사용자 승인)** |
+| M7. Memory 요약 (Memory Summarization) | `DocumentationAgent`의 Engine 실행 결과를 Memory Snapshot 요약으로 저장 — PRD 7.4 "검색/요약" 갭 완성 | **완료 (2026-07-26 사용자 승인)** |
+| M8. 세션 연속성 (Session Continuity) | `PlanningAgent`가 Mission 시작 시 project의 최신 Memory Snapshot을 자동 복원 — PRD 7.4 "자동 이어받기" 갭 완성 | **완료 (2026-07-26 사용자 승인)** |
+| M9. 세션 견고성 (Session Robustness) | `PlanningAgent`에 세션 리셋 옵션(`reset=True`) 추가, 동시 Project Session 경쟁 조건 조사 — M8 Review 이월 갭 완성 | **완료 (2026-07-26 사용자 승인)** |
+| M10. 실행 복원력 (Execution Resilience) | `run_parallel()`의 개별 Task 실패 격리(배치 전체 결과 유실 버그 수정) + 실패 Task만 개별 재시도 — M4 Review 이월 갭 완성 | **구현+Review 완료 (2026-07-26) — 사용자 승인 대기** |
 
 ---
 
@@ -279,6 +284,367 @@ Review" 7절 참고).
 방식 불일치(M2 이월 부채 #4)를 조사한 결과, `src/ai_workspace/`의 모든
 Event 생성 지점이 이미 `uuid.uuid4()`로 일관되어 있어(M3에서 자연히
 해소됨) 코드 변경 없이 부채 항목만 해소로 종결했다.
+
+---
+
+## Milestone 6 — Policy 기반 실행 라우팅 (Policy-Driven Engine Routing)
+
+**목표**: `.ai/RULES.md` §7(Temporary LLM Policy) 로드맵의 "M4 단계: Policy
+Engine이 자동으로 Provider/Model/Effort를 선택한다"를 완성한다. M5-T01/T02가
+정책을 조회·기록하는 데까지만 연결했던 것을, 이번에는 실제로
+`LLMPolicyDecision`에 따라 서로 다른 등록된 `EngineAdapter`가 선택되어
+실행되도록 만든다 — M5 Review가 남긴 "정책→실행 연결 미완성" 갭을 해소하는
+것이 핵심이다.
+
+> **2026-07-26 사용자 확정**: 범위를 좁게 유지한다. Adapter 계열 통합
+> (`ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 흡수), Codex/Gemini CLI
+> 실제 재검증, 소규모 이월 부채(`run_parallel` 개별 재시도/
+> `MemoryEngine.search` 성능/`ShellAgent` 화이트리스트 외부화 등)는 이번
+> Milestone 범위에서 명시적으로 제외하고 계속 이월한다.
+
+**Milestone Definition of Done**
+1. `LLMPolicyDecision.model.provider`에 따라 `CodingAgent`/`ReviewAgent`/
+   `DocumentationAgent`가 실제로 서로 다른 등록된 `EngineAdapter`를 선택해
+   실행함이 통합 테스트로 검증된다.
+2. `ManagedEngineRuntime`이 2개 이상의 `EngineAdapter`를 동시에 등록할 수
+   있고, `required_capabilities`로 올바른 Adapter를 선택하며, 만족하는
+   Adapter가 없으면 `NoSuitableEngineError`를 던진다.
+3. `EngineRuntime`/`EngineAdapter` 인터페이스 계약은 변경되지 않는다
+   (Interface First).
+4. 기존 `pytest` 전체 스위트 + 신규 테스트 모두 통과, `ruff`/`mypy` 클린.
+5. Adapter 계열 통합, Codex/Gemini CLI 실제 재검증, 소규모 이월 부채는
+   이번 범위에서 제외되며 계속 이월된다.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 6" 참고)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M6-T01 | `ManagedEngineRuntime` 다중 Adapter 등록 지원 — **완료** | M5 Review 이월 갭 #1 |
+| M6-T02 | `LLMProvider` → Engine Capability 매핑 + Agent 3종(Coding/Review/Documentation) 라우팅 반영 — **완료** | RULES §7 M4 단계(자동 선택) |
+| M6-T03 | 다중 Adapter 조립 + End-to-End 검증 — **완료** | Milestone DoD |
+| M6-T04 | Milestone 6 Review — 완료 | 관례 |
+
+**진행 상태**: M6-T01~T04 전체 완료. **2026-07-26 사용자 승인으로
+Milestone 6 종료.** Retrospective(Model/Effort 수준 라우팅 미완성을
+M7+ 논의 대상으로 명시)는 `.ai/TASKS.md`의 "Milestone 6 Review" 참고.
+
+---
+
+## Milestone 7 — Memory 요약 (Memory Summarization)
+
+**목표**: PRD 7.4(장기 메모리)와 M4 DoD가 원래 요구했던 "검색/요약" 중
+"요약"만 M4-T08에서 "LLM 없이는 구현 불가"로 이관됐던 항목을 완성한다.
+M6에서 실제 LLM 호출 인프라(`EngineRuntime`→`EngineAdapter`)가 완성되어
+이 차단 사유가 해소됐다.
+
+> **2026-07-26 사용자 확정**: 요약 트리거는 **파이프라인 종료
+> 시점**(`DocumentationAgent`)으로 좁힌다. 온디맨드 트리거는 범위 제외.
+
+**Milestone Definition of Done**
+1. `DocumentationAgent`가 `engine_runtime.run()` 결과를 캡처해
+   `context_manager.create_snapshot(session, summary=...)`로 전달한다.
+2. `ContextManager.create_snapshot()`이 선택적 `summary` 파라미터를 받아
+   Snapshot에 포함시키며, 기존 무인자 호출과 하위 호환된다.
+3. 저장된 요약을 `restore_snapshot()`/`assemble_context()`로 조회,
+   `find_snapshots(query)`로 검색할 수 있다(PRD 7.4 완전 충족).
+4. `MemoryEngine` 인터페이스는 변경되지 않는다(ADR-0017 경계 유지).
+5. 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린.
+6. Adapter 통합/CLI 실제 재검증/Model·Effort 라우팅/소규모 이월 부채는
+   범위 밖으로 유지된다.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 7" 참고)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M7-T01 | `ContextManager.create_snapshot()`에 선택적 `summary` 파라미터 추가 — **완료** | PRD 7.4 갭 |
+| M7-T02 | `DocumentationAgent`가 버려지던 engine 결과를 요약으로 전달 — **완료** | PRD 7.4 갭 |
+| M7-T03 | End-to-End 검증 — **완료** | Milestone DoD |
+| M7-T04 | Milestone 7 Review — 완료 | 관례 |
+
+**진행 상태**: M7-T01~T04 전체 완료. **2026-07-26 사용자 승인으로
+Milestone 7 종료.** Retrospective(`WorkspaceSession.memory_snapshot_id`
+자동 갱신 미비를 M8+ 논의 대상으로 명시)는 `.ai/TASKS.md`의 "Milestone
+7 Review" 참고.
+
+---
+
+## Milestone 8 — 세션 연속성 (Session Continuity)
+
+**목표**: M7 Review에서 드러난 갭을 해소한다 — `WorkspaceSession.
+memory_snapshot_id`가 자동 갱신되지 않아 PRD 7.4("새 세션이 관련
+메모리를 자동으로 이어받는다")가 수동으로만 가능하던 것을 완성한다.
+
+> **핵심 설계 결정**: `docs/ARCHITECTURE.md` §8 규칙 7("Memory 접근은
+> Agent → Context Manager → Memory Engine 순서로만")에 따라 Workspace
+> Core는 Context Manager에 의존할 수 없다 — 대신 Agent 계층(Rule 5)에서
+> 해결한다. `PlanningAgent`(파이프라인 진입점)가 Mission 시작 시 최신
+> snapshot을 자동 복원하는 방식으로, 기존 의존성 규칙을 전혀 바꾸지
+> 않고 세션 연속성을 구현한다.
+
+**Milestone Definition of Done**
+1. `ContextManager.latest_snapshot_id(project_id)`가 그 project_id로
+   가장 최근에 생성된 snapshot_id를 반환한다(없으면 `None`).
+2. `DocumentationAgent`가 Mission 종료 시 `workspace_session.
+   memory_snapshot_id`를 새 snapshot_id로 갱신한다.
+3. `PlanningAgent`가 Mission 시작 시 `memory_snapshot_id`가 비어 있으면
+   자동으로 복원한다.
+4. 같은 세션의 연속 Mission, 그리고 새 `WorkspaceSession`으로도 이전
+   요약을 자동으로 이어받음이 통합 테스트로 증명된다.
+5. `WorkspaceCore`/`MemoryEngine` 인터페이스는 변경되지 않는다.
+6. 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린.
+7. 동시성 경쟁 조건, 세션 리셋 옵션, Model/Effort 라우팅, Adapter 통합
+   등은 범위 밖으로 유지된다.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 8" 참고)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M8-T01 | `ContextManager.latest_snapshot_id(project_id)` 신규 메서드 — **완료** | M7 Review 이월 갭 |
+| M8-T02 | `DocumentationAgent`가 Mission 종료 시 세션에 최신 snapshot_id 기록 — **완료** | Milestone DoD |
+| M8-T03 | `PlanningAgent`가 Mission 시작 시 최신 snapshot 자동 복원 — **완료** | Milestone DoD |
+| M8-T04 | End-to-End 검증 — **완료** | Milestone DoD |
+| M8-T05 | Milestone 8 Review — **완료** | 관례 |
+
+**진행 상태**: M8-T01~T04 전체 완료. **2026-07-26 사용자 승인으로
+Milestone 8 종료.** Retrospective(동시성 경쟁 조건/세션 리셋 옵션을
+M9+ 논의 대상으로 명시)는 `.ai/TASKS.md`의 "Milestone 8 Review" 참고.
+
+---
+
+## Milestone 9 — 세션 견고성 (Session Robustness)
+
+**목표**: M8 Review가 명시적으로 범위 밖에 둔 두 갭 — 세션 리셋 옵션 없음,
+동시 Project Session 경쟁 조건 — 을 해소한다. M8 Review가 제시한 3개 후보
+(Model/Effort 라우팅, 세션 견고성, Adapter 계열 통합) 중 Interface 변경이
+필요 없고 외부 CLI 바이너리 의존이 없는 세션 견고성을 선택했다.
+
+**Milestone Definition of Done**
+1. 동시 Project Session 경쟁 조건이 현재 코드베이스에서 실제 재현
+   가능한지 조사하고 결론을 문서화한다.
+2. `PlanningAgent.plan_mission(reset=True)`가 새 세션의 자동 복원(M8-T03)을
+   건너뛴다.
+3. `reset=False`(기본값)는 기존 M8 동작과 완전히 하위 호환된다.
+4. 리셋 시나리오가 전체 파이프라인에서 End-to-End로 검증된다.
+5. `WorkspaceCore`/`ContextManager`/`MemoryEngine` 인터페이스는 변경되지
+   않는다.
+6. 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린.
+7. Model/Effort 라우팅, Adapter 계열 통합, CLI `--reset` 플래그 노출은
+   범위 밖으로 유지된다.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 9" 참고)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M9-T01 | 동시 Project Session 시나리오 조사 — **완료(조치 불필요로 종결)** | M8 Review 이월 갭 |
+| M9-T02 | 동시성 경쟁 조건 해소 — **스킵**(M9-T01 결과에 따름) | M8 Review 이월 갭 |
+| M9-T03 | `PlanningAgent` 세션 리셋 옵션(`reset=True`) — **완료** | M8 Review 이월 갭 |
+| M9-T04 | End-to-End 검증 — **완료** | Milestone DoD |
+| M9-T05 | Milestone 9 Review — **완료** | 관례 |
+
+**진행 상태**: M9-T01(조사, 조치 불필요로 종결)·M9-T03·M9-T04 완료,
+M9-T02는 M9-T01 결과에 따라 스킵. **2026-07-26 사용자 승인으로
+Milestone 9 종료.** Retrospective(M10 착수 전 재분석 대상 5개 Technical
+Debt 후보 제시)는 `.ai/TASKS.md`의 "Milestone 9 Review" 참고.
+
+---
+
+## Milestone 10 — 실행 복원력 (Execution Resilience)
+
+**목표**: `run_parallel()`이 개별 Task 예외로 배치 전체 결과를 잃지 않게
+하고, 실패한 Task만 재시도되도록 한다.
+
+> **2026-07-26 사용자 확정**: M10 착수 전 제시된 5개 Technical Debt
+> 후보(Model/Effort 라우팅, Adapter 계열 통합, Codex/Gemini CLI 실환경
+> 검증, Memory Summary 최적화, run_parallel 개별 재시도/복원력) 중
+> Codex/Gemini 실환경 검증(이 세션 환경에 CLI 없음)·Adapter 통합(기능
+> 이득 없는 리팩토링)·Memory 최적화(PRD §11이 "필요해지면"으로 유보)는
+> 제외하고, 외부 의존이 없고 실제 확인된 버그가 있는 **실행 복원력**을
+> 선택했다.
+
+**Milestone Definition of Done**
+1. `EngineRuntime.run_parallel()` 계약에 개별 Task 실패 격리(반환
+   길이=입력 길이/순서 보존/개별 예외→`EngineResult(success=False)`
+   변환/개별 실패만으로는 예외 없음)를 명시한다. `NoSuitableEngineError`
+   는 이 격리 대상이 아니라 여전히 즉시 전파된다.
+2. `ManagedEngineRuntime.run_parallel()`이 위 계약을 실제로 만족한다
+   (확인된 버그 수정 — Task 1개 예외가 배치 전체 결과를 날리던 문제).
+3. `RecoveringEngineRuntime.run_parallel()`이 실패한 Task만 개별
+   재시도한다.
+4. 즉시 성공/일시 실패 후 성공/영구 실패 혼합 시나리오가 전체 스택으로
+   End-to-End 검증된다.
+5. `EngineRuntime`/`EngineAdapter` 메서드 시그니처는 변경되지 않는다.
+6. 기존 + 신규 테스트 전부 통과, `ruff`/`mypy` 클린.
+7. Model/Effort 라우팅, Adapter 계열 통합, Codex/Gemini 실환경 검증,
+   Memory Summary 최적화, Retry Backoff는 범위 밖으로 유지된다.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 10" 참고)
+
+| Task | 내용 | 근거/출처 |
+|---|---|---|
+| M10-T01 | `EngineRuntime.run_parallel()` 계약 명확화 + `FakeEngineRuntime` 반영 — **완료** | 사용자 지시(4가지 보장 명문화) |
+| M10-T02 | `ManagedEngineRuntime.run_parallel()` 개별 예외 캡처(버그 수정) — **완료** | 조사로 확인된 버그 |
+| M10-T03 | `RecoveringEngineRuntime.run_parallel()` 실패 Task만 개별 재시도 — **완료** | M4 Review 이월 갭 |
+| M10-T04 | End-to-End 검증 — **완료** | Milestone DoD |
+| M10-T05 | Milestone 10 Review — **완료** | 관례 |
+
+**진행 상태**: M10-T01~T04 전체 완료. Milestone DoD 1~6번 충족
+확인됨(7번은 범위 제외 확정 그대로 유지). Milestone 10 Review 작성
+완료(`.ai/TASKS.md`의 "Milestone 10 Review" 참고) — 사용자 승인 대기.
+
+---
+
+## Milestone 11 — Execution Environment
+
+**목표**: `EngineAdapter`가 "무엇을 실행할지"와 "어디서 실행할지"를
+분리하지 못하고 있다(`ClaudeCodeEngineAdapter`/`CLIEngineAdapter`가
+로컬 프로세스 실행 전용 `ProcessRunner`를 직접 생성). `ExecutionEnvironment`
+인터페이스를 도입하고, 기존 `ProcessRunner`를 그 첫 구현체
+(`LocalExecutionEnvironment`)로 승격해 두 Adapter가 인터페이스에만
+의존하도록 전환한다.
+
+> **2026-07-26 설계 검토 결론(사용자 확정)**: `ExecutionEnvironment`를
+> Task→Agent→Engine 사이의 새 최상위 Layer로 두지 않는다. `EngineAdapter`
+> 하위(내부) 인터페이스로 유지하고, Adapter는 이를 생성자 주입(DI)으로
+> 받는다. Codespaces/Replit/Docker 실행 환경은 실제 요구사항이 생길 때까지
+> 구현하지 않는다(YAGNI) — `LocalExecutionEnvironment`만 지금 구현한다.
+
+**Milestone Definition of Done**
+1. `ExecutionEnvironment` 인터페이스가 정의되고 계약 테스트가 통과한다.
+2. `LocalExecutionEnvironment`가 기존 `ProcessRunner`의 동작(정상 실행/
+   Timeout 강제 종료/Cancel)을 회귀 없이 제공한다.
+3. `ClaudeCodeEngineAdapter`/`CLIEngineAdapter`가 `ProcessRunner`를
+   직접 생성하지 않고 `ExecutionEnvironment`를 주입받는다.
+4. 새 `ExecutionEnvironment` 구현체를 추가할 때 기존 `EngineAdapter`
+   코드를 수정하지 않고 확장 가능함이 테스트로 증명된다(OCP).
+5. `docs/ARCHITECTURE.md`(§3.10, §9)가 새 구조를 반영한다.
+6. 전체 `pytest`/`ruff`/`mypy`가 통과한다.
+
+**Task List**(2026-07-26 확정, 사용자 최종 승인, 상세는 `.ai/TASKS.md`의
+"Milestone 11" 참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M11-T01 | `ExecutionEnvironment` Interface 정의 | **완료** |
+| M11-T02 | `LocalExecutionEnvironment` 구현 | **완료** |
+| M11-T03 | `EngineAdapter`가 `ExecutionEnvironment`를 사용하도록 전환 | **완료** |
+| M11-T04 | 문서화 + Milestone 11 Review | **완료** |
+
+**진행 상태**: M11-T01~T04 전체 완료. Milestone DoD 1~6번 전부 충족
+확인됨. **Milestone 11 완료 — 2026-07-26 사용자 승인.**
+
+---
+
+## Milestone 12 — Workflow Automation
+
+**목표**: 여러 Task로 구성된 Workflow가 사람 개입 없이
+`WorkflowEngine.plan()`이 계산한 의존관계 순서대로 자동 순차 실행되게
+한다(MVP). Multi-Agent 선택/Routing/병렬 실행/Retry/Approval은 범위
+밖 — 기존 고정 Agent 파이프라인을 그대로 재사용한다.
+
+**설계 방향**: `WorkflowEngine`(Core Engine)에 실행 책임을 추가하지
+않는다(의존 방향 §8 위반 방지). 새 Agent로도 만들지 않는다(Multi-Agent
+범위 제외). `AgentRuntime`을 거치지 않는 순수 조율 클래스
+`WorkflowRunner`(`runtime/workflow/`)를 신설해 `WorkflowEngine.plan()`
+순서대로 `MissionPlanned`를 순차 발행하고, Task가 `DONE`에 도달하지
+못하면 중단한다.
+
+**Milestone Definition of Done**
+1. `WorkflowRunner`가 `plan()` 순서대로 Task를 순차 실행한다.
+2. 앞 Task 실패 시 이후 Task는 실행되지 않고 즉시 중단된다.
+3. Task 2개 이상 + 의존관계가 있는 실제 Workflow가 사람 개입 없이
+   완주함(성공/중단 두 시나리오)이 통합 테스트로 증명된다.
+4. 기존 `WorkflowEngine`/`EventBus`/`TaskEngine`/Agent 파이프라인
+   계약은 변경하지 않는다.
+5. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 12"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M12-T01 | `WorkflowRunner` 구현 | **완료** |
+| M12-T02 | End-to-End 검증 | **완료** |
+| M12-T03 | 문서화 + Milestone 12 Review | **완료** |
+
+**진행 상태**: M12-T01~T03 전체 완료. Milestone DoD 1~5번 전부 충족
+확인됨. **Milestone 12 완료 — 2026-07-26 사용자 승인.**
+
+---
+
+## Milestone 13 — Multi-Agent Collaboration
+
+**목표**: 같은 Capability(CODING)를 가진 Agent가 여러 개 등록돼 있을
+때, `AgentScheduler.select()`가 실제로 그중 하나만 고르고 선택되지
+않은 Agent는 개입하지 않는다는 것을 실제 동작으로 증명한다(MVP).
+Provider/Model Routing, 병렬 실행, Scheduler 정책 고도화, CodingAgent
+외 확장은 범위 밖.
+
+**설계 방향**: 새 중앙 디스패처 없이, 각 Agent가 처리 직전 "내가
+Scheduler에게 선택됐나?"를 스스로 확인하는 자가 확인 가드를 둔다.
+`agents/scheduling.py`에 `is_agent_selected()` 헬퍼를 추가하고,
+`CodingAgent`에 `agent_registry`/`agent_scheduler`를 **선택적**
+매개변수로 추가(기본값 `None` — 기존 호출부 전혀 안 건드림).
+
+**Milestone Definition of Done**
+1. `agent_registry`/`agent_scheduler` 미주입 시 `CodingAgent`는 기존과
+   완전히 동일하게 동작한다(회귀 없음).
+2. 같은 Capability의 `CodingAgent` 2개 중 Scheduler가 고른 1개만
+   Task를 처리하고 나머지는 개입하지 않는다.
+3. 위 2번이 실제 구현체(Fake 아님)로 통합 테스트로 증명된다.
+4. 기존 `EventBus`/`AgentRegistry`/`AgentScheduler`/`CodingAgent`의
+   다른 계약은 변경되지 않는다.
+5. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 13"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M13-T01 | `is_agent_selected()` 헬퍼 정의 | **완료** |
+| M13-T02 | `CodingAgent`에 선택적 Scheduler 가드 적용 | **완료** |
+| M13-T03 | End-to-End 통합 테스트 | **완료** |
+| M13-T04 | 문서화 + Milestone 13 Review | **완료** |
+
+**진행 상태**: M13-T01~T04 전체 완료. Milestone DoD 1~5번 전부 충족
+확인됨. **Milestone 13 완료 — 2026-07-26 사용자 승인.**
+
+---
+
+## Milestone 14 — LLM Routing (Model 수준 라우팅)
+
+**목표**: `AgentSession.llm_policy_decision`의 `model`(예: opus/sonnet/
+haiku)이 `ClaudeCodeEngineAdapter`의 실제 `--model` 실행 인자까지
+전달되게 한다(MVP). Effort 라우팅, Codex/Gemini 실연동, Scheduler
+정책 고도화는 범위 밖.
+
+**설계 방향**: `EngineAdapter.run()`/`EngineRuntime.run()`에 `model:
+str | None = None`을 선택적으로 추가. `ClaudeCodeEngineAdapter`만 실제
+반영(Codex/Gemini는 계약만 만족, 무시). `CodingAgent`/`ReviewAgent`/
+`DocumentationAgent`가 정책의 `model.name`을 전달하도록 연결.
+
+**Milestone Definition of Done**
+1. `model` 미전달 시 기존과 완전히 동일하게 동작한다(회귀 없음).
+2. `ClaudeCodeEngineAdapter`가 `run()`에 전달된 `model`을 생성자
+   기본값보다 우선 사용한다.
+3. `ManagedEngineRuntime`/`RecoveringEngineRuntime`이 `model`을
+   그대로 다음 계층에 전달한다(새 선택 로직 없음).
+4. Agent 3종이 정책의 `model.name`을 실제로 전달함이 통합 테스트로
+   증명된다.
+5. 전체 `pytest`/`ruff`/`mypy` 통과.
+
+**Task List**(2026-07-26 확정, 상세는 `.ai/TASKS.md`의 "Milestone 14"
+참고)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M14-T01 | `EngineAdapter`/`EngineRuntime` 계약에 `model` 선택적 파라미터 확장 | **완료** |
+| M14-T02 | 구현체 갱신 | **완료** |
+| M14-T03 | Agent 3종 연결 + End-to-End 통합 테스트 | **완료** |
+| M14-T04 | 문서화 + Milestone 14 Review | **완료** |
+
+**진행 상태**: M14-T01~T04 전체 완료. Milestone DoD 1~5번 전부 충족
+확인됨. Milestone 14 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 14
+Review" 참고). **Milestone 14 완료 — 2026-07-26 사용자 승인.**
 
 ---
 

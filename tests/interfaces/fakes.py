@@ -49,6 +49,11 @@ from ai_workspace.interfaces.engine_runtime import (
 )
 from ai_workspace.interfaces.event_bus import Event, EventBus, SubscriptionNotFoundError
 from ai_workspace.interfaces.event_store import EventStore
+from ai_workspace.interfaces.execution_environment import (
+    ExecutionEnvironment,
+    ExecutionNotFoundError,
+    ExecutionResult,
+)
 from ai_workspace.interfaces.interaction_engine import (
     InteractionEngine,
     NormalizedRequest,
@@ -230,15 +235,17 @@ class FakeEngineAdapter(EngineAdapter):
         self._parallel = parallel
         self._sessions: dict[str, EngineSessionStatus] = {}
         self._id_generator = itertools.count(1)
+        self.received_models: list[str | None] = []
 
     def create_session(self) -> str:
         session_id = f"session-{next(self._id_generator)}"
         self._sessions[session_id] = EngineSessionStatus.RUNNING
         return session_id
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         if session_id not in self._sessions:
             raise SessionNotFoundError(session_id)
+        self.received_models.append(model)
         self._sessions[session_id] = EngineSessionStatus.COMPLETED
         return EngineResult(success=True, output=f"{task.task_id} 완료")
 
@@ -271,7 +278,7 @@ class FailingFakeEngineAdapter(EngineAdapter):
     def create_session(self) -> str:
         return "session-failing"
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         raise EngineExecutionError("구현 엔진 프로세스를 실행할 수 없습니다.")
 
     def cancel(self, session_id: str) -> None:
@@ -291,6 +298,45 @@ class FailingFakeEngineAdapter(EngineAdapter):
 
     def estimate_cost(self, task: Task) -> CostEstimate:
         return CostEstimate(estimated_tokens=0, estimated_cost_usd=0.0)
+
+
+class FakeExecutionEnvironment(ExecutionEnvironment):
+    """실제 프로세스를 실행하지 않고 미리 준비된 결과/예외를 반환하는
+    테스트용 구현체(M11-T01). `execute()`에 전달된 명령을 기록해,
+    `EngineAdapter`가 이 인터페이스를 통해서만 명령을 실행하는지
+    검증할 수 있다."""
+
+    def __init__(self) -> None:
+        self.result: ExecutionResult | None = None
+        self.exception: BaseException | None = None
+        self.executed_commands: list[list[str]] = []
+        self.cancelled_ids: list[str] = []
+        self._running: set[str] = set()
+
+    def execute(
+        self,
+        execution_id: str,
+        command: list[str],
+        *,
+        cwd: str | None = None,
+        timeout: float | None = None,
+    ) -> ExecutionResult:
+        self.executed_commands.append(command)
+        if self.exception is not None:
+            raise self.exception
+        self._running.add(execution_id)
+        try:
+            if self.result is not None:
+                return self.result
+            return ExecutionResult(returncode=0, stdout="", stderr="")
+        finally:
+            self._running.discard(execution_id)
+
+    def cancel(self, execution_id: str) -> None:
+        if execution_id not in self._running:
+            raise ExecutionNotFoundError(execution_id)
+        self.cancelled_ids.append(execution_id)
+        self._running.discard(execution_id)
 
 
 class FakeEngineRuntime(EngineRuntime):
@@ -315,11 +361,15 @@ class FakeEngineRuntime(EngineRuntime):
         raise NoSuitableEngineError(required_capabilities)
 
     def run(
-        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
     ) -> EngineResult:
         adapter = self._select(required_capabilities)
         session_id = adapter.create_session()
-        result = adapter.run(session_id, task)
+        result = adapter.run(session_id, task, model=model)
         adapter.destroy_session(session_id)
         self._task_status[task.task_id] = (
             EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED
@@ -327,14 +377,23 @@ class FakeEngineRuntime(EngineRuntime):
         return result
 
     def run_parallel(
-        self, tasks: list[Task], required_capabilities: frozenset[str] = frozenset()
+        self,
+        tasks: list[Task],
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
     ) -> list[EngineResult]:
         adapter = self._select(required_capabilities, require_parallel=True)
         results: list[EngineResult] = []
         for task in tasks:
-            session_id = adapter.create_session()
-            result = adapter.run(session_id, task)
-            adapter.destroy_session(session_id)
+            try:
+                session_id = adapter.create_session()
+                result = adapter.run(session_id, task, model=model)
+                adapter.destroy_session(session_id)
+            except BaseException as exc:
+                self._task_status[task.task_id] = EngineSessionStatus.FAILED
+                results.append(EngineResult(success=False, output="", error=str(exc)))
+                continue
             self._task_status[task.task_id] = (
                 EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED
             )
@@ -461,6 +520,7 @@ class FakeContextManager(ContextManager):
     def __init__(self) -> None:
         self._snapshots: dict[str, dict[str, str]] = {}
         self._id_generator = itertools.count(1)
+        self._latest_snapshot_by_project: dict[str, str] = {}
 
     def assemble_context(self, session: WorkspaceSession) -> dict[str, str]:
         context: dict[str, str] = {}
@@ -472,15 +532,23 @@ class FakeContextManager(ContextManager):
             context.update(self._snapshots[session.memory_snapshot_id])
         return context
 
-    def create_snapshot(self, session: WorkspaceSession) -> str:
+    def create_snapshot(self, session: WorkspaceSession, summary: str | None = None) -> str:
         snapshot_id = f"snapshot-{next(self._id_generator)}"
-        self._snapshots[snapshot_id] = self.assemble_context(session)
+        context = self.assemble_context(session)
+        if summary is not None:
+            context["summary"] = summary
+        self._snapshots[snapshot_id] = context
+        if session.current_project_id is not None:
+            self._latest_snapshot_by_project[session.current_project_id] = snapshot_id
         return snapshot_id
 
     def restore_snapshot(self, snapshot_id: str) -> dict[str, str]:
         if snapshot_id not in self._snapshots:
             raise SnapshotNotFoundError(snapshot_id)
         return dict(self._snapshots[snapshot_id])
+
+    def latest_snapshot_id(self, project_id: str) -> str | None:
+        return self._latest_snapshot_by_project.get(project_id)
 
     def find_snapshots(self, query: str) -> list[str]:
         return [

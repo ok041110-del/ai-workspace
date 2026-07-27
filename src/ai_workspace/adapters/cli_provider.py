@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from ai_workspace.adapters.process_runner import ProcessResult
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_adapter import EngineResult
+from ai_workspace.interfaces.execution_environment import ExecutionResult
 
 
 class CLIProvider(ABC):
@@ -29,9 +29,9 @@ class CLIProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def parse_result(self, process_result: ProcessResult) -> EngineResult:
+    def parse_result(self, execution_result: ExecutionResult) -> EngineResult:
         """
-        입력: 프로세스 실행이 끝난 뒤의 ProcessResult
+        입력: 실행이 끝난 뒤의 ExecutionResult
         출력: EngineResult(success, output, error)
         예외: 없음(파싱 실패는 예외가 아니라 success=False로 표현)
         보장: side-effect 없음(read-only).

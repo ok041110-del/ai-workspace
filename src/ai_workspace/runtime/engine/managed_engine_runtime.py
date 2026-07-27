@@ -23,12 +23,15 @@ _DEFAULT_TIMEOUT_SECONDS = 30.0
 
 
 class ManagedEngineRuntime(EngineRuntime):
-    """단일 EngineAdapter의 Task 실행을 생명주기(Running/Completed/Failed/
+    """EngineAdapter의 Task 실행을 생명주기(Running/Completed/Failed/
     Cancelled) 관리·Timeout·Event 발행과 함께 운영하는 프로덕션 Engine
-    Runtime(ARCHITECTURE.md §3.9, ADR-0016, M3-T01). 여러 엔진 등록·
-    Capability 기반 선택(Engine Registry, T2-05의 `InMemoryEngineRuntime`이
-    이미 담당)은 범위 밖이며, 이 구현은 정확히 하나의 EngineAdapter만
-    등록할 수 있다.
+    Runtime(ARCHITECTURE.md §3.9, ADR-0016, M3-T01/M6-T01). 여러 개의
+    EngineAdapter를 이름별로 등록할 수 있으며(M6-T01), `run()`/
+    `run_parallel()`은 `required_capabilities`를 만족하는 등록된 어댑터 중
+    하나를 선택해 실행한다(등록 순서상 첫 매칭 — 복수 매칭 시 우선순위
+    정책은 필요성이 증명되지 않아 도입하지 않음, YAGNI). 이 선택 방식은
+    `tests/interfaces/fakes.py`의 `FakeEngineRuntime`이 이미 계약 검증용으로
+    구현해 둔 것과 동일하다.
 
     기존 `EngineAdapter`/`EngineRuntime` 계약은 동기(synchronous)이므로,
     Timeout은 `adapter.run()` 호출을 별도 스레드에서 실행하고
@@ -40,11 +43,19 @@ class ManagedEngineRuntime(EngineRuntime):
 
     `run_parallel()`은 `ThreadPoolExecutor`로 각 Task의 `run()`을 실제로
     동시에 실행한다(ADR-0023, M4-T06 — 이전에는 순차 반복 호출이었음).
-    반환 목록은 `EngineRuntime.run_parallel()` 계약대로 입력 순서를
-    보장하며, 한 Task의 실패/예외가 다른 Task의 실행을 막지 않는다(모두
-    이미 동시에 제출되어 독립적으로 실행되기 때문). `with` 블록이 끝날 때
-    `ThreadPoolExecutor.shutdown(wait=True)`가 호출되므로, 예외가
-    전파되기 전에 제출된 모든 Task가 이미 완료된 상태임이 보장된다.
+    반환 목록은 `EngineRuntime.run_parallel()` 계약대로 입력 순서·길이를
+    보장한다.
+
+    **개별 Task 실패 격리(M10-T02)**: `required_capabilities`를 만족하는
+    엔진이 아예 없으면(Runtime 자체의 치명적 오류) 어떤 Task도 제출하기
+    전에 `NoSuitableEngineError`가 즉시 전파된다. 반면 제출된 개별
+    Task의 실행이 예외를 던지면(예: `EngineExecutionError`) 그 Task의
+    `future.result()`만 개별적으로 캐치해 `EngineResult(success=False)`로
+    변환한다 — 이전에는 `[future.result() for future in futures]` 리스트
+    컴프리헨션이 첫 예외에서 즉시 전파되어 이미 완료된 다른 Task의 결과까지
+    전부 유실됐다(M10 이전 버그, `.ai/TASKS.md` M10-T02 참고). `with` 블록이
+    끝날 때 `ThreadPoolExecutor.shutdown(wait=True)`가 호출되므로, 예외
+    캐치 시점에는 제출된 모든 Task가 이미 완료된 상태임이 보장된다.
     """
 
     def __init__(
@@ -52,24 +63,28 @@ class ManagedEngineRuntime(EngineRuntime):
     ) -> None:
         self._event_bus = event_bus
         self._default_timeout_seconds = default_timeout_seconds
-        self._adapter: EngineAdapter | None = None
+        self._engines: dict[str, EngineAdapter] = {}
         self._task_status: dict[str, EngineSessionStatus] = {}
         self._task_sessions: dict[str, str] = {}
+        self._task_adapters: dict[str, EngineAdapter] = {}
 
     def register_engine(self, name: str, adapter: EngineAdapter) -> None:
-        if self._adapter is not None:
+        if name in self._engines:
             raise DuplicateEngineError(name)
-        self._adapter = adapter
+        self._engines[name] = adapter
 
     def run(
         self,
         task: Task,
         required_capabilities: frozenset[str] = frozenset(),
         timeout_seconds: float | None = None,
+        *,
+        model: str | None = None,
     ) -> EngineResult:
         adapter = self._require_adapter(required_capabilities)
         session_id = adapter.create_session()
         self._task_sessions[task.task_id] = session_id
+        self._task_adapters[task.task_id] = adapter
         self._task_status[task.task_id] = EngineSessionStatus.RUNNING
         self._publish("engine_task_started", task.task_id, session_id)
 
@@ -78,7 +93,7 @@ class ManagedEngineRuntime(EngineRuntime):
 
         def _execute() -> None:
             try:
-                result_box["result"] = adapter.run(session_id, task)
+                result_box["result"] = adapter.run(session_id, task, model=model)
             except BaseException as exc:
                 error_box["error"] = exc
 
@@ -100,22 +115,37 @@ class ManagedEngineRuntime(EngineRuntime):
         return self._finish_as_completed(task.task_id, session_id, adapter, result_box["result"])
 
     def run_parallel(
-        self, tasks: list[Task], required_capabilities: frozenset[str] = frozenset()
+        self,
+        tasks: list[Task],
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        model: str | None = None,
     ) -> list[EngineResult]:
         if not tasks:
             return []
+        self._require_adapter(required_capabilities)
         with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
-            futures = [executor.submit(self.run, task, required_capabilities) for task in tasks]
-            return [future.result() for future in futures]
+            futures = [
+                executor.submit(self.run, task, required_capabilities, model=model)
+                for task in tasks
+            ]
+            results: list[EngineResult] = []
+            for future in futures:
+                try:
+                    results.append(future.result())
+                except BaseException as exc:
+                    results.append(EngineResult(success=False, output="", error=str(exc)))
+            return results
 
     def cancel(self, task_id: str) -> None:
         if task_id not in self._task_status:
             raise EngineTaskNotFoundError(task_id)
         self._task_status[task_id] = EngineSessionStatus.CANCELLED
         session_id = self._task_sessions.get(task_id)
-        if session_id is not None and self._adapter is not None:
+        adapter = self._task_adapters.get(task_id)
+        if session_id is not None and adapter is not None:
             try:
-                self._adapter.cancel(session_id)
+                adapter.cancel(session_id)
             except SessionNotFoundError:
                 pass
 
@@ -125,11 +155,10 @@ class ManagedEngineRuntime(EngineRuntime):
         return self._task_status[task_id]
 
     def _require_adapter(self, required_capabilities: frozenset[str]) -> EngineAdapter:
-        if self._adapter is None or not required_capabilities.issubset(
-            self._adapter.capabilities()
-        ):
-            raise NoSuitableEngineError(required_capabilities)
-        return self._adapter
+        for adapter in self._engines.values():
+            if required_capabilities.issubset(adapter.capabilities()):
+                return adapter
+        raise NoSuitableEngineError(required_capabilities)
 
     def _finish_as_completed(
         self, task_id: str, session_id: str, adapter: EngineAdapter, result: EngineResult

@@ -59,3 +59,71 @@ def test_find_snapshots_returns_empty_list_when_no_match() -> None:
     manager.create_snapshot(WorkspaceSession(session_id="s1", current_project_id="p1"))
 
     assert manager.find_snapshots("없음") == []
+
+
+def test_create_snapshot_with_summary_includes_summary_in_restored_context() -> None:
+    """M7-T01: summary가 주어지면 Snapshot 내용에 포함되어 그대로
+    복원된다."""
+    manager = FakeContextManager()
+    session = WorkspaceSession(session_id="s1", current_project_id="p1")
+
+    snapshot_id = manager.create_snapshot(session, summary="로그인 기능 구현 및 검토 완료")
+
+    assert manager.restore_snapshot(snapshot_id)["summary"] == "로그인 기능 구현 및 검토 완료"
+
+
+def test_create_snapshot_without_summary_omits_summary_key() -> None:
+    """기존 무인자 호출은 하위 호환된다 — summary 키가 생기지 않는다."""
+    manager = FakeContextManager()
+    session = WorkspaceSession(session_id="s1", current_project_id="p1")
+
+    snapshot_id = manager.create_snapshot(session)
+
+    assert "summary" not in manager.restore_snapshot(snapshot_id)
+
+
+def test_find_snapshots_matches_summary_content() -> None:
+    manager = FakeContextManager()
+    snapshot_id = manager.create_snapshot(
+        WorkspaceSession(session_id="s1", current_project_id="p1"), summary="로그인 기능 완료"
+    )
+
+    assert manager.find_snapshots("로그인") == [snapshot_id]
+
+
+def test_latest_snapshot_id_returns_none_when_no_snapshot_for_project() -> None:
+    manager = FakeContextManager()
+
+    assert manager.latest_snapshot_id("p1") is None
+
+
+def test_latest_snapshot_id_returns_most_recently_created_snapshot() -> None:
+    """M8-T01: 같은 project_id로 여러 Snapshot을 만들면 가장 최근 것만
+    반환한다 — find_snapshots()와 달리 정렬 순서를 계약한다."""
+    manager = FakeContextManager()
+    session = WorkspaceSession(session_id="s1", current_project_id="p1")
+    manager.create_snapshot(session)
+    latest_id = manager.create_snapshot(session)
+
+    assert manager.latest_snapshot_id("p1") == latest_id
+
+
+def test_latest_snapshot_id_is_scoped_per_project() -> None:
+    manager = FakeContextManager()
+    snapshot_p1 = manager.create_snapshot(
+        WorkspaceSession(session_id="s1", current_project_id="p1")
+    )
+    snapshot_p2 = manager.create_snapshot(
+        WorkspaceSession(session_id="s2", current_project_id="p2")
+    )
+
+    assert manager.latest_snapshot_id("p1") == snapshot_p1
+    assert manager.latest_snapshot_id("p2") == snapshot_p2
+
+
+def test_create_snapshot_without_project_id_does_not_register_latest_pointer() -> None:
+    manager = FakeContextManager()
+
+    manager.create_snapshot(WorkspaceSession(session_id="s1"))
+
+    assert manager.latest_snapshot_id("p1") is None

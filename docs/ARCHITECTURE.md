@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.12.0 |
-| 작성일 | 2026-07-25 |
-| 상태 | Draft (Milestone 1~3 완료, Milestone 4 진행 중 — ADR-0023으로 §3.4/§3.9 병렬 실행 책임 경계 명시) |
+| 문서 버전 | v0.16.0 |
+| 작성일 | 2026-07-26 |
+| 상태 | Draft (Milestone 1~13 완료, Milestone 14 진행 중 — ADR-0026으로 §3.9/§3.10에 model 라우팅 반영) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -204,6 +204,18 @@ Agent의 실행을 담당하는 계층.
   활동할 Agent 후보를 최대 max_count개 선택**하는 정책 결정만 한다 —
   선택된 Agent를 실제로 동시에 실행시키는 메커니즘은 갖지 않는다(그
   메커니즘은 3.9 Engine Runtime의 `run_parallel()` 책임).
+  **선택이 실제로 개입을 가르는 자가 확인 가드(Milestone 13)**: M1~M12
+  내내 `select()`는 정의만 되어 있고 실제 협업 흐름에서 "선택되지 않은
+  Agent는 개입하지 않는다"가 실제로 검증된 적이 없었다. 새 중앙
+  디스패처를 두지 않고, `agents/scheduling.py`의
+  `is_agent_selected(agent_registry, agent_scheduler, capability,
+  agent_id)`로 각 Agent가 처리 직전 스스로 "내가 선택됐나"를 확인하는
+  방식을 택했다 — `select()`가 결정적(같은 candidates에 항상 같은 결과)
+  이라는 전제 하에, 같은 Capability의 Agent가 여러 개 Event를
+  구독하고 있어도 전부 같은 결론에 도달해 실제로는 선택된 하나만
+  일한다. `CodingAgent`가 이 가드를 최초로 채택했다(생성자에
+  `agent_registry`/`agent_scheduler`를 **선택적**으로 주입 — 기본값
+  `None`이면 이 확인을 건너뛰어 기존 동작과 완전히 동일).
 - **Agent Manager** (`AgentManager`): Agent 생성/생명주기/상태 관리.
 - **Event Bus** (`EventBus`): Event 발행/구독/Agent 간 통신.
 
@@ -229,10 +241,27 @@ Agent의 실행을 담당하는 계층.
 - **협업**: Agent끼리 직접 호출하지 않고 Event 기반으로 협업(§5).
 - **실행**: 실제 일은 **Engine Runtime**을 통해 구현 엔진에 위임하고, Context는
   **Context Manager**로, 도메인 작업은 **Core Engines**로 처리한다.
+- **세션 연속성(M8-T03)**: `PlanningAgent`(파이프라인 진입점)는
+  `context_manager`/`workspace_session`을 생성자로 주입받는다.
+  `plan_mission()` 호출 시 `workspace_session.memory_snapshot_id`가
+  비어 있으면 `context_manager.latest_snapshot_id(project_id)`로 그
+  project의 최신 Snapshot을 자동 복원한다(이미 값이 있으면 덮어쓰지
+  않음). §8 규칙 5(Agent → Context Manager)로 해결하며, Workspace
+  Core는 이 로직에 관여하지 않는다(§8 규칙 3·7 무변경).
+- **세션 리셋 옵션(M9-T03)**: `plan_mission(..., reset=True)`는 위 자동
+  복원을 건너뛴다 — 사용자가 이전 프로젝트 요약을 이어받지 않고 완전히
+  새로 시작하고 싶을 때 쓴다. 같은 세션에 이미 있는 `memory_snapshot_id`
+  (이어지는 Mission)는 건드리지 않는다 — "새 세션 자동 복원"만 막는
+  좁은 범위다.
 
 ### 3.7 Core Engines (Services)
 Task · Workflow · Approval · Automation Engine. Agent가 사용하는 능력 서비스.
-- **Workflow Engine**: Mission→Workflow→Task→Step 협업 흐름 계획/실행(§4).
+- **Workflow Engine**: Mission→Workflow→Task→Step 협업 흐름의 실행
+  **순서 계획만** 담당한다(`plan()`, side-effect 없는 순수 함수, §4).
+  **계획된 순서를 실제로 실행하는 책임은 이 Engine에 없다** — Core
+  Engine이 EventBus에 의존하면 Agent → Core Engine 의존 방향(§8)이
+  뒤집히기 때문이다. 실행은 §3.12 `WorkflowRunner`가 맡는다
+  (Milestone 12).
 - **Approval Engine**: 승인 대상 4행위 판별/차단.
 - **Automation Engine**: 조건/일정 트리거를 Workflow와 연결(bind)·발동
   (fire)한다(M4-T07). **연결 관리만** 담당하고 `WorkflowEngine`에
@@ -246,6 +275,22 @@ Task · Workflow · Approval · Automation Engine. Agent가 사용하는 능력 
   Memory Snapshot은 Context Manager가 소유·관리한다.
 - **Memory Engine** (`MemoryEngine`): **저장/검색**만 담당하는 하위 서비스.
   Context Manager가 이를 사용한다.
+- **Memory 요약(M7-T01)**: `ContextManager.create_snapshot(session, summary=...)`가
+  선택적 `summary` 문자열을 받아 Snapshot 내용에 포함시킨다. **Context
+  Manager와 Memory Engine 둘 다 요약을 생성하지 않는다** — 이미 만들어진
+  요약 문자열을 전달받아 저장할 뿐이다. 요약을 실제로 만드는 것(LLM 호출)은
+  `EngineRuntime`에 접근할 수 있는 Agent 계층의 책임이다(§3.6 Agents,
+  `DocumentationAgent` 참고). 저장된 요약은 `MemoryEngine.search()`(M4-T08)
+  로도 검색되므로 별도 구현 없이 PRD 7.4 "검색/요약"을 함께 충족한다.
+- **세션 연속성(M8-T01)**: `ContextManager.latest_snapshot_id(project_id)`가
+  그 project로 가장 최근에 생성된 snapshot_id를 반환한다. 이 "최신"
+  포인터는 **`MemoryEngine`을 거치지 않고 Context Manager 내부에서만**
+  관리한다 — `MemoryEngine.search()`는 값의 substring 일치로 동작해
+  정렬 순서를 계약하지 않으므로, 포인터까지 그 경로로 저장하면 검색
+  결과가 오염될 위험이 있다(`memory/context_manager.py` 클래스 docstring
+  참고). `PlanningAgent`가 Mission 시작 시 이를 이용해 세션 연속성을
+  복원한다(§3.6 Agents 참고) — **Workspace Core는 이 메서드를 호출하지
+  않는다**(§8 규칙 7 유지, Memory 접근은 Agent 계층에서만).
 - **의존 방향**: Agent → Context Manager → Memory Engine.
 
 ### 3.9 Engine Runtime (EngineRuntime 인터페이스, ADR-0016)
@@ -258,6 +303,43 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   `ThreadPoolExecutor` 기반, M4-T06) — 3.4 Agent Scheduler의 "후보 선택"
   과는 다른 층위다: Scheduler는 누구를 동시에 활동시킬지 고르고,
   Engine Runtime은 실제로 여러 실행을 동시에 수행한다.
+- **다중 Adapter 등록·선택(M6-T01)**: `ManagedEngineRuntime`은 이름별로
+  여러 `EngineAdapter`를 동시에 등록할 수 있다(`register_engine`은 같은
+  이름을 재등록할 때만 `DuplicateEngineError`). `run()`/`run_parallel()`은
+  `required_capabilities`를 만족하는 등록된 어댑터 중 하나(등록 순서상 첫
+  매칭)를 선택해 실행한다 — 복수 매칭 시 우선순위 정책(비용 기반 선택
+  등)은 필요성이 증명되지 않아 도입하지 않는다(YAGNI). 이 방식으로
+  `LLMPolicyDecision.model.provider`에 따라 Agent가 서로 다른 등록된
+  Adapter(capability 태그 기준 `claude_code`/`codex`/`gemini`)를 실행
+  시점에 고를 수 있는 기반이 마련된다.
+- **Policy→Execution 라우팅(M6-T02)**: `domain/llm_policy.py`의
+  `required_capabilities(decision)` 순수 함수가 `LLMProvider`(ANTHROPIC/
+  OPENAI/GOOGLE/XAI)를 위 capability 태그로 매핑한다(ANTHROPIC→
+  `claude_code`, OPENAI→`codex`, GOOGLE→`gemini`; XAI는 대응 Adapter가
+  없어 매칭 실패 시 `NoSuitableEngineError`가 자연히 발생하는 것이 의도된
+  동작). `CodingAgent`/`ReviewAgent`/`DocumentationAgent` 3개 Agent가
+  `AgentSession.llm_policy_decision`을 이 함수에 넘겨 `engine_runtime.
+  run()`의 `required_capabilities`로 전달한다 — 정책이 없으면 빈 집합이
+  되어 기존 동작과 하위 호환된다.
+- **`run_parallel()` 개별 Task 실패 격리 + 재시도(M10)**: `EngineRuntime.
+  run_parallel()` 계약에 "개별 Task 실패는 다른 Task 결과에 영향을 주지
+  않는다"는 보장이 명시됐다(M10-T01, 시그니처 불변·docstring 보강).
+  `ManagedEngineRuntime`은 `future.result()`를 개별적으로 캐치해 실패한
+  Task만 `EngineResult(success=False)`로 변환한다(M10-T02) — 이전에는
+  한 Task의 예외가 이미 완료된 다른 Task의 결과까지 통째로 날렸다.
+  `RecoveringEngineRuntime.run_parallel()`은 첫 병렬 패스 후 실패한
+  Task만 골라 `self.run()`의 기존 재시도 루프로 재실행한다(M10-T03,
+  새 재시도 로직 없이 재사용). 요구 Capability를 만족하는 엔진이 아예
+  없는 경우(`NoSuitableEngineError`)는 이 격리 대상이 아니라 여전히
+  Task 실행 전에 즉시 전파되는 Runtime 자체의 치명적 오류다.
+- **Model 라우팅(M14, ADR-0026)**: `run(task, required_capabilities, *,
+  model=None)`/`run_parallel(...)`이 `model`을 새 선택 로직 없이 다음
+  계층까지 그대로 전달한다(`ManagedEngineRuntime`/
+  `RecoveringEngineRuntime`/`InMemoryEngineRuntime` 전부 동일). Provider
+  선택(M6, `required_capabilities`)과 달리 **Model은 어떤 Adapter를
+  고를지에 관여하지 않고**, 이미 선택된 Adapter에 "이번 호출에서 어떤
+  모델을 쓸지"만 전달한다 — 두 축(Provider 선택 vs Model 지정)은 서로
+  다른 층위다.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -267,7 +349,7 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
 | 메서드 | 의미 |
 |---|---|
 | `create_session()` | 엔진 세션 생성 |
-| `run(...)` | 세션 위 실행 요청 |
+| `run(..., model=None)` | 세션 위 실행 요청(Milestone 14: 선택적 model 파라미터) |
 | `cancel(...)` | 실행 취소 |
 | `status(...)` | 실행 상태 조회 |
 | `destroy_session()` | 세션 정리/종료 |
@@ -286,8 +368,59 @@ CLI 등 여러 CLI 기반 엔진이 공유하는 프레임워크 — `CLIEngineA
 를 이 프레임워크로 통합하는 것은 의도적으로 미룸(기존 안정성 유지) —
 `CLIEngineAdapter`가 충분히 검증된 뒤 재검토(M6+).
 
+**ExecutionEnvironment (Milestone 11, ADR-0025)**: `EngineAdapter`가
+"무엇을 실행할지"(엔진별 명령 조립·결과 파싱)와 "어디서 실행할지"(로컬
+프로세스/향후 원격 컨테이너)를 분리하기 위한 `EngineAdapter` 하위(내부)
+인터페이스. `ClaudeCodeEngineAdapter`/`CLIEngineAdapter` 둘 다 구체
+구현체를 직접 생성하지 않고 생성자 주입(Dependency Injection)으로
+`ExecutionEnvironment`를 받는다(기본값 `LocalExecutionEnvironment`).
+`execute(execution_id, command, ...)`/`cancel(execution_id)` 계약이며,
+`execution_id`는 특정 실행 방식(OS 프로세스 등)을 가정하지 않는
+이름이다. 현재는 기존 `ProcessRunner`(M3-T03)를 그대로 감싸는
+`LocalExecutionEnvironment`만 구현되어 있다. `CodespacesExecutionEnvironment`
+/`ReplitExecutionEnvironment`/`DockerExecutionEnvironment` 등은 실제
+요구사항이 생길 때까지 구현하지 않는다(YAGNI) — 새 구현체를 추가할 때
+`EngineAdapter` 코드를 전혀 수정할 필요가 없도록 설계되었다(OCP).
+`ExecutionEnvironment`는 `CLIProvider`처럼 `adapters/`·`interfaces/`
+내부에서만 쓰이는 협력자이며, Agent/Engine Runtime은 이 인터페이스의
+존재를 알지 못한다 — Task→Agent→Engine Runtime→Engine Adapter라는
+기존 최상위 흐름(§2)은 그대로 유지된다.
+
+**Model 라우팅(Milestone 14, ADR-0026)**: `run()`의 `model` 인자는
+Provider 선택(위 M6-T02 라우팅)과 다른 층위다 — Provider는 "어떤
+Adapter를 쓸지"를 정하고, Model은 "이미 정해진 Adapter에게 어떤
+모델을 쓰라고 지시할지"를 정한다. 지금은 `ClaudeCodeEngineAdapter`만
+`model`을 실제로 `--model` 실행 인자에 반영한다(`run()`에 전달된
+값이 생성자의 고정 `model`보다 우선) — `MockEngineAdapter`/
+`CLIEngineAdapter`(Codex/Gemini)는 받되 사용하지 않는다(Codex/Gemini
+는 이 환경에 CLI가 없어 검증 불가, M5-T05/M10에서 반복 확인). Effort
+(low/medium/high)는 대응하는 실제 실행 지점이 아직 없어 이번
+Milestone 범위에서 뺐다 — 실제 대응 지점이 생기면 재검토한다.
+
 ### 3.11 Implementation Engines (외부)
 Claude Code · Codex · Gemini CLI 등.
+
+### 3.12 Workflow Runner (Milestone 12, Workflow Automation)
+`Workflow`에 속한 여러 Task를 `WorkflowEngine.plan()`이 계산한 순서대로
+사람 개입 없이 순차 실행하는 조율자(`WorkflowRunner`). Agent도 아니고
+Core Engine도 아닌 별도 컴포넌트다.
+- **Agent가 아닌 이유**: Multi-Agent 선택/조정(ADR-0019 Coordination
+  Capability)과는 다른 관심사다 — `AgentRuntime`/`AgentScheduler`를
+  전혀 사용하지 않는다. 이번 Milestone은 의도적으로 Multi-Agent
+  선택·Routing·병렬 실행·Retry·Approval을 범위 밖에 둔다.
+- **Core Engine이 아닌 이유**: `WorkflowEngine`은 Agent보다 하위 계층
+  서비스라 EventBus를 알면 안 된다(§8). `WorkflowRunner`는 그 위에서
+  `WorkflowEngine.plan()` + `EventBus` + `TaskEngine` 세 Interface를
+  조합할 뿐인 조율자다(`EngineApprovalPipeline`, M3-T05와 같은 패턴).
+- **동작**: `plan()`이 반환한 순서대로 각 task_id에 `MissionPlanned`
+  Event를 발행한다. `EventBus.publish()`는 계약상 예외를 던지지 않으므로
+  (구독자 예외는 Bus가 내부에서 격리, §7), 실패 감지는 오직
+  `TaskEngine.get_task(task_id).status`가 `DONE`인지로만 판단한다 —
+  `DONE`에 도달하지 못하면(예: 재작업 소진) 그 자리에서 Workflow 실행을
+  중단하고 이후 Task는 실행하지 않는다.
+- **전제 조건**: `workflow.task_ids`의 모든 Task는 호출 전에 이미
+  `TaskEngine.create_task()`로 생성되어 있어야 한다 — `WorkflowRunner`
+  는 Task를 새로 만들지 않는다.
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
@@ -339,7 +472,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentCapability` | Coordination/Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP … |
 | `AgentStatus` | 생명주기 상태 |
 
-## 7. Interfaces (추상 계약, 총 17종)
+## 7. Interfaces (추상 계약, 총 18종)
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
@@ -360,6 +493,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
 | `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행 | Milestone 1 (T1-19) | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
+| `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 
 > **참고**: "완료(계약)"은 Interface 정의와 Fake 기반 계약 테스트만 존재하고
 > 실제 서비스에 쓰일 구체 구현체는 아직 없다는 뜻이다(각 컴포넌트의 계획된
@@ -392,18 +526,21 @@ src/ai_workspace/
 ├── domain/            # Project, Mission, Workflow, Task, Step,
 │                       #   WorkspaceSession, Agent, AgentRole, AgentCapability, AgentStatus
 │                       #   (구현됨, T1-14~T1-17)
-├── interfaces/         # 추상 계약 (16종, §7) (구현됨, T1-15~T1-21)
+├── interfaces/         # 추상 계약 (18종, §7) (구현됨, T1-15~T1-21, M11-T01)
 ├── core/              # Workspace Core (WorkspaceSession 관리, Runtime 초기화)
 │                       #   (구현됨, T1-22)
 ├── runtime/           # (Milestone 2 이후)
 │   ├── agent/         #   Agent Runtime: registry, scheduler, manager
-│   └── engine/        #   Engine Runtime: 선택/세션 풀/병렬
+│   ├── engine/        #   Engine Runtime: 선택/세션 풀/병렬
+│   └── workflow/      #   WorkflowRunner: Workflow 순차 자동 실행 (Milestone 12)
 ├── agents/            # 능력별 Agent 구현체 (Milestone 2 이후)
 ├── engines/           # Core Engines 구현 (Task/Workflow/Approval/Automation, Milestone 2 이후)
 ├── memory/            # Context Manager + Memory Engine 구현 (Milestone 2 이후)
 ├── events/            # Event Bus + Event Store 구현 (Milestone 2 이후)
 ├── interaction/        # Interaction Layer 구현 (Milestone 3 이후)
 ├── adapters/          # EngineAdapter 구현 (Milestone 3: claude_code.py, codex.py, gemini_cli.py)
+│                       #   + local_execution_environment.py (ExecutionEnvironment
+│                       #   구현, Milestone 11)
 ├── storage/           # FileProjectRepository/FileAgentRepository/FileEventStore
 │                       #   (구현됨, T1-23)
 └── cli/               # CLI 진입점 (UI Surface의 하나) — main.py (구현됨, T1-24)

@@ -30,14 +30,20 @@ class ContextManager(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def create_snapshot(self, session: WorkspaceSession) -> str:
+    def create_snapshot(self, session: WorkspaceSession, summary: str | None = None) -> str:
         """
-        입력: session (현재 Context 상태를 저장할 대상 WorkspaceSession)
+        입력: session (현재 Context 상태를 저장할 대상 WorkspaceSession),
+              summary (선택, M7-T01 — 이 Snapshot에 함께 저장할 자연어
+              요약. 생략하면 요약 없이 기존과 동일하게 동작)
         출력: 새로 생성된 Snapshot을 식별하는 snapshot_id
         예외: 없음
         보장: create_snapshot(session) 직후 restore_snapshot(snapshot_id)를
-              호출하면 그 시점의 assemble_context(session) 결과와 동일한
-              Context를 반환한다.
+              호출하면 그 시점의 assemble_context(session) 결과에 summary가
+              주어졌을 경우 `{"summary": summary}`가 추가된 Context를
+              반환한다. summary는 `MemoryEngine`이 저장하는 문자열의 일부가
+              되므로 `find_snapshots()`로도 검색된다. 여러 Snapshot에 걸친
+              누적 요약(요약의 요약)은 하지 않는다 — 매번 최신 요약 하나만
+              저장한다.
         """
         raise NotImplementedError
 
@@ -62,5 +68,22 @@ class ContextManager(ABC):
         보장: side-effect 없음(read-only). 저장/검색 자체는 `MemoryEngine.
               search()`에 위임한다(§8 규칙 7 — Agent는 이 메서드를 통해서만
               검색하며 MemoryEngine을 직접 호출하지 않는다).
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def latest_snapshot_id(self, project_id: str) -> str | None:
+        """
+        입력: project_id
+        출력: 해당 project_id로 `create_snapshot()`이 가장 최근에 생성한
+              snapshot_id(없으면 `None`)
+        예외: 없음
+        보장: side-effect 없음(read-only). `create_snapshot(session, ...)`
+              호출 시 `session.current_project_id`가 `project_id`와
+              같으면, 그 직후 `latest_snapshot_id(project_id)`는 새로
+              생성된 snapshot_id를 반환한다(M8-T01). `find_snapshots()`와
+              달리 내용 일치가 아니라 "가장 최근 생성"이라는 정렬 순서를
+              계약한다 — `MemoryEngine.search()`는 이 순서를 보장하지
+              않으므로(계약 문서 참고) 별도로 추적한다.
         """
         raise NotImplementedError

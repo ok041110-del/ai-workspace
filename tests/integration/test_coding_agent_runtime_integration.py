@@ -28,6 +28,7 @@ from ai_workspace.domain.task import TaskStatus
 from ai_workspace.engines.task_engine import InMemoryTaskEngine
 from ai_workspace.events.event_bus import InMemoryEventBus
 from ai_workspace.interfaces.event_bus import Event
+from ai_workspace.interfaces.execution_environment import ExecutionEnvironment, ExecutionResult
 from ai_workspace.memory.context_manager import InMemoryContextManager
 from ai_workspace.memory.memory_engine import InMemoryMemoryEngine
 from ai_workspace.runtime.agent.agent_runtime import AgentRuntime
@@ -35,29 +36,30 @@ from ai_workspace.runtime.engine.managed_engine_runtime import ManagedEngineRunt
 from ai_workspace.runtime.engine.recovering_engine_runtime import RecoveringEngineRuntime
 
 
-class FlakyProcessRunner:
-    """미리 정해진 결과를 호출 순서대로 반환하는 테스트 더블 — 실제 `claude`
-    프로세스는 띄우지 않되(비용·비결정성 회피, M3-T07과 동일 원칙),
+class FlakyExecutionEnvironment(ExecutionEnvironment):
+    """미리 정해진 결과를 호출 순서대로 반환하는 테스트 더블(M11-T03에서
+    `ExecutionEnvironment` 계약으로 전환) — 실제 `claude` 프로세스는
+    띄우지 않되(비용·비결정성 회피, M3-T07과 동일 원칙),
     `RecoveringEngineRuntime`의 재시도가 실제 Agent 파이프라인 안에서
     의미 있게 동작함을 증명하기 위해 첫 실행을 의도적으로 실패시킨다."""
 
-    def __init__(self, results: list[ProcessResult]) -> None:
+    def __init__(self, results: list[ExecutionResult]) -> None:
         self._results = list(results)
         self.call_count = 0
 
-    def run(
+    def execute(
         self,
-        process_id: str,
+        execution_id: str,
         command: list[str],
         *,
         cwd: str | None = None,
         timeout: float | None = None,
-    ) -> ProcessResult:
+    ) -> ExecutionResult:
         result = self._results[self.call_count]
         self.call_count += 1
         return result
 
-    def cancel(self, process_id: str) -> None:
+    def cancel(self, execution_id: str) -> None:
         pass
 
 
@@ -68,9 +70,9 @@ def build_pipeline() -> dict[str, Any]:
     Coding 단계의 첫 실행만 실패시켜(`FlakyProcessRunner`) 재시도가 실제로
     발생하고 복구됨을 증명한다. M5-T06으로 `ShellAgent`(항상 성공하는
     `FakeShellProcessRunner` 주입)+`CoordinatorAgent`가 Coding과 Review
-    사이에 추가되었다 — `ClaudeCodeEngineAdapter`용 `FlakyProcessRunner`와는
-    완전히 별개의 프로세스 실행 경로다."""
-    process_runner = FlakyProcessRunner(
+    사이에 추가되었다 — `ClaudeCodeEngineAdapter`용
+    `FlakyExecutionEnvironment`와는 완전히 별개의 프로세스 실행 경로다."""
+    execution_environment = FlakyExecutionEnvironment(
         [
             error_result("일시 오류"),
             success_result("완료(coding)"),
@@ -78,7 +80,7 @@ def build_pipeline() -> dict[str, Any]:
             success_result("완료(documentation)"),
         ]
     )
-    adapter = ClaudeCodeEngineAdapter(process_runner=process_runner)
+    adapter = ClaudeCodeEngineAdapter(execution_environment=execution_environment)
     event_bus = InMemoryEventBus()
     managed_runtime = ManagedEngineRuntime(event_bus=event_bus)
     managed_runtime.register_engine("claude_code", adapter)
@@ -93,7 +95,11 @@ def build_pipeline() -> dict[str, Any]:
     workspace_session = WorkspaceSession(session_id="s1", current_project_id="p1")
 
     planning_agent = PlanningAgent(
-        agent_runtime=agent_runtime, event_bus=event_bus, task_engine=task_engine
+        agent_runtime=agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
+        context_manager=context_manager,
+        workspace_session=workspace_session,
     )
     CodingAgent(
         agent_runtime=agent_runtime,
@@ -133,7 +139,7 @@ def build_pipeline() -> dict[str, Any]:
         "event_bus": event_bus,
         "task_engine": task_engine,
         "planning_agent": planning_agent,
-        "process_runner": process_runner,
+        "execution_environment": execution_environment,
     }
 
 
@@ -144,7 +150,7 @@ def test_full_pipeline_completes_with_real_engine_stack() -> None:
 
     assert pipeline["task_engine"].get_task(task.task_id).status == TaskStatus.DONE
     # Coding 1차 실패 + 재시도 성공(2) + Review(1) + Documentation(1) = 4회 실제 실행
-    assert pipeline["process_runner"].call_count == 4
+    assert pipeline["execution_environment"].call_count == 4
 
 
 def test_retry_actually_recovers_a_failed_first_attempt() -> None:

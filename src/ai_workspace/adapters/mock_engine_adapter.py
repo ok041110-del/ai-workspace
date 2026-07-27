@@ -15,7 +15,9 @@ from ai_workspace.interfaces.engine_adapter import (
 class MockEngineAdapter(EngineAdapter):
     """실제 구현 엔진을 호출하지 않고 즉시 성공 결과를 반환하는 자리표시자
     EngineAdapter(T2-05). Milestone 3에서 실제 Claude Code 등 어댑터로
-    교체될 때까지 Engine Runtime과 Agent의 연동을 검증하는 데 쓰인다."""
+    교체될 때까지 Engine Runtime과 Agent의 연동을 검증하는 데 쓰인다.
+    `run()`의 `model`(Milestone 14)은 받되 사용하지 않는다 — 실제 엔진을
+    호출하지 않으므로 모델 구분이 의미가 없다."""
 
     def __init__(self, capabilities: frozenset[str] = frozenset({"code_generation"})) -> None:
         self._capabilities = capabilities
@@ -27,7 +29,7 @@ class MockEngineAdapter(EngineAdapter):
         self._sessions[session_id] = EngineSessionStatus.RUNNING
         return session_id
 
-    def run(self, session_id: str, task: Task) -> EngineResult:
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         if session_id not in self._sessions:
             raise SessionNotFoundError(session_id)
         self._sessions[session_id] = EngineSessionStatus.COMPLETED
