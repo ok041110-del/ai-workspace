@@ -5402,11 +5402,30 @@ Stub/Mock으로만 검증), `CodingAgent` 연결.
 | Task | 내용 | 상태 |
 |---|---|---|
 | M18-T01 | `EngineExecutionResult` domain + `AuthenticationManager` Interface + `InMemoryAuthenticationManager` | **완료** |
-| M18-T02 | `ExecutionDispatcher` 핵심 로직(인증 확인/실패/Decision 부재 처리) | 진행 예정 |
+| M18-T02 | `ExecutionDispatcher` 핵심 로직(인증 확인/실패/Decision 부재 처리) | **완료** |
 | M18-T03 | End-to-End 통합 테스트(실제 `ClaudeCodeEngineAdapter`+`ExecutionEnvironment` 연결 + 의존성 검증) | 진행 예정 |
 | M18-T04 | 문서화 + Milestone 18 Review | 진행 예정 |
 
-**진행 상태**: M18-T01 완료. M18-T02 진행 중.
+**진행 상태**: M18-T01~T02 완료. M18-T03 진행 중.
+
+#### M18-T02: `ExecutionDispatcher` 핵심 로직
+- 상태: **DONE (2026-07-27)** — `runtime/execution/
+  execution_dispatcher.py`에 `ExecutionDispatcher`(구체 클래스, 사용자
+  승인) 신규. `dispatch(decision, task) -> EngineExecutionResult`:
+  `decision is None`이면 `EngineRegistry`/`AuthenticationManager`를
+  전혀 호출하지 않고 즉시 실패 결과 반환(DoD 11). 인증 확인 후
+  미인증이면 `AuthenticationRequiredError`를 던진다(DoD 4). 인증됐으면
+  `EngineRegistry.get(decision.engine_name)`으로 정확히 하나의
+  Adapter만 얻어 `create_session()`→`run(session_id, task,
+  model=decision.model)`→`destroy_session()` 순서로 실행하고
+  `time.monotonic()`으로 실행 시간을 측정해 `EngineExecutionResult`로
+  감싼다(DoD 1/2/3/7/8/9). `EngineSelectionPolicy`는 어디서도
+  참조하지 않는다(Decision-Execution 분리, import 자체가 없음).
+  단위 테스트 5개 신규(인증됨 실행/미인증 예외/Decision 없음 시
+  Registry·Auth 미호출을 Spy로 직접 증명/여러 Engine 중 선택된
+  것만 실행/미등록 Engine 예외 전파). `pytest`(563개), `ruff`,
+  `mypy` 통과. 다음 Task: **M18-T03**(End-to-End 통합 테스트).
+- 의존성: M18-T01.
 
 #### M18-T01: `EngineExecutionResult` domain + `AuthenticationManager` Interface + 구현체
 - 상태: **DONE (2026-07-27)** — `domain/execution_result.py`에
