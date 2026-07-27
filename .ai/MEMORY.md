@@ -1314,6 +1314,9 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   (전부 기존에 알려진 프롬프트 예시 텍스트, 신규 0건)/Missing
   tags 0건. `poetry run ruff`/`mypy`/`pytest`(46개) 전부 통과.
   `.obsidian/`은 이 세션이 Obsidian을 실행할 수 없어 만들지 않음
-  (Obsidian이 처음 열 때 자동 생성). **Milestone 26 자체의
-  "Completed" 선언은 이전 Milestone들과 동일하게 사용자의 최종
-  확인을 거친다.**
+  (Obsidian이 처음 열 때 자동 생성).
+- **Milestone 26 — Completed(2026-07-27, 사용자 승인 "병합")**.
+  PR #4(`claude/m23-t01-reading-profiles-pmnpue` → `claude/
+  ai-workspace-docs-setup-aj3jvo`)로 base 브랜치에 병합(커밋
+  `e6648ed`). 병합된 base로 로컬 checkout을 재설정해 `pytest`
+  (46개) 재검증, merge 전후 완전히 동일함을 확인.

@@ -8674,6 +8674,14 @@ M26-T01**로 번호를 새로 부여했다(투명하게 기록).
 
 **의존성**: Milestone 25(Production Vault Activation) 완료.
 
+**병합**: PR #4(`claude/m23-t01-reading-profiles-pmnpue` →
+`claude/ai-workspace-docs-setup-aj3jvo`)로 2026-07-27 병합 완료
+(커밋 `e6648ed`, 사용자 승인). 병합된 base 브랜치로 로컬 checkout을
+재설정해 `pytest`(46개) 재검증, merge 전후 완전히 동일함을 확인.
+
+**Milestone 26(Obsidian Vault Root Refactoring) — Completed.**
+(2026-07-27, 사용자 승인)
+
 ---
 
 ## 진행 로그
