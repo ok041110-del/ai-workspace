@@ -62,7 +62,9 @@ def render_section(request: VaultDocumentRequest) -> tuple[str, str]:
 
 
 def render_daily_file(date: str) -> str:
-    """[[Template - Daily]] 형식 그대로 전체 파일 내용을 만든다."""
+    """[[Template - Daily]] 형식 그대로 전체 파일 내용을 만든다. Milestone
+    27(Obsidian Workspace Templates)에서 "진행중"/"완료"를 분리하고
+    "오늘 결정"을 "결정사항"으로 정리했다(M25 요청 Daily Note Template)."""
     return (
         "---\n"
         "tags: [daily]\n"
@@ -74,11 +76,19 @@ def render_daily_file(date: str) -> str:
         "\n"
         "-\n"
         "\n"
-        "## 오늘 결정\n"
+        "## 진행중\n"
         "\n"
         "-\n"
         "\n"
-        "## 발견한 문제\n"
+        "## 완료\n"
+        "\n"
+        "-\n"
+        "\n"
+        "## 문제\n"
+        "\n"
+        "-\n"
+        "\n"
+        "## 결정사항\n"
         "\n"
         "-\n"
         "\n"
@@ -89,4 +99,81 @@ def render_daily_file(date: str) -> str:
         "## 관련 문서\n"
         "\n"
         "- [[Overview]]\n"
+    )
+
+
+def _render_related_documents_section(related_docs: tuple[str, ...]) -> str:
+    if not related_docs:
+        return "-\n"
+    return "\n".join(f"- [[{doc}]]" for doc in related_docs) + "\n"
+
+
+def render_task_file(request: VaultDocumentRequest) -> str:
+    """[[Template - Task]] 형식 그대로 개별 Task 문서 전체 내용을 만든다
+    (Milestone 27, M25 요청 Task Template). `DECISION`/generic kind와
+    달리 Index에 append하지 않고 파일 하나를 통째로 생성한다 —
+    `render_daily_file()`과 같은 create 방식이며, 대상 파일은
+    `request.fields["task_id"]` 기준(Document Router가 이미 해석)."""
+    status = _require(request, "status")
+    priority = _require(request, "priority")
+    milestone = _require(request, "milestone")
+    owner = _require(request, "owner")
+    created = _require(request, "created")
+    updated = _require(request, "updated")
+    notes = request.summary or "-"
+    related = _render_related_documents_section(request.related_docs)
+
+    return (
+        "---\n"
+        "tags: [task]\n"
+        "type: task\n"
+        f"status: {status}\n"
+        f"priority: {priority}\n"
+        f"milestone: {milestone}\n"
+        f"owner: {owner}\n"
+        f"created: {created}\n"
+        f"updated: {updated}\n"
+        "---\n"
+        "\n"
+        f"# {request.title}\n"
+        "\n"
+        "## Status\n"
+        "\n"
+        f"{status}\n"
+        "\n"
+        "## Priority\n"
+        "\n"
+        f"{priority}\n"
+        "\n"
+        "## Milestone\n"
+        "\n"
+        f"{milestone}\n"
+        "\n"
+        "## Owner\n"
+        "\n"
+        f"{owner}\n"
+        "\n"
+        "## Created\n"
+        "\n"
+        f"{created}\n"
+        "\n"
+        "## Updated\n"
+        "\n"
+        f"{updated}\n"
+        "\n"
+        "## Checklist\n"
+        "\n"
+        "-\n"
+        "\n"
+        "## Notes\n"
+        "\n"
+        f"{notes}\n"
+        "\n"
+        "## Related Documents\n"
+        "\n"
+        f"{related}"
+        "\n"
+        "## Decision\n"
+        "\n"
+        "-\n"
     )

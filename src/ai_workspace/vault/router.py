@@ -7,6 +7,7 @@ from datetime import date as date_cls
 from pathlib import Path
 
 from ai_workspace.vault.mapping import VAULT_DIRECTORY_MAP
+from ai_workspace.vault.markdown_generator import MissingVaultFieldError
 from ai_workspace.vault.models import VaultDocumentKind, VaultDocumentRequest
 
 
@@ -36,5 +37,13 @@ class DocumentRouter:
         if request.kind is VaultDocumentKind.DAILY:
             day = request.date or date_cls.today().isoformat()
             relative_path = relative_path.format(date=day)
+        elif request.kind is VaultDocumentKind.TASK:
+            try:
+                task_id = request.fields["task_id"]
+            except KeyError as exc:
+                raise MissingVaultFieldError(
+                    "task 라우팅에 'task_id' 필드가 필요합니다"
+                ) from exc
+            relative_path = relative_path.format(task_id=task_id)
 
         return VaultTarget(path=self._vault_root / relative_path, mode=entry.mode)

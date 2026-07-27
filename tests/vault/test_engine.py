@@ -42,6 +42,31 @@ def test_save_daily_creates_new_file(tmp_path: Path) -> None:
     assert "# 2026-07-27" in daily_path.read_text(encoding="utf-8")
 
 
+def test_save_task_creates_new_file(tmp_path: Path) -> None:
+    engine = VaultSaveEngine(tmp_path)
+    request = VaultDocumentRequest(
+        kind=VaultDocumentKind.TASK,
+        title="Obsidian Workspace Templates",
+        summary="",
+        fields={
+            "task_id": "T27-01",
+            "status": "in-progress",
+            "priority": "high",
+            "milestone": "M27",
+            "owner": "AI",
+            "created": "2026-07-27",
+            "updated": "2026-07-27",
+        },
+    )
+
+    changed = engine.save(request)
+
+    task_path = tmp_path / "14 Tasks/T27-01.md"
+    assert changed is True
+    assert task_path.exists()
+    assert "# Obsidian Workspace Templates" in task_path.read_text(encoding="utf-8")
+
+
 def test_save_returns_false_when_nothing_changes(tmp_path: Path) -> None:
     vault_root = _make_vault(tmp_path)
     engine = VaultSaveEngine(vault_root)

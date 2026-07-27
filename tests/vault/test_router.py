@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from ai_workspace.vault.markdown_generator import MissingVaultFieldError
 from ai_workspace.vault.models import VaultDocumentKind, VaultDocumentRequest
 from ai_workspace.vault.router import DocumentRouter, UnroutableVaultKindError
 
@@ -36,6 +37,26 @@ def test_resolve_daily_without_date_uses_today(tmp_path: Path) -> None:
 
     assert target.path.suffix == ".md"
     assert target.path.parent == tmp_path / "13 Daily"
+
+
+def test_resolve_task_uses_task_id(tmp_path: Path) -> None:
+    router = DocumentRouter(tmp_path)
+    request = VaultDocumentRequest(
+        kind=VaultDocumentKind.TASK, title="", summary="", fields={"task_id": "T27-01"}
+    )
+
+    target = router.resolve(request)
+
+    assert target.path == tmp_path / "14 Tasks/T27-01.md"
+    assert target.mode == "create"
+
+
+def test_resolve_task_without_task_id_raises(tmp_path: Path) -> None:
+    router = DocumentRouter(tmp_path)
+    request = VaultDocumentRequest(kind=VaultDocumentKind.TASK, title="", summary="")
+
+    with pytest.raises(MissingVaultFieldError):
+        router.resolve(request)
 
 
 def test_resolve_unknown_kind_raises() -> None:

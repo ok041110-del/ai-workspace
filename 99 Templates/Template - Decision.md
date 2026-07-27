@@ -1,6 +1,10 @@
 ---
 tags: [decision]
+type: decision
 status: proposed
+milestone:
+created:
+updated:
 ---
 
 # {{title}}
@@ -11,21 +15,30 @@ status: proposed
 
 `proposed` | `accepted` | `superseded`
 
-## 질문
+## Problem(질문)
 
 <!-- 예: 왜 Widget은 별도 저장소인가? -->
 
-## 판단
+## Options(선택지)
+
+<!-- 검토한 대안들 -->
+
+## Decision(판단)
 
 <!-- 현재까지의 결론 -->
 
-## 근거
+## Reason(근거)
 
 <!-- 왜 그렇게 판단했는가 -->
+
+## Impact(영향)
+
+<!-- 이 판단이 바꾸는 것 — 코드/문서/다음 Task -->
 
 ## 관련 문서
 
 - [[Decisions Index]]
+- [[DECISION_TEMPLATE]]
 
 ## 원문
 

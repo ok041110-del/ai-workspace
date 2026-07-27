@@ -43,10 +43,10 @@ def content_hash(path: Path) -> str:
 
 
 def _iter_vault_markdown_files(vault_root: Path) -> list[Path]:
-    """Vault 콘텐츠 디렉터리(15종)만 스캔한다 — `vault_root`가 저장소
-    root와 같아진 뒤(Milestone 26) `docs/`/`.claude/`/`.agents/` 등을
-    끌어들이지 않기 위함(`validation._iter_markdown_files`와 동일한
-    범위)."""
+    """Vault 콘텐츠 디렉터리(16종, Milestone 27부터 `14 Tasks` 포함)만
+    스캔한다 — `vault_root`가 저장소 root와 같아진 뒤(Milestone 26)
+    `docs/`/`.claude/`/`.agents/` 등을 끌어들이지 않기 위함
+    (`validation._iter_markdown_files`와 동일한 범위)."""
     files: list[Path] = []
     for name in VAULT_CONTENT_DIRECTORIES:
         directory = vault_root / name

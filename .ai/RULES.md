@@ -452,3 +452,38 @@ Recommendation 구조와 추천 알고리즘은 그대로 이어진다.
   CI/CD를 신설하는 것은 과한 대응이다.
 - 자동 삭제로 정리되지 않은 브랜치가 남아 있다면 삭제 여부와 방법을
   사용자에게 확인한 뒤 진행한다(GitHub 웹 UI 수동 삭제 등).
+
+## 9. Obsidian Workspace Templates (Milestone 27, ADR-0038, 2026-07-27)
+
+Obsidian Vault(이 저장소 root, `docs/ARCHITECTURE.md` §3.21)에
+저장하는 모든 문서가 따르는 Template/Frontmatter/Tag/Wiki Link
+규칙의 전체 원문은 Vault의 `00 System/AI_RULES.md`(Tag Rule/
+Frontmatter Rule/Backlink Rule)와 `99 Templates/`에 있다 — 이
+저장소 문서(RULES.md 등)는 그 규칙을 복사하지 않고 요약만 남긴다
+(Vault → GitHub 반대 방향으로도 원문을 복제하지 않는 원칙,
+`AI_RULES`의 "이 Vault가 아닌 것" 참고).
+
+- **Task Template**: `14 Tasks/{task_id}.md` 1개 문서 = Task
+  1건. Status/Priority/Milestone/Owner/Created/Updated/Checklist/
+  Notes/Related Documents/Decision 섹션 + frontmatter(`tags:
+  [task]`, `type: task`, `status`, `priority`, `milestone`,
+  `owner`, `created`, `updated`). GitHub `.ai/TASKS.md`(이 문서의
+  Task List/DoD/완료 write-up)를 대체하지 않는다 — 원문은 여전히
+  `.ai/TASKS.md`, Vault 쪽은 실시간 상태 보기/갱신용.
+- **Daily Note Template**: `13 Daily/{date}.md`. 오늘 작업/
+  진행중/완료/문제/결정사항/내일 계획.
+- **Decision Template**: `99 Templates/Template - Decision.md`.
+  Problem/Options/Decision/Reason/Impact + frontmatter(`type:
+  decision`, `status`, `milestone`, `created`, `updated`). ADR로
+  승격되기 전 가벼운 판단 기록용, ADR과 별도(`.ai/DECISIONS.md`).
+- **Workspace(Project) Template**: `99 Templates/Template -
+  Project Workspace.md`에 `Projects/<이름>/README.md, Tasks/,
+  Notes/, Meetings/, Decisions/, Archive/` 표준 구조를 정의하되,
+  이 Vault가 아직 단일 Project(자기 자신)만 다루므로 지금
+  인스턴스화하지 않는다(YAGNI, 두 번째 Project가 생길 때 적용).
+- **Tag Rule 확장**: `#task`/`#meeting`/`#bug`/`#feature`/
+  `#research`/`#daily`.
+- **Frontmatter Rule**: 상태를 갖는 문서(Task/Decision)는
+  `type`/`status`/`priority`/`milestone`/`created`/`updated`를
+  frontmatter에 둔다. 상태 개념이 없는 문서(Daily 등)는 `tags`만
+  으로 충분하다.

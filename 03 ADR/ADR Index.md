@@ -230,6 +230,12 @@ tags: [decision]
 - 결정: `Vault/01 Projects/AI Workspace/`의 15개 디렉터리를 `git mv`로 저장소 root로 승격, PARA 뼈대(Inbox/Resources/Archives) 제거. `connection.py`는 표식 파일(`00 System/PROJECT_INDEX.md`) 기준으로 Vault Root를 찾도록 변경, `mapping.py`는 무변경(처음부터 상대 경로), `validation.py`/`sync.py`는 스캔 범위를 Vault 콘텐츠 15개 디렉터리로 제한
 - 영향: Wikilink는 파일명 기준이라 전혀 깨지지 않음(마크다운 상대경로 링크는 Vault 안에 0건). 상세는 [[Vault Integration Architecture]]
 
+## ADR-0038: Obsidian Workspace Templates 도입 (Milestone 27, M25 요청)
+
+- 목적: Task 생성 → 문서 생성 → 진행 관리 → 상태 변경이 Obsidian 안에서 이뤄지도록 Task 전용 Template/kind 도입
+- 결정: `VaultDocumentKind.TASK` 신규(개별 Task 문서, `14 Tasks/{task_id}.md`), `render_task_file()`(Status/Priority/Milestone/Owner/Checklist/Notes/Related Documents/Decision + frontmatter), `render_daily_file()`에 진행중/완료 구분 추가, `AI_RULES` Tag/Frontmatter Rule 확장, Project Workspace Template은 설계만(단일 Project 유지, YAGNI)
+- 영향: [[Template - Task]]/[[Template - Project Workspace]] 신규, [[Template - Daily]]/[[Template - Decision]] 갱신. 상세는 [[Vault Integration Architecture]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

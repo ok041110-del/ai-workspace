@@ -109,14 +109,31 @@ ai-workspace/
   `.gitignore`로 제외한다.
 - 기기 간 동기화는 Git Vault Sync(iOS)와 일반 `git pull`/`git push`
   (Mac 등 데스크톱)로 이뤄진다 — 즉 Vault 콘텐츠(`00 System`~
-  `99 Templates`)와 `.obsidian/` 설정이 동일한 Git 이력을 통해 함께
-  동기화된다.
+  `14 Tasks`/`99 Templates`)와 `.obsidian/` 설정이 동일한 Git 이력을
+  통해 함께 동기화된다.
 - `workspace.json`/`workspace-mobile.json`은 열려 있는 탭·창 배치처럼
   기기·세션마다 계속 바뀌는 값을 담고 있어, 여러 기기에서 동시에
   사용하면 잦은 Git 충돌이 생길 수 있다. 이 저장소는 "동일한 작업
   환경 유지"를 우선해 두 파일도 함께 관리하기로 했으나, 충돌이 잦다고
   판단되면 이후 별도 승인을 거쳐 `.gitignore`로 제외하는 것을 검토할
   수 있다.
+
+### Obsidian Workspace Templates (Milestone 27, ADR-0038)
+
+Obsidian은 문서 저장소를 넘어 Task 진행 상태를 직접 관리하는
+작업 인터페이스로도 쓰인다. Vault의 `00 System/AI_RULES.md`가
+Tag/Frontmatter/Wiki Link 규칙 원문을 갖고, `99 Templates/`가
+실제 Template 파일을 갖는다 — 이 README는 위치만 요약한다.
+
+- **Task**: `14 Tasks/{task_id}.md` 1개 문서 = Task 1건
+  ([[Template - Task]], `vault/markdown_generator.render_task_file()`
+  로 자동 생성 가능). GitHub `.ai/TASKS.md`를 대체하지 않는다.
+- **Daily Note**: `13 Daily/{date}.md` ([[Template - Daily]]).
+- **Decision**: 가벼운 판단 기록, ADR로 승격 전 단계
+  ([[Template - Decision]], `12 Decisions/Decisions Index.md`).
+- **Project Workspace**: 다중 Project 확장 시 쓸 표준 폴더 구조
+  정의([[Template - Project Workspace]]) — 이 Vault는 아직 단일
+  Project라 지금 인스턴스화하지 않는다.
 
 ## 개발 철학
 

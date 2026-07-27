@@ -10,8 +10,12 @@ from enum import Enum
 
 
 class VaultDocumentKind(Enum):
-    """Vault Directory Mapping의 kind. `AI_RULES`의 Tag Rule 11종 중
-    자동 저장 대상과 1:1 대응한다(`system`은 수동 문서라 제외)."""
+    """Vault Directory Mapping의 kind. `AI_RULES`의 Tag Rule 중 자동
+    저장 대상과 1:1 대응한다(`system`은 수동 문서라 제외). `TASK`는
+    Milestone 27(Obsidian Workspace Templates, ADR-0038)에서 추가돼,
+    다른 kind와 달리 Index에 append하지 않고 Task 1건당 파일 1개를
+    만든다(`DAILY`와 같은 create 방식, 대상 파일이 날짜가 아니라
+    `task_id` 기준)."""
 
     ADR = "adr"
     DECISION = "decision"
@@ -25,6 +29,7 @@ class VaultDocumentKind(Enum):
     MILESTONE = "milestone"
     DAILY = "daily"
     ARCHITECTURE = "architecture"
+    TASK = "task"
 
 
 @dataclass(frozen=True)
