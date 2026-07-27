@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.26.0 |
+| 문서 버전 | v0.27.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~22 완료, Milestone 23은 "Obsidian Integration & Auto Save"로 재정의(M23-T01/T02 완료) — ADR-0035로 신규 §3.21 Vault Integration Layer 도입. 새 Interface 없이 27종 유지. **M23-T03 완료**: `vault/` 패키지(Path Map/Document Router/Markdown Generator/Vault Writer/VaultSaveEngine) 실제 구현) |
+| 상태 | Draft (Milestone 1~22 완료, Milestone 23은 "Obsidian Integration & Auto Save"로 재정의(M23-T01/T02 완료) — ADR-0035로 신규 §3.21 Vault Integration Layer 도입. 새 Interface 없이 27종 유지. **M23-T03 완료**: `vault/` 패키지(Path Map/Document Router/Markdown Generator/Vault Writer/VaultSaveEngine) 실제 구현. **M23-T04 완료**: `vault/validation.py`+`vault/auto_save.py`로 저장→Validation→완료 보고를 한 번에 묶는 Auto Save Workflow 추가) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -914,10 +914,16 @@ GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
   (`render_section`/`render_daily_file`), `vault/writer.py`
   (`VaultWriter` — 신규 파일 생성/기존 섹션 upsert), `vault/
   engine.py`(`VaultSaveEngine`, Save Flow 전체를 잇는 진입점)로
-  구현 완료. `pytest` 18개 신규, `ruff`/`mypy` 클린.
-- **범위 밖(계속)**: Task 완료 시 자동 트리거(M23-T04), Rename/
-  Delete/Conflict/Version 정책(M23-T05), 자연어 명령 라우팅
-  (M23-T06), 실행 환경 연동 검증(M23-T07).
+  구현 완료.
+- **구현 상태(M23-T04, Auto Save Workflow)**: `vault/validation.py`
+  (`find_broken_backlinks`/`find_missing_tags` — AI_RULES의 Backlink
+  Rule/Tag Rule을 코드로 확인), `vault/auto_save.py`(`run_auto_save`
+  — 여러 `VaultDocumentRequest`를 저장하고 Vault 전체 Backlink +
+  새로 만든 파일의 Tag를 검증해 `AutoSaveReport`(저장/미변경/
+  Validation 실패 목록 + `summary()` 완료 보고 문구)를 돌려줌)로
+  구현 완료. `pytest` 27개(T03 18 + T04 9), `ruff`/`mypy` 클린.
+- **범위 밖(계속)**: Rename/Delete/Conflict/Version 정책(M23-T05),
+  자연어 명령 라우팅(M23-T06), 실행 환경 연동 검증(M23-T07).
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
@@ -1109,8 +1115,9 @@ src/ai_workspace/
 ├── vault/             # Vault Directory Mapping/Document Router/
 │                       #   Markdown Generator/Vault Writer/
 │                       #   VaultSaveEngine (구현됨, M23-T02/T03,
-│                       #   ADR-0035 — Core Domain·web/을 모두 모름,
-│                       #   Milestone 23)
+│                       #   ADR-0035) + validation.py/auto_save.py
+│                       #   (Auto Save Workflow, M23-T04) — Core
+│                       #   Domain·web/을 모두 모름, Milestone 23
 ├── web/               # Infrastructure 계층 — FastAPI/uvicorn을 아는 유일한 곳
 │                       #   (Milestone 20): dashboard_viewmodel.py, routes.py,
 │                       #   dashboard_broadcaster.py, app.py, server.py,

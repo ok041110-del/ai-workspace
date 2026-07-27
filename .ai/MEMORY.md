@@ -1112,5 +1112,17 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   있지 않아(poetry.lock이 pyproject.toml과 어긋남) 전체 `pytest`/
   `mypy src`는 기존 Milestone 코드에서도 동일하게 실패한다 — `vault/`
   와 무관한 사전 존재 환경 제약이며 이번 Task에서 `pyproject.toml`/
-  `poetry.lock`은 건드리지 않았다. 다음 Task: **M23-T04**(Auto Save
-  Workflow — Task 완료 시 `VaultSaveEngine`을 자동 호출하는 Workflow).
+  `poetry.lock`은 건드리지 않았다.
+- **M23-T04 완료: Auto Save Workflow(2026-07-27)**. `vault/
+  validation.py`(`find_broken_backlinks` — Vault 전체 `[[..]]`가
+  실제 파일명을 가리키는지, `find_missing_tags` — 새로 만든 파일의
+  frontmatter `tags` 확인)와 `vault/auto_save.py`(`run_auto_save`
+  — 여러 `VaultDocumentRequest`를 `VaultSaveEngine`으로 저장한 뒤
+  자동으로 Validation을 돌려 `AutoSaveReport`를 만든다.
+  `AutoSaveReport.summary()`가 "저장됨 N개/변경 없음 N개/Validation
+  통과(또는 실패 목록)" 완료 보고 문구를 생성)를 신규 구현.
+  append 모드는 기존 파일의 frontmatter를 건드리지 않으므로 Tag
+  검증은 create 모드(현재는 Daily)로 새로 생성된 파일에만 적용하도록
+  범위를 좁힘(과잉 검증 방지). `tests/vault/` 9개 추가(총 27개),
+  `ruff`/`mypy` 클린. 다음 Task: **M23-T05**(Vault Synchronization —
+  Create/Update/Rename/Delete/Conflict/Version 정책).

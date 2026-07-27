@@ -7592,7 +7592,7 @@ FCM·APNs 전송)은 그대로 유효**하며, 해당 Milestone 착수 시 다�
 | M23-T01 | Reading Profiles — 작업 유형별 Retrieval Profile 정의 | **완료** |
 | M23-T02 | Obsidian Integration Architecture — Vault 연동 구조/저장 전략/Auto Save Architecture 설계, ADR 작성 | **완료** |
 | M23-T03 | Vault Save Engine — Markdown 생성/저장 엔진 구현 | **완료** |
-| M23-T04 | Auto Save Workflow — Task 완료 후 자동 Vault 갱신 | 예정 |
+| M23-T04 | Auto Save Workflow — Task 완료 후 자동 Vault 갱신 | **완료** |
 | M23-T05 | Vault Synchronization — Create/Update/Rename/Delete/Conflict/Version/Link·Backlink 검증 정책 | 예정 |
 | M23-T06 | Execution Engine — 자연어 명령 → Retrieval → Template → 작업 → Vault 저장 → Validation → 완료 보고 라우팅 | 예정 |
 | M23-T07 | Execution Environment Integration — Claude Code/Filesystem/MCP/GitHub 실제 연동 검증 | 예정 |
@@ -7723,6 +7723,68 @@ Updater/Metadata 처리/Template 적용)을 신규 `vault/` 패키지로
 
 **의존성**: M23-T02(Obsidian Integration Architecture, ADR-0035)
 완료.
+
+---
+
+#### M23-T04: Auto Save Workflow
+
+**목표**: Task 완료 후 여러 `VaultDocumentRequest`를 한 번에
+저장하고, Vault 전체를 Validation한 뒤, 완료 보고 문구까지 만드는
+Workflow를 구현한다. EXECUTION_PROFILE Standard Workflow의 4단계
+(Task Execution 종료)~7단계(Completion Report) 사이에서 "자동 저장
+→ Validation → 완료 보고" 흐름을 코드 한 번의 호출로 수행한다.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `vault/validation.py` — `find_broken_backlinks`(Vault 전체 Backlink Rule 검증) | ✅ |
+| 2 | `vault/validation.py` — `find_missing_tags`(신규 생성 파일의 Tag Rule 검증) | ✅ |
+| 3 | `vault/auto_save.py` — `run_auto_save()`가 여러 요청을 `VaultSaveEngine`으로 저장 | ✅ |
+| 4 | `run_auto_save()`가 저장 후 Backlink/Tag Validation을 자동 수행 | ✅ |
+| 5 | `AutoSaveReport`(저장/미변경/Validation 실패 목록 + `ok`/`summary()`)로 완료 보고 문구 생성 | ✅ |
+| 6 | `tests/vault/test_validation.py`/`test_auto_save.py` 신규 9개(깨진 Backlink 탐지, Tag 누락 탐지, 저장 성공/중복 저장 시 unchanged, 신규 파일 생성 케이스 포함) | ✅ |
+| 7 | `ruff check src/ai_workspace/vault tests/vault`, `mypy src/ai_workspace/vault` 클린 | ✅ |
+| 8 | `docs/ARCHITECTURE.md`/Vault `Vault Integration Architecture.md`/`Backend Index`에 구현 상태 반영 | ✅ |
+| 9 | 변경된 파일만 수정, 새 Core Interface 미추가 | ✅ |
+
+**구현 내용**
+
+- `src/ai_workspace/vault/validation.py`(신규): `find_broken_
+  backlinks()`가 Vault 전체 `.md` 파일에서 `[[제목]]` 패턴을 찾아
+  파일명(확장자 제외) 집합과 대조한다 — 존재하지 않는 문서를
+  가리키면 `VaultValidationIssue`. `find_missing_tags()`는 주어진
+  경로들의 frontmatter에 `tags: [...]` 줄이 있는지 확인한다 —
+  append 모드는 기존 파일의 frontmatter를 건드리지 않으므로
+  `run_auto_save()`는 이 함수를 **새로 만든 파일(create 모드)에만**
+  적용한다.
+- `src/ai_workspace/vault/auto_save.py`(신규): `run_auto_save
+  (vault_root, requests)`가 각 요청을 `DocumentRouter.resolve()`로
+  대상 경로를 먼저 알아낸 뒤 `VaultSaveEngine.save()`로 저장하고,
+  변경 여부에 따라 저장됨/미변경 목록에 나눠 담는다. 저장이 끝나면
+  Vault 전체 Backlink 검증 + 새로 생성된 파일의 Tag 검증을 실행해
+  `AutoSaveReport`(저장/미변경 경로, Validation 이슈 목록)를
+  만든다. `AutoSaveReport.summary()`가 "저장됨 N개/변경 없음 N개/
+  Validation 통과(또는 실패 목록)" 형태의 완료 보고 문구를 만들어,
+  Standard Workflow 7단계(Completion Report)에 바로 붙여 쓸 수
+  있게 한다.
+- `tests/vault/test_validation.py`(신규, 5개): 깨진 Backlink 탐지/
+  전부 정상일 때 빈 목록/frontmatter 없는 파일 탐지/tags 있는
+  파일 통과/존재하지 않는 경로는 건너뜀.
+- `tests/vault/test_auto_save.py`(신규, 4개): 저장 성공 시 report
+  구성 확인, 동일 요청 재호출 시 `unchanged_paths`로 분류, 관련
+  문서에 존재하지 않는 문서를 링크하면 `ok=False`로 잡힘, Daily
+  파일 생성 후 Tag Validation 통과.
+- `docs/ARCHITECTURE.md`(v0.27.0)/Vault `Vault Integration
+  Architecture.md`/`Backend Index`(수정): 구현 상태 절 추가.
+- 검증: `poetry run ruff check src/ai_workspace/vault tests/vault`
+  / `poetry run mypy src/ai_workspace/vault` / `poetry run pytest
+  tests/vault` 전부 통과(27개, T03 18 + T04 9). 전체 `pytest`/
+  `mypy src`는 M23-T03과 동일한 사전 존재 환경 제약(이 세션에
+  `pyyaml`/`fastapi`/`uvicorn` 미설치)으로 여전히 실패 — `vault/`
+  와 무관.
+
+**의존성**: M23-T03(Vault Save Engine) 완료.
 
 ---
 

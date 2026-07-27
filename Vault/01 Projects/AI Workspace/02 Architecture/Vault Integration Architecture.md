@@ -66,18 +66,28 @@ GitHub 원문 갱신(Standard Workflow 5단계, Document Update)
   말미에 추가 — 과거 수작업으로 채운 내용을 보존한다.
 - 실제 내용이 바뀔 때만 파일을 쓴다(불필요한 diff 방지).
 
-## 구현 상태(M23-T03)
+## 구현 상태(M23-T03, Vault Save Engine)
 
 `src/ai_workspace/vault/`에 `VaultDocumentKind`/`VaultDocumentRequest`
 (models.py), `VAULT_DIRECTORY_MAP`(mapping.py), `DocumentRouter`
 (router.py), `render_section`/`render_daily_file`
 (markdown_generator.py), `VaultWriter`(writer.py, 신규 파일 생성 +
 기존 섹션 upsert), `VaultSaveEngine`(engine.py, Save Flow 전체를
-잇는 진입점)로 구현 완료. `tests/vault/` 18개, `ruff`/`mypy` 클린.
+잇는 진입점)로 구현 완료.
+
+## 구현 상태(M23-T04, Auto Save Workflow)
+
+`vault/validation.py`(`find_broken_backlinks`/`find_missing_tags` —
+`AI_RULES`의 Backlink Rule/Tag Rule을 코드로 확인), `vault/
+auto_save.py`(`run_auto_save` — 여러 `VaultDocumentRequest`를 한
+번에 저장한 뒤 Vault 전체 Backlink와 새로 만든 파일의 Tag를 검증해
+`AutoSaveReport`를 돌려줌. `AutoSaveReport.summary()`가 "저장됨 N개/
+변경 없음 N개/Validation 통과(또는 실패 목록)" 형태의 완료 보고
+문구를 만든다)로 구현 완료. `tests/vault/` 27개(T03 18 + T04 9),
+`ruff`/`mypy` 클린.
 
 ## 범위 밖(계속)
 
-- Task 완료 시 자동 트리거 — M23-T04(Auto Save Workflow).
 - Rename/Delete/Conflict/Version 정책 — M23-T05(Vault
   Synchronization).
 - 자연어 명령 라우팅 — M23-T06(Execution Engine).
