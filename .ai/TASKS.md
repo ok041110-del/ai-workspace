@@ -5681,6 +5681,24 @@ Credential 관리, Engine Selection/Budget/Knowledge 개선,
 
 **진행 상태**: M19-T01~T03 완료. M19-T04(문서화 + Review) 진행 중.
 
+#### M19-T01: Reliability Domain 정의
+- 상태: **DONE (2026-07-27)** — `domain/retry_policy.py`의 기존
+  `RetryPolicy`(M3)에 `retry_delay_seconds: float = 0.0`/
+  `non_retryable_exceptions: tuple[type[BaseException], ...] = ()`
+  필드와 `decide(exception) -> RetryDecision` 메서드 추가(둘 다
+  기본값이 있어 `RecoveringEngineRuntime`의 기존 호출부 전부 무영향
+  — 새 이름을 만들지 않고 같은 개념을 확장). `RetryDecision`
+  (should_retry/reason) 신규 — `EngineSelectionDecision`/
+  `BudgetDecision`과 동일한 명명 패턴. `runtime/execution/
+  retry_executor.py`의 `RetryExecutor`(제네릭 `Callable[[], T]`를
+  받아 `RetryPolicy`에 따라 재시도 — 반환 타입을 모르므로
+  `EngineExecutionResult`를 전혀 참조하지 않음, 순수 재시도 메커니즘)
+  신규. 단위 테스트 11개 신규(domain 6개, runtime/execution 5개 —
+  기본 동작/재시도 성공/횟수 소진 후 예외 재전파/재시도 불가 예외
+  즉시 실패/delay 적용 확인). `pytest`(578개), `ruff`, `mypy` 통과.
+  다음 Task: **M19-T02**(Execution Reliability 구현).
+- 의존성: 없음.
+
 #### M19-T02: Execution Reliability 구현
 - 상태: **DONE (2026-07-27)** — `domain/execution_result.py`의
   `EngineExecutionResult`에 `retry_count: int = 0`/`cancelled: bool =
@@ -5722,23 +5740,145 @@ Credential 관리, Engine Selection/Budget/Knowledge 개선,
   통과. 다음 Task: **M19-T04**(문서화 + Milestone 19 Review).
 - 의존성: M19-T02.
 
-#### M19-T01: Reliability Domain 정의
-- 상태: **DONE (2026-07-27)** — `domain/retry_policy.py`의 기존
-  `RetryPolicy`(M3)에 `retry_delay_seconds: float = 0.0`/
-  `non_retryable_exceptions: tuple[type[BaseException], ...] = ()`
-  필드와 `decide(exception) -> RetryDecision` 메서드 추가(둘 다
-  기본값이 있어 `RecoveringEngineRuntime`의 기존 호출부 전부 무영향
-  — 새 이름을 만들지 않고 같은 개념을 확장). `RetryDecision`
-  (should_retry/reason) 신규 — `EngineSelectionDecision`/
-  `BudgetDecision`과 동일한 명명 패턴. `runtime/execution/
-  retry_executor.py`의 `RetryExecutor`(제네릭 `Callable[[], T]`를
-  받아 `RetryPolicy`에 따라 재시도 — 반환 타입을 모르므로
-  `EngineExecutionResult`를 전혀 참조하지 않음, 순수 재시도 메커니즘)
-  신규. 단위 테스트 11개 신규(domain 6개, runtime/execution 5개 —
-  기본 동작/재시도 성공/횟수 소진 후 예외 재전파/재시도 불가 예외
-  즉시 실패/delay 적용 확인). `pytest`(578개), `ruff`, `mypy` 통과.
-  다음 Task: **M19-T02**(Execution Reliability 구현).
-- 의존성: 없음.
+#### M19-T04: 문서화 + Milestone 19 Review
+- 목적: 문서와 구현을 일치시키고 Milestone 종료 승인을 받는다.
+- 작업 내용: `docs/ARCHITECTURE.md`에 신규 §3.17(Reliability) 갱신,
+  `.ai/DECISIONS.md`에 ADR-0031 신규(`RetryPolicy` 확장 근거 + `timed_out`
+  휴리스틱 기술 부채 정식 기록), `docs/ROADMAP.md`/`.ai/MEMORY.md`
+  갱신, Review 작성.
+- 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
+- 상태: **DONE (2026-07-27)** — `docs/ARCHITECTURE.md` v0.21.0 신규
+  §3.17(Reliability — `RetryPolicy` 확장/`RetryExecutor`/취소
+  sentinel 재사용/**timed_out 휴리스틱 기술 부채 명시적 경고** 포함)
+  /§3.16(`EngineExecutionResult` 확장 및 의존 방향에 `RetryExecutor`
+  반영)/§9(디렉터리 매핑에 `runtime/execution/retry_executor.py`
+  반영). §7 Interfaces는 새 Interface가 없어 25종 그대로(`RetryExecutor`
+  는 구체 클래스, `RetryPolicy`/`RetryDecision`은 domain 확장).
+  `.ai/DECISIONS.md`에 **ADR-0031**(배경/결정 7개 항목/대안 4개/
+  이유/결과, timed_out 한계를 정식 기록) 신규 작성. 아래 "Milestone
+  19 Review" 절 참고.
+- 의존성: M19-T01~T03.
+
+---
+
+## Milestone 19 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `RetryPolicy`(최대 횟수/재시도 판단/Delay) | ✅ (M19-T01, 기존 확장) |
+| 2 | `RetryExecutor`가 재시도 담당, `ExecutionDispatcher`는 직접 미구현 | ✅ (M19-T01/T02) |
+| 3 | Timeout 시 정책대로 재시도 여부 결정 | ✅ (M19-T02/T03) |
+| 4 | 취소 시 `EngineExecutionResult`에 반영 | ✅ (M19-T02/T03) |
+| 5 | `EngineExecutionResult` 확장(retry_count/cancelled/timed_out) | ✅ (M19-T02) |
+| 6 | `AuthenticationRequiredError` 비재시도 | ✅ (M19-T02) |
+| 7 | `NoSuitableEngineError`(및 실제 `EngineNotRegisteredError`) 비재시도 | ✅ (M19-T02) |
+| 8 | 재시도 가능/불가능 오류를 단위 테스트로 증명 | ✅ (M19-T01/T02) |
+| 9 | 재시도 횟수 정책 동작을 단위 테스트로 증명 | ✅ (M19-T01) |
+| 10 | Timeout 동작을 통합 테스트로 증명 | ✅ (M19-T03) |
+| 11 | Cancellation 동작을 통합 테스트로 증명 | ✅ (M19-T03) |
+| 12 | `ExecutionDispatcher`가 `RetryPolicy` 미직접구현을 의존성 검증으로 증명 | ✅ (M19-T02, 소스 코드 검사) |
+| 13 | 전체 `pytest`/`ruff`/`mypy` 통과 | ✅ (아래 4절) |
+
+Task List(M19-T01~T04) 전체 완료. 사용자 승인 조건(`timed_out`
+휴리스틱을 ADR/ARCHITECTURE에 기술 부채로 명시, `cancelled`는 기존
+sentinel 재사용) 모두 충족됨.
+
+**2. Architecture Review**
+
+- **신규 컴포넌트**: `runtime/execution/retry_executor.py`
+  (`RetryExecutor`) — 1개 신규 소스 파일.
+- **변경된 기존 컴포넌트**: `domain/retry_policy.py`(`RetryPolicy`
+  확장 + `RetryDecision` 추가), `domain/execution_result.py`
+  (`EngineExecutionResult` 3개 필드 확장), `runtime/execution/
+  execution_dispatcher.py`(`RetryExecutor` 연동).
+- **핵심 설계 결정**: 기존 `RetryPolicy`(M3)를 새 이름으로 쪼개지
+  않고 확장했다 — M16/M18의 "다른 개념인데 이름이 겹침" 문제와
+  달리, 이번엔 실제로 같은 개념(실행 재시도 정책)의 자연스러운
+  확장이라고 판단했다. `RetryExecutor`를 `EngineExecutionResult`를
+  전혀 모르는 제네릭 컴포넌트로 설계해 재사용 가능성을 열어뒀다.
+  `timed_out` 판정이 메시지 텍스트 휴리스틱에 의존한다는 한계를
+  숨기지 않고 ADR-0031과 ARCHITECTURE.md §3.17에 명시적으로
+  기록했다(사용자 승인 조건 1).
+
+`git diff --stat`(M18 종료 커밋 대비)로 확인한 결과 신규 소스 파일
+1개, 기존 소스 파일 수정 3개 — 지금까지 중 가장 작은 변경 폭 중
+하나(M17: 신규 5/수정 0, M18: 신규 4/수정 0에 이어 세 번째로 작음).
+
+**3. Interface First 원칙 검토**
+
+M19는 **새 최상위 Interface를 추가하지 않았다** — `RetryExecutor`는
+`WorkflowRunner`/`ExecutionDispatcher`와 동일하게 구체 클래스이고,
+`RetryPolicy`/`RetryDecision`은 기존 domain 객체의 확장/추가라
+Interface 변경이 아니다. 그럼에도 ADR-0031을 작성한 이유는 (1)
+`RetryPolicy`가 M3부터 존재하는 컴포넌트의 계약을 실질적으로
+확장했고, (2) `timed_out` 휴리스틱이라는 기술 부채를 사용자가
+명시적으로 ADR 기록을 요구했기 때문이다 — "새 Interface 추가"라는
+기존 ADR 트리거 규칙 밖에서도, 사용자의 명시적 요청이 있으면 ADR을
+작성하는 것이 맞다고 판단했다.
+
+**4. 테스트 결과**
+
+- `pytest`: **588개 전부 통과**(M18 완료 시점 567개 → M19에서 21개
+  신규: M19-T01 +11, M19-T02 +6, M19-T03 +4)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(신규 소스 파일 1개 포함, `storage/
+  llm_policy_loader.py`의 `types-PyYAML` 미설치 경고 1건은 M19
+  이전부터 존재하는 무관한 항목)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M19에서 새로 발생한 기술 부채(사용자 승인, ADR-0031에 정식 기록)*
+- **`timed_out` 휴리스틱** — `ClaudeCodeEngineAdapter.run()`이
+  Timeout과 다른 실행 오류를 같은 예외 타입으로 던져 메시지 텍스트
+  매칭으로만 판정 가능. 근본 해결은 `EngineAdapter`(또는
+  `EngineExecutionError`)에 Timeout을 구조적으로 표현하는 후속
+  Milestone이 필요하다.
+
+*M19 범위 밖으로 명시적으로 제외한 것(사용자 확정, 계속 이월)*
+- Dashboard, Scheduler, Workflow Automation, MCP, Plugin, Billing,
+  Telemetry, Logging 고도화, 실제 로그인/OAuth/Credential 관리,
+  Engine Selection/Budget/Knowledge 개선.
+
+*계속 이월되는 기존 항목*
+- Effort 라우팅, `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임
+  워크 미통합, Codex/Gemini 실연동 미검증, `MemoryEngine.search()`
+  선형 스캔, 여러 Task에 걸친 누적 예산 추적, 예산 초과 시 Approval
+  흐름, `KnowledgeIndexer`, Review/Documentation Agent로의
+  `knowledge_provider` 확장, `EngineRuntime`↔`EngineRegistry` 중복
+  등록, 실제 로그인/OAuth/Credential/Token Refresh, `CodingAgent`
+  ↔`ExecutionDispatcher` 연결, `ShellAgent` 화이트리스트 코드 고정.
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M19-T01~T04 상세 섹션) / `docs/ROADMAP.md`
+(M19 Task List·목표·DoD 반영) / `docs/ARCHITECTURE.md`(v0.21.0, 신규
+§3.17 갱신) / `.ai/DECISIONS.md`(ADR-0031 신규) 완료. `pyproject.toml`
+버전은 v0.5.0 그대로 유지(ADR-0024 기준선 — 새 Interface 없이 기존
+domain 확장 + 신규 구체 클래스 1개라 기준선 재선언 대상이 아님).
+`.ai/MEMORY.md`는 이 Review 승인 직후 M1~M18과 동일한 방식으로
+압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 1/
+수정 3 소스 파일, "RetryPolicy 확장(신규 명명 없음) + timed_out
+휴리스틱 한계 명시" 설계 결정 기록), Interface First 검토 완료(3절,
+새 Interface 없음이나 사용자 요청에 따라 ADR-0031 작성), 테스트 결과
+문서화 완료(4절), Technical Debt 정리 완료(5절, timed_out 휴리스틱을
+신규 부채로 정식 등재), 문서 갱신 완료(6절) — 6개 조건 모두 만족.
+Review 중 코드 변경이 필요한 치명적 문제(버그·계약 위반)는 발견되지
+않았다.
+
+**사용자 승인을 조건으로 Milestone 19 Completed를 선언한다.**
+
+**Milestone 20 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
+않았다. 사용자가 예고한 다음 단계는 Dashboard를 통한 실행 상태
+시각화·관리다 — 다만 이는 사전 논의 없이 확정된 것이 아니며,
+Milestone 20은 착수 시점에 이 문서에 목표/DoD/Task List를 새로
+정의한다(Task Driven Development 원칙, M2~M19가 그래왔듯).
 
 ---
 

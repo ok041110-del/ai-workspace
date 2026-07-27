@@ -1195,3 +1195,104 @@
   (M11/M15/M16/M17이 실행까지 연결됨). 실제 로그인/OAuth/Credential
   관리/Token Refresh, `CodingAgent` 연결, Retry/Timeout/Recovery/
   Approval/병렬 실행은 실제 필요성이 생기기 전까지 이월한다.
+
+## ADR-0031: Reliability Layer 도입 (`RetryPolicy` 확장 + `RetryExecutor`), `timed_out` 휴리스틱 기술 부채 명시 (Milestone 19)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: M18로 완성된 Execution Layer는 실패를 감지·복구하는 능력이
+  없었다. 사용자가 "Task → Selection Policy → Decision →
+  ExecutionDispatcher → RetryExecutor → AuthenticationManager →
+  EngineRegistry → EngineAdapter → ExecutionEnvironment →
+  EngineExecutionResult" 흐름으로 M19를 요청했다. 설계 검토 결과
+  세 가지를 확인했다: (1) `domain/retry_policy.py`의 `RetryPolicy`
+  (M3)가 이미 존재하고 `RecoveringEngineRuntime`이 "무조건 재시도"
+  에 쓰고 있다 — 이번엔 M16/M18과 달리 **같은 개념의 확장**이라
+  판단해 새 이름 대신 기존 클래스에 필드를 추가하기로 했다. (2)
+  `ClaudeCodeEngineAdapter.run()`은 Timeout과 다른 실행 오류를 모두
+  같은 `EngineExecutionError`로 던지고 메시지 텍스트로만 구분되는데,
+  "`EngineAdapter` 인터페이스는 변경하지 않는다"는 이번 Milestone의
+  제약과 정면으로 부딪힌다 — 완전한 구분이 불가능하다. (3) DoD가
+  언급한 `NoSuitableEngineError`(`EngineRuntime` 시절 예외)는 이
+  경로에 실제로 나타나지 않는다 — M18이 `EngineRuntime`을 건너뛰고
+  `EngineRegistry`를 직접 쓰기 때문에 실제로는
+  `EngineNotRegisteredError`가 발생한다. 사용자는 최종 승인에서
+  두 조건을 확정했다: `timed_out`은 휴리스틱임을 이 ADR과
+  ARCHITECTURE.md에 기술 부채로 명시할 것, `cancelled`는 새 문자열
+  규칙을 만들지 않고 `EngineAdapter`가 이미 쓰는 sentinel을 그대로
+  이어받을 것.
+- 결정:
+  1. `domain/retry_policy.py`의 기존 `RetryPolicy`에
+     `retry_delay_seconds: float = 0.0`/`non_retryable_exceptions:
+     tuple[type[BaseException], ...] = ()`(둘 다 기본값)와
+     `decide(exception) -> RetryDecision`을 추가한다. 도메인
+     계층은 구체 예외 타입을 몰라도 되도록 `type[BaseException]`
+     튜플만 받는다 — 실제 재시도 불가 예외 목록은 호출자
+     (`ExecutionDispatcher`)가 구성한다. `RecoveringEngineRuntime`
+     의 기존 호출부(모두 `max_attempts`만 지정)는 전혀 영향받지
+     않는다.
+  2. `RetryDecision`(should_retry/reason)을 신설한다 —
+     `EngineSelectionDecision`/`BudgetDecision`과 동일한 명명
+     패턴.
+  3. `runtime/execution/retry_executor.py`에 `RetryExecutor`(구체
+     클래스, 제네릭 `Callable[[], T]`를 받아 재시도)를 신설한다.
+     `EngineExecutionResult`를 전혀 알지 못하는 순수 재시도
+     메커니즘이다.
+  4. `ExecutionDispatcher`는 "인증 확인→`EngineRegistry` 조회→
+     `EngineAdapter` 실행" 전체를 한 번의 시도로 묶어
+     `RetryExecutor.execute()`에 위임한다(재시도 로직을 직접
+     구현하지 않음). 기본 `RetryPolicy`는
+     `non_retryable_exceptions=(AuthenticationRequiredError,
+     EngineNotRegisteredError, NoSuitableEngineError)`로 구성한다
+     — `NoSuitableEngineError`는 이 경로에 실제로 발생하지 않지만
+     전방 호환을 위해 포함해 뒀다(해가 없음).
+  5. `domain/execution_result.py`의 `EngineExecutionResult`에
+     `retry_count: int = 0`/`cancelled: bool = False`/`timed_out:
+     bool = False`(전부 기본값, M18 호출부 무영향)를 추가한다.
+  6. `EngineExecutionError`가 재시도를 소진하면 예외를 그대로
+     전파하는 대신 `EngineExecutionResult(success=False,
+     timed_out=<휴리스틱>)`로 변환한다 — `_looks_like_timeout()`이
+     Timeout 메시지의 한국어 마커("응답하지 않았습니다") 문자열
+     매칭으로만 판정한다. **이것은 알려진 기술 부채다** — Adapter가
+     메시지 문구를 바꾸면 이 판정은 깨진다.
+  7. 취소는 `EngineResult.error == "cancelled"`(`EngineAdapter`가
+     이미 쓰는 sentinel)로 판정하고, 재시도 루프를 타지 않고 즉시
+     `cancelled=True`로 반영한다.
+- 대안:
+  - `RetryPolicy`를 새 이름(예: `ExecutionRetryPolicy`)으로 분리 —
+    기각. M16(`MemoryEngine`/Knowledge)·M18(`ExecutionResult`)의
+    이름 충돌과 달리, 이번엔 "실행 재시도 정책"이라는 **같은
+    개념**을 다루므로 확장이 SRP를 지키면서도 더 단순하다
+    (YAGNI — 불필요하게 유사 개념을 두 이름으로 쪼개지 않음).
+  - `EngineAdapter` 인터페이스를 확장해 Timeout을 구조적으로 표현
+    (예: `EngineExecutionTimeoutError` 서브타입 도입) — 기각(사용자
+    확정 범위 밖, "이번 Milestone에서는 EngineAdapter 인터페이스를
+    변경하지 않는다"). 근본 해결은 후속 Milestone으로 이월하고,
+    이번엔 메시지 기반 휴리스텍으로 최소 기능만 제공하며 한계를
+    투명하게 기록한다.
+  - `cancelled` 판정에 새로운 전용 필드나 예외 타입 도입 — 기각
+    (사용자 확정 조건). `EngineAdapter`가 이미 `error="cancelled"`
+    라는 값으로 취소를 인코딩하고 있으므로, 새 규칙을 만들지 않고
+    그 값을 그대로 이어받는 것이 최소 변경 원칙에 맞는다.
+  - 모든 실행 실패(성공하지 못한 `EngineResult`)를 자동 재시도 —
+    기각. DoD의 재시도 대상은 전부 예외 기반(Timeout/Process
+    Error)이라, 정상적으로 반환된 실패 결과(예: LLM이 "이 작업은
+    할 수 없습니다"라고 응답한 경우)까지 재시도하면 의미 없는
+    반복 호출만 늘어난다 — 이번 MVP는 인프라 수준 실패만 재시도
+    대상으로 좁혔다.
+- 이유: `RetryExecutor`를 제네릭·독립 컴포넌트로 두면
+  `ExecutionDispatcher` 외의 다른 곳에서도 재시도가 필요해질 때
+  재사용할 수 있다. 재시도 판단을 예외 타입 기반으로 구성 가능하게
+  하면(`non_retryable_exceptions`) `ExecutionDispatcher`가 판단
+  로직을 직접 갖지 않아도 되고, 정책만 교체하면 재시도 대상을
+  바꿀 수 있다(OCP). Timeout 휴리스틱의 한계를 숨기지 않고 ADR과
+  ARCHITECTURE.md에 명시적으로 기록해, 향후 `EngineAdapter` 개선
+  Milestone에서 이 부채를 해소할 근거를 남긴다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.21.0 신규 §3.17(Reliability)에
+  반영(§7 Interfaces는 새 Interface가 없어 25종 그대로 — `RetryExecutor`
+  는 구체 클래스, `RetryPolicy`/`RetryDecision`은 domain 확장).
+  실제 `ClaudeCodeEngineAdapter`+`ExecutionEnvironment` 조합으로
+  Timeout 재시도·소진 후 `timed_out` 반영, Cancellation 즉시 반영을
+  통합 테스트로 증명(M19-T03). `EngineAdapter` 구조적 Timeout 신호,
+  Backoff 전략 고도화, 다른 컴포넌트(예: `KnowledgeRepository`)로의
+  `RetryExecutor` 재사용은 실제 필요성이 생기기 전까지 이월한다.

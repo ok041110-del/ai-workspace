@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.20.0 |
+| 문서 버전 | v0.21.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~17 완료, Milestone 18 완료 — ADR-0030으로 신규 §3.16 Execution Layer 도입, 첫 End-to-End 실행 경로 완성) |
+| 상태 | Draft (Milestone 1~18 완료, Milestone 19 완료 — ADR-0031로 신규 §3.17 Reliability(Retry/Timeout/Cancellation) 도입, timed_out 휴리스틱 기술 부채 명시) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -578,16 +578,68 @@ ExecutionEnvironment/M15 Budget/M16 Knowledge/M17 Selection이 실행까지
   집합만 보관한다. Workspace는 CLI 로그인 명령을 직접 실행하지
   않는다(실제 로그인 기능은 후속 Milestone).
 - **`EngineExecutionResult`(domain, Provider 독립)**: success/output/
-  error/engine/execution_time. `interfaces/execution_environment.py`
-  의 `ExecutionResult`(OS 프로세스 결과 — returncode/stdout/stderr)
-  와는 이름·개념이 다르다 — 혼동 방지를 위해 별도로 명명했다.
-- **`CodingAgent`는 수정하지 않는다**: 이번 Milestone은
-  `ExecutionDispatcher`를 독립적으로 구현·검증한다(사용자 확정).
-  Agent 파이프라인 연결은 후속 Milestone의 책임이다.
+  error/engine/execution_time(+ M19에서 retry_count/cancelled/
+  timed_out 확장, §3.17). `interfaces/execution_environment.py`의
+  `ExecutionResult`(OS 프로세스 결과 — returncode/stdout/stderr)와는
+  이름·개념이 다르다 — 혼동 방지를 위해 별도로 명명했다.
+- **`CodingAgent`는 수정하지 않는다**: M18은 `ExecutionDispatcher`를
+  독립적으로 구현·검증했다(사용자 확정). Agent 파이프라인 연결은
+  후속 Milestone의 책임이다.
 - **의존 방향**: (현재는 호출 주체 없음, 통합 테스트가 직접
-  호출) `ExecutionDispatcher` → `AuthenticationManager` +
-  `EngineRegistry` → `EngineAdapter` → `ExecutionEnvironment`(기존
-  M11 경로 그대로).
+  호출) `ExecutionDispatcher` → `RetryExecutor`(§3.17) →
+  `AuthenticationManager` + `EngineRegistry` → `EngineAdapter` →
+  `ExecutionEnvironment`(기존 M11 경로 그대로).
+
+### 3.17 Reliability — Retry / Timeout / Cancellation (Milestone 19, ADR-0031)
+`ExecutionDispatcher`(§3.16)의 안정성을 확보하는 계층. Reliability는
+Execution 위에서 동작한다 — `ExecutionDispatcher`는 재시도 로직을
+직접 구현하지 않고 `RetryExecutor`에 위임한다(사용자 설계 원칙 1).
+- **`RetryPolicy`(M3부터 존재, M19에서 확장)**: `max_attempts`(M3)
+  에 `retry_delay_seconds`/`non_retryable_exceptions`(둘 다 기본값
+  있음)를 추가했다 — 이름을 새로 만들지 않고 **같은 개념을
+  확장**했다(M16 `MemoryEngine`/M18 `ExecutionResult`가 겪은 "다른
+  개념인데 이름이 겹침"과는 반대로, 이번엔 실제로 같은 개념이라
+  확장이 맞는 선택이었다). `RecoveringEngineRuntime`(M3/M10, 무조건
+  재시도)은 새 필드를 쓰지 않아 전혀 영향받지 않는다.
+  `decide(exception) -> RetryDecision`이 재시도 가능 여부를
+  판단한다(도메인 계층은 구체 예외 타입을 몰라도 되도록
+  `type[BaseException]` 튜플만 다룬다).
+- **`RetryExecutor`(신규, 구체 클래스)**: `Callable[[], T]`를 받아
+  `RetryPolicy`대로 재시도하는 범용 메커니즘 — `EngineExecutionResult`
+  를 전혀 알지 못한다(제네릭). `ExecutionDispatcher`는 "인증 확인→
+  Registry 조회→Adapter 실행" 전체를 한 번의 시도로 묶어 넘긴다
+  (사용자 Architecture 다이어그램대로 `RetryExecutor`가
+  `AuthenticationManager`보다 앞에 위치) — 그래서
+  `AuthenticationRequiredError`/`EngineNotRegisteredError`/
+  `NoSuitableEngineError`도 재시도 루프 "안"에 있지만,
+  `RetryPolicy.non_retryable_exceptions`에 기본 포함되어 있어 첫
+  시도에서 즉시 실패한다(재시도 없음).
+- **`NoSuitableEngineError`는 이 경로에 실제로 나타나지 않는다**:
+  `EngineRuntime` 시절 예외인데, `ExecutionDispatcher`는
+  `EngineRuntime`을 건너뛰고 `EngineRegistry`를 직접 쓴다(M18) —
+  실제로 발생하는 것은 `EngineNotRegisteredError`다. 둘 다 기본
+  재시도 불가 목록에 포함해 뒀다(전방 호환, 해가 없음).
+- **취소(Cancellation)**: `EngineAdapter`(예: `ClaudeCodeEngineAdapter`)
+  가 이미 쓰는 sentinel(`EngineResult.error == "cancelled"` —
+  `ExecutionEnvironment.ExecutionResult.cancelled`이 Adapter 내부에서
+  이미 이 값으로 인코딩됨)을 그대로 재사용해 판정한다(사용자 승인
+  조건 — 새 문자열 규칙을 만들지 않음). 취소는 예외가 아니라 정상
+  반환값이므로 재시도 루프를 타지 않고 즉시
+  `EngineExecutionResult.cancelled=True`로 반영된다.
+- **⚠️ 기술 부채: `timed_out`은 완전한 구분이 불가능한 휴리스틱이다**:
+  `ClaudeCodeEngineAdapter.run()`은 Timeout과 다른 실행 오류(예: CLI
+  파일 없음)를 **모두 같은 예외 타입**(`EngineExecutionError`)으로
+  던지고, 메시지 텍스트로만 구분된다. 이번 Milestone은 "`EngineAdapter`
+  인터페이스를 변경하지 않는다"는 제약이 있어 이 문제를 근본적으로
+  고칠 수 없다 — `_looks_like_timeout()`이 Timeout 메시지의 한국어
+  마커 문자열("응답하지 않았습니다")을 찾는 방식으로만 판정한다.
+  Adapter가 메시지 문구를 바꾸면 이 판정은 깨진다. 근본 해결은
+  `EngineAdapter`(또는 `EngineExecutionError`)에 Timeout 여부를
+  구조적으로 표현하는 후속 Milestone이 필요하다(ADR-0031에 정식
+  기록).
+- **의존 방향**: `ExecutionDispatcher` → `RetryExecutor`(순수 재시도
+  메커니즘, `EngineExecutionResult`를 모름) → (인증 확인→Registry
+  조회→Adapter 실행을 하나의 시도로 묶은 클로저).
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
@@ -712,6 +764,7 @@ src/ai_workspace/
 │   ├── engine/        #   Engine Runtime: 선택/세션 풀/병렬
 │   │                   #   + engine_registry.py (InMemoryEngineRegistry, Milestone 17)
 │   ├── execution/     #   ExecutionDispatcher: Decision -> Execution 연결 (Milestone 18)
+│   │                   #   + retry_executor.py (RetryExecutor, Milestone 19)
 │   └── workflow/      #   WorkflowRunner: Workflow 순차 자동 실행 (Milestone 12)
 ├── agents/            # 능력별 Agent 구현체 (Milestone 2 이후)
 ├── engines/           # Core Engines 구현 (Task/Workflow/Approval/Automation, Milestone 2 이후)
