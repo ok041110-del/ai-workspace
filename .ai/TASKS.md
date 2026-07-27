@@ -7147,13 +7147,23 @@ Optional)로 이월한다.
 | M23-Prep-T01 | Vault 초기 구성 및 시스템 문서 작성 | **완료** |
 | M23-Prep-T02 | 프로젝트 개요 및 아키텍처 작성 | **완료** |
 | M23-Prep-T03 | ADR 정리 | **완료** |
-| M23-Prep-T04 | Backend/API 문서화 | 진행 예정 |
+| M23-Prep-T04 | Backend/API 문서화 | **완료** |
 | M23-Prep-T05 | 서버 구성 문서화 | 진행 예정 |
 | M23-Prep-T06 | Client 및 프로젝트 이력 정리 | 진행 예정 |
 | M23-Prep-T07 | 운영 문서 및 검증 | 진행 예정 |
 | M23-Prep-T08 (Optional) | Obsidian MCP 연동 — Claude Code 도입 시점으로 이월 | 보류 |
 
-**진행 상태**: M23-Prep-T01~T03 완료. M23-Prep-T04 진행 예정.
+**진행 상태**: M23-Prep-T01~T04 완료. M23-Prep-T05 진행 예정.
+
+#### M23-Prep-T04: Backend/API 문서화
+- 상태: **DONE (2026-07-27)** — `04 Backend/Backend Index.md`
+  신규(디렉터리별 역할 표, Interface 27종 중 최근 3개 Milestone
+  요약, Core Engines vs Runtime 구분 설명). `05 API/API Catalog.md`
+  신규(Dashboard/Automation/Production REST API 전체 + `/ws/
+  dashboard` WebSocket 표, `/api/health`와 `/api/status`를 의도적으로
+  분리한 설계 원칙 기록). 다음 Task: **M23-Prep-T05**(서버 구성
+  문서화).
+- 의존성: M23-Prep-T03.
 
 #### M23-Prep-T03: ADR 정리
 - 상태: **DONE (2026-07-27)** — `03 ADR/ADR Index.md` 신규. `.ai/
