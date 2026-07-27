@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.16.0 |
+| 문서 버전 | v0.17.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~20 완료, v0.5.0 아키텍처 기준선 선언, Milestone 20에서 첫 외부 런타임 의존성(FastAPI/uvicorn) 도입 — ADR-0032. Milestone 21 착수 대기) |
+| 상태 | Draft (Milestone 1~20 완료, v0.5.0 아키텍처 기준선 선언, Milestone 20에서 첫 외부 런타임 의존성(FastAPI/uvicorn) 도입 — ADR-0032. Milestone 21(Automation Engine) 진행 중, M21-T01 완료) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -853,11 +853,35 @@ Dashboard(CQRS Read Model)를 구축한다. FastAPI+uvicorn(신규 런타임
 | M20-T04 | 서버 런타임 구축 | **완료** |
 | M20-T05 | API 및 Web UI | **완료** |
 | M20-T06 | 전체 흐름 검증 | **완료** |
-| M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
+| M20-T07 | 문서화 및 아키텍처 정리 | **완료** |
 
 **진행 상태**: M20-T01~T07 전체 완료. **2026-07-27 사용자 승인으로
 Milestone 20 공식 종료**(상세는 `.ai/TASKS.md`의 "Milestone 20
 Review" 참고).
+
+---
+
+## Milestone 21 — Automation Engine
+
+**목표**: 사용자의 명시적 요청 없이 조건/일정에 따라 Task를 자동
+실행하는 Automation을 구현한다. Automation은 Dashboard와 독립적인
+Domain이며, `ExecutionDispatcher`를 통해서만 Task를 실행하고,
+`EventBus`와 Dashboard는 그대로 재사용한다. 상세는 `.ai/TASKS.md`의
+"Milestone 21" 참고.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M21-T01 | Automation 도메인 + `AutomationRepository` Interface + `InMemoryAutomationRepository` | **완료** |
+| M21-T02 | `AutomationService`(CRUD) 구현 | 진행 예정 |
+| M21-T03 | `AutomationScheduler` + Time/Interval/Startup Trigger 구현 | 진행 예정 |
+| M21-T04 | Event Trigger + `ExecutionDispatcher` 연동 | 진행 예정 |
+| M21-T05 | Automation API + Dashboard 연계 | 진행 예정 |
+| M21-T06 | Dashboard Web UI Automation 화면 | 진행 예정 |
+| M21-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
+
+**진행 상태**: M21-T01 완료, M21-T02 진행 예정.
 
 ---
 

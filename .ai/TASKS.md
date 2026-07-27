@@ -6239,7 +6239,107 @@ Core-Web 계층 분리 + 첫 외부 런타임 의존성을 web/에 격리" 설�
 
 **Milestone 20 종료 — 2026-07-27 사용자 승인.**
 
-**Milestone 21 상태**: 미정 — 다음 Milestone 킥오프 프롬프트 대기 중.
+**Milestone 21 상태**: 착수 확정. 아래 "Milestone 21" 절 참고.
+
+---
+
+## Milestone 21 — Automation Engine
+
+**목표**: 사용자의 명시적 요청 없이 조건/일정에 따라 Task를 자동
+실행하는 Automation을 구현한다. Automation은 Dashboard와 독립적인
+Domain이며, `ExecutionDispatcher`를 통해서만 Task를 실행한다.
+Automation은 `EventBus`와 Dashboard를 그대로 재사용한다(2026-07-27
+사용자 확정).
+
+> **설계 검토에서 발견한 사실**: M4-T07에 이미 `AutomationEngine`
+> Interface + `InMemoryAutomationEngine`이 존재한다 — 하지만 책임이
+> "어떤 trigger가 어떤 Workflow와 연결되어 있는가"만 관리하는
+> **연결 관리**뿐이다. trigger가 **언제** 발동돼야 하는지 판단하는
+> 조건/일정 평가와 실제 실행은 원래부터 호출자 책임으로 명시적으로
+> 떠넘겨져 있었다(M4-T07 설계 당시 문서화된 한계). M21이 요청한
+> `AutomationRule`(4종 Trigger+Action)과 `AutomationScheduler`(실제
+> 일정 평가+자동 실행)는 바로 이 떠넘겨진 책임을 처음 구현하는
+> 것이라 **동일 개념의 확장이 아니라 별개의 새 컴포넌트 세트**로
+> 판단했다(M16 `KnowledgeRepository`/M18 `EngineExecutionResult`와
+> 같은 "이름은 유사하지만 다른 개념" 패턴). 기존 `AutomationEngine`/
+> `InMemoryAutomationEngine`은 수정 없이 그대로 유지한다.
+
+**설계 방향(사용자 최종 승인, 조건 6개)**:
+1. `AutomationScheduler`와 Trigger의 책임을 분리한다 — Trigger는
+   순수 데이터(`domain/automation.py`), "언제 발동할지" 평가는
+   `runtime/automation/`의 Trigger별 평가기가 담당한다.
+2. Dashboard는 계속 Read Model을 유지한다.
+3. Automation CRUD는 Automation API를 통해서만 수행한다.
+4. Dashboard는 Automation을 직접 제어하지 않는다(조회만).
+5. `ExecutionDispatcher`를 유일한 실행 진입점으로 유지한다 — Action
+   "Task 실행"은 M17/M18 파이프라인(`EngineSelectionPolicy.select()`
+   → `ExecutionDispatcher.dispatch()`)을 재사용한다.
+6. `last_executed_at`/`next_execution_at`을 도메인 모델에 포함해
+   M23 Mobile Experience와 자연스럽게 연계할 수 있도록 한다.
+
+**Dashboard 연계**: `DashboardService`가 선택적으로 `AutomationService`
+를 주입받아(M15 `budget_policy_engine`/M16 `knowledge_provider`와
+동일한 선택적 DI 패턴) 등록 Rule 수/활성 Rule 수/마지막 실행/다음
+실행 예정을 조회 시 조합한다 — Reader(`DashboardService`)가 다른
+Reader(`AutomationService`)를 참조하는 것은 CQRS 위반이 아니다
+(Writer인 `ExecutionDispatcher`가 Dashboard를 직접 참조하는 것만
+금지).
+
+**Non-goal(범위 밖)**: Cron Expression, Database 저장, Distributed/
+Multi-node Scheduler, Retry Policy 변경, Mobile Push Notification/
+Home Widget/Lock Screen Widget/Live Activity/Dynamic Island, AI 기반
+Rule 추천.
+
+**Milestone Definition of Done**
+1. Automation Domain 구현(`AutomationRule`/`Trigger`/`Action`).
+2. `AutomationRepository` Interface 구현.
+3. `InMemoryAutomationRepository` 구현.
+4. `AutomationService` 구현(CRUD).
+5. `AutomationScheduler` 구현.
+6. Time Trigger 구현.
+7. Interval Trigger 구현.
+8. Event Trigger 구현.
+9. Startup Trigger 구현.
+10. Automation API 구현(8종).
+11. Dashboard Automation 화면 구현.
+12. `EventBus` 연동.
+13. `ExecutionDispatcher` 연동.
+14. End-to-End 테스트.
+15. `ruff` 통과.
+16. `mypy` 통과.
+17. 전체 `pytest` 통과.
+
+**Task List**(2026-07-27 확정, 사용자 최종 승인)
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M21-T01 | Automation 도메인 + `AutomationRepository` Interface + `InMemoryAutomationRepository` | **완료** |
+| M21-T02 | `AutomationService`(CRUD) 구현 | 진행 예정 |
+| M21-T03 | `AutomationScheduler` + Time/Interval/Startup Trigger 구현 | 진행 예정 |
+| M21-T04 | Event Trigger + `ExecutionDispatcher` 연동 | 진행 예정 |
+| M21-T05 | Automation API + Dashboard 연계 | 진행 예정 |
+| M21-T06 | Dashboard Web UI Automation 화면 | 진행 예정 |
+| M21-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
+
+**진행 상태**: M21-T01 완료. M21-T02 진행 예정.
+
+#### M21-T01: Automation 도메인 + Repository
+- 상태: **DONE (2026-07-27)** — `domain/automation.py`에 `TriggerKind`
+  (TIME/INTERVAL/EVENT/STARTUP)/`Trigger`(kind로 태그된 Flat 구조,
+  `ExecutionRecord`(M20)와 동일한 스타일 — kind별로 실제 쓰이는
+  필드만 채움)/`ActionKind`(RUN_TASK/RUN_WORKFLOW/DASHBOARD_REFRESH/
+  NOTIFICATION)/`Action`(동일 스타일)/`AutomationRule`(rule_id/name/
+  description/trigger/action/created_at/updated_at/enabled=True/
+  `last_executed_at`/`next_execution_at`, 사용자 승인 조건 6 반영,
+  `enable()`/`disable()` 메서드로 Task처럼 가변 엔티티) 신규.
+  `interfaces/automation_repository.py`에 `AutomationRepository`
+  (`get`/`save`/`delete`/`list_rules`, `ProjectRepository`와 동일한
+  upsert 스타일)+`AutomationRuleNotFoundError` 신규. `runtime/
+  automation/automation_repository.py`의 `InMemoryAutomationRepository`
+  구현(방어적 복사 포함). 단위 테스트 17개 신규(domain 10개,
+  interfaces 7개). `pytest`(652개), `ruff`, `mypy` 통과. 다음 Task:
+  **M21-T02**(`AutomationService` CRUD).
+- 의존성: 없음.
 
 ---
 
