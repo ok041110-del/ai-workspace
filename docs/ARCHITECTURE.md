@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.19.0 |
+| 문서 버전 | v0.20.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~16 완료, Milestone 17 완료 — ADR-0029로 신규 §3.15 Intelligent Engine Selection 도입, Decision Only) |
+| 상태 | Draft (Milestone 1~17 완료, Milestone 18 완료 — ADR-0030으로 신규 §3.16 Execution Layer 도입, 첫 End-to-End 실행 경로 완성) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -538,10 +538,56 @@ Capability/비용을 종합해 **최적 Engine 후보를 결정**만 하는 계�
   해당 파라미터가 없다. `EngineSelectionPolicy`가 다른 Engine을
   추천하더라도, 실제 `EngineRuntime`에 등록된 Adapter와 기존
   "첫 매칭" 규칙(§3.9)이 실행을 그대로 결정한다.
-- **의존 방향**: 이 계층을 호출하는 주체(현재는 통합 테스트뿐,
-  Milestone 18에서 Agent나 별도 조율자가 호출할 예정) → `EngineRegistry`
-  (후보 조회) + `EngineSelectionPolicy`(판단). `EngineRuntime`과는
-  독립적인 경로다.
+- **의존 방향**: 이 계층을 호출하는 주체(현재는 §3.16
+  `ExecutionDispatcher`와 통합 테스트) → `EngineRegistry`(후보 조회) +
+  `EngineSelectionPolicy`(판단). `EngineRuntime`과는 독립적인 경로다.
+
+### 3.16 Execution Layer — ExecutionDispatcher / Authentication (Milestone 18, ADR-0030)
+M17의 `EngineSelectionDecision`을 실제 실행으로 연결하는 계층.
+`Task → Selection Policy → EngineSelectionDecision → ExecutionDispatcher
+→ AuthenticationManager → EngineRegistry → EngineAdapter →
+ExecutionEnvironment → AI Engine 실행 → EngineExecutionResult`가
+Workspace가 실제로 수행할 수 있는 첫 End-to-End 실행 경로다(M11
+ExecutionEnvironment/M15 Budget/M16 Knowledge/M17 Selection이 실행까지
+연결됨).
+- **`ExecutionDispatcher`(구체 클래스, Interface 아님)**: `EngineRegistry`
+  /`EngineAdapter`/`AuthenticationManager` **Interface만** 사용해
+  특정 Provider(Claude/Gemini/Codex/GPT/Ollama)를 직접 분기하지
+  않는다(OCP — 새 Engine 추가 시 `EngineRegistry`/`EngineAdapter`/
+  Authentication 구현체만 추가하면 되고 이 클래스는 수정하지 않는다).
+  `dispatch(decision, task) -> EngineExecutionResult`가 유일한
+  진입점이다. `ExecutionEnvironment`를 직접 생성하지 않는다 —
+  `EngineAdapter`(예: `ClaudeCodeEngineAdapter`)가 이미 M11부터
+  생성자 주입으로 갖고 있다.
+- **Decision과 Execution의 완전한 분리**: `ExecutionDispatcher`는
+  `EngineSelectionDecision`만 입력받고 `EngineSelectionPolicy`를
+  전혀 참조하지 않는다. 반대로 `EngineSelectionPolicy`도
+  `ExecutionDispatcher`를 전혀 모른다(코드 검증됨, M18-T03). `decision`
+  이 `None`이면 `EngineRegistry`/`AuthenticationManager` 어느 쪽도
+  호출하지 않고 즉시 `EngineExecutionResult(success=False, ...)`를
+  반환한다 — "선택된 것이 없다"는 정상 입력으로 취급한다.
+- **`AuthenticationManager`(신규 Interface)**: "실행 가능한 인증
+  상태인지 **확인**"만 담당한다 — `is_authenticated(engine_name)`/
+  `authentication_status(engine_name)`만 제공하고 `login()`/`logout()`
+  은 이 계약에 없다. 이미 인증되어 있으면 `ExecutionDispatcher`가
+  즉시 실행하고, 인증되어 있지 않으면 `AuthenticationRequiredError`
+  를 던진다(정상 실패로 취급하는 "Decision 없음"과 달리, 인증 실패는
+  전제조건 위반이라 예외로 표현). `InMemoryAuthenticationManager`는
+  실제 로그인/OAuth/API Key/Credential 저장/Token Refresh를 전혀
+  다루지 않는다 — 생성 시 주어진 "인증된 것으로 간주할 Engine 이름"
+  집합만 보관한다. Workspace는 CLI 로그인 명령을 직접 실행하지
+  않는다(실제 로그인 기능은 후속 Milestone).
+- **`EngineExecutionResult`(domain, Provider 독립)**: success/output/
+  error/engine/execution_time. `interfaces/execution_environment.py`
+  의 `ExecutionResult`(OS 프로세스 결과 — returncode/stdout/stderr)
+  와는 이름·개념이 다르다 — 혼동 방지를 위해 별도로 명명했다.
+- **`CodingAgent`는 수정하지 않는다**: 이번 Milestone은
+  `ExecutionDispatcher`를 독립적으로 구현·검증한다(사용자 확정).
+  Agent 파이프라인 연결은 후속 Milestone의 책임이다.
+- **의존 방향**: (현재는 호출 주체 없음, 통합 테스트가 직접
+  호출) `ExecutionDispatcher` → `AuthenticationManager` +
+  `EngineRegistry` → `EngineAdapter` → `ExecutionEnvironment`(기존
+  M11 경로 그대로).
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
@@ -593,7 +639,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentCapability` | Coordination/Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP … |
 | `AgentStatus` | 생명주기 상태 |
 
-## 7. Interfaces (추상 계약, 총 24종)
+## 7. Interfaces (추상 계약, 총 25종)
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
@@ -604,6 +650,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `KnowledgeProvider` | Agent가 Knowledge에 접근하는 유일한 진입점 | Milestone 16 (M16-T02 계약, `InMemoryKnowledgeProvider` 구현) | **완료(계약+구현)** |
 | `EngineRegistry` | 등록된 `EngineAdapter` 조회 + Capability 만족 후보 나열 | Milestone 17 (M17-T01 계약, `InMemoryEngineRegistry` 구현) | **완료(계약+구현)** |
 | `EngineSelectionPolicy` | Task/Budget/Knowledge/후보를 종합해 최적 Engine 판단(Decision Only) | Milestone 17 (M17-T02 계약, `InMemoryEngineSelectionPolicy` 구현) | **완료(계약+구현)** |
+| `AuthenticationManager` | Engine별 실행 가능한 인증 상태 확인(`login`/`logout` 없음) | Milestone 18 (M18-T01 계약, `InMemoryAuthenticationManager` 구현) | **완료(계약+구현)** |
 | `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 (T1-15 계약, T1-23 `FileProjectRepository` 구현) | **완료(계약+구현)** |
 | `WorkflowEngine` | Mission→…→Step 협업 흐름 | 이후 | 기존 |
 | `TaskEngine` | Task 생성/상태 전이 + Step 실행 이력(M5-T06) | 이후 | 기존 |
@@ -657,13 +704,14 @@ src/ai_workspace/
 ├── domain/            # Project, Mission, Workflow, Task, Step,
 │                       #   WorkspaceSession, Agent, AgentRole, AgentCapability, AgentStatus
 │                       #   (구현됨, T1-14~T1-17)
-├── interfaces/         # 추상 계약 (24종, §7) (구현됨, T1-15~T1-21, M11-T01, M15-T01/T02, M16-T01/T02, M17-T01/T02)
+├── interfaces/         # 추상 계약 (25종, §7) (구현됨, T1-15~T1-21, M11-T01, M15-T01/T02, M16-T01/T02, M17-T01/T02, M18-T01)
 ├── core/              # Workspace Core (WorkspaceSession 관리, Runtime 초기화)
 │                       #   (구현됨, T1-22)
 ├── runtime/           # (Milestone 2 이후)
 │   ├── agent/         #   Agent Runtime: registry, scheduler, manager
 │   ├── engine/        #   Engine Runtime: 선택/세션 풀/병렬
 │   │                   #   + engine_registry.py (InMemoryEngineRegistry, Milestone 17)
+│   ├── execution/     #   ExecutionDispatcher: Decision -> Execution 연결 (Milestone 18)
 │   └── workflow/      #   WorkflowRunner: Workflow 순차 자동 실행 (Milestone 12)
 ├── agents/            # 능력별 Agent 구현체 (Milestone 2 이후)
 ├── engines/           # Core Engines 구현 (Task/Workflow/Approval/Automation, Milestone 2 이후)
@@ -671,6 +719,8 @@ src/ai_workspace/
 │                       #   (InMemoryKnowledgeSearch/InMemoryKnowledgeProvider, Milestone 16)
 │                       #   + engine_selection_policy.py
 │                       #   (InMemoryEngineSelectionPolicy, Milestone 17)
+│                       #   + authentication_manager.py
+│                       #   (InMemoryAuthenticationManager, Milestone 18)
 ├── memory/            # Context Manager + Memory Engine 구현 (Milestone 2 이후)
 ├── events/            # Event Bus + Event Store 구현 (Milestone 2 이후)
 ├── interaction/        # Interaction Layer 구현 (Milestone 3 이후)

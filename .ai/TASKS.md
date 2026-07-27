@@ -5464,6 +5464,149 @@ Stub/Mock으로만 검증), `CodingAgent` 연결.
   Task: **M18-T04**(문서화 + Milestone 18 Review).
 - 의존성: M18-T02.
 
+#### M18-T04: 문서화 + Milestone 18 Review
+- 목적: 문서와 구현을 일치시키고 Milestone 종료 승인을 받는다.
+- 작업 내용: `docs/ARCHITECTURE.md`에 신규 §3.16(Execution Layer) +
+  §7(Interfaces 24→25종) + §9 갱신, `.ai/DECISIONS.md`에 ADR-0030
+  신규(새 최상위 Interface 1개 도입, `ExecutionDispatcher`는 구체
+  클래스라 ADR 대상 아님을 명시), `docs/ROADMAP.md`/`.ai/MEMORY.md`
+  갱신, Review 작성.
+- 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
+- 상태: **DONE (2026-07-27)** — `docs/ARCHITECTURE.md` v0.20.0 신규
+  §3.16(Execution Layer — `ExecutionDispatcher`/`AuthenticationManager`
+  /`EngineExecutionResult` 역할, Decision-Execution 분리 근거,
+  `CodingAgent` 미수정 명시)/§7(Interfaces 총 25종,
+  `AuthenticationManager` 행 추가)/§9(디렉터리 매핑에
+  `runtime/execution/execution_dispatcher.py`/`engines/
+  authentication_manager.py` 반영). `.ai/DECISIONS.md`에
+  **ADR-0030**(배경/결정 6개 항목/대안 4개/이유/결과) 신규 작성.
+  아래 "Milestone 18 Review" 절 참고.
+- 의존성: M18-T01~T03.
+
+---
+
+## Milestone 18 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `ExecutionDispatcher`가 선택된 Engine 하나만 실행 | ✅ (M18-T02/T03) |
+| 2~3 | `AuthenticationManager`로 인증 확인, 인증된 경우 즉시 실행 | ✅ (M18-T02/T03) |
+| 4 | 미인증 시 `AuthenticationRequiredError` | ✅ (M18-T02/T03) |
+| 5 | 실제 로그인 미수행 | ✅ (M18-T01, `login`/`logout` 계약 자체가 없음) |
+| 6 | `AuthenticationManager`가 `is_authenticated`/`authentication_status`만 제공 | ✅ (M18-T01) |
+| 7~8 | `ExecutionEnvironment` 직접 생성 없음(DI), `EngineAdapter` Interface만 사용 | ✅ (M18-T02) |
+| 9 | `EngineExecutionResult` Domain(Provider 독립) | ✅ (M18-T01) |
+| 10 | `ClaudeCodeEngineAdapter` 실제 연결 증명 | ✅ (M18-T03) |
+| 11 | Decision 없으면 미실행 단위 테스트 증명 | ✅ (M18-T02, Spy로 Registry/Auth 미호출 확인) |
+| 12 | `EngineSelectionPolicy`가 `ExecutionDispatcher` 미참조 증명 | ✅ (M18-T03, 소스 코드 직접 검증) |
+| 13 | 전체 `pytest`/`ruff`/`mypy` 통과 | ✅ (아래 4절) |
+
+Task List(M18-T01~T04) 전체 완료. 사용자 승인 조건(`EngineExecutionResult`
+명명, `ExecutionDispatcher` 구체 클래스, 인증 실패=예외/Decision
+부재=실패 결과 구분, `CodingAgent` 미수정) 모두 충족됨.
+
+**2. Architecture Review**
+
+- **신규 컴포넌트**: `domain/execution_result.py`
+  (`EngineExecutionResult`), `interfaces/authentication_manager.py`
+  (`AuthenticationManager`/`AuthenticationStatus`/
+  `AuthenticationRequiredError`), `engines/authentication_manager.py`
+  (`InMemoryAuthenticationManager`), `runtime/execution/
+  execution_dispatcher.py`(`ExecutionDispatcher`) — 총 4개 신규
+  소스 파일.
+- **변경된 기존 컴포넌트**: 없음. M17에 이어 두 Milestone 연속으로
+  기존 소스 파일을 전혀 수정하지 않았다 — `CodingAgent`를 포함해
+  기존 실행 경로 어디에도 손대지 않았다(사용자 확정 범위).
+- **핵심 설계 결정**: M11의 `ExecutionResult`(프로세스 결과)와 이름이
+  겹치는 문제를 발견해 새 Domain을 `EngineExecutionResult`로
+  명명했다(M16의 `MemoryEngine` 이름 충돌 발견과 같은 종류의 사전
+  점검). `ExecutionDispatcher`를 `WorkflowRunner`(M12)와 동일하게
+  구체 클래스로 둬 불필요한 Interface 추상화를 늘리지 않았다(YAGNI).
+  인증 실패(예외)와 Decision 부재(실패 결과)를 서로 다른 성격의
+  조건으로 구분해 표현했다.
+
+`git diff --stat`(M17 종료 커밋 대비)로 확인한 결과 신규 소스 파일
+4개, 기존 소스 파일 수정 0개 — M17에 이어 두 번째로 기존 파일을
+전혀 건드리지 않은 Milestone이다.
+
+**3. Interface First 원칙 검토**
+
+M18은 **새 최상위 Interface 1개(`AuthenticationManager`)를 추가**
+했다. `ExecutionDispatcher`는 Interface가 아니라 구체 클래스이므로
+(M12 `WorkflowRunner`와 동일한 판단 기준) 이 결정만으로는 ADR 대상이
+아니지만, `AuthenticationManager` 신설은 M17(`EngineRegistry`/
+`EngineSelectionPolicy`)과 M16(Knowledge 3종)에 이어 "신규 계층
+도입" 계열이라 ADR-0030으로 기록했다(ADR-0017/0025/0028/0029와
+동일 계열). `ExecutionDispatcher`가 세 Interface(Registry/Adapter/
+Authentication)만 의존해 OCP를 지켰음을 §3.16에 명시했다.
+
+**4. 테스트 결과**
+
+- `pytest`: **567개 전부 통과**(M17 완료 시점 553개 → M18에서 14개
+  신규: M18-T01 +5, M18-T02 +5, M18-T03 +4)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(신규 소스 파일 4개 포함, `storage/
+  llm_policy_loader.py`의 `types-PyYAML` 미설치 경고 1건은 M18
+  이전부터 존재하는 무관한 항목)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M18 범위 밖으로 명시적으로 제외한 것(사용자 확정, 계속 이월)*
+- **실제 로그인/OAuth/API Key 등록/Credential 저장/Token Refresh**
+  — 후속 Authentication Layer Milestone에서 다룰 예정.
+- **`CodingAgent` 연결** — `ExecutionDispatcher`는 이번엔 독립
+  컴포넌트로만 존재. Agent 파이프라인 연결은 후속 Milestone.
+- **Retry/Timeout/Recovery/Approval/Parallel Execution/Scheduler/
+  Workflow Automation/MCP/Dashboard** — 사용자 확정 범위 밖.
+- **Codex/Gemini 실제 구현** — Adapter Stub/Mock으로만 검증(M5-T05/
+  M10부터 이어지는 환경 제약과 동일 사유).
+
+*계속 이월되는 기존 항목*
+- Effort 라우팅, `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임
+  워크 미통합, Codex/Gemini 실연동 미검증, `MemoryEngine.search()`
+  선형 스캔, 여러 Task에 걸친 누적 예산 추적, 예산 초과 시 Approval
+  흐름, `KnowledgeIndexer`, Review/Documentation Agent로의
+  `knowledge_provider` 확장, `EngineRuntime`↔`EngineRegistry` 중복
+  등록, Retry Backoff/Persistent Runtime Recovery/Approval 비동기
+  처리/Process Timeout 정책 고도화, `ShellAgent` 화이트리스트 코드
+  고정.
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M18-T01~T04 상세 섹션) / `docs/ROADMAP.md`
+(M18 Task List·목표·DoD 반영) / `docs/ARCHITECTURE.md`(v0.20.0, 신규
+§3.16/§7/§9 갱신) / `.ai/DECISIONS.md`(ADR-0030 신규) 완료.
+`pyproject.toml` 버전은 v0.5.0 그대로 유지(ADR-0024 기준선 — 새
+Interface 1개 추가는 M16/M17과 같은 "신규 계층 도입" 계열이라 기준선
+재선언 대상이 아니라고 판단했으나, M16~M18로 Interface가 19→25종까지
+늘어난 만큼 다음 기준선 재검토 시점에 누적 변화를 함께 검토할
+필요가 있다). `.ai/MEMORY.md`는 이 Review 승인 직후 M1~M17과 동일한
+방식으로 압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 4/
+수정 0 소스 파일, "EngineExecutionResult 명명 분리 + ExecutionDispatcher
+구체 클래스 + 인증 실패/Decision 부재 구분" 설계 결정 명시), Interface
+First 검토 완료(3절, 새 Interface 1개를 "신규 계층 도입" 계열 ADR로
+기록, `ExecutionDispatcher`는 구체 클래스라 ADR 대상 아님을 근거와
+함께 명시), 테스트 결과 문서화 완료(4절), Technical Debt 정리 완료
+(5절), 문서 갱신 완료(6절) — 6개 조건 모두 만족. Review 중 코드
+변경이 필요한 치명적 문제(버그·계약 위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 18 Completed를 선언한다.**
+
+**Milestone 19 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
+않았다. M18로 Task→...→`EngineExecutionResult`까지 이어지는 첫
+End-to-End 실행 경로가 완성됐다 — 다만 다음 단계(예: 실제
+Authentication/Agent 파이프라인 연결/Codex·Gemini 실연동)는 사전
+논의 없이 확정된 것이 아니며, Milestone 19는 착수 시점에 이 문서에
+목표/DoD/Task List를 새로 정의한다(Task Driven Development 원칙,
+M2~M18이 그래왔듯).
+
 ---
 
 ## 진행 로그

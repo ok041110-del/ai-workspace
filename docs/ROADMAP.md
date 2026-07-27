@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.15.0 |
 | 작성일 | 2026-07-26 |
-| 상태 | Draft (Milestone 1~17 완료, v0.5.0 아키텍처 기준선 선언, Milestone 18(Multi-Engine Execution Integration) 진행 중) |
+| 상태 | Draft (Milestone 1~17 완료, v0.5.0 아키텍처 기준선 선언, Milestone 18(Multi-Engine Execution Integration) 구현 완료 — 사용자 승인 대기) |
 
 ## 계층 구조 (Task 기반 체계, ADR-0021)
 
@@ -778,9 +778,11 @@ Review" 참고). **Milestone 17 완료 — 2026-07-27 사용자 승인.**
 | M18-T01 | `EngineExecutionResult` domain + `AuthenticationManager` | **완료** |
 | M18-T02 | `ExecutionDispatcher` 핵심 로직 | **완료** |
 | M18-T03 | End-to-End 통합 테스트 | **완료** |
-| M18-T04 | 문서화 + Milestone 18 Review | 진행 예정 |
+| M18-T04 | 문서화 + Milestone 18 Review | **완료** |
 
-**진행 상태**: M18-T01~T03 완료, M18-T04(문서화 + Review) 진행 중.
+**진행 상태**: M18-T01~T04 전체 완료. Milestone DoD 1~13번 전부 충족
+확인됨. Milestone 18 Review 작성 완료(`.ai/TASKS.md`의 "Milestone 18
+Review" 참고) — 사용자 승인 대기.
 
 ---
 

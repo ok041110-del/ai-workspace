@@ -1104,3 +1104,94 @@
   파이프라인 실행 결과로 직접 검증했다. Model 수준 결정, ML/휴리스틱
   기반 고급 판단, `EngineRuntime`↔`EngineRegistry` 통합(중복 등록
   제거)은 실제 필요성이 증명되기 전까지 이월한다.
+
+## ADR-0030: Execution Layer 도입 (`ExecutionDispatcher` 구체 클래스 + `AuthenticationManager` Interface), Decision-Execution 완전 분리 (Milestone 18)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: M17의 `EngineSelectionDecision`은 결정만 하고 실제 실행에는
+  전혀 연결되지 않았다(의도된 Decision Only 경계). 사용자가 "Task →
+  Selection Policy → EngineSelectionDecision → ExecutionDispatcher →
+  AuthenticationManager → EngineRegistry → EngineAdapter →
+  ExecutionEnvironment → AI Engine 실행 → ExecutionResult" 흐름으로
+  M18을 요청했다. 설계 검토 결과, 요청한 새 "ExecutionResult" Domain
+  (success/output/error/engine/execution_time)이 M11의
+  `interfaces/execution_environment.py`가 이미 쓰고 있는
+  `ExecutionResult`(returncode/stdout/stderr — OS 프로세스 결과)와
+  이름이 겹친다는 사실을 확인했다. 사용자는 최종 승인에서 네 가지를
+  확정했다: (1) 새 Domain은 `EngineExecutionResult`로 명명해 기존
+  `ExecutionResult`와 분리, (2) `ExecutionDispatcher`는 Interface가
+  아닌 구체 클래스로 구현, (3) 인증 실패는
+  `AuthenticationRequiredError` 예외, `SelectionDecision` 부재는
+  `EngineExecutionResult(success=False)`로 구분, (4) 이번
+  Milestone은 `CodingAgent`를 수정하지 않고 `ExecutionDispatcher`를
+  독립적으로 구현·검증.
+- 결정:
+  1. `domain/execution_result.py`에 `EngineExecutionResult`(success/
+     output/error/engine/execution_time, Provider 독립)를 신설한다.
+  2. `interfaces/authentication_manager.py`에
+     `AuthenticationStatus`(AUTHENTICATED/UNAUTHENTICATED)/
+     `AuthenticationRequiredError`/`AuthenticationManager`(`is_
+     authenticated`/`authentication_status`만 — `login`/`logout`은
+     의도적으로 이 계약에 없음)를 신설한다. "로그인을 수행"하는
+     것이 아니라 "실행 가능한 인증 상태인지 확인"만 한다.
+     `InMemoryAuthenticationManager`는 생성 시 주어진 "인증된 것으로
+     간주할 Engine 이름" 집합만 보관하고, 실제 로그인/OAuth/API Key/
+     Credential 저장/Token Refresh는 전혀 다루지 않는다.
+  3. `runtime/execution/execution_dispatcher.py`에
+     `ExecutionDispatcher`(구체 클래스, M12 `WorkflowRunner`와 동일
+     패턴)를 신설한다. `dispatch(decision, task) ->
+     EngineExecutionResult`: `decision`이 `None`이면
+     `EngineRegistry`/`AuthenticationManager` 어느 쪽도 호출하지
+     않고 즉시 실패 결과를 반환하고, 인증되지 않았으면
+     `AuthenticationRequiredError`를 던지며, 인증됐으면
+     `EngineRegistry.get(decision.engine_name)`으로 정확히 하나의
+     `EngineAdapter`만 얻어 실행한다.
+  4. `ExecutionDispatcher`는 `EngineRegistry`/`EngineAdapter`/
+     `AuthenticationManager` **Interface만** 사용하고 구현체를 직접
+     참조하지 않는다(OCP). `EngineSelectionPolicy`는 전혀 참조하지
+     않는다(Decision과 Execution의 완전한 분리) — 반대 방향도
+     마찬가지로, `EngineSelectionPolicy`의 실제 소스 코드에
+     `ExecutionDispatcher` 참조가 없음을 통합 테스트가 직접
+     검증한다(M18-T03).
+  5. `ExecutionDispatcher`는 `ExecutionEnvironment`를 직접 생성하지
+     않는다 — `ClaudeCodeEngineAdapter`가 M11부터 이미 생성자
+     주입으로 갖고 있으므로 `EngineAdapter.run()`만 호출하면 된다.
+  6. 이번 Milestone은 `CodingAgent`를 수정하지 않는다.
+     `ExecutionDispatcher`는 독립적으로 구현·검증하며, Agent
+     파이프라인 연결은 후속 Milestone의 책임이다.
+- 대안:
+  - 새 Domain을 그대로 `ExecutionResult`로 명명 — 기각(이름 충돌).
+    M11의 `ExecutionResult`(프로세스 결과)와 이번 `EngineExecutionResult`
+    (Engine 실행 결과)는 서로 다른 추상화 층위라, 같은 이름을 쓰면
+    "무엇의 결과인지" 코드만 봐서는 알 수 없게 된다.
+  - `ExecutionDispatcher`를 Interface로 정의하고 여러 구현체를 허용 —
+    기각(사용자 명시적 요청, YAGNI). 이 Dispatcher는 조합 로직
+    (Registry 조회 → 인증 확인 → 실행)만 담당하고 교체 가능한 정책이
+    아니다 — `WorkflowRunner`가 Interface가 아닌 것과 같은 이유.
+  - 인증 실패도 `EngineExecutionResult(success=False)`로 통일 —
+    기각. "Decision 없음"은 정상적인 입력(아무것도 선택되지 않음)
+    이지만, "선택은 됐는데 인증이 안 됨"은 실행 전제조건 위반이라
+    이 저장소가 일관되게 써온 예외 기반 패턴(`NoSuitableEngineError`,
+    `SessionNotFoundError` 등)과 맞춘다.
+  - M18에서 `CodingAgent`에 바로 연결 — 기각(사용자 확정 범위 밖).
+    Decision Only였던 M17에 이어, M18도 "Execution Layer 완성"에만
+    집중해 범위를 명확히 유지한다.
+- 이유: `ExecutionDispatcher`가 세 Interface(Registry/Adapter/
+  Authentication)만 의존하면 새 Engine 추가 시 이 클래스를 전혀
+  수정하지 않아도 된다(OCP). Decision과 Execution을 물리적으로
+  분리된 두 컴포넌트로 유지하면(서로가 서로를 모름) 어느 한쪽만
+  교체·재검증할 수 있다. 인증을 "상태 확인"으로 좁히면 이번
+  Milestone은 실행 파이프라인 연결에만 집중할 수 있고, 실제
+  로그인/OAuth라는 훨씬 큰 관심사는 후속 Milestone(Authentication
+  Layer)으로 명확히 미룰 수 있다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.20.0 신규 §3.16/§7(Interfaces
+  24→25종)/§9에 반영. 실제 `ClaudeCodeEngineAdapter`+
+  `ExecutionEnvironment`로 실행됨을 통합 테스트로 증명(M18-T03,
+  `ExecutionEnvironment.executed_commands`에 실제 명령 기록 확인).
+  Task → Selection Policy → Decision → Dispatcher →
+  Authentication → Registry → Adapter → ExecutionEnvironment →
+  EngineExecutionResult로 이어지는 첫 End-to-End 실행 경로가 완성됐다
+  (M11/M15/M16/M17이 실행까지 연결됨). 실제 로그인/OAuth/Credential
+  관리/Token Refresh, `CodingAgent` 연결, Retry/Timeout/Recovery/
+  Approval/병렬 실행은 실제 필요성이 생기기 전까지 이월한다.
