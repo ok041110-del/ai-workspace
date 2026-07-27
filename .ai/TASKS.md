@@ -4876,11 +4876,11 @@ MCP, 외부 Knowledge 연동, Obsidian API 연동, `KnowledgeIndexer`
 | Task | 내용 | 상태 |
 |---|---|---|
 | M16-T01 | `KnowledgeDocument`/`KnowledgeKind` domain + `KnowledgeRepository` Interface + `FileKnowledgeRepository` | **완료** |
-| M16-T02 | `KnowledgeSearch`/`KnowledgeProvider` + `CodingAgent` 연동(선택적 DI) | 진행 예정 |
+| M16-T02 | `KnowledgeSearch`/`KnowledgeProvider` + `CodingAgent` 연동(선택적 DI) | **완료** |
 | M16-T03 | End-to-End 통합 테스트(실제 Markdown 문서 검색 + Agent Prompt 반영) | 진행 예정 |
 | M16-T04 | 문서화 + Milestone 16 Review | 진행 예정 |
 
-**진행 상태**: M16-T01 완료. M16-T02 진행 중.
+**진행 상태**: M16-T01~T02 완료. M16-T03 진행 중.
 
 #### M16-T01: `KnowledgeDocument`/`KnowledgeKind` domain + `KnowledgeRepository` Interface + 구현체
 - 상태: **DONE (2026-07-27)** — `domain/knowledge.py`에
@@ -4899,6 +4899,27 @@ MCP, 외부 Knowledge 연동, Obsidian API 연동, `KnowledgeIndexer`
   `docs/ARCHITECTURE.md` 등을 실제로 읽어 목록에 포함되는지까지
   확인). `pytest`(519개), `ruff`, `mypy` 통과. 다음 Task: **M16-T02**.
 - 의존성: 없음.
+
+#### M16-T02: `KnowledgeSearch`/`KnowledgeProvider` + `CodingAgent` 연동
+- 상태: **DONE (2026-07-27)** — `interfaces/knowledge_search.py`에
+  `KnowledgeSearch`(`search(query) -> list[KnowledgeDocument]`, 생성자로
+  주입된 `KnowledgeRepository`만 검색), `interfaces/
+  knowledge_provider.py`에 `KnowledgeProvider`(Agent의 유일한 진입점,
+  `ContextManager`가 `MemoryEngine`을 감싸는 것과 동일한 패턴) 신규.
+  `engines/knowledge_search.py`의 `InMemoryKnowledgeSearch`(title/
+  content 포함 검색, 영속 Index 없음, YAGNI)와 `engines/
+  knowledge_provider.py`의 `InMemoryKnowledgeProvider`(Search에 위임)
+  최소 구현. `domain/development_context.py`에 `related_knowledge:
+  list[str] | None = None` 필드 추가, `to_prompt()`가 있으면 "관련
+  프로젝트 지식" 섹션을 덧붙인다(기존 `prior_output`과 동일한 선택적
+  확장 패턴). `CodingAgent`에 선택적 `knowledge_provider` DI 추가 —
+  주입 시 `task.title`로 `provide()`를 호출해 결과를
+  `DevelopmentContext.related_knowledge`에 실어 프롬프트에 반영,
+  미주입 시(기본값 `None`) 검색 자체를 건너뛰어 기존과 완전히 동일.
+  단위 테스트 10개 신규(interfaces engines 5개, development_context
+  2개, coding_agent 3개). `pytest`(529개), `ruff`, `mypy` 통과. 다음
+  Task: **M16-T03**.
+- 의존성: M16-T01.
 
 ---
 
