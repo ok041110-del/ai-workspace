@@ -37,7 +37,7 @@ tags: [decision]
 
 ## 왜 Server와 iOS/Android를 분리했는가
 
-- Status: 확정(2026-07-27, M23 Start Criteria)
+- Status: 확정(2026-07-27, Mobile Experience Start Criteria — 결정 당시 M23, 이후 M23은 "Obsidian Integration & Auto Save"로 재정의됨)
 - 질문: iOS/Android 앱 코드를 이 저장소(`ok041110-del/ai-workspace`)
   안에 둘지, 별도 저장소로 분리할지?
 - 답: Client 코드는 별도 저장소로 분리한다. 이 저장소
@@ -45,7 +45,7 @@ tags: [decision]
   Client(iOS/Android)는 포함하지 않는다. Push는 이 저장소의 Server가
   생성·관리하되, 실제 전송은 FCM/APNs를 통해 수행한다(별도 Push
   서비스가 아니라 외부 발송 채널만 이용). [[iOS Design]]/
-  [[PREPARATION_SUMMARY]]의 M23 Start Criteria 참고.
+  [[PREPARATION_SUMMARY]]의 "Mobile Experience Start Criteria" 참고.
 
 ## 관련 문서
 

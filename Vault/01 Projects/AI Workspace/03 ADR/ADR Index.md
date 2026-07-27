@@ -212,6 +212,12 @@ tags: [decision]
 - 결정: `ProductionConfig`/`LifecycleManager`/`HealthMonitor`를 도입. DashboardService와의 순환 의존은 `TYPE_CHECKING`으로 해결, 조립 순서 문제는 `attach_health_monitor()`로 해결
 - 영향: M23에서 재사용할 `uptime`/`started_at`/`version`/`health_status` 표준 필드가 확정됨
 
+## ADR-0035: Vault Integration Layer 도입 (M23-T02)
+
+- 목적: GitHub 원문 ↔ Vault 문서 동기화를 수작업 대신 표준 계층으로 자동화
+- 결정: 신규 `vault/` 패키지(Path Map/Document Router/Markdown Generator/Vault Writer), Core Domain·`web/` 양쪽 모두 모르는 완전 독립 계층으로 설계(새 Interface 없음, 설계만·미구현)
+- 영향: 상세 설계는 [[Vault Integration Architecture]], 실제 구현은 M23-T03(Vault Save Engine)부터
+
 ## 관련 문서
 
 - [[Architecture Overview]]

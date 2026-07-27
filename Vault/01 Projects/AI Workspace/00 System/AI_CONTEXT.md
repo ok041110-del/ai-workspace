@@ -12,13 +12,18 @@ tags: [system]
 ## 현재 상태(가장 먼저 확인)
 
 - **완료**: Milestone 1~22 전체 + **M23-Preparation(Obsidian
-  Knowledge Base 구축, T01~T07 + T01A~T01D) 전체 완료**. Vault
-  30개 문서, Retrieval First/Short Prompt Workflow/Template
-  First/Standard Execution Workflow 4개 운영 원칙 도입 완료.
-- **다음**: Milestone 23(Mobile Experience) 목표 검토 착수. 착수
-  전 확인해야 할 미해결 조건은 [[PREPARATION_SUMMARY]]의 "M23
-  Start Criteria" 참고(Client 저장소 위치/서버 지원 범위/Push
-  발송 주체 3가지가 아직 미정).
+  Knowledge Base 구축, T01~T07 + T01A~T01D) 전체 완료** +
+  **Milestone 23-T01(Reading Profiles)/T02(Obsidian Integration
+  Architecture, ADR-0035) 완료**. Vault 30개+ 문서, Retrieval
+  First/Short Prompt Workflow/Template First/Standard Execution
+  Workflow 4개 운영 원칙 도입 완료.
+- **진행 중**: Milestone 23이 "Obsidian Integration & Auto Save"로
+  재정의됨(2026-07-27) — GitHub↔Vault 자동 저장 구조 구현. 다음
+  Task는 M23-T03(Vault Save Engine). 원래 M23이 다루던 Mobile
+  Experience는 별도 Milestone(번호 미정)으로 이월됨 — Start
+  Criteria 3개 결정(Client 별도 저장소/Server API 전용/Push는
+  Server 생성+FCM·APNs 전송)은 [[PREPARATION_SUMMARY]]의 "Mobile
+  Experience Start Criteria" 절에 그대로 보존.
 - **Baseline**: 코드/아키텍처는 v0.5.0 기준선(ADR-0024) + Interface
   27종(ADR-0034) 유지. Vault를 포함한 전체 산출물의 상세 Baseline은
   [[PREPARATION_SUMMARY]] 참고.

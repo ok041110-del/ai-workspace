@@ -1073,3 +1073,26 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   ~ M23-T05 Push 등록 API)를 승인 대기 상태로 기록. Client 저장소
   생성 자체는 별도 명시적 승인이 필요함을 명시(Task List 승인과
   분리).
+- **Milestone 23이 "Mobile Experience"에서 "Obsidian Integration &
+  Auto Save"로 재정의됨(2026-07-27, 사용자 지시)**. 구 M23-T02~T05
+  (Push Notification 아키텍처/구현) 제안은 별도 Milestone(번호
+  미정)으로 이월하되, 그때 확정했던 M23 Start Criteria 3개 결정
+  (Client 별도 저장소/이 저장소는 Server API까지만/Push는 이
+  저장소 Server가 생성·관리하고 FCM·APNs로 전송)은 그대로 유효하게
+  유지한다. 새 M23 Task List: T01(Reading Profiles, 완료) → T02
+  (Obsidian Integration Architecture, 완료) → T03(Vault Save
+  Engine) → T04(Auto Save Workflow) → T05(Vault Synchronization)
+  → T06(Execution Engine, 자연어 명령 라우팅) → T07(Execution
+  Environment Integration). **M23-T02 완료**: ADR-0035로 신규
+  `vault/` 패키지를 설계 — `storage/`와 나란한 최상위 패키지지만
+  Core Domain·`web/` 양쪽 모두 이 계층을 모르는 완전 독립 계층으로
+  결정(Production Platform이 지킨 "위 계층이 아래를 모른다" 원칙을
+  반대 방향으로도 적용 — 이 계층은 AI Workspace 제품 기능이 아니라
+  개발 도구). 새 Core Interface는 추가하지 않음(27종 유지). Vault
+  Directory Mapping 13종(kind→대상 Vault 파일, Tag Rule 11종과
+  1:1), 4단계 Save Flow(구조화 입력→Document Router→Markdown
+  Generator→Vault Writer), File Strategy(신규 생성 vs 기존 문서
+  대상 섹션만 치환, 실제 변경 시에만 저장)를 결정. 실제 코드
+  구현은 없음(설계 전용 Task) — 구현은 M23-T03부터. `docs/
+  ARCHITECTURE.md` v0.25.0 §3.21 신규, Vault `Vault Integration
+  Architecture.md` 신규.

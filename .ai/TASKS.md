@@ -7562,47 +7562,84 @@ Planning/Daily 기록) 각각에 대해 필수/선택/제외 문서, 쓸 Templat
 
 ---
 
-## Milestone 23 — Mobile Experience
+## Milestone 23 — Obsidian Integration & Auto Save
 
-**목표**: AI Workspace Server가 이미 제공하는 API(`/api/status`,
-`/api/dashboard`, `/api/health`, `/ws/dashboard` 등)를 소비하는
-Mobile Experience를 시작한다. 이 저장소(`ok041110-del/ai-workspace`)
-는 Server 쪽 작업(Push 생성·관리 포함)만 담당하고, iOS/Android
-Client 코드는 별도 저장소에서 진행한다.
+**목표**(2026-07-27 사용자 재정의 — 기존 "Mobile Experience"에서
+전환): AI Workspace(GitHub)와 Obsidian Vault를 통합한다. Retrieval
+First Workflow를 유지하면서 Markdown 문서를 자동 생성·저장·갱신
+하는 구조를 구현해, 사용자가 짧은 명령만 입력해도 AI가 Retrieval
+→ 작업 → Vault 저장까지 수행할 수 있는 기반을 마련한다.
 
-**M23 Start Criteria(2026-07-27 사용자 확정, [[PREPARATION_SUMMARY]]
-참고)**:
-1. Client 코드 저장소는 이 저장소와 분리된 별도 Repository로
-   구성한다(저장소 자체는 아직 미생성).
-2. 이 저장소는 Server(API)까지 담당하며 Mobile Client(iOS/Android)
-   는 포함하지 않는다.
-3. Push는 이 저장소의 Server가 생성·관리하고, 실제 전송은
-   FCM/APNs를 이용한다.
-4. M22 Production API 표준 필드(`uptime`/`started_at`/`version`/
-   `health_status`)가 M23 요구를 충족함(기존 확인 유지).
-5. Vault Index가 M23 작업에 필요한 최소 컨텍스트를 제공함(기존
-   확인 유지).
+**기본 원칙**: Retrieval First / Minimum Retrieval / Template
+First / Short Prompt Workflow / Standard Execution Workflow /
+기존 Architecture 및 문서 구조 유지 / 변경된 파일만 수정 / 모든
+설계는 Obsidian Vault를 기준으로 한다.
 
-**Non-goal(이 저장소 범위 밖)**: iOS/Android 앱 코드 자체(별도
-저장소 kickoff는 그 저장소에서 별도 진행), SwiftUI/WidgetKit/
-ActivityKit/Jetpack Compose 등 Client 기술 스택 구현, Client 저장소
-자체 생성(별도 승인 필요 — 아래 참고).
+**Mobile Experience는 이 Milestone에서 분리되어 이월됨**: M23이
+"Obsidian Integration & Auto Save"로 재정의됨에 따라, 이전 M23
+kickoff에서 다룬 Mobile Experience(Push Notification 아키텍처
+설계 등, 구 M23-T02~T05 제안)는 별도 Milestone(번호 미정, kickoff
+시점에 확정)으로 이월한다. **M23 Start Criteria로 확정했던 3개
+결정(Client 별도 저장소/Server API 전용 범위/Push는 Server 생성+
+FCM·APNs 전송)은 그대로 유효**하며, 해당 Milestone 착수 시 다시
+불러와 그대로 적용한다([[PREPARATION_SUMMARY]], [[Decisions Index]]
+"왜 Server와 iOS/Android를 분리했는가" 참고).
 
-**이 저장소(Server) 쪽 제안 Task List(승인 대기, 아직 미착수)**
+**Task List**
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M23-T02 | Push Notification 아키텍처 설계 — FCM/APNs 연동 방식, 발송 트리거(Execution 실패/Automation 발동 등 Event 매핑), 새 외부 의존성 도입 여부를 ADR로 결정 | 제안(승인 대기) |
-| M23-T03 | `PushNotificationService`(가칭) Interface/Engine 구현 — 서버가 Push Payload를 생성·관리하는 책임만 지고, 실제 전송은 FCM/APNs Adapter로 위임 | 제안(승인 대기) |
-| M23-T04 | Automation/Execution 주요 Event(Automation 발동/Execution 실패 등)를 Push 발송 트리거로 연동 | 제안(승인 대기) |
-| M23-T05 | Client가 소비할 Push 등록 API(디바이스 토큰 등록/해제) 설계 및 구현 — Client 저장소가 아직 없어도 서버 계약은 먼저 정의 가능 | 제안(승인 대기) |
+| M23-T01 | Reading Profiles — 작업 유형별 Retrieval Profile 정의 | **완료** |
+| M23-T02 | Obsidian Integration Architecture — Vault 연동 구조/저장 전략/Auto Save Architecture 설계, ADR 작성 | **완료** |
+| M23-T03 | Vault Save Engine — Markdown 생성/저장 엔진 구현 | 예정 |
+| M23-T04 | Auto Save Workflow — Task 완료 후 자동 Vault 갱신 | 예정 |
+| M23-T05 | Vault Synchronization — Create/Update/Rename/Delete/Conflict/Version/Link·Backlink 검증 정책 | 예정 |
+| M23-T06 | Execution Engine — 자연어 명령 → Retrieval → Template → 작업 → Vault 저장 → Validation → 완료 보고 라우팅 | 예정 |
+| M23-T07 | Execution Environment Integration — Claude Code/Filesystem/MCP/GitHub 실제 연동 검증 | 예정 |
 
-Client 저장소 생성 자체(이름/조직/초기 구조)는 GitHub 저장소를
-새로 만드는 행위이므로, 이 Task List와 별도로 진행 전 명시적
-승인을 받는다(Task Driven Development 승인 필요 원칙).
+#### M23-T02: Obsidian Integration Architecture
 
-**의존성**: M23-Preparation(T01~T07+T01A~T01D) + M23-T01(Reading
-Profiles) 완료, M23 Start Criteria 5개 전 항목 확정.
+**목표**: AI Workspace(GitHub) ↔ Obsidian Vault 연동 구조를
+설계한다. Vault Directory Mapping/Document Routing/Save Flow/File
+Strategy를 정의하고 ADR로 결정을 기록한다. 실제 구현(Markdown
+생성기/Writer 코드)은 이 Task 범위가 아니다(M23-T03).
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `.ai/DECISIONS.md`에 ADR-0035(Vault Integration Layer) 신규 | ✅ |
+| 2 | `docs/ARCHITECTURE.md`에 §3.21(Vault Integration Layer) + §9 디렉터리 구조에 `vault/` 반영 | ✅ |
+| 3 | Vault Directory Mapping(kind → Vault 파일, Tag Rule 11종과 1:1) 정의 | ✅ |
+| 4 | Save Flow(구조화 입력 → Document Router → Markdown Generator → Vault Writer) 정의 | ✅ |
+| 5 | File Strategy(신규 생성 vs 기존 섹션 치환, 변경 시에만 저장) 정의 | ✅ |
+| 6 | Vault `Vault Integration Architecture.md` 신규(설계를 Vault 기준으로 반영) | ✅ |
+| 7 | `ADR Index`/`Architecture Overview`/`Architecture Map`에 backlink 추가 | ✅ |
+| 8 | 새 Core Interface 미추가 확인(Production Platform과 동일 판단) | ✅ |
+| 9 | 기존 구조·Backlink·Tag·원문 규칙 유지, 변경된 파일만 수정 | ✅ |
+
+**구현 내용**
+
+- `.ai/DECISIONS.md`(수정): ADR-0035 신규. `vault/`를 `storage/`와
+  나란한 새 최상위 패키지로 결정하되 Core Domain·`web/` 양쪽 모두
+  이를 모르는 완전 독립 계층으로 설계(제품 기능이 아니라 개발
+  도구). Vault Directory Mapping 13종(kind→대상 파일), 4단계 Save
+  Flow, File Strategy(섹션만 치환·변경 시에만 저장), Metadata
+  처리 원칙을 결정. M23-T03~T07은 이 ADR의 결정 범위 밖으로 명시.
+- `docs/ARCHITECTURE.md`(수정, v0.25.0): 신규 §3.21 Vault
+  Integration Layer — Execution Flow 다이어그램 + 컴포넌트 요약.
+  §9에 `vault/`(설계됨, 미구현) 추가. 상단 상태 표기를 M23 재정의
+  기준으로 갱신.
+- `Vault/.../02 Architecture/Vault Integration Architecture.md`
+  (신규): [[Template - Architecture]] 구조로 ADR-0035를 Vault
+  기준으로 반영 — 핵심 컴포넌트/Execution Flow/Vault Directory
+  Mapping 표/File Strategy/범위 밖 목록.
+- `ADR Index`/`Architecture Overview`/`Architecture Map`(수정):
+  ADR-0035 3줄 요약 추가, [[Vault Integration Architecture]]
+  backlink 추가.
+- Vault 전체 재검증: 신규 문서 Backlink/Tag/"원문" 섹션 확인.
+
+**의존성**: M23-T01(Reading Profiles) 완료.
 
 ---
 

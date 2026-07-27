@@ -20,8 +20,9 @@ Architecture Overview
    ├── Automation Index
    ├── Production Index
    │
-   ├── iOS Design (M23, 설계만)
-   ├── Android Placeholder (M23)
+   ├── iOS Design (M23 대상 재검토 필요, 설계만)
+   ├── Android Placeholder
+   ├── Vault Integration Architecture (M23, 설계만)
    │
    ├── ADR Index ──────────► (개별 ADR 필요 시 GitHub 원문)
    └── Milestones Index
@@ -39,7 +40,8 @@ Architecture Overview
 | 운영(설정/생명주기/상태) | [[Production Index]] |
 | 의사결정 이력 | [[ADR Index]], [[Decisions Index]] |
 | Milestone 이력 | [[Milestones Index]] |
-| Mobile(M23) | [[iOS Design]], [[Android Placeholder]] |
+| Mobile Client 설계(별도 저장소 예정) | [[iOS Design]], [[Android Placeholder]] |
+| Vault ↔ GitHub 자동 저장(M23) | [[Vault Integration Architecture]] |
 
 ## 관련 문서
 

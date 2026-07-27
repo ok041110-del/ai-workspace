@@ -65,28 +65,36 @@ M23-Preparation(Obsidian Knowledge Base 구축, T01~T07 + T01A~T01C)
 - **지식 관리**: M23-Preparation으로 GitHub Source of Truth를
   요약+링크로 Index화한 Obsidian Vault(`Vault/`, 30개 문서) 구축
   완료. Retrieval/Prompt/Template/Execution 4개 효율화 원칙 도입.
-- **문서 버전**: `docs/ARCHITECTURE.md` v0.24.0, `docs/ROADMAP.md`
-  v0.22.0(T01D 갱신 예정 포함).
-- **미착수**: Milestone 23(Mobile Experience) 자체 — 아래 Start
-  Criteria 충족 후 착수.
+- **문서 버전**: `docs/ARCHITECTURE.md` v0.25.0, `docs/ROADMAP.md`
+  v0.26.0.
+- **진행 중**: Milestone 23(Obsidian Integration & Auto Save,
+  T01~T02 완료). 원래 M23이던 Mobile Experience는 별도 Milestone
+  (번호 미정)으로 이월됨 — 아래 참고.
 
-## M23 Start Criteria(착수 조건)
+## Mobile Experience Start Criteria(원 M23, 현재 별도 Milestone으로
+이월됨)
 
-Mobile Experience(M23) 목표 검토를 시작하려면 아래를 먼저
-확정한다:
+**2026-07-27 Milestone 23이 "Obsidian Integration & Auto Save"로
+재정의되며, Mobile Experience는 번호 미정인 별도 Milestone으로
+이월됐다.** 아래 Start Criteria 5개는 이월 전 이미 확정된 값으로,
+해당 Milestone 착수 시 그대로 재사용한다.
 
 | # | 조건 | 현재 상태 |
 |---|---|---|
 | 1 | Client 코드 저장소 위치(이 저장소 내부 vs 별도 저장소) 결정 | **확정**(2026-07-27) — 별도 저장소로 분리. [[Decisions Index]] "왜 Server와 iOS/Android를 분리했는가" 참고. 저장소 자체는 아직 미생성 |
 | 2 | 서버 지원 범위 확정(서버 API 소비 전용 / PWA / 네이티브 앱 코드까지 이 저장소가 포함하는지) | **확정**(2026-07-27) — 이 저장소는 Server(API)까지만 담당, Mobile Client 코드는 포함하지 않음 |
 | 3 | Push 발송 주체(서버 자체 vs 별도 서비스) 결정 | **확정**(2026-07-27) — 이 저장소의 Server가 Push를 생성·관리하고 실제 전송은 FCM/APNs 이용. [[iOS Design]] 참고 |
-| 4 | M22 Production API(`uptime`/`started_at`/`version`/`health_status`)가 M23 요구를 충족하는지 재확인 | 충족(설계 시점부터 M23 재사용 목적으로 준비됨, ADR-0034) |
-| 5 | Vault Index가 M23 작업에 필요한 최소 컨텍스트(Backend/API/Production)를 제공하는지 확인 | 충족(T04~T05 완료) |
+| 4 | M22 Production API(`uptime`/`started_at`/`version`/`health_status`)가 Mobile Experience 요구를 충족하는지 재확인 | 충족(설계 시점부터 재사용 목적으로 준비됨, ADR-0034) |
+| 5 | Vault Index가 Mobile Experience 작업에 필요한 최소 컨텍스트(Backend/API/Production)를 제공하는지 확인 | 충족(T04~T05 완료) |
 
-**M23 Start Criteria 5개 전 항목 충족(2026-07-27, 사용자 확정).**
-Milestone 23(Mobile Experience) 목표 검토(Feature Design)를
-착수할 수 있다 — 진행 상태는 `.ai/TASKS.md`의 "Milestone 23 —
-Mobile Experience" 절 참고.
+5개 전 항목 확정 완료. 해당 Milestone 번호가 정해지면 이 값들을
+그대로 가져가 kickoff한다.
+
+## Milestone 23(Obsidian Integration & Auto Save) 진행 상태
+
+T01(Reading Profiles)/T02(Obsidian Integration Architecture,
+ADR-0035) 완료. T03(Vault Save Engine)부터는 `.ai/TASKS.md`의
+"Milestone 23 — Obsidian Integration & Auto Save" 절 참고.
 
 ## 향후 개선 대상(Deferred Items)
 

@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.24.0 |
+| 문서 버전 | v0.25.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~21 완료, Milestone 22 완료 — ADR-0034로 신규 §3.20 Production Platform 도입. 새 Interface 없이 27종 유지 — `ProductionConfig`/`LifecycleManager`/`HealthMonitor`는 전부 구체 클래스) |
+| 상태 | Draft (Milestone 1~22 완료, Milestone 23은 "Obsidian Integration & Auto Save"로 재정의(M23-T01 완료, M23-T02 완료) — ADR-0035로 신규 §3.21 Vault Integration Layer 도입. 새 Interface 없이 27종 유지, `vault/`는 설계만 완료(미구현), 실제 구현은 M23-T03부터) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -872,6 +872,47 @@ Configuration      Lifecycle Manager      Health Monitor
   FastAPI/uvicorn을 모른다 — 실제 라우트는 `web/production_routes.py`
   에서만 조립한다(ADR-0034).
 
+### 3.21 Vault Integration Layer (Milestone 23, ADR-0035, 설계만 — 미구현)
+
+Obsidian Vault(`Vault/`)로의 문서 저장을 자동화하는 계층. **Core
+Domain·`web/` 양쪽 모두 이 계층을 모르고, 이 계층도 Core Domain에
+의존하지 않는다** — Production Platform(§3.20)이 지킨 "위 계층이
+아래 계층을 모른다"는 원칙과 반대 방향으로 완전히 독립된, AI
+Workspace 개발 과정을 돕는 도구 계층이다(제품 기능이 아님).
+
+```text
+GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
+             docs/ARCHITECTURE.md, docs/ROADMAP.md)
+        │  구조화 입력(kind, title, summary, related_docs, source_paths)
+        ▼
+  Document Router  ──►  Vault Directory Mapping(kind → 대상 파일)
+        │
+        ▼
+  Markdown Generator  ──►  99 Templates/의 해당 Template로 렌더링
+        │
+        ▼
+  Vault Writer  ──►  File Creator(신규) / File Updater(기존 파일의
+                      대상 섹션만 치환, 전체 재작성 금지)
+        │
+        ▼
+        Vault/ (git-tracked Markdown)
+```
+
+- **패키지 위치**: `vault/`(신규, `storage/`와 나란히 존재하되
+  대상이 다름 — `storage/`는 도메인 객체 JSON 영속성, `vault/`는
+  Task/ADR/Decision/Design/Implementation/API 등 산출물의 Markdown
+  동기화).
+- **Vault Directory Mapping**: `AI_RULES`의 Tag Rule 11종과 1:1
+  대응하는 kind→디렉터리 고정 매핑(코드가 아니라 데이터). 상세
+  매핑표는 ADR-0035 참고.
+- **File Strategy**: 신규 문서는 전체 생성, 기존 Index 문서는
+  대상 섹션만 치환 — 과거 수작업으로 채운 내용을 보존한다. 내용이
+  실제로 바뀔 때만 파일을 쓴다.
+- **범위 밖(이 설계 시점)**: 실제 구현(M23-T03), Task 완료 시
+  자동 트리거(M23-T04), Rename/Delete/Conflict/Version 정책
+  (M23-T05), 자연어 명령 라우팅(M23-T06), 실행 환경 연동 검증
+  (M23-T07).
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -1059,6 +1100,10 @@ src/ai_workspace/
 │                       #   구현, Milestone 11)
 ├── storage/           # FileProjectRepository/FileAgentRepository/FileEventStore
 │                       #   (구현됨, T1-23) + FileKnowledgeRepository (Milestone 16)
+├── vault/             # Vault Directory Mapping/Document Router/
+│                       #   Markdown Generator/Vault Writer (설계됨,
+│                       #   M23-T02, ADR-0035 — 미구현, Core Domain·
+│                       #   web/을 모두 모름, Milestone 23)
 ├── web/               # Infrastructure 계층 — FastAPI/uvicorn을 아는 유일한 곳
 │                       #   (Milestone 20): dashboard_viewmodel.py, routes.py,
 │                       #   dashboard_broadcaster.py, app.py, server.py,
