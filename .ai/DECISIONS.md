@@ -1022,3 +1022,85 @@
   `FileKnowledgeRepository` 기반 통합 테스트로 증명(M16-T03).
   Review/Documentation Agent로의 확장, `KnowledgeIndexer` 도입,
   Semantic Search는 실제 필요성이 증명되기 전까지 이월한다.
+
+## ADR-0029: Intelligent Engine Selection 도입 (EngineRegistry + EngineSelectionPolicy, Decision Only, `EngineRuntime` 계약 미확장) (Milestone 17)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: 사용자가 "Task + Budget(M15) + Project Knowledge(M16) +
+  Engine Capability + Selection Policy → 최적 Engine 선택"이라는
+  목표로 M17을 요청했다. 설계 검토 결과, `EngineRuntime.run()`/
+  `estimate_cost()`는 `required_capabilities`를 만족하는 등록된
+  Engine 중 **첫 번째 매칭만** 고르며, 여러 후보를 나열·비교하는
+  방법 자체가 없었다 — "선택"이라 부를 로직이 지금까지 없었다.
+  사용자는 최종 승인에서 세 조건을 명시했다: (1) M17은 Decision
+  Only Milestone으로 유지, (2) `EngineSelectionDecision`에 선택
+  이유(`reason`) 포함, (3) 가능하다면 `EngineRuntime.list_candidates()`
+  대신 기존 Engine 관리 계층(Registry/Manager)의 조회 기능을
+  활용해 조회(Registry)와 판단(Policy)의 책임을 분리. 조사 결과,
+  `AgentRegistry`에 대응하는 **Engine Registry는 이 저장소에 존재하지
+  않았다**(Engine 등록은 `EngineRuntime.register_engine()` 내부
+  dict가 전부였음) — 그래서 "기존 계층 활용"이 아니라 `AgentManager`/
+  `AgentRegistry` 분리와 동일한 패턴으로 **신규 계층을 도입**하는
+  결정이 됐다.
+- 결정:
+  1. `domain/engine_selection.py`에 `EngineCandidate`(engine_name/
+     capabilities/estimated_tokens/estimated_cost_usd/
+     supports_parallel)/`EngineSelectionDecision`(engine_name/model/
+     reason)을 신설한다. `CostEstimate`(interfaces 계층)를 그대로
+     참조하지 않고 값만 옮겨 담아 domain이 interfaces에 의존하지
+     않는 기존 원칙을 유지한다.
+  2. `interfaces/engine_registry.py`에 `EngineRegistry`(`register`/
+     `get`/`list_candidates`)를 신설한다. **`EngineRuntime`의 실행
+     계약(run/estimate_cost)은 전혀 확장하지 않는다** — 기존 3개
+     구현체(`InMemoryEngineRuntime`/`ManagedEngineRuntime`/
+     `RecoveringEngineRuntime`)의 내부 구현은 손대지 않는다. 후보
+     조회가 필요한 쪽이 같은 Adapter를 조립 시점에 `EngineRegistry`
+     에도 등록해 별도로 조회한다.
+  3. `interfaces/engine_selection_policy.py`에
+     `EngineSelectionPolicy`(`select(task, candidates, *,
+     budget_policy_engine=None, knowledge=None) ->
+     EngineSelectionDecision | None`)를 신설한다. 후보가 어디서
+     왔는지는 알지 못한다(조회와 판단의 책임 분리, 사용자 승인
+     조건).
+  4. `InMemoryEngineSelectionPolicy`는 `budget_policy_engine`이
+     주어지면 각 후보로 `CostEstimate`를 만들어 `BudgetPolicyEngine.
+     check()`에 위임(M15 재사용, 예산 비교 로직 중복 없음)하고,
+     예산 내 최저 비용 후보를 선택한다. `knowledge`는 `reason`에만
+     참고로 반영한다(후보를 걸러내지 않음, MVP).
+  5. **결정과 실행을 연결하지 않는다** — `CodingAgent`는
+     `EngineSelectionPolicy`/`EngineRegistry`를 이번 Milestone에서
+     전혀 모른다(생성자 파라미터 없음). 이 경계를 통합 테스트로
+     직접 증명한다(다른 Engine을 추천해도 실제 실행은 영향받지
+     않음 + `inspect.signature()`로 파라미터 부재 확인).
+- 대안:
+  - `EngineRuntime.list_candidates()`를 추가 — 사용자가 "가능하다면
+    피하라"고 명시. `EngineRuntime`을 M14(model)/M15(estimate_cost)
+    에 이어 세 번째로 확장하는 대신, 이번엔 완전히 별도 계층으로
+    분리해 `EngineRuntime`의 책임(실행)과 `EngineRegistry`의 책임
+    (조회)을 더 명확히 나눴다.
+  - `EngineSelectionPolicy`가 직접 `EngineRegistry`를 주입받아 후보를
+    스스로 조회 — 기각. Policy가 "어디서 후보를 가져오는지"까지
+    알게 되면 조회와 판단의 책임이 다시 섞인다. 호출자가 먼저
+    `EngineRegistry.list_candidates()`로 후보를 조회한 뒤 Policy에
+    넘기는 2단계 흐름을 유지한다.
+  - M17에서 곧바로 `CodingAgent`에 연결해 실제 실행까지 바꿈 —
+    기각(사용자 확정 범위 밖, "Decision Only"). 결정 로직과 실행
+    로직을 같은 Milestone에서 함께 바꾸면 두 책임이 다시 섞이고,
+    "M17=Decision, M18=Execution"이라는 사용자의 책임 분리 의도가
+    깨진다.
+- 이유: 조회(Registry)/판단(Policy)/실행(Runtime) 세 책임을 분리하면
+  각각 독립적으로 교체·검증할 수 있다(SRP). `EngineRuntime`을 건드리지
+  않아 기존 3개 실행 구현체에 회귀 위험이 전혀 없다(Surgical
+  Changes). Decision과 Execution을 Milestone 단위로 분리하면, M18에서
+  "어떻게 연결할지"(예: `CodingAgent`에 선택적 DI로 추가할지, 별도
+  조율자를 둘지)를 M17의 판단 로직 변경 없이 독립적으로 검토할 수
+  있다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.19.0 신규 §3.15/§7(Interfaces
+  22→24종)/§9에 반영. 실제 여러 Engine이 등록된 상태에서 Budget 내
+  최저 비용 후보 선택, 예산 초과 후보 제외, 전체 초과 시 `None`,
+  실제 `FileKnowledgeRepository` 기반 Knowledge 반영을 통합 테스트로
+  증명(M17-T03). "결정과 실행의 분리" 경계는 실제 `CodingAgent`
+  파이프라인 실행 결과로 직접 검증했다. Model 수준 결정, ML/휴리스틱
+  기반 고급 판단, `EngineRuntime`↔`EngineRegistry` 통합(중복 등록
+  제거)은 실제 필요성이 증명되기 전까지 이월한다.

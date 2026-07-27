@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.18.0 |
+| 문서 버전 | v0.19.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~15 완료, Milestone 16 완료 — ADR-0028로 신규 §3.14 Knowledge Layer 도입) |
+| 상태 | Draft (Milestone 1~16 완료, Milestone 17 완료 — ADR-0029로 신규 §3.15 Intelligent Engine Selection 도입, Decision Only) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -496,6 +496,53 @@ Workspace 전용 Knowledge로 노출하고, Agent가 Keyword 기반으로 검색
 - **의존 방향**: Agent → Knowledge Provider → Knowledge Search →
   Knowledge Repository(§8 의존성 규칙에 신규 추가).
 
+### 3.15 Intelligent Engine Selection (Milestone 17, ADR-0029)
+Task + Budget(§3.13) + Project Knowledge(§3.14) + 등록된 Engine들의
+Capability/비용을 종합해 **최적 Engine 후보를 결정**만 하는 계층.
+**Decision Only Milestone** — 이 계층의 결정은 실제 실행(어떤 Engine
+으로 `engine_runtime.run()`을 호출할지)에 전혀 연결되지 않는다. 실행
+연결은 Milestone 18의 책임이다.
+- **`EngineRegistry`(신규, `AgentRegistry`와 동일 설계)**: 등록된
+  `EngineAdapter`가 무엇인지 조회하는 계약(`register`/`get`/
+  `list_candidates`). **`EngineRuntime`의 실행 계약(run/
+  estimate_cost)은 전혀 확장하지 않았다** — `EngineRuntime`은
+  `list_candidates()` 이전부터 이미 자체 dict로 Adapter를
+  등록·관리하고 있었고, 이번에도 그 내부 구현은 손대지 않는다.
+  대신 후보 조회가 필요한 쪽이 같은 Adapter를 조립 시점에
+  `EngineRegistry`에도 등록해 별도로 조회한다(같은 Adapter를 두
+  곳에 등록하는 약간의 중복은 있으나, `EngineRuntime`의 실행 경로를
+  전혀 건드리지 않아 회귀 위험이 0이다).
+- **`list_candidates(task, required_capabilities)`**: `required_
+  capabilities`를 만족하는 **등록된 모든** Engine을 `EngineCandidate`
+  (engine_name/capabilities/estimated_tokens/estimated_cost_usd/
+  supports_parallel)로 나열한다. `EngineRuntime.run()`/
+  `estimate_cost()`가 "첫 매칭 하나"만 고르는 것과 달리, 이 계층은
+  "비교 가능한 후보 여럿"을 제공하는 것이 존재 이유다. 세션을 생성
+  하지 않는다(각 Adapter의 `estimate_cost(task)`만 호출).
+- **`EngineSelectionPolicy`(신규)**: `Task`/`EngineCandidate` 목록/
+  선택적 `BudgetPolicyEngine`/선택적 Knowledge 목록을 받아 규칙
+  기반으로 판단만 하는 계약(`LLMPolicyEngine`/`BudgetPolicyEngine`과
+  동일한 설계 원칙 — side-effect 없음, LLM 호출 없음). 후보가 어디서
+  왔는지(`EngineRegistry`)는 알지 못한다 — 조회(Registry)와 판단
+  (Policy)의 책임을 분리했다(SRP, 사용자 승인 조건).
+- **`InMemoryEngineSelectionPolicy`(최소 구현)**: `budget_policy_
+  engine`이 주어지면 각 후보의 `estimated_tokens`/`estimated_cost_usd`
+  로 `CostEstimate`를 만들어 `BudgetPolicyEngine.check()`에 그대로
+  위임(M15 재사용, 예산 비교 로직을 중복 구현하지 않음) — 예산 내
+  후보 중 `estimated_cost_usd`(동률이면 `estimated_tokens`)가 가장
+  낮은 후보를 선택한다. Knowledge는 결정 사유(`reason`)에만 참고로
+  반영하고 후보를 걸러내는 데는 쓰지 않는다(MVP 범위, Model 수준
+  결정도 범위 밖 — 계속 M14의 정적 정책이 담당).
+- **결정과 실행의 분리(핵심 경계, 통합 테스트로 증명됨)**: `CodingAgent`
+  는 `EngineSelectionPolicy`/`EngineRegistry`를 전혀 모른다 — 생성자에
+  해당 파라미터가 없다. `EngineSelectionPolicy`가 다른 Engine을
+  추천하더라도, 실제 `EngineRuntime`에 등록된 Adapter와 기존
+  "첫 매칭" 규칙(§3.9)이 실행을 그대로 결정한다.
+- **의존 방향**: 이 계층을 호출하는 주체(현재는 통합 테스트뿐,
+  Milestone 18에서 Agent나 별도 조율자가 호출할 예정) → `EngineRegistry`
+  (후보 조회) + `EngineSelectionPolicy`(판단). `EngineRuntime`과는
+  독립적인 경로다.
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -546,7 +593,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentCapability` | Coordination/Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP … |
 | `AgentStatus` | 생명주기 상태 |
 
-## 7. Interfaces (추상 계약, 총 22종)
+## 7. Interfaces (추상 계약, 총 24종)
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
@@ -555,6 +602,8 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `KnowledgeRepository` | 프로젝트 문서를 `KnowledgeDocument`로 조회 | Milestone 16 (M16-T01 계약, `FileKnowledgeRepository` 구현) | **완료(계약+구현)** |
 | `KnowledgeSearch` | `KnowledgeRepository` 문서의 Keyword 검색 | Milestone 16 (M16-T02 계약, `InMemoryKnowledgeSearch` 구현) | **완료(계약+구현)** |
 | `KnowledgeProvider` | Agent가 Knowledge에 접근하는 유일한 진입점 | Milestone 16 (M16-T02 계약, `InMemoryKnowledgeProvider` 구현) | **완료(계약+구현)** |
+| `EngineRegistry` | 등록된 `EngineAdapter` 조회 + Capability 만족 후보 나열 | Milestone 17 (M17-T01 계약, `InMemoryEngineRegistry` 구현) | **완료(계약+구현)** |
+| `EngineSelectionPolicy` | Task/Budget/Knowledge/후보를 종합해 최적 Engine 판단(Decision Only) | Milestone 17 (M17-T02 계약, `InMemoryEngineSelectionPolicy` 구현) | **완료(계약+구현)** |
 | `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 (T1-15 계약, T1-23 `FileProjectRepository` 구현) | **완료(계약+구현)** |
 | `WorkflowEngine` | Mission→…→Step 협업 흐름 | 이후 | 기존 |
 | `TaskEngine` | Task 생성/상태 전이 + Step 실행 이력(M5-T06) | 이후 | 기존 |
@@ -608,17 +657,20 @@ src/ai_workspace/
 ├── domain/            # Project, Mission, Workflow, Task, Step,
 │                       #   WorkspaceSession, Agent, AgentRole, AgentCapability, AgentStatus
 │                       #   (구현됨, T1-14~T1-17)
-├── interfaces/         # 추상 계약 (22종, §7) (구현됨, T1-15~T1-21, M11-T01, M15-T01/T02, M16-T01/T02)
+├── interfaces/         # 추상 계약 (24종, §7) (구현됨, T1-15~T1-21, M11-T01, M15-T01/T02, M16-T01/T02, M17-T01/T02)
 ├── core/              # Workspace Core (WorkspaceSession 관리, Runtime 초기화)
 │                       #   (구현됨, T1-22)
 ├── runtime/           # (Milestone 2 이후)
 │   ├── agent/         #   Agent Runtime: registry, scheduler, manager
 │   ├── engine/        #   Engine Runtime: 선택/세션 풀/병렬
+│   │                   #   + engine_registry.py (InMemoryEngineRegistry, Milestone 17)
 │   └── workflow/      #   WorkflowRunner: Workflow 순차 자동 실행 (Milestone 12)
 ├── agents/            # 능력별 Agent 구현체 (Milestone 2 이후)
 ├── engines/           # Core Engines 구현 (Task/Workflow/Approval/Automation, Milestone 2 이후)
 │                       #   + knowledge_search.py/knowledge_provider.py
 │                       #   (InMemoryKnowledgeSearch/InMemoryKnowledgeProvider, Milestone 16)
+│                       #   + engine_selection_policy.py
+│                       #   (InMemoryEngineSelectionPolicy, Milestone 17)
 ├── memory/            # Context Manager + Memory Engine 구현 (Milestone 2 이후)
 ├── events/            # Event Bus + Event Store 구현 (Milestone 2 이후)
 ├── interaction/        # Interaction Layer 구현 (Milestone 3 이후)

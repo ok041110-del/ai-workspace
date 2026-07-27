@@ -5206,6 +5206,150 @@ M14의 정적 정책이 담당 — 이 Decision은 Engine 선택에만 집중),
   Milestone 17 Review).
 - 의존성: M17-T02.
 
+#### M17-T04: 문서화 + Milestone 17 Review
+- 목적: 문서와 구현을 일치시키고 Milestone 종료 승인을 받는다.
+- 작업 내용: `docs/ARCHITECTURE.md`에 신규 §3.15(Intelligent Engine
+  Selection) + §7(Interfaces 22→24종) + §9 갱신, `.ai/DECISIONS.md`
+  에 ADR-0029 신규(새 최상위 Interface 2개 도입, `EngineRuntime`
+  계약은 미확장이라는 결정 근거 포함), `docs/ROADMAP.md`/`.ai/
+  MEMORY.md` 갱신, Review 작성.
+- 완료 조건(DoD): 문서-구현 정합성 확인 + 사용자 승인.
+- 상태: **DONE (2026-07-27)** — `docs/ARCHITECTURE.md` v0.19.0 신규
+  §3.15(Intelligent Engine Selection — `EngineRegistry`/
+  `EngineSelectionPolicy` 역할, `EngineRuntime` 계약 미확장 근거,
+  결정과 실행의 분리 경계 명시)/§7(Interfaces 총 24종, `EngineRegistry`
+  /`EngineSelectionPolicy` 2행 추가)/§9(디렉터리 매핑에
+  `runtime/engine/engine_registry.py`/`engines/
+  engine_selection_policy.py` 반영). `.ai/DECISIONS.md`에
+  **ADR-0029**(배경/결정 5개 항목/대안 3개/이유/결과) 신규 작성.
+  아래 "Milestone 17 Review" 절 참고.
+- 의존성: M17-T01~T03.
+
+---
+
+## Milestone 17 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | `EngineCandidate`/`EngineSelectionDecision`이 Provider 독립 | ✅ (M17-T01) |
+| 2 | `EngineRegistry`가 등록된 모든 후보를 나열(세션 미생성) | ✅ (M17-T01) |
+| 3 | `EngineSelectionPolicy`가 규칙 기반·side-effect 없음, `reason` 포함 | ✅ (M17-T02) |
+| 4 | Budget 내 최저 비용 우선 규칙이 다중 Engine으로 통합 테스트 검증 | ✅ (M17-T03) |
+| 5 | 결정이 `CodingAgent`의 실제 실행에 연결되지 않음을 증명 | ✅ (M17-T03, 파이프라인 실행 + 시그니처 검사 이중 증명) |
+| 6 | 전체 `pytest`/`ruff`/`mypy` 통과 | ✅ (아래 4절) |
+
+Task List(M17-T01~T04) 전체 완료. 사용자 승인 조건("Decision Only
+유지", "`reason` 포함", "가능하면 `EngineRuntime.list_candidates()`
+대신 기존/신규 Registry 계층으로 조회·판단 책임 분리") 모두 충족됨.
+
+**2. Architecture Review**
+
+- **신규 컴포넌트**: `domain/engine_selection.py`(`EngineCandidate`/
+  `EngineSelectionDecision`), `interfaces/engine_registry.py`
+  (`EngineRegistry`), `interfaces/engine_selection_policy.py`
+  (`EngineSelectionPolicy`), `runtime/engine/engine_registry.py`
+  (`InMemoryEngineRegistry`), `engines/engine_selection_policy.py`
+  (`InMemoryEngineSelectionPolicy`) — 총 5개 신규 소스 파일.
+- **변경된 기존 컴포넌트**: 없음. `EngineRuntime`/`CodingAgent`
+  어느 쪽도 수정하지 않았다 — M11~M16이 매번 최소 1개 기존
+  컴포넌트를 손댔던 것과 달리, M17은 **완전히 새 계층만 추가**하고
+  기존 실행 경로는 전혀 건드리지 않았다(Decision Only라는 Milestone
+  성격이 코드 구조에도 그대로 반영됨).
+- **핵심 설계 결정**: 사용자가 제안한 "`EngineRuntime.list_candidates()`
+  대신 기존 Registry/Manager 계층 활용"을 조사한 결과, 대응하는
+  기존 계층이 없다는 사실을 확인하고 `AgentManager`/`AgentRegistry`
+  분리와 동일한 패턴으로 `EngineRegistry`를 신규 도입했다 — "기존
+  활용"이 아니라 "동일 패턴의 신규 계층 도입"이라는 점을 문서에
+  정직하게 기록했다. `EngineSelectionPolicy`는 후보가 어디서
+  왔는지 알지 못하게 설계해(호출자가 먼저 `list_candidates()`로
+  조회한 뒤 넘김) 조회/판단 책임을 코드 구조로도 분리했다.
+
+`git diff --stat`(M16 종료 커밋 대비)로 확인한 결과 신규 소스 파일
+5개, 기존 소스 파일 수정 0개 — 지금까지 유일하게 **기존 소스 파일을
+전혀 수정하지 않은** Milestone이다(가장 작은 회귀 위험).
+
+**3. Interface First 원칙 검토**
+
+M17은 **새 최상위 Interface 2개(`EngineRegistry`/
+`EngineSelectionPolicy`)를 추가**했다 — M16(3개)에 이어 두 Milestone
+연속으로 신규 계층을 도입한 것이지만, M17은 기존 Interface(`EngineRuntime`
+등)를 단 하나도 확장하지 않았다는 점에서 M14/M15/M16과 다르다.
+`EngineRuntime`을 세 번째로 확장하는 대신 완전히 독립된 계층을
+분리한 것은 ADR-0017(Context Manager 도입)·ADR-0025
+(ExecutionEnvironment 도입)·ADR-0028(Knowledge Layer 도입)과 같은
+"신규 계층 도입" 계열이라 ADR-0029로 기록했다. 새 컴포넌트를 호출하는
+기존 코드가 없으므로(Decision Only) 하위 호환성 이슈 자체가 발생하지
+않는다.
+
+**4. 테스트 결과**
+
+- `pytest`: **553개 전부 통과**(M16 완료 시점 532개 → M17에서 21개
+  신규: M17-T01 +8, M17-T02 +6, M17-T03 +7)
+- `ruff check src tests`: 클린
+- `mypy src`: 클린(신규 소스 파일 5개 포함, `storage/
+  llm_policy_loader.py`의 `types-PyYAML` 미설치 경고 1건은 M17
+  이전부터 존재하는 무관한 항목)
+- 신규 외부 런타임 의존성 없음
+
+**5. Technical Debt 정리**
+
+*M17 범위 밖으로 명시적으로 제외한 것(사용자 확정, 계속 이월)*
+- **실행 연결(M18로 예정)** — `EngineSelectionPolicy`의 결정을
+  실제 `engine_runtime.run()` 호출에 반영하는 것은 다음 Milestone의
+  책임.
+- **Model 수준 결정** — 계속 M14의 정적 정책이 담당, 이 Decision은
+  Engine 선택에만 집중.
+- **ML/휴리스틱 기반 고급 판단** — 규칙 기반 최소 구현(예산 내 최저
+  비용)만 제공.
+- **`EngineRuntime`↔`EngineRegistry` 중복 등록 제거(통합)** — 같은
+  Adapter를 두 곳에 등록하는 약간의 중복이 있으나, `EngineRuntime`
+  내부 구현을 리팩터링하는 것은 이번 범위 밖(회귀 위험 최소화 우선).
+
+*계속 이월되는 기존 항목*
+- Effort 라우팅, `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임
+  워크 미통합, Codex/Gemini 실연동 미검증, `MemoryEngine.search()`
+  선형 스캔, 여러 Task에 걸친 누적 예산 추적, 예산 초과 시 Approval
+  흐름, `KnowledgeIndexer`, Review/Documentation Agent로의
+  `knowledge_provider` 확장, Retry Backoff/Persistent Runtime
+  Recovery/Approval 비동기 처리/Process Timeout 정책 고도화,
+  `ShellAgent` 화이트리스트 코드 고정.
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M17-T01~T04 상세 섹션) / `docs/ROADMAP.md`
+(M17 Task List·목표·DoD 반영) / `docs/ARCHITECTURE.md`(v0.19.0, 신규
+§3.15/§7/§9 갱신) / `.ai/DECISIONS.md`(ADR-0029 신규) 완료.
+`pyproject.toml` 버전은 v0.5.0 그대로 유지(ADR-0024 기준선 — 새
+Interface 2개 추가는 M5/M11/M16과 같은 "신규 계층 도입" 계열이라
+기준선 재선언 대상이 아니라고 판단했으나, M16+M17로 Interface가
+19→24종까지 늘어난 만큼 다음 기준선 재검토 시점에 누적 변화를 함께
+검토할 필요가 있다). `.ai/MEMORY.md`는 이 Review 승인 직후 M1~M16과
+동일한 방식으로 압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절), Architecture Review 완료(2절, 신규 5/
+수정 0 소스 파일 — 지금까지 유일하게 기존 파일 무수정, "조회
+(Registry)/판단(Policy)/실행(Runtime) 책임 분리" 설계 결정 명시),
+Interface First 검토 완료(3절, 새 Interface 2개를 "신규 계층 도입"
+계열 ADR로 투명하게 기록, 기존 Interface 미확장), 테스트 결과
+문서화 완료(4절), Technical Debt 정리 완료(5절), 문서 갱신 완료
+(6절) — 6개 조건 모두 만족. Review 중 코드 변경이 필요한 치명적
+문제(버그·계약 위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 17 Completed를 선언한다.**
+
+**Milestone 18 상태**: 아직 목표/DoD/Task List가 전혀 정의되지
+않았다. 사용자가 예고한 다음 단계는 Execution — M17의
+`EngineSelectionDecision`을 실제 `CodingAgent` 실행 경로에 연결하는
+것이며, 이번 Milestone으로 그 판단 로직(`EngineSelectionPolicy`)과
+후보 조회(`EngineRegistry`)가 모두 마련됐다 — 다만 이는 사전 논의
+없이 확정된 것이 아니며, Milestone 18은 착수 시점에 이 문서에
+목표/DoD/Task List를 새로 정의한다(Task Driven Development 원칙,
+M2~M17이 그래왔듯).
+
 ---
 
 ## 진행 로그
