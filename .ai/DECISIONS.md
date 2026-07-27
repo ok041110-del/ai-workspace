@@ -1530,3 +1530,149 @@
   경로, `AutomationRepository`의 파일/DB 구현체, Cron Expression
   기반 Trigger, Distributed/Multi-node Scheduler는 실제 필요성이
   생기기 전까지 이월한다.
+
+## ADR-0034: Production Platform 도입 — `ProductionConfig`/`LifecycleManager`/`HealthMonitor`, Dashboard Reader→Reader 확장, `TYPE_CHECKING` 지연 import로 순환 의존 회피 (Milestone 22)
+
+- 상태: 승인됨 (2026-07-27, 사용자 승인)
+- 날짜: 2026-07-27
+- 배경: M20/M21로 완성된 Dashboard/Automation은 실행 상태는
+  보여줬지만 서버 자체의 운영 정보(설정/생명주기/상태/버전)는
+  다루지 않았다. 사용자가 "AI Workspace를 실제 운영 가능한
+  Production Platform으로 확장한다 — 비즈니스 로직은 추가하지
+  않는다"는 목표로 M22를 요청했다. 사용자 최종 승인 조건 5개:
+  (1) Configuration은 Infrastructure Layer의 Immutable 설정 객체로
+  유지, (2) `LifecycleManager`는 생성이 아닌 생명주기(Startup/
+  Shutdown)만 관리, (3) `HealthMonitor`는 조회 전용(Read Model)으로
+  유지, (4) Dashboard Health는 기존 `DashboardService`를 확장하여
+  구현, (5) `uptime`/`started_at`/`version`/`health_status`를
+  표준 상태 정보로 제공해 M23이 재사용할 수 있도록 함. Kickoff
+  논의에서 추가로 확정한 사항: Version API는 `pyproject.toml`의
+  아키텍처 기준선 버전(ADR-0024)과 다른 별도 상수로 관리, Health
+  Monitor의 "Engine" 항목은 `EngineRegistry` Interface를 확장하지
+  않고 구조적 연결 여부만 확인, Configuration/Lifecycle/Health는
+  `runtime/production/`(FastAPI를 모름)에, 실제 REST 엔드포인트는
+  `web/production_routes.py`에 배치, Graceful Shutdown은 별도
+  계측 없이 기존 `DashboardService.workspace_status()`(M20이
+  이미 Event로 추적)를 폴링해 구현.
+- 결정:
+  1. `runtime/production/config.py`에 `ProductionConfig`(frozen
+     dataclass — `host`/`port`/`log_level`/`dashboard_enabled`/
+     `automation_enabled`/`automation_tick_seconds`/
+     `engine_settings`, `__post_init__`에서 값 검증)를 신설한다.
+     `runtime/production/config_loader.py`의
+     `load_production_config(config_path=, env=)`가 기본값→설정
+     파일(YAML)→Environment Variable(`AI_WORKSPACE_` 접두사) 순으로
+     겹쳐 쓴다 — `storage/llm_policy_loader.py`와 동일하게 "로더만
+     PyYAML/`os.environ`을 안다" 원칙을 지킨다.
+  2. `runtime/production/logging_setup.py`의 `configure_logging()`
+     이 `ProductionConfig.log_level`로 표준 `logging.Logger`
+     (`ai_workspace`)를 설정한다(Console 항상 켜짐, `log_file` 선택
+     지원). `domain`/`interfaces`/`engines`는 이 모듈을 참조하지
+     않는다 — "Logging은 Domain에 침투하지 않는다"(사용자 원칙).
+  3. `runtime/production/lifecycle.py`의 `LifecycleManager`
+     (STARTUP/RUNNING/SHUTDOWN)는 이미 조립된
+     `AutomationScheduler`/`DashboardService`를 선택적으로
+     주입받을 뿐 스스로 컴포넌트를 만들지 않는다(사용자 승인 조건
+     2). `startup()`이 `started_at`을 기록하고 `AutomationScheduler.
+     start()`(Startup Trigger 1회)를 호출한다. `shutdown()`(비동기)
+     은 `DashboardService.workspace_status()`를 폴링해 실행 중
+     Task가 끝나길 기다리되, `graceful_shutdown_timeout_seconds`를
+     넘기면 **강제로 개입하지 않고** 그대로 진행한다(사용자 DoD
+     "강제 종료를 수행하지 않는다").
+  4. `runtime/production/health.py`의 `HealthMonitor`는 조회
+     전용이다(사용자 승인 조건 3) — Server(`LifecycleManager.
+     state` 기반)/Dashboard/Automation/EventBus/Engine 5개
+     컴포넌트를 각각 "연결돼 있는가"로 판정하고 가장 나쁜 상태로
+     전체 `health_status`를 집계한다. Engine 항목은 `EngineRegistry`
+     Interface를 확장하지 않고 구조적 연결 여부만 본다(Kickoff
+     합의). `ProductionStatus`에 사용자 승인 조건 5의 4개 표준
+     필드(`health_status`/`version`/`started_at`/`uptime_seconds`)
+     를 담는다.
+  5. `runtime/production/version.py`에 `WORKSPACE_VERSION`(제품
+     릴리스 버전, `pyproject.toml`의 아키텍처 기준선 버전과 별개)
+     과 `get_git_commit_hash()`(실패 시 `None`, git 저장소가 아니어도
+     Version API가 항상 동작)를 신설한다.
+  6. Dashboard Health는 **기존 `DashboardService`를 확장**해
+     구현한다(사용자 승인 조건 4) — 선택적 `health_monitor` DI +
+     `production_status()`(M21 `automation_service` DI와 동일한
+     Reader→Reader 패턴). `DashboardSnapshot`/`DashboardViewModel`
+     에 `production_status` 필드를 추가(기본값 `None`)해 `/api/
+     dashboard`·`/api/summary`에 자동 포함시킨다.
+  7. **순환 의존 처리**: `HealthMonitor`/`LifecycleManager`가 타입
+     힌트로만 `DashboardService`를 참조하도록(`from __future__
+     import annotations` + `TYPE_CHECKING` 가드) 바꿔, `dashboard_
+     service.py` → `health.py`/`lifecycle.py` → `dashboard_
+     service.py`로 되돌아오는 런타임 순환 import를 없앴다. 또한
+     `HealthMonitor` 생성에는 이미 만들어진 `DashboardService`가
+     필요하지만 `DashboardService`도 `HealthMonitor`를 참조하고
+     싶어 하는 조립 순서 문제는 `DashboardService.
+     attach_health_monitor(health_monitor)`(생성 후 연결)로
+     풀었다 — 실제 순환 의존이 아니라 순수한 조립 순서 문제임을
+     이 ADR과 코드 주석에 명시적으로 기록한다.
+  8. Production API(`web/production_routes.py`)는 `GET /api/health`
+     (컴포넌트별 상세)/`GET /api/config`(`ProductionConfig` 그대로,
+     비밀값 없음)/`GET /api/version`/`GET /api/status`(사용자 승인
+     조건 5의 4개 표준 필드만 담은 경량 요약 — M23이 그대로 재사용
+     하도록 `/api/health`의 상세 `components`와 분리) 4종을
+     제공한다. `web/app.py`의 `create_app()`은 `production_config`/
+     `lifecycle_manager`/`health_monitor` 3개 모두 주입해야만
+     Production 라우터를 등록한다(기존 M20/M21 호출부 무영향).
+     `lifecycle_manager`가 주어지면 `lifespan`이 `automation_
+     scheduler.start()`를 직접 호출하는 대신 위임하고, 종료 시
+     `await lifecycle_manager.shutdown()`(Graceful Shutdown)을
+     tick Task 취소보다 먼저 수행한다.
+  9. `web/server.py`의 `build_app()`이 `config` 미지정 시
+     `load_production_config()`로 채우고 Production 컴포넌트까지
+     전부 조립한다. `run_server()`는 CLI `host`/`port`가 주어지면
+     Configuration보다 우선(가장 구체적인 값)하고, `configure_
+     logging()`을 호출한 뒤 `uvicorn.run()`한다. `cli/main.py`의
+     `start` 서브커맨드 `--host`/`--port` 기본값을 하드코딩된
+     문자열에서 `None`으로 바꿔 미지정 시 Configuration이 살아
+     있게 했다.
+- 대안:
+  - `LifecycleManager`가 컴포넌트까지 직접 조립 — 기각(사용자 확정
+    조건). `web/server.py`의 `build_app()`이 여전히 유일한 조립
+    지점으로 남아야 "조립 로직이 여러 곳에 흩어지는" 문제를 막는다.
+  - `HealthMonitor`가 `EngineRegistry`에 새 조회 메서드를 추가해
+    등록된 Engine 개수/이름까지 점검 — 기각(Kickoff 합의). 아직
+    실제 Engine이 등록되지 않는 알려진 한계(M21 Review) 위에 새
+    Interface 계약을 얹는 것은 시기상조라고 판단했다 — 실제 Engine
+    등록이 이뤄지는 후속 Milestone에서 재검토한다.
+  - Version API가 `pyproject.toml`의 `version`을 그대로 재사용 —
+    기각. 그 값은 ADR-0024가 관리하는 "아키텍처 기준선 버전"이라
+    Milestone이 끝날 때마다 반드시 바뀌는 값이 아니고, 사용자 예시
+    (`2.0.0`)가 가리키는 "제품 릴리스 버전"과 의미가 다르다 — 두
+    개념을 억지로 합치면 어느 한쪽이 오염된다.
+  - `DashboardService`↔`HealthMonitor`의 순환 참조를 완전히 없애기
+    위해 Dashboard Health를 별도 독립 컴포넌트로 분리 — 기각(사용자
+    확정 조건 4, "기존 DashboardService를 확장"). `TYPE_CHECKING`
+    지연 import + `attach_health_monitor()`로 실제 순환 import 없이
+    확장 요구를 그대로 만족시킬 수 있어, 사용자 조건을 어기지 않고
+    문제를 해결했다.
+- 이유: Configuration을 불변으로 유지하면 서버 실행 중 예기치 않게
+  설정이 바뀌는 버그 클래스를 원천 차단한다. `LifecycleManager`/
+  `HealthMonitor`를 각각 "생명주기만"/"조회만"으로 좁혀 두면 두
+  컴포넌트의 책임이 겹치지 않고, 향후 실제 프로덕션 배포 요구
+  (Docker/K8s/HTTPS 등, 이번엔 Out of Scope)가 들어와도 이 경계
+  안에서 확장할 수 있다. Dashboard Health를 별도 API 대신 기존
+  `DashboardService`의 확장으로 구현하면 Web UI/모바일이 한 번의
+  `/api/dashboard` 호출로 Workspace/Engine/실행/Automation/
+  Production 상태를 전부 받을 수 있어 M23 Mobile Experience의
+  API 설계 부담을 줄인다.
+- 결과/영향: `docs/ARCHITECTURE.md` v0.24.0 신규 §3.20(Production
+  Platform)에 반영. §7 Interfaces는 새 Interface가 없어 27종
+  그대로(`ProductionConfig`/`LifecycleManager`/`HealthMonitor`
+  전부 구체 클래스/dataclass) — M19에 이어 "새 Interface 없이도
+  DoD가 요구해 ADR을 작성"한 두 번째 사례. §8 의존성 규칙에
+  Production 관련 경로 추가, §9 디렉터리 구조에 `runtime/
+  production/`/`web/production_routes.py` 반영. 실제
+  `ClaudeCodeEngineAdapter`+`ExecutionDispatcher`+`uvicorn`
+  lifespan 조합으로 서버 기동→Healthy 전이, Graceful Shutdown이
+  실행 중 Task를 실제로 기다림, Environment Variable이 실제
+  `/api/config`까지 전달됨을 통합 테스트로 증명(M22-T07). `ast`
+  기반 import 검사로 `runtime/production/`이 `web/`을 모르고,
+  Core Domain(`domain`/`interfaces`/`engines`)이 Production을
+  전혀 모르며, `LifecycleManager`가 구체 구현체를 직접 생성하지
+  않음을 재확인. Docker/Kubernetes/CI/CD/HTTPS/Reverse Proxy/
+  Database/Authentication/Authorization/Multi-node Cluster/
+  Mobile 관련 위젯류는 실제 필요성이 생기기 전까지 이월한다.

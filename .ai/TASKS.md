@@ -6774,9 +6774,41 @@ Activity, Push Notification.
 | M22-T04 | Health Monitor + Version 조회 | **완료** |
 | M22-T05 | Production API(4종) + Server Runtime 연동 | **완료** |
 | M22-T06 | Dashboard Health 화면 | **완료** |
-| M22-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
+| M22-T07 | 전체 흐름 검증 + 문서화 | **완료** |
 
-**진행 상태**: M22-T01~T06 완료. M22-T07 진행 예정.
+**진행 상태**: M22-T01~T07 전체 완료.
+
+#### M22-T07: 전체 흐름 검증 + 문서화
+- 상태: **DONE (2026-07-27)** —
+  `tests/integration/test_m22_production_platform.py` 신규(7개
+  테스트). 실제 FastAPI `lifespan`으로 서버 기동 시 Lifecycle이
+  `running`/`healthy`로 전이함을 증명. 실제 `ClaudeCodeEngineAdapter`
+  +`ExecutionDispatcher` 조합으로 Graceful Shutdown이 실행 중인
+  Task(Dashboard가 Event로 추적)를 감지해 완료까지 기다린 뒤에야
+  종료함을 비동기 테스트로 증명(강제 종료 없음). Production API가
+  실제 Dashboard/Automation 연결 상태를 반영함을 REST 호출로
+  증명. `AI_WORKSPACE_LOG_LEVEL`/`AI_WORKSPACE_AUTOMATION_TICK_SECONDS`
+  Environment Variable이 `load_production_config()`→`build_app()`
+  →`/api/config`까지 실제로 이어짐을 증명. `ast` 기반 Architecture
+  Test 4종: `runtime/production/` 전체가 `web/`/FastAPI/uvicorn을
+  import하지 않음, `domain`/`interfaces`/`engines` 전체가
+  `runtime.production`을 import하지 않음("Core Domain은 Production
+  을 모른다"), `LifecycleManager`가 `InMemory*` 구체 구현체를 전혀
+  import하지 않음(사용자 승인 조건 2 재확인). `pytest`(771개),
+  `ruff`, `mypy` 통과.
+
+  ADR-0034(`.ai/DECISIONS.md`) 신규 작성 — 사용자 승인 조건 5개
+  반영 근거, Version API 분리 이유, `DashboardService`↔
+  `HealthMonitor` 순환 참조를 `TYPE_CHECKING`+`attach_health_monitor()`
+  로 해결한 경위, 대안 검토를 전부 기록. `docs/ARCHITECTURE.md`
+  v0.24.0: 신규 §3.20(Production Platform, 사용자 Architecture
+  다이어그램 포함), §7은 새 Interface 없어 27종 그대로 유지(주석만
+  갱신), §8 의존성 규칙에 15/16/17번(Core는 Production을 모름,
+  Dashboard Health Reader→Reader, LifecycleManager는 비생성) 추가,
+  §9 디렉터리 구조에 `runtime/production/`/
+  `web/production_routes.py`/CLI 옵션 변경 반영. 아래 Milestone 22
+  Review 작성.
+- 의존성: M22-T06.
 
 #### M22-T06: Dashboard Health 화면
 - 상태: **DONE (2026-07-27)** — `DashboardService`를 확장(사용자
@@ -6941,6 +6973,153 @@ Activity, Push Notification.
   6개). `pytest`(732개), `ruff`, `mypy` 통과. 다음 Task:
   **M22-T02**(Production Logging).
 - 의존성: 없음.
+
+---
+
+## Milestone 22 Review
+
+**1. Definition of Done 체크리스트**
+
+| # | DoD 항목 | 상태 |
+|---|---|---|
+| 1 | Configuration 구현 | ✅ (M22-T01) |
+| 2 | Configuration Loader 구현 | ✅ (M22-T01) |
+| 3 | Lifecycle Manager 구현 | ✅ (M22-T03) |
+| 4 | Health Monitor 구현 | ✅ (M22-T04) |
+| 5 | Production Logging 구현 | ✅ (M22-T02) |
+| 6 | Production API 구현 | ✅ (M22-T05, 4종) |
+| 7 | Dashboard Health 화면 구현 | ✅ (M22-T06) |
+| 8 | Graceful Shutdown 구현 | ✅ (M22-T03, 실제 검증 M22-T07) |
+| 9 | Version API 구현 | ✅ (M22-T04/T05) |
+| 10 | Environment Variable 지원 | ✅ (M22-T01, 실제 검증 M22-T07) |
+| 11 | 설정 파일 지원 | ✅ (M22-T01) |
+| 12 | End-to-End 테스트 | ✅ (M22-T07) |
+| 13 | Architecture Test | ✅ (M22-T07, `ast` 기반 4종) |
+| 14 | ADR 작성 | ✅ (ADR-0034) |
+| 15 | ARCHITECTURE.md 갱신 | ✅ (v0.24.0) |
+| 16 | TASKS.md Review | ✅ (본 절) |
+| 17 | `ruff`/`mypy`/전체 `pytest` 통과 | ✅ (아래 4절) |
+
+Task List(M22-T01~T07) 전체 완료. 사용자 승인 조건 5개(Configuration
+Immutable/Infrastructure Layer, LifecycleManager는 생명주기만,
+HealthMonitor는 조회 전용, Dashboard Health는 기존 DashboardService
+확장, uptime/started_at/version/health_status 표준 필드) 모두
+충족됨.
+
+**2. Architecture Review**
+
+- **신규 컴포넌트**: `runtime/production/`(신규 패키지 전체 —
+  `config.py`/`config_loader.py`/`logging_setup.py`/`lifecycle.py`/
+  `health.py`/`version.py`), `web/production_routes.py` — 7개
+  신규 소스 파일.
+- **변경된 기존 컴포넌트**: `runtime/dashboard/dashboard_service.py`
+  (선택적 `health_monitor` DI + `production_status()`+
+  `attach_health_monitor()`), `web/app.py`(Production 라우터 조건부
+  등록 + `lifecycle_manager` 기반 Startup/Graceful Shutdown),
+  `web/server.py`(Configuration 로드 + Production 컴포넌트 전부
+  조립), `web/routes.py`(`/api/summary`에 `production_status`
+  추가), `web/dashboard_viewmodel.py`(`production_status` 필드),
+  `cli/main.py`(`--host`/`--port` 기본값 `None`), `web/static/`
+  (Production 현황 화면) — 6개 소스 파일 수정, 전부 선택적 DI/
+  기본값으로 기존 호출부 무영향.
+- **핵심 설계 결정**: (1) `ProductionConfig`를 frozen dataclass로
+  두고 `runtime/production/`(Infrastructure Layer)에만 배치해
+  Core Domain이 이 개념을 전혀 모르게 했다. (2) `LifecycleManager`
+  /`HealthMonitor`의 책임을 "생명주기만"/"조회만"으로 엄격히
+  좁혀 서로 겹치지 않게 했다 — 컴포넌트 조립은 여전히
+  `web/server.py`가 전담한다. (3) Dashboard Health를 별도 API가
+  아니라 **기존 `DashboardService`의 확장**으로 구현하면서 발생한
+  `DashboardService`↔`HealthMonitor` 순환 참조를, `TYPE_CHECKING`
+  지연 import(런타임 순환 없음) + `attach_health_monitor()`(생성
+  후 연결, 조립 순서 문제 해결)로 실제 코드 순환 없이 풀었다 — 이
+  프로젝트에서 처음 등장한 "두 컴포넌트가 서로를 참조하고 싶어
+  하는" 설계 상황을 사용자 조건을 어기지 않고 해결한 사례.
+
+`git diff --stat`(M21 종료 커밋 대비)로 확인한 결과 신규 소스 파일
+7개, 기존 파일 수정 6개 — M20/M21과 비슷한 규모(신규 층위 전체가
+새 컴포넌트, 기존 컴포넌트 변경은 선택적 DI로 최소화).
+
+**3. Interface First 원칙 검토**
+
+M22는 **새 최상위 Interface를 추가하지 않았다** — `ProductionConfig`
+/`LifecycleManager`/`HealthMonitor`/`VersionInfo` 전부 구체
+클래스이거나 dataclass다(총 27종 그대로). 그럼에도 ADR-0034를
+작성한 이유는 사용자 DoD가 "ADR 작성"을 명시적으로 요구했고, (1)
+`AutomationEngine`(M4-T07)/`AutomationRepository`(M21)에 이어
+"기존 개념과의 관계"를 정리할 필요는 없었지만 순환 참조 처리
+방식(`TYPE_CHECKING` + `attach_*`)이라는 새로운 패턴을 도입했으며,
+(2) Version API의 값이 `pyproject.toml`의 버전과 다른 개념임을
+명확히 기록해야 했기 때문이다 — M19(ADR-0031)에 이어 "새 Interface
+없이도 사용자 요청/설계 결정 기록 필요성으로 ADR을 작성"한 두 번째
+사례.
+
+**4. 테스트 결과**
+
+- `pytest`: **771개 전부 통과**(M21 완료 시점 720개 → M22에서
+  51개 신규: M22-T01 +12, M22-T02 +6, M22-T03 +7, M22-T04 +14,
+  M22-T05 +8, M22-T06 +3, M22-T07 +7 — 일부 중복 조정 포함 실제
+  51개 순증)
+- `ruff check src tests`: 클린
+- `mypy --python-executable "$(which python3)" src`: 클린(136개
+  소스 파일)
+- 신규 외부 런타임 의존성 없음(M20의 FastAPI/uvicorn 그대로 사용)
+- **실제 서버 검증**: `uvicorn.run()`으로 실제 소켓을 열어
+  `curl`로 `/api/status`/`/api/config`를 호출해 CLI `--host`/
+  `--port` 오버라이드와 Lifecycle 상태 전이(`running`/`healthy`)
+  가 실제로 동작함을 확인.
+- **실제 브라우저 검증**(M22-T06, Playwright 세션 한정 설치):
+  Chromium으로 "Production 현황" 화면이 Server 상태/Version/시작
+  시각/Uptime/컴포넌트별 상태/Configuration 요약을 정확히
+  렌더링함을 확인.
+
+**5. Technical Debt 정리**
+
+*M22에서 새로 발생한 기술 부채*
+- 없음 — 새로운 휴리스틱이나 임시 우회는 도입하지 않았다(순환
+  참조는 `TYPE_CHECKING` 지연 import로 근본 해결, 우회가 아님).
+
+*M22 범위 밖으로 명시적으로 제외한 것(사용자 확정, 계속 이월)*
+- Docker, Kubernetes, CI/CD, HTTPS, Reverse Proxy, Database,
+  Authentication, Authorization, Multi-node Cluster, Mobile App,
+  Home Widget, Lock Screen Widget, Live Activity, Push
+  Notification. `EngineRegistry`의 실제 Engine 등록 개수 점검
+  (Health Monitor의 Engine 항목 심화)도 이번엔 다루지 않음.
+
+*계속 이월되는 기존 항목*
+- Effort 라우팅, `ClaudeCodeEngineAdapter`↔`CLIEngineAdapter` 프레임
+  워크 미통합, Codex/Gemini 실연동 미검증, `MemoryEngine.search()`
+  선형 스캔, 여러 Task에 걸친 누적 예산 추적, 예산 초과 시 Approval
+  흐름, `KnowledgeIndexer`, Review/Documentation Agent로의
+  `knowledge_provider` 확장, `EngineRuntime`↔`EngineRegistry` 중복
+  등록, 실제 로그인/OAuth/Credential/Token Refresh, `CodingAgent`
+  ↔`ExecutionDispatcher` 연결, `ShellAgent` 화이트리스트 코드 고정,
+  `timed_out` 휴리스틱(ADR-0031), `DashboardRepository` 쓰기/읽기
+  Interface 물리적 분리, RUN_WORKFLOW 미지원(ADR-0033), Dashboard
+  서버의 실제 Engine 미등록(ADR-0033), 실제 프로덕션 배포 구성.
+
+**6. 문서 정리**
+
+`.ai/TASKS.md`(본 Review, M22-T01~T07 상세 섹션) / `docs/ROADMAP.md`
+(M22 Task List·진행 상태 반영) / `docs/ARCHITECTURE.md`(v0.24.0,
+신규 §3.20, §8 규칙 15/16/17번, §9 디렉터리 구조 갱신) /
+`.ai/DECISIONS.md`(ADR-0034 신규) 완료. `pyproject.toml` 변경 없음
+(신규 외부 의존성 없음, `WORKSPACE_VERSION`은 별도 상수로 관리).
+`.ai/MEMORY.md`는 이 Review 승인 직후 M1~M21과 동일한 방식으로
+압축 반영한다.
+
+**7. Milestone 종료 선언**
+
+Definition of Done 충족(1절, 17개 항목 전부), Architecture Review
+완료(2절, 신규 7개/수정 6개 소스 파일, "Configuration Immutable +
+Lifecycle/Health 책임 분리 + Dashboard Reader→Reader 확장의 순환
+참조를 TYPE_CHECKING+attach_*로 해결" 설계 결정 기록), Interface
+First 검토 완료(3절, 새 Interface 없음이나 사용자 DoD 요구에 따라
+ADR-0034 작성), 테스트 결과 문서화 완료(4절, 771개 전부 통과 +
+실제 서버·브라우저 이중 검증), Technical Debt 정리 완료(5절, 신규
+부채 없음), 문서 갱신 완료(6절) — 6개 조건 모두 만족. Review 중
+코드 변경이 필요한 치명적 문제(버그·계약 위반)는 발견되지 않았다.
+
+**사용자 승인을 조건으로 Milestone 22 Completed를 선언한다.**
 
 ---
 

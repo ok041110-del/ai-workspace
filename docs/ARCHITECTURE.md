@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.23.0 |
+| 문서 버전 | v0.24.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~20 완료, Milestone 21 완료 — ADR-0033으로 신규 §3.19 Automation Engine 도입, `AutomationRepository` Interface 신설(27종), 기존 `AutomationEngine`(M4-T07)과 명시적으로 분리) |
+| 상태 | Draft (Milestone 1~21 완료, Milestone 22 완료 — ADR-0034로 신규 §3.20 Production Platform 도입. 새 Interface 없이 27종 유지 — `ProductionConfig`/`LifecycleManager`/`HealthMonitor`는 전부 구체 클래스) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -791,6 +791,87 @@ EventBus → Dashboard (Reader → Reader)
   (읽기 전용). Automation Core(`domain`/`interfaces`/`runtime/
   automation/`)는 `web/`이나 FastAPI/uvicorn을 모른다(ADR-0033).
 
+### 3.20 Production Platform (Milestone 22, ADR-0034)
+Server Runtime의 생명주기(Lifecycle)/설정(Configuration)/상태
+(Health)/Logging을 담당한다. 비즈니스 로직을 추가하지 않는다 —
+Execution/Dashboard/Automation은 그대로 유지한다. **새 최상위
+Interface를 추가하지 않는다** — 아래 3개 컴포넌트 전부 구체
+클래스/dataclass다.
+
+```text
+                    Workspace Server
+                           │
+      ┌────────────────────┼────────────────────┐
+      ▼                    ▼                    ▼
+Configuration      Lifecycle Manager      Health Monitor
+      │                    │                    │
+      └──────────────┬─────┴──────────────┬─────┘
+                     ▼                    ▼
+               Dashboard             Automation
+                     │                    │
+                     ▼                    ▼
+               ExecutionDispatcher    EventBus
+```
+
+- **`ProductionConfig`(`runtime/production/config.py`)**: `host`/
+  `port`/`log_level`/`dashboard_enabled`/`automation_enabled`/
+  `automation_tick_seconds`/`engine_settings`를 담는 **Immutable**
+  객체(frozen dataclass, 사용자 승인 조건 1 — Infrastructure
+  Layer). `load_production_config()`(`config_loader.py`)가
+  기본값→설정 파일(YAML)→Environment Variable(`AI_WORKSPACE_`
+  접두사) 순으로 겹쳐 쓴다 — `storage/llm_policy_loader.py`와
+  동일하게 로더만 PyYAML/`os.environ`을 안다.
+- **Production Logging(`logging_setup.py`)**: `ProductionConfig.
+  log_level`로 표준 `logging.Logger`(`ai_workspace`)를 설정한다
+  (Console 항상, File 선택). `domain`/`interfaces`/`engines`는
+  이 모듈을 참조하지 않는다 — Logging은 Domain에 침투하지 않는다.
+- **`LifecycleManager`(`lifecycle.py`)**: `STARTUP`/`RUNNING`/
+  `SHUTDOWN` 상태만 관리하고 **컴포넌트를 생성하지 않는다**
+  (사용자 승인 조건 2 — 조립은 `web/server.py`의 `build_app()`
+  책임). `startup()`이 `started_at`을 기록하고
+  `AutomationScheduler.start()`를 호출한다. `shutdown()`은
+  `DashboardService.workspace_status()`(M20이 이미 Event로 추적)를
+  폴링해 실행 중 Task 완료를 기다리되, 타임아웃을 넘겨도 **강제로
+  개입하지 않는다**(Graceful Shutdown, 강제 종료 없음).
+- **`HealthMonitor`(`health.py`)**: **조회 전용**(사용자 승인
+  조건 3, Read Model) — Server(`LifecycleManager.state` 기반)/
+  Dashboard/Automation/EventBus/Engine 5개 컴포넌트를 "연결돼
+  있는가"로 판정하고 가장 나쁜 상태로 전체 `health_status`
+  (HEALTHY/DEGRADED/UNHEALTHY)를 집계한다. Engine 항목은
+  `EngineRegistry` Interface를 확장하지 않고 구조적 연결 여부만
+  본다(실제 Engine 등록 여부는 범위 밖, M21부터의 알려진 한계).
+  `ProductionStatus`가 사용자 승인 조건 5의 4개 표준 필드
+  (`health_status`/`version`/`started_at`/`uptime_seconds`)를
+  담아 M23이 그대로 재사용할 수 있게 한다.
+- **`WORKSPACE_VERSION`(`version.py`)**: 제품 릴리스 버전 —
+  `pyproject.toml`의 `version`(ADR-0024의 아키텍처 기준선 버전)과
+  별개 개념이다. `get_git_commit_hash()`는 실패해도 `None`을
+  반환해 Version API가 항상 동작한다.
+- **Dashboard Health(Reader→Reader 확장)**: **기존
+  `DashboardService`를 확장**해 구현한다(사용자 승인 조건 4) —
+  선택적 `health_monitor` DI + `production_status()`(M21
+  `automation_service`와 동일한 패턴). `HealthMonitor`/
+  `LifecycleManager`는 `TYPE_CHECKING` 가드로 `DashboardService`를
+  타입 힌트로만 참조해 런타임 순환 import를 피한다. `HealthMonitor`
+  생성에는 이미 만들어진 `DashboardService`가 필요하므로,
+  `DashboardService.attach_health_monitor()`(생성 후 연결)로 조립
+  순서 문제를 푼다 — 실제 순환 의존은 아니다.
+- **Production API(`web/production_routes.py`)**: `GET /api/health`
+  (컴포넌트별 상세)/`GET /api/config`(비밀값 없어 그대로 노출)/
+  `GET /api/version`/`GET /api/status`(4개 표준 필드만 담은 경량
+  요약, `/api/health`의 상세와 분리). `web/app.py`의
+  `create_app()`은 `production_config`/`lifecycle_manager`/
+  `health_monitor` 3개 모두 주입해야만 이 라우터를 등록한다.
+- **Server Runtime 연동**: `web/server.py`의 `build_app()`이
+  `config` 미지정 시 `load_production_config()`로 채우고
+  `LifecycleManager`/`HealthMonitor`까지 조립한다. `run_server()`
+  는 CLI `host`/`port`가 주어지면 Configuration보다 우선하고,
+  `configure_logging()` 호출 뒤 `uvicorn.run()`한다.
+- **의존 방향**: Core Domain(`domain`/`interfaces`/`engines`)은
+  Production을 전혀 모른다. `runtime/production/`은 `web/`이나
+  FastAPI/uvicorn을 모른다 — 실제 라우트는 `web/production_routes.py`
+  에서만 조립한다(ADR-0034).
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -919,6 +1000,20 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
     읽기측을 모른다"는 방향성만 유지하면 된다). Dashboard는
     `AutomationService`의 조회 메서드만 호출하고 Automation을
     제어하지 않는다.
+15. **Core Domain(`domain`/`interfaces`/`engines`)은 Production을
+    전혀 모른다**(Milestone 22). `runtime/production/`(Configuration
+    /Lifecycle Manager/Health Monitor/Logging)은 `web/`이나
+    FastAPI/uvicorn을 참조하지 않는다 — 실제 REST 엔드포인트는
+    `web/production_routes.py`에서만 조립한다.
+16. **Dashboard Health 조회는 `DashboardService` → `HealthMonitor`
+    (읽기 전용)** 순서로만 이루어진다(Milestone 22) — §8 규칙 14와
+    동일한 Reader→Reader 패턴. `HealthMonitor`/`LifecycleManager`는
+    `DashboardService`를 타입 힌트로만 참조해(`TYPE_CHECKING`)
+    런타임 순환 import를 만들지 않는다.
+17. **`LifecycleManager`는 컴포넌트를 생성하지 않는다**(Milestone
+    22) — 조립은 항상 `web/server.py`의 `build_app()`이 전담하고,
+    `LifecycleManager`는 이미 조립된 컴포넌트의 Startup/Shutdown
+    순서만 조율한다.
 
 ## 9. 디렉터리 구조와 컴포넌트 매핑
 
@@ -944,6 +1039,9 @@ src/ai_workspace/
 │   │                   #   + trigger_evaluator.py(TriggerEvaluator 계층)
 │   │                   #   + AutomationScheduler + AutomationActionExecutor
 │   │                   #   (Dashboard와 독립적인 Domain, web/을 모름, Milestone 21)
+│   ├── production/    #   ProductionConfig/config_loader.py/logging_setup.py
+│   │                   #   + LifecycleManager + HealthMonitor + version.py
+│   │                   #   (Infrastructure Layer, web/을 모름, Milestone 22)
 │   └── workflow/      #   WorkflowRunner: Workflow 순차 자동 실행 (Milestone 12)
 ├── agents/            # 능력별 Agent 구현체 (Milestone 2 이후)
 ├── engines/           # Core Engines 구현 (Task/Workflow/Approval/Automation, Milestone 2 이후)
@@ -967,8 +1065,11 @@ src/ai_workspace/
 │                       #   static/(index.html/style.css/app.js, 빌드 도구 없음)
 │                       #   + automation_routes.py(Automation REST API 8종,
 │                       #   Milestone 21) — static/에 Automation 화면 추가
+│                       #   + production_routes.py(Production API 4종,
+│                       #   Milestone 22) — static/에 Production 현황 추가
 └── cli/               # CLI 진입점 (UI Surface의 하나) — main.py (구현됨, T1-24)
 │                       #   + start 서브커맨드로 web.server.run_server 지연 import (Milestone 20)
+│                       #   + --host/--port 기본값 None(미지정 시 Configuration 값 사용, Milestone 22)
 ```
 
 ## 10. 확장성 고려사항
