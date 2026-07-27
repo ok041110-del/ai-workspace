@@ -12,8 +12,12 @@ from ai_workspace.interfaces.event_bus import EventBus
 from ai_workspace.runtime.automation.automation_scheduler import AutomationScheduler
 from ai_workspace.runtime.automation.automation_service import AutomationService
 from ai_workspace.runtime.dashboard.dashboard_service import DashboardService
+from ai_workspace.runtime.production.config import ProductionConfig
+from ai_workspace.runtime.production.health import HealthMonitor
+from ai_workspace.runtime.production.lifecycle import LifecycleManager
 from ai_workspace.web.automation_routes import router as automation_router
 from ai_workspace.web.dashboard_broadcaster import DashboardBroadcaster
+from ai_workspace.web.production_routes import router as production_router
 from ai_workspace.web.routes import router as dashboard_router
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -27,13 +31,16 @@ def create_app(
     automation_service: AutomationService | None = None,
     automation_scheduler: AutomationScheduler | None = None,
     automation_tick_seconds: float = DEFAULT_AUTOMATION_TICK_SECONDS,
+    production_config: ProductionConfig | None = None,
+    lifecycle_manager: LifecycleManager | None = None,
+    health_monitor: HealthMonitor | None = None,
 ) -> FastAPI:
-    """Dashboard/Automation API의 FastAPI 앱을 조립한다(M20-T04/T05,
-    M21-T05). `Core` 계층(domain/interfaces/engines/runtime)은
-    FastAPI를 전혀 모른다 — FastAPI는 이 `web/` 디렉터리
-    (Infrastructure 계층)에서만 쓴다. `DashboardService`를
-    `app.state`에 실어 라우터가 `request.app.state.dashboard_service`
-    로 꺼내 쓴다.
+    """Dashboard/Automation/Production API의 FastAPI 앱을
+    조립한다(M20-T04/T05, M21-T05, M22-T05). `Core` 계층(domain/
+    interfaces/engines/runtime)은 FastAPI를 전혀 모른다 — FastAPI는
+    이 `web/` 디렉터리(Infrastructure 계층)에서만 쓴다.
+    `DashboardService`를 `app.state`에 실어 라우터가
+    `request.app.state.dashboard_service`로 꺼내 쓴다.
 
     `event_bus`를 주입하면(M20-T05) `DashboardBroadcaster`가 구독해
     Dashboard 관련 Event 발생 시 연결된 WebSocket 전부에 최신 스냅샷을
@@ -44,17 +51,28 @@ def create_app(
     `automation_service`/`automation_scheduler`를 함께 주입해야만
     Automation API(`/api/automation/...`)가 등록된다(M21-T05) — 둘 다
     없으면(기본값) Dashboard API만 있던 M20 시절과 동일하게 동작한다
-    (기존 호출부 무영향). `automation_scheduler`가 주어지면 서버
-    기동(`lifespan`) 시 Startup Trigger를 1회 평가하고, 서버가 살아
-    있는 동안 `automation_tick_seconds`마다 Time/Interval Trigger를
-    평가하는 백그라운드 Task를 띄운다 — 종료 시 Task를 취소해 정리한다
-    ("Scheduler는 Server Runtime과 함께 실행된다", 사용자 DoD)."""
+    (기존 호출부 무영향).
+
+    `production_config`/`lifecycle_manager`/`health_monitor`를 모두
+    주입해야만 Production API(`/api/health`, `/api/config`,
+    `/api/version`, `/api/status`)가 등록된다(M22-T05, 기존 호출부
+    무영향). `lifecycle_manager`가 주어지면 서버 기동 시
+    `lifecycle_manager.startup()`이 `automation_scheduler.start()`를
+    대신 호출하고, 종료 시 `await lifecycle_manager.shutdown()`이
+    Graceful Shutdown(실행 중 Task 완료 대기, 강제 종료 없음)을
+    수행한 뒤에야 주기적 tick Task를 취소한다 — `lifecycle_manager`
+    미주입 시(기존 M20/M21 호출부)는 이전과 동일하게 즉시
+    `automation_scheduler.start()`를 호출하고 대기 없이 tick Task를
+    취소한다."""
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         tick_task: asyncio.Task[None] | None = None
         if automation_scheduler is not None:
-            automation_scheduler.start()
+            if lifecycle_manager is not None:
+                lifecycle_manager.startup()
+            else:
+                automation_scheduler.start()
 
             async def _tick_loop() -> None:
                 while True:
@@ -65,6 +83,8 @@ def create_app(
         try:
             yield
         finally:
+            if lifecycle_manager is not None:
+                await lifecycle_manager.shutdown()
             if tick_task is not None:
                 tick_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -78,6 +98,16 @@ def create_app(
         app.state.automation_service = automation_service
         app.state.automation_scheduler = automation_scheduler
         app.include_router(automation_router)
+
+    if (
+        production_config is not None
+        and lifecycle_manager is not None
+        and health_monitor is not None
+    ):
+        app.state.production_config = production_config
+        app.state.lifecycle_manager = lifecycle_manager
+        app.state.health_monitor = health_monitor
+        app.include_router(production_router)
 
     broadcaster = DashboardBroadcaster(dashboard_service=dashboard_service)
     if event_bus is not None:

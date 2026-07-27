@@ -47,8 +47,12 @@ def _build_parser() -> argparse.ArgumentParser:
     start_parser = subparsers.add_parser(
         "start", help="Dashboard 서버 실행(M20) — 상시 실행, 기존 명령과 독립"
     )
-    start_parser.add_argument("--host", default="127.0.0.1")
-    start_parser.add_argument("--port", type=int, default=8080)
+    start_parser.add_argument(
+        "--host", default=None, help="미지정 시 Production Configuration 값을 따른다(M22)"
+    )
+    start_parser.add_argument(
+        "--port", type=int, default=None, help="미지정 시 Production Configuration 값을 따른다"
+    )
 
     project_parser = subparsers.add_parser("project", help="Project 관리")
     project_subparsers = project_parser.add_subparsers(dest="project_command", required=True)

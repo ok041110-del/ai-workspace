@@ -6772,11 +6772,51 @@ Activity, Push Notification.
 | M22-T02 | Production Logging(표준 `logging`, Console+File) | **완료** |
 | M22-T03 | Lifecycle Manager(Startup/Running/Shutdown, Graceful Shutdown) | **완료** |
 | M22-T04 | Health Monitor + Version 조회 | **완료** |
-| M22-T05 | Production API(4종) + Server Runtime 연동 | 진행 예정 |
+| M22-T05 | Production API(4종) + Server Runtime 연동 | **완료** |
 | M22-T06 | Dashboard Health 화면 | 진행 예정 |
 | M22-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M22-T01~T04 완료. M22-T05 진행 예정.
+**진행 상태**: M22-T01~T05 완료. M22-T06 진행 예정.
+
+#### M22-T05: Production API + Server Runtime 연동
+- 상태: **DONE (2026-07-27)** — `web/production_routes.py`에
+  `GET /api/health`(`HealthMonitor.status()` 상세, `components`
+  배열 포함)/`GET /api/config`(`ProductionConfig` 그대로 노출,
+  비밀값 없음)/`GET /api/version`(`VersionInfo`)/`GET /api/status`
+  (사용자 승인 조건 5의 4개 표준 필드만 담은 경량 요약 — M23이
+  이 최소 형태를 그대로 재사용할 수 있도록 `/api/health`의 상세
+  `components`와 분리) 신규.
+
+  `web/app.py`의 `create_app()`에 `production_config`/
+  `lifecycle_manager`/`health_monitor` 3개 모두 주입해야만
+  Production 라우터가 등록되도록 확장(기존 M20/M21 호출부는
+  무영향, 새 파라미터 전부 기본값 `None`). `lifecycle_manager`가
+  주어지면 `lifespan`이 `automation_scheduler.start()`를 직접
+  호출하는 대신 `lifecycle_manager.startup()`에 위임하고, 종료 시
+  `await lifecycle_manager.shutdown()`(Graceful Shutdown — 실행 중
+  Task 완료 대기)을 tick Task 취소보다 먼저 수행한다(사용자 DoD
+  순서: 실행 중 Task 완료 대기 → Scheduler 종료). 미주입 시(기존
+  M20/M21 호출부) 이전과 동일하게 즉시 시작·즉시 종료한다.
+
+  `web/server.py`의 `build_app(*, project_name=, config=)`가
+  `config` 미지정 시 `load_production_config()`로 채우고,
+  `LifecycleManager`/`HealthMonitor`까지 전부 조립해
+  `create_app()`에 넘긴다. `run_server(*, host=None, port=None,
+  config_path=None, log_file=None)`은 Configuration을 로드한 뒤
+  CLI `host`/`port`가 주어지면(가장 구체적인 값) 그것으로
+  덮어쓰고, `configure_logging()`(M22-T02)까지 호출한 다음
+  `uvicorn.run()`한다. `cli/main.py`의 `start` 서브커맨드
+  `--host`/`--port` 기본값을 하드코딩된 문자열에서 `None`으로
+  바꿔 미지정 시 Configuration 값이 살아있도록 했다(명시하면 여전히
+  CLI가 최우선).
+
+  실제 `uvicorn.run()`으로 띄운 서버에 `curl`로 `/api/status`/
+  `/api/config`를 직접 호출해 `host`/`port` 오버라이드와 Lifecycle
+  상태 전이(`running`/`healthy`)가 실제로 동작함을 확인. 단위/통합
+  테스트 12개 신규(production_routes 5개, server 3개, 기존 CLI
+  테스트 무영향 확인). `pytest`(761개), `ruff`, `mypy` 통과. 다음
+  Task: **M22-T06**(Dashboard Health 화면).
+- 의존성: M22-T01, M22-T02, M22-T04.
 
 #### M22-T04: Health Monitor + Version 조회
 - 상태: **DONE (2026-07-27)** — `runtime/production/version.py`에
