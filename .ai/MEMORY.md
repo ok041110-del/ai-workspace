@@ -1259,3 +1259,26 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   선언은 M23/M24와 동일하게 사용자의 별도 확인을 거쳐야 하므로
   이번 턴에서는 선언하지 않음** — Task List(T01~T05)만 구현
   완료로 기록.
+- **중대 발견: M23~M25 전체가 feature branch에만 존재하고 한 번도
+  merge되지 않았음(2026-07-27, 사용자 보고 — 로컬 Obsidian이
+  Vault를 "1개 파일, 0개 폴더"로 표시)**. 확인 결과 `claude/
+  m23-t01-reading-profiles-pmnpue`가 `origin`에 push는 돼 있었지만
+  PR이 한 번도 생성/병합된 적이 없었다. 저장소에 `main`은 존재하지
+  않고, 과거 병합된 PR 2건 모두 `claude/ai-workspace-docs-setup-
+  aj3jvo`를 base로 사용해 그것이 실질적 default 브랜치임을 확인.
+  **조치**: (1) 비교 — base는 이 브랜치가 갈라진 뒤 커밋 0개(behind
+  0), 43개 파일/+3671·-70줄/12커밋의 순수 선형 연장선. (2) 충돌
+  분석 — `git merge-base --is-ancestor`로 fast-forward 가능 확인
+  + 로컬 dry-run 병합(`--no-commit --no-ff`)으로 충돌 0건 확인.
+  (3) PR #3 생성(Merge 안전성 검토 + Test plan 포함). (4) 사용자
+  승인 후 `merge` 방식으로 병합(커밋 `4882fc4`). (5) 병합된 base
+  브랜치로 로컬 checkout을 재설정(`git checkout -B claude/m23-t01-
+  reading-profiles-pmnpue origin/claude/ai-workspace-docs-setup-
+  aj3jvo`, 이 세션의 지정 브랜치가 이미 병합된 경우 default 브랜치
+  기준으로 재시작하는 규칙을 따름) 후 `pytest`(46개)/실제 Vault
+  Backlink·Frontmatter 재검증 — merge 전후 완전히 동일함을 확인.
+  **Milestone 23/24/25 전부 최종 Completed로 확정.** 로컬 Obsidian
+  이 여전히 비어 보인다면, 그 앱이 여는 Vault 폴더가 `claude/
+  ai-workspace-docs-setup-aj3jvo` 브랜치를 반영하는 clone인지
+  사용자가 직접 확인해야 한다(이 세션은 사용자의 로컬 파일시스템에
+  접근할 수 없음).

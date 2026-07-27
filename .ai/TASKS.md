@@ -8500,6 +8500,54 @@ M24와 동일하게 사용자의 최종 확인을 거친다.**
 
 ---
 
+## Merge — Milestone 23~25가 feature branch에만 존재하던 문제 해결
+
+**배경**: 사용자가 로컬 Obsidian 앱에서 Vault가 "1개 파일, 0개
+폴더"로 보인다고 보고(2026-07-27). 확인 결과, M23-Preparation
+이후의 모든 작업(M23~M25, `.ai/TASKS.md`/`.ai/MEMORY.md`/`docs/
+ARCHITECTURE.md`/`docs/ROADMAP.md`/Vault 문서/`src/ai_workspace/
+vault/` 전체)이 이 세션의 작업 브랜치 `claude/m23-t01-reading-
+profiles-pmnpue`에만 존재했고, **한 번도 PR로 병합된 적이
+없었다**(브랜치 자체는 `origin`에 push돼 있었지만 base 브랜치와
+분리된 상태). 저장소에 `main`은 없고, 과거 병합된 PR 2건 모두
+`claude/ai-workspace-docs-setup-aj3jvo`를 base로 사용해 이 브랜치가
+실질적 default임을 확인했다.
+
+**진행**:
+1. **비교**: base(`claude/ai-workspace-docs-setup-aj3jvo`)는 이
+   브랜치가 갈라진 뒤 커밋이 0개(behind 0) — 43개 파일, +3671/-70줄,
+   12커밋의 순수 선형 연장선임을 확인.
+2. **충돌 분석**: `git merge-base --is-ancestor`로 fast-forward
+   가능 확인, 로컬 dry-run 병합(`git merge --no-commit --no-ff`,
+   push 없음)으로 **충돌 0건** 확인.
+3. **PR 생성**: [#3](https://github.com/ok041110-del/ai-workspace/pull/3)
+   (`claude/m23-t01-reading-profiles-pmnpue` → `claude/ai-workspace-
+   docs-setup-aj3jvo`), Merge 안전성 검토와 Test plan을 PR 본문에
+   기록.
+4. **사용자 승인 후 Merge**: 2026-07-27, `merge` 방식으로 병합
+   (커밋 `4882fc4`).
+5. **Merge 후 검증**: 병합된 base 브랜치를 다시 checkout해
+   `pytest tests/vault tests/integration/test_m23_vault_
+   environment_integration.py tests/integration/
+   test_m24_real_vault_e2e.py`(46개) 재실행 통과, 실제 Vault
+   34개 파일·Backlink(9건, 전부 기존에 알려진 예시 텍스트)·
+   Frontmatter(누락 0건) 재확인 — merge 전후 상태 완전히 동일함을
+   확인.
+
+**Milestone 23(Obsidian Integration & Auto Save) — Completed.**
+**Milestone 24(Real Obsidian Vault Integration) — Completed.**
+**Milestone 25(Production Vault Activation) — Completed.**
+(2026-07-27, 사용자 승인 + PR #3 Merge 완료로 세 Milestone 모두
+최종 확정)
+
+**사용자 조치 필요**: 로컬 Obsidian 앱이 여는 Vault 폴더가 이
+저장소의 `claude/ai-workspace-docs-setup-aj3jvo` 브랜치(또는 그
+브랜치를 반영하는 로컬 clone)를 가리키고 있는지 확인 필요 — 이
+세션은 로컬 파일시스템에 접근할 수 없어 그 경로 자체는 확인할
+수 없다.
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |
