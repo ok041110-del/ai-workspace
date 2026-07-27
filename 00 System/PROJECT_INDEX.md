@@ -26,6 +26,7 @@ Router 역할만 한다. 프로젝트 설명은 [[AI_CONTEXT]], 운영 규칙은
 | 과거 결정("왜 이렇게 했는가")이 궁금하다 | [[Decisions Index]] → 더 상세하면 [[ADR Index]] |
 | 특정 ADR 전문이 필요하다 | [[ADR Index]]에서 항목 확인 → GitHub `.ai/DECISIONS.md` 원문 |
 | 과거 Milestone 이력이 궁금하다 | [[Milestones Index]] |
+| 개별 Task 진행 상태를 Obsidian에서 관리하고 싶다 | [[Template - Task]] → [[Milestones Index]] |
 | Mobile(M23) 관련 작업 | [[iOS Design]] / [[Android Placeholder]] |
 | 프롬프트를 어떻게 짧게 쓸지 모르겠다 | [[PROMPT_PROFILE]] |
 | Vault 운영 규칙 자체가 궁금하다 | [[AI_RULES]] |
@@ -64,6 +65,8 @@ Automation 연동 부분 확인해줘"(O) vs GitHub 파일 전체를 프롬프�
 | 가벼운 판단 기록 | [[DECISION_TEMPLATE]] |
 | ADR/API/Milestone/Decision을 Vault Index에 요약 등록 | [[Template - ADR Summary]] / [[Template - API]] / [[Template - Milestone]] / [[Template - Decision]] |
 | Daily Note | [[Template - Daily]] |
+| 개별 Task 문서(Obsidian 안에서 진행/상태 관리) | [[Template - Task]] |
+| 새 Project(다중 Project 확장 시) 폴더 구조 | [[Template - Project Workspace]] |
 
 산출물별 선택 기준과 "원문 작성용 vs Vault 등록용" 구분은
 [[PROMPT_PROFILE]]의 Template Mapping 절 참고.

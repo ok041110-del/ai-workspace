@@ -84,6 +84,13 @@ Core Domain·`web/` 양쪽 모두 모르는 독립 계층 `vault/`가 GitHub
 자동화한다. 아직 미구현이며, 설계 상세는
 [[Vault Integration Architecture]] 참고.
 
+## Obsidian Workspace Templates(Milestone 27, ADR-0038)
+
+`vault/`에 `VaultDocumentKind.TASK`(개별 Task 문서, `14 Tasks/
+{task_id}.md`)가 추가돼, Task 1건마다 Status/Priority/Milestone/
+Owner/Checklist/Notes/Related Documents/Decision을 담은 문서를
+Obsidian 안에서 직접 관리할 수 있다. [[Template - Task]] 참고.
+
 ## 관련 문서
 
 - [[Overview]]

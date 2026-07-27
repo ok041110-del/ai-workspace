@@ -32,6 +32,7 @@ tags: [milestone]
 | M20 | Real-time Dashboard Platform | `DashboardRepository`(26번째 Interface) 도입, 첫 외부 런타임 의존성(FastAPI/uvicorn) | ADR-0032 |
 | M21 | Automation Engine | `AutomationRepository`(27번째 Interface) 도입, AutomationScheduler | ADR-0033 |
 | M22 | Production Platform | `ProductionConfig`/`LifecycleManager`/`HealthMonitor` 도입, 새 Interface 없음 | ADR-0034 |
+| M27 | Obsidian Workspace Templates(M25 요청) | `VaultDocumentKind.TASK` 신규(개별 Task 문서), Daily/Decision Template 확장, Project Workspace Template 정의(설계만) | ADR-0038 |
 
 ## M23-Preparation
 

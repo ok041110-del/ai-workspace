@@ -8684,6 +8684,84 @@ M26-T01**로 번호를 새로 부여했다(투명하게 기록).
 
 ---
 
+## Milestone 27 — Obsidian Workspace Templates
+
+**목표**(2026-07-27 사용자 요청, 원문 제목 "M25 - Obsidian Workspace
+Integration"): Obsidian을 단순 Markdown 저장소가 아니라 "Task 생성
+→ 문서 생성 → 진행 관리 → 상태 변경"이 Obsidian 안에서 이루어지는
+AI Workspace의 실제 작업 인터페이스로 확장한다.
+
+**Milestone 번호 안내**: 사용자 요청은 이 작업을 "M25"로 지칭했으나,
+그 번호는 이미 완료된 Milestone 25(Production Vault Activation)가
+쓰고 있어 기존 기록을 덮어쓰지 않기 위해 **Milestone 27, M27-T01**
+로 번호를 새로 부여했다(ADR-0037이 M24-T01 충돌 때 Milestone 26으로
+부여한 것과 동일한 패턴). Git 브랜치명(`claude/m25-obsidian-workspace-
+c6hudf`)과 PR 제목은 사용자 요청 원문 그대로 "M25" 표기를 유지한다.
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M27-T01 | Task/Daily/Decision/Project Workspace Template 정의 + Frontmatter/Tag/Wiki Link 규칙 확장 + Task Vault 저장 자동화(`VaultDocumentKind.TASK`) | **완료** |
+
+### M27-T01: Obsidian Workspace Templates
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Workspace(Project) Template 정의(README/Tasks/Notes/Meetings/Decisions/Archive) | ✅ (`Template - Project Workspace.md` 신규, 설계만 — 이 Vault가 단일 Project라 인스턴스화하지 않음, YAGNI) |
+| 2 | Task Template 정의(Status/Priority/Milestone/Owner/Created/Updated/Checklist/Notes/Related Documents/Decision) | ✅ (`Template - Task.md` 신규 + `vault/markdown_generator.py`의 `render_task_file()`로 코드 생성 자동화) |
+| 3 | Daily Note Template 정의(오늘 작업/진행중/완료/문제/결정사항/내일 계획) | ✅ (`Template - Daily.md` + `render_daily_file()` 확장) |
+| 4 | Decision Template 정의(Problem/Options/Decision/Reason/Impact), ADR과 별도 유지 | ✅ (`Template - Decision.md` 갱신, `DECISION_TEMPLATE.md`(GitHub 원문용)는 무변경) |
+| 5 | Wiki Link 규칙 정의 | ✅ (`AI_RULES`의 기존 Backlink Rule 재확인, 신규 문서에도 그대로 적용 — 변경 없음) |
+| 6 | Tag 규칙 정의 | ✅ (`AI_RULES` Tag Rule에 `#task`/`#meeting`/`#bug`/`#feature`/`#research`/`#daily` 추가) |
+| 7 | Frontmatter 규칙 정의 | ✅ (`AI_RULES`에 신규 Frontmatter Rule 절 — 상태를 갖는 문서는 `type`/`status`/`priority`/`milestone`/`created`/`updated`) |
+| 8 | README/RULES/ARCHITECTURE/ROADMAP 갱신, 필요 시 ADR 작성 | ✅ (ADR-0038, `docs/ARCHITECTURE.md` §3.21 갱신, `docs/ROADMAP.md`/`.ai/RULES.md`(§9)/README.md 반영) |
+| 9 | Template 생성이 정상 동작하는지 테스트 | ✅ (`tests/vault/` 신규 6개: `render_task_file` 정상/필드 누락 에러, Router TASK 라우팅/`task_id` 누락 에러, `VaultSaveEngine` TASK 저장, Daily 확장 섹션 검증) |
+| 10 | 기존 Architecture 변경 없이 Workspace 확장 수준 유지 | ✅ (새 Interface 없음, 기존 4단계 Save Flow(Router→Generator→Writer→Engine) 그대로, `DAILY`가 이미 확립한 create 패턴 재사용) |
+
+**구현 내용**
+
+- `vault/models.py`: `VaultDocumentKind.TASK` 신규(create 방식,
+  `DECISION`과 달리 Index에 append하지 않음).
+- `vault/mapping.py`: `14 Tasks` 디렉터리 신설(`VAULT_CONTENT_
+  DIRECTORIES` 15종→16종) + `VAULT_DIRECTORY_MAP[TASK]` = `"14
+  Tasks/{task_id}.md"`(create).
+- `vault/router.py`: `TASK`의 `task_id` 치환 처리(`DAILY`의 날짜
+  치환과 동일한 패턴), 누락 시 `MissingVaultFieldError`.
+- `vault/markdown_generator.py`: `render_task_file()` 신규(M25
+  요청 Task Template 필드 전부 반영), `render_daily_file()`에
+  진행중/완료/결정사항 섹션 추가(기존 "오늘 결정" 정리).
+- `vault/engine.py`: `VaultSaveEngine.save()`가 `TASK` create를
+  `render_task_file()`로 라우팅.
+- `14 Tasks/README.md`(신규), `99 Templates/Template - Task.md`
+  (신규), `99 Templates/Template - Project Workspace.md`(신규,
+  설계만), `99 Templates/Template - Daily.md`/`Template -
+  Decision.md`(갱신), `00 System/AI_RULES.md`(Tag Rule 확장 +
+  Frontmatter Rule 신설), `00 System/PROJECT_INDEX.md`(Template
+  Index/Retrieval 표에 Task/Project Workspace 행 추가).
+- Vault `03 ADR/ADR Index.md`/`11 Milestones/Milestones Index.md`/
+  `02 Architecture/Architecture Overview.md`에 ADR-0038/Milestone
+  27 요약 반영.
+
+**검증**
+
+- `poetry run ruff check src tests` 클린, `poetry run mypy src`
+  클린(기존에 존재하던 `types-PyYAML` 미설치 경고 2건 제외, 이번
+  변경과 무관).
+- `poetry run pytest`: `tests/vault/` 신규 6개 포함 전부 통과,
+  `tests/integration/test_m23_vault_environment_integration.py`
+  (Broken Backlink 0건 신규 유지, `14 Tasks/README.md`의
+  `[[Template - Task]]` 링크 포함)/`test_m24_real_vault_e2e.py`
+  전부 통과. 전체 스위트(웹 계층의 `httpx`/`starlette` 환경 의존성
+  이슈 제외, 이번 변경과 무관) 806개 통과.
+
+**Milestone 27(Obsidian Workspace Templates) — Completed.**
+(2026-07-27, ADR-0038)
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

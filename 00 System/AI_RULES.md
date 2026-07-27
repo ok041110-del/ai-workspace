@@ -58,10 +58,42 @@ tags: [system]
 #api
 #milestone
 #system
+#daily
+#task
+#meeting
+#bug
+#feature
+#research
 ```
 
 한 문서에 여러 태그를 붙여도 된다(예: Dashboard API 문서는
-`#dashboard #api`).
+`#dashboard #api`). `#task`/`#meeting`/`#bug`/`#feature`/`#research`
+는 Milestone 27(Obsidian Workspace Templates)에서 추가됐다 —
+`#task`는 [[Template - Task]]/`14 Tasks/`의 개별 Task 문서,
+`#meeting`은 회의록([[Template - Project Workspace]]의 `Meetings/`
+참고), `#bug`/`#feature`/`#research`는 Task/Note 성격 구분용
+보조 태그로, 아직 전용 Index/디렉터리는 없다(필요해지면 신설).
+
+## Frontmatter Rule
+
+모든 문서는 YAML frontmatter로 시작한다(최소 `tags`). Task/
+Decision처럼 상태를 갖는 문서는 아래 필드를 추가한다.
+
+```yaml
+---
+type: task        # 또는 decision 등 문서 종류
+status: in-progress
+priority: high
+milestone: M27
+created: 2026-07-27
+updated: 2026-07-27
+---
+```
+
+`type`은 kind를 코드로 다루는 [[Architecture Overview]]의
+`VaultDocumentKind`와 대응한다. Daily Note처럼 상태 개념이 없는
+문서는 `tags`만으로 충분하다(`type` 필드를 강제하지 않는다) —
+과도한 스키마를 모든 문서에 강제하지 않는다(YAGNI).
 
 ## GitHub Link Rule
 
@@ -119,6 +151,8 @@ Vault 문서를 읽고도 판단이 서지 않으면(예: 정확한 필드명, �
 - [[PROJECT_INDEX]]
 - [[PROMPT_PROFILE]]
 - [[AI_CONTEXT]]
+- [[Template - Task]]
+- [[Template - Project Workspace]]
 - [[Overview]]
 
 ## 원문

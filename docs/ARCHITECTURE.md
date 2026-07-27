@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.32.0 |
+| 문서 버전 | v0.33.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. **Milestone 26(Obsidian Vault Root Refactoring) — ADR-0037: Obsidian Vault Root가 이 저장소 root로 승격됨**(Vault == Repository Root, `Vault/01 Projects/AI Workspace/` 15개 디렉터리를 `git mv`로 저장소 root에 이동, PARA 뼈대 제거). 새 Interface 없이 27종 유지) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). **Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — ADR-0038: `VaultDocumentKind.TASK` 신규(개별 Task 문서), Daily/Decision Template 확장, Project Workspace Template 정의(설계만)**. 새 Interface 없이 27종 유지) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -999,6 +999,35 @@ GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
   fixture를 새 스캔 범위에 맞춰 조정) 전부 통과, `tests/integration/
   test_m23_vault_environment_integration.py`/`test_m24_real_vault_e2e.py`
   는 저장소 root를 직접 Vault Root로 사용하도록 갱신.
+
+- **구현 상태(Milestone 27, ADR-0038, Obsidian Workspace
+  Templates — 사용자 요청 "M25 - Obsidian Workspace Integration")**:
+  Obsidian을 "Task 생성 → 문서 생성 → 진행 관리 → 상태 변경"이
+  Obsidian 안에서 이뤄지는 Workspace로 확장했다. `vault/models.py`
+  에 `VaultDocumentKind.TASK` 신규(`DAILY`와 같은 create 방식,
+  대상 파일은 `fields["task_id"]` 기준), `vault/mapping.py`에
+  `14 Tasks` 디렉터리 + `"14 Tasks/{task_id}.md"` 매핑 추가(
+  `VAULT_CONTENT_DIRECTORIES` 15종 → 16종), `vault/router.py`가
+  `task_id` 치환을 처리(누락 시 `MissingVaultFieldError`),
+  `vault/markdown_generator.py`에 `render_task_file()` 신규
+  (frontmatter `tags`/`type`/`status`/`priority`/`milestone`/
+  `owner`/`created`/`updated` + Status/Priority/Milestone/Owner/
+  Created/Updated/Checklist/Notes/Related Documents/Decision
+  섹션), `render_daily_file()`에 진행중/완료/결정사항 구분 추가.
+  `99 Templates/Template - Task.md`/`Template - Project
+  Workspace.md`(신규), `Template - Daily.md`/`Template -
+  Decision.md`(갱신). `AI_RULES`에 `#task`/`#meeting`/`#bug`/
+  `#feature`/`#research`/`#daily` Tag 추가 + 신규 Frontmatter Rule
+  절(`type`/`status`/`priority`/`milestone`/`created`/`updated`).
+  Workspace(다중 Project 폴더) Template은 이 Vault가 아직 단일
+  Project라 지금 인스턴스화하지 않고 `Template - Project
+  Workspace.md`에 설계만 남긴다(YAGNI). `tests/vault/` 신규 6개
+  (`render_task_file`/Router TASK 라우팅/`VaultSaveEngine` TASK
+  저장 + Daily 확장 섹션) 전부 통과, 기존 테스트 무변경 통과. 새
+  Interface 없음(27종 그대로) — `vault/`는 Interface 계층이 아니라
+  데이터/함수 계층(ADR-0035)이라는 성격을 유지한다.
+
+**Milestone 27(Obsidian Workspace Templates) 완료.**
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 

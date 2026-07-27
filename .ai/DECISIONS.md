@@ -1974,3 +1974,99 @@
   environment_integration.py`/`test_m24_real_vault_e2e.py`가
   저장소 root를 직접 Vault Root로 쓰도록 갱신. 새 Interface 없음
   (27종 그대로).
+
+## ADR-0038: Obsidian Workspace Templates 도입 — `VaultDocumentKind.TASK` 신규(개별 Task 문서), Frontmatter/Tag Rule 확장, Project Workspace Template 정의(설계만) (Milestone 27, M25 요청)
+
+- 상태: 승인됨 (2026-07-27, 사용자 요청 "M25 - Obsidian Workspace
+  Integration" 반영)
+- 날짜: 2026-07-27
+- **Milestone 번호 안내**: 사용자 요청 프롬프트는 이 작업을 "M25"로
+  지칭했으나, 그 번호는 이미 완료된 Milestone 25(Production Vault
+  Activation)가 쓰고 있어 기존 기록을 덮어쓰지 않기 위해
+  **Milestone 27**로 새로 번호를 부여했다(ADR-0037이 M24-T01
+  충돌에서 Milestone 26을 부여한 것과 동일한 패턴, 투명하게 기록).
+  Git 브랜치명/PR 제목 등 외부에 이미 고정된 문자열은 그대로 "M25"
+  표기를 유지한다.
+- 배경: Obsidian을 단순 문서 저장소가 아니라 "Task 생성 → 문서
+  생성 → 진행 관리 → 상태 변경"이 Obsidian 안에서 이루어지는
+  Workspace UI로 확장하고 싶다는 요청. Vault Integration Layer
+  (ADR-0035)는 이미 12개 kind → Index 파일 append/Daily 파일
+  create 매핑을 갖고 있었지만, Task는 전용 kind가 없어 GitHub
+  `.ai/TASKS.md` 표 행으로만 존재했고 Obsidian 안에서 상태를 보고
+  갱신할 방법이 없었다. Decision/Daily Template도 이번 요청이
+  요구하는 필드(Problem/Options/Decision/Reason/Impact,
+  진행중/완료 구분)를 전부 갖추고 있지는 않았다.
+- 결정:
+  1. `vault/models.py`의 `VaultDocumentKind`에 `TASK`를 추가한다.
+     `DECISION`처럼 Index에 append하지 않고 `DAILY`처럼 파일 1개를
+     통째로 생성한다(create 방식) — 대상 파일은 날짜가 아니라
+     `request.fields["task_id"]` 기준.
+  2. `vault/mapping.py`에 새 콘텐츠 디렉터리 `14 Tasks`를 추가하고
+     `VAULT_DIRECTORY_MAP[TASK]`를 `"14 Tasks/{task_id}.md"`(create)
+     로 매핑한다. `VAULT_CONTENT_DIRECTORIES`(기존 15종 → 16종)에도
+     포함시켜 `validation.py`/`sync.py`의 Backlink/Tag 스캔 대상이
+     되게 한다.
+  3. `vault/router.py`가 `DAILY`의 날짜 치환과 같은 방식으로
+     `TASK`의 `task_id` 치환을 처리한다 — `fields`에 `task_id`가
+     없으면 `MissingVaultFieldError`.
+  4. `vault/markdown_generator.py`에 `render_task_file()`을 추가한다
+     — frontmatter(`tags: [task]`, `type: task`, `status`,
+     `priority`, `milestone`, `owner`, `created`, `updated`) +
+     Status/Priority/Milestone/Owner/Created/Updated/Checklist/
+     Notes/Related Documents/Decision 섹션(M25 요청 원문 그대로).
+     `vault/engine.py`의 `VaultSaveEngine.save()`가 `TASK` create를
+     이 함수로 라우팅한다.
+  5. `render_daily_file()`을 확장해 "오늘 작업"/"진행중"/"완료"/
+     "문제"/"결정사항"/"내일 계획"(M25 요청 Daily Note Template)을
+     전부 반영한다 — 기존 "오늘 결정"을 "결정사항"으로 정리하고
+     "진행중"/"완료"를 분리했다. `99 Templates/Template - Daily.md`
+     도 동일하게 갱신해 코드-문서 1:1 대응(`render_daily_file()`
+     docstring이 이미 주장하던 관계)을 유지한다.
+  6. `99 Templates/Template - Decision.md`에 M25 요청 Decision
+     Template 필드(Problem/Options/Decision/Reason/Impact)를
+     반영하고 frontmatter에 `type`/`milestone`/`created`/`updated`
+     를 추가한다. 기존 GitHub 원문용 `DECISION_TEMPLATE.md`(가벼운
+     판단 기록 절차)는 바꾸지 않는다 — 둘의 역할 분리(ADR-0035
+     이전부터 유지된 관행)를 그대로 존중한다.
+  7. `AI_RULES`의 Tag Rule에 `#task`/`#meeting`/`#bug`/`#feature`/
+     `#research`/`#daily`를 추가하고, 새 **Frontmatter Rule** 절을
+     신설해 "상태를 갖는 문서는 `type`/`status`/`priority`/
+     `milestone`/`created`/`updated`를 frontmatter에 추가한다"는
+     규칙을 명문화한다. Backlink Rule(Wiki Link)은 기존 규칙을
+     그대로 재확인(변경 없음, 이미 M25 요청을 만족).
+  8. **Workspace Template(다중 Project 폴더 구조)은 설계만 하고
+     지금 인스턴스화하지 않는다** — `99 Templates/Template -
+     Project Workspace.md`(신규)에 `Projects/<이름>/README.md,
+     Tasks/, Notes/, Meetings/, Decisions/, Archive/` 표준 구조와
+     이 Vault(단일 Project)의 현재 디렉터리 대응표를 문서화한다.
+     이 Vault는 아직 Project 1개(자기 자신)만 다루고
+     `ProjectRepository`(`storage/file_project_repository.py`)가
+     Vault와 실제로 연결돼 있지 않으므로, 지금 `Projects/` 폴더를
+     만드는 것은 추측성 구조 생성이다(YAGNI, `.ai/RULES.md` §4.2).
+- 대안:
+  - Task도 `DECISION`처럼 `11 Milestones/Milestones Index.md`에
+    한 줄만 append — 기각. M25 요청의 핵심("Task 상태를 Obsidian
+    안에서 관리")은 Task 1건당 문서가 있어야 Checklist/Status를
+    개별적으로 갱신할 수 있다.
+  - Workspace Template을 지금 `Projects/AI Workspace/` 폴더로
+    실제 이동/생성 — 기각. Milestone 26(ADR-0037)이 정확히 반대
+    방향(다중 프로젝트 PARA 구조 제거, Vault == Repository Root)
+    으로 리팩토링한 직후이므로, 다시 다중 프로젝트 중첩 구조를
+    지금 도입하는 것은 그 결정을 무근거로 되돌리는 것이다.
+- 이유: ADR-0035의 kind→매핑 설계(코드가 아니라 데이터)와
+  ADR-0037의 `VAULT_CONTENT_DIRECTORIES` 분리 덕분에, `TASK`
+  kind 추가가 `DAILY`가 이미 확립한 "create + 동적 파일명" 패턴을
+  그대로 재사용하는 것으로 끝났다 — 새 Interface나 새 Save Flow
+  단계 없이 기존 4단계(Router→Generator→Writer→Engine)에 값 하나만
+  더한 확장.
+- 결과/영향: `vault/models.py`/`mapping.py`/`router.py`/
+  `markdown_generator.py`/`engine.py` 수정, `14 Tasks/`(신규
+  디렉터리 + README.md), `99 Templates/Template - Task.md`/
+  `Template - Project Workspace.md`(신규), `Template - Daily.md`/
+  `Template - Decision.md`(갱신), `AI_RULES`/`PROJECT_INDEX` 갱신.
+  `tests/vault/`(신규 6개 — `render_task_file`/Router TASK 라우팅/
+  `VaultSaveEngine` TASK 저장 + Daily 확장 섹션 검증), 기존
+  전부 무변경 통과. `docs/ARCHITECTURE.md` §3.21, `docs/ROADMAP.md`,
+  `.ai/RULES.md`에 반영. 새 Interface 없음(27종 그대로) —
+  `vault/`는 애초에 Interface 계층이 아니라 데이터/함수 계층
+  (ADR-0035)이므로 이 확장도 그 성격을 유지한다.
