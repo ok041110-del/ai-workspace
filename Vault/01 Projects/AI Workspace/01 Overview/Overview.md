@@ -19,16 +19,17 @@ AI Workspace 자체는 코드를 작성하지 않는다 — 역할을 가진 Age
 
 | 저장소 | 역할 | 상태 |
 |---|---|---|
-| `ok041110-del/ai-workspace` | Python 백엔드(Server/Dashboard/Automation/Production) | 진행 중 |
+| `ok041110-del/ai-workspace` | Python 백엔드(Server/Dashboard/Automation/Production), Mobile Client는 포함하지 않음(2026-07-27 확정) | 진행 중 |
 | (이 Vault) | Knowledge Base(Obsidian) | 이 저장소 내 `Vault/`로 체크인 |
-| iOS 앱 | Mobile Experience(M23) | 미착수 — [[iOS Design]] 참고 |
-| Android 앱 | Mobile Experience(M23) | 미착수 — [[Android Placeholder]] 참고 |
+| iOS/Android 앱(별도 저장소, 이름 미정) | Mobile Experience Client(Milestone 번호 미정 — M23이 아님, 아래 참고) — Server와 분리된 저장소(2026-07-27 확정) | 미생성 — [[iOS Design]]/[[Android Placeholder]] 참고 |
 
 ## 현재 진행률
 
-- **Milestone 1~22 완료**(2026-07-27 기준).
-- **Milestone 23(Mobile Experience)**: 착수 전. 지식 허브를 먼저
-  구축하는 **M23-Preparation** 진행 중(이 Vault 자체가 그 산출물).
+- **Milestone 1~23 완료**(2026-07-27 기준). Milestone 23(Obsidian
+  Integration & Auto Save)이 GitHub↔Vault 자동 저장 구조
+  (`src/ai_workspace/vault/`)를 완성했다. 이전에 M23이 다루던
+  Mobile Experience는 별도 Milestone(번호 미정)으로 이월됨(Start
+  Criteria 3개 결정은 유효, [[Decisions Index]] 참고).
 - 상세 목록은 [[Milestones Index]] 참고.
 
 ## Backend 상태
@@ -40,19 +41,23 @@ Web API)가 분리돼 있다. Interface(추상 계약) 총 **27종**. 상세는
 
 ## Mobile 계획
 
-M23에서 iOS(Widget/Live Activity/Push Notification)와 Android를
+별도 Milestone(번호 미정, M23에서 이월 — [[Decisions Index]]
+참고)에서 iOS(Widget/Live Activity/Push Notification)와 Android를
 다룰 예정이다. 서버가 이미 제공하는 REST API(`/api/dashboard`,
 `/api/automation`, `/api/health`, `/api/status` 등)를 그대로
 소비하는 Client로 설계한다 — 서버 쪽에 Mobile 전용 로직을 추가하지
 않는다(M22 Production Platform이 이미 `uptime`/`started_at`/
-`version`/`health_status` 표준 필드를 M23 재사용을 염두에 두고
+`version`/`health_status` 표준 필드를 재사용을 염두에 두고
 설계함). 상세는 [[iOS Design]], [[Android Placeholder]] 참고.
 
 ## 현재 Milestone
 
-**M23-Preparation** — Obsidian Knowledge Base 구축(이 Vault).
-Task 진행 상태는 GitHub `.ai/TASKS.md`의 "M23-Preparation" 절
-참고.
+**Milestone 23 — Obsidian Integration & Auto Save: 전체 완료**
+(T01~T07, 2026-07-27). GitHub↔Vault 자동 저장 구조(`src/
+ai_workspace/vault/`)가 실제 환경에서 검증까지 끝났다. 다음
+Milestone은 아직 미정 — 원 M23이 다루던 Mobile Experience 이월분
+([[Decisions Index]] 참고) 또는 새 지시 대기. Task 진행 상태는
+GitHub `.ai/TASKS.md`의 "Milestone 23" 절 참고.
 
 ## 관련 문서
 

@@ -73,9 +73,16 @@ Reader를 참조하는 것은 CQRS 위반이 아니다** — `DashboardService`�
 ## Interface 개수
 
 **총 27종**(2026-07-27 기준, ADR-0034 시점). Milestone 21에서
-`AutomationRepository`가 27번째로 추가된 뒤 Milestone 22는 새
-Interface를 추가하지 않았다. 전체 목록은 GitHub `docs/
+`AutomationRepository`가 27번째로 추가된 뒤 Milestone 22·23(T02)
+모두 새 Interface를 추가하지 않았다. 전체 목록은 GitHub `docs/
 ARCHITECTURE.md` §7 참고.
+
+## Vault Integration Layer(Milestone 23, ADR-0035, 설계만)
+
+Core Domain·`web/` 양쪽 모두 모르는 독립 계층 `vault/`가 GitHub
+원문과 이 Vault 사이의 문서 동기화(Markdown 생성/저장)를
+자동화한다. 아직 미구현이며, 설계 상세는
+[[Vault Integration Architecture]] 참고.
 
 ## 관련 문서
 
@@ -86,6 +93,7 @@ ARCHITECTURE.md` §7 참고.
 - [[Automation Index]]
 - [[Production Index]]
 - [[Architecture Map]]
+- [[Vault Integration Architecture]]
 
 ## 원문
 

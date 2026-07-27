@@ -52,6 +52,19 @@ Rules가 원칙이고, 이 문서는 그 원칙을 반복 작업 유형별 짧�
 (공백, `-`)는 그 결과를 Vault Index에 요약으로 **등록**할 때
 쓰는 용도다. 둘은 역할이 다르며 서로 대체하지 않는다.
 
+## Reading Profile 연계
+
+패턴별 짧은 프롬프트 예시는 "무엇을 요청할지"를 정한다. 요청을
+받은 AI가 "구체적으로 어떤 문서를 어떤 순서로 읽을지"는
+[[READING_PROFILES]]가 작업 유형별로(Architecture Design/Feature
+Design/API Design/Backend·Frontend·Mobile Implementation/Dashboard·
+Automation Development/ADR·Decision 작성/Bug Fix/Refactoring/
+Documentation/Milestone Planning/Daily 기록) 필수/선택/제외 문서로
+미리 정해 둔다. 프롬프트에 "[[READING_PROFILES]]의 <Profile 이름>
+기준으로"라고만 덧붙이면 위 표의 예시 프롬프트에 Retrieval 범위까지
+명시적으로 고정할 수 있다(예: "[[READING_PROFILES]]의 Bug Fix
+기준으로 <증상> 원인 파악해줘").
+
 ## Execution Profile 연계
 
 이 문서가 다루는 "어떻게 짧게 물어볼지"는 요청 단계까지다. 요청을
@@ -75,6 +88,7 @@ Selection → 구현 → 문서 갱신 → 검증 → 보고)는 [[EXECUTION_PRO
 - [[AI_RULES]]
 - [[DESIGN_TEMPLATE]]
 - [[EXECUTION_PROFILE]]
+- [[READING_PROFILES]]
 
 ## 원문
 

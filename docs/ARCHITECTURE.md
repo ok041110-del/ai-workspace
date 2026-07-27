@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.24.0 |
+| 문서 버전 | v0.31.0 |
 | 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~21 완료, Milestone 22 완료 — ADR-0034로 신규 §3.20 Production Platform 도입. 새 Interface 없이 27종 유지 — `ProductionConfig`/`LifecycleManager`/`HealthMonitor`는 전부 구체 클래스) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed(T01~T07 + Verification). **Milestone 24(Real Obsidian Vault Integration) 진행 중** — ADR-0036으로 §3.21 Vault Integration Layer에 Connection/Filesystem Adapter/Atomic Write 추가, Auto Save Validation을 Incremental로 전환. 새 Interface 없이 27종 유지) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -872,6 +872,110 @@ Configuration      Lifecycle Manager      Health Monitor
   FastAPI/uvicorn을 모른다 — 실제 라우트는 `web/production_routes.py`
   에서만 조립한다(ADR-0034).
 
+### 3.21 Vault Integration Layer (Milestone 23, ADR-0035, M23-T02 설계 + M23-T03 구현)
+
+Obsidian Vault(`Vault/`)로의 문서 저장을 자동화하는 계층. **Core
+Domain·`web/` 양쪽 모두 이 계층을 모르고, 이 계층도 Core Domain에
+의존하지 않는다** — Production Platform(§3.20)이 지킨 "위 계층이
+아래 계층을 모른다"는 원칙과 반대 방향으로 완전히 독립된, AI
+Workspace 개발 과정을 돕는 도구 계층이다(제품 기능이 아님).
+
+```text
+GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
+             docs/ARCHITECTURE.md, docs/ROADMAP.md)
+        │  구조화 입력(kind, title, summary, related_docs, source_paths)
+        ▼
+  Document Router  ──►  Vault Directory Mapping(kind → 대상 파일)
+        │
+        ▼
+  Markdown Generator  ──►  99 Templates/의 해당 Template로 렌더링
+        │
+        ▼
+  Vault Writer  ──►  File Creator(신규) / File Updater(기존 파일의
+                      대상 섹션만 치환, 전체 재작성 금지)
+        │
+        ▼
+        Vault/ (git-tracked Markdown)
+```
+
+- **패키지 위치**: `vault/`(신규, `storage/`와 나란히 존재하되
+  대상이 다름 — `storage/`는 도메인 객체 JSON 영속성, `vault/`는
+  Task/ADR/Decision/Design/Implementation/API 등 산출물의 Markdown
+  동기화).
+- **Vault Directory Mapping**: `AI_RULES`의 Tag Rule 11종과 1:1
+  대응하는 kind→디렉터리 고정 매핑(코드가 아니라 데이터). 상세
+  매핑표는 ADR-0035 참고.
+- **File Strategy**: 신규 문서는 전체 생성, 기존 Index 문서는
+  대상 섹션만 치환 — 과거 수작업으로 채운 내용을 보존한다. 내용이
+  실제로 바뀔 때만 파일을 쓴다.
+- **구현 상태(M23-T03)**: `vault/models.py`(`VaultDocumentKind`/
+  `VaultDocumentRequest`), `vault/mapping.py`(`VAULT_DIRECTORY_MAP`),
+  `vault/router.py`(`DocumentRouter`), `vault/markdown_generator.py`
+  (`render_section`/`render_daily_file`), `vault/writer.py`
+  (`VaultWriter` — 신규 파일 생성/기존 섹션 upsert), `vault/
+  engine.py`(`VaultSaveEngine`, Save Flow 전체를 잇는 진입점)로
+  구현 완료.
+- **구현 상태(M23-T04, Auto Save Workflow)**: `vault/validation.py`
+  (`find_broken_backlinks`/`find_missing_tags` — AI_RULES의 Backlink
+  Rule/Tag Rule을 코드로 확인), `vault/auto_save.py`(`run_auto_save`
+  — 여러 `VaultDocumentRequest`를 저장하고 Vault 전체 Backlink +
+  새로 만든 파일의 Tag를 검증해 `AutoSaveReport`(저장/미변경/
+  Validation 실패 목록 + `summary()` 완료 보고 문구)를 돌려줌)로
+  구현 완료. `pytest` 27개(T03 18 + T04 9), `ruff`/`mypy` 클린.
+- **구현 상태(M23-T05, Vault Synchronization)**: `vault/sync.py`
+  — `rename_document()`(파일명 변경 + Vault 전체 Backlink `[[..]]`/
+  `[[..|별칭]]`/`[[..#절]]` 일괄 갱신), `delete_document()`(다른
+  문서가 아직 참조 중이면 기본적으로 거부, `force=True`일 때만
+  삭제 — Orphan Backlink 방지), `content_hash()`+`VaultWriter.
+  upsert_section(expected_hash=...)`(Conflict Handling — 저장
+  시점 사이 파일이 바뀌면 `VaultConflictError`로 실패, 조용히
+  덮어쓰지 않음). **Version Strategy**: 별도 버전 관리 시스템을
+  새로 만들지 않고 `Vault/`가 이미 git으로 버전 관리되는 사실을
+  그대로 쓰기로 결정(최소 복잡성 원칙). Link/Backlink Validation은
+  M23-T04의 `find_broken_backlinks()`를 그대로 재사용.
+- **구현 상태(M23-T06, Execution Engine)**: 새 코드가 아니라
+  절차 문서로 구현 — 자연어 해석은 AI 고유 역할이라 결정적
+  프로그램 대상이 아니다. Vault `EXECUTION_PROFILE`에 "Execution
+  Engine — 자연어 명령 라우팅" 절 추가(흐름도 + 지원 명령 예시
+  표), 5~6단계(Document Update/Validation)가 `vault.auto_save.
+  run_auto_save()`를 구체적으로 가리키도록 갱신.
+- **구현 상태(M23-T07, Execution Environment Integration)**:
+  `tests/integration/test_m23_vault_environment_integration.py`
+  신규 — 이 실행 환경(Claude Code CLI + 로컬 Filesystem)에서
+  실제 `Vault/`에 접근 가능한지, 실제 문서 트리에서
+  `find_broken_backlinks()`가 알려진 프롬프트 예시 텍스트 외에
+  새로운 깨진 링크가 없는지, `run_auto_save()`가 실제 Vault 트리
+  복사본 위에서 저장→검증 왕복에 성공하는지 확인한다. 검증 과정
+  에서 `EXECUTION_PROFILE.md`/`Backend Index.md`에 줄바꿈으로
+  깨진 `[[..]]` 링크 2건(M23 작업 중 도입 1건, 그 이전부터 있던
+  1건)을 실제로 찾아 함께 수정 — 이 계층이 실제로 가치가 있음을
+  증명. Obsidian MCP를 통한 실시간 연동은 범위 밖으로 유지
+  (M23-Prep-T08 Optional, Claude Code 도입 시점으로 이월 유지).
+  GitHub Repository 연동은 M23-T01~T07 매 Task의 커밋·푸시 성공
+  으로 이미 검증됨.
+
+**Milestone 23(Obsidian Integration & Auto Save) 전체 완료
+(T01~T07).**
+
+- **구현 상태(Milestone 24, ADR-0036, Real Obsidian Vault
+  Integration)**: `vault/connection.py`(`resolve_default_vault_root()`
+  로 이 저장소 상위에서 실제 `Vault/01 Projects/AI Workspace`를
+  탐색, `connect()`가 존재/디렉터리/쓰기 권한을 검증해
+  `VaultConnection` 반환 또는 `VaultConnectionError`), `vault/
+  filesystem.py`(`VaultFileSystem` — Create/Read/Update/Delete/
+  Exists/Rename/Move 7개 연산을 명시적으로 노출하는 얇은 Adapter),
+  `vault/atomic.py`(`atomic_write_text()` — 임시 파일 + `os.replace()`
+  로 원자적 저장, `VaultWriter`가 내부적으로 사용). `run_auto_save()`
+  의 Validation을 Vault 전체 스캔에서 **이번 호출이 저장한 파일만
+  검사하는 Incremental 방식**으로 전환(`find_broken_backlinks()`에
+  `only_paths` 파라미터 추가, 생략 시 기존과 동일한 전체 스캔).
+  `run_auto_save_on_default_vault()`(신규)가 `vault_root` 생략 시
+  실제 Vault에 자동 연결한다. `tests/vault/`(Mock/`tmp_path`, 38개)
+  는 전부 무변경 통과, `tests/integration/test_m24_real_vault_e2e.py`
+  (신규, 5개)가 `tmp_path` 없이 이 저장소의 실제 `Vault/`를 대상으로
+  Connect/Create/Update/Rename/Delete/Auto Save 왕복을 검증하고
+  종료 시 스스로 정리한다(기존 문서 영구 변경 없음).
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -1059,6 +1163,16 @@ src/ai_workspace/
 │                       #   구현, Milestone 11)
 ├── storage/           # FileProjectRepository/FileAgentRepository/FileEventStore
 │                       #   (구현됨, T1-23) + FileKnowledgeRepository (Milestone 16)
+├── vault/             # Vault Directory Mapping/Document Router/
+│                       #   Markdown Generator/Vault Writer/
+│                       #   VaultSaveEngine (구현됨, M23-T02/T03,
+│                       #   ADR-0035) + validation.py/auto_save.py
+│                       #   (Auto Save Workflow, M23-T04) +
+│                       #   sync.py(Rename/Delete/Conflict, M23-T05)
+│                       #   + connection.py/filesystem.py/atomic.py
+│                       #   (Real Vault Connection/Adapter/Atomic
+│                       #   Write, M24, ADR-0036)
+│                       #   — Core Domain·web/을 모두 모름, Milestone 23~24
 ├── web/               # Infrastructure 계층 — FastAPI/uvicorn을 아는 유일한 곳
 │                       #   (Milestone 20): dashboard_viewmodel.py, routes.py,
 │                       #   dashboard_broadcaster.py, app.py, server.py,

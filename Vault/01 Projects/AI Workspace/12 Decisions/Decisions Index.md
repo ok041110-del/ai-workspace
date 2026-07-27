@@ -35,13 +35,17 @@ tags: [decision]
   독립적으로 테스트·재사용 가능해야 한다는 원칙(M20 kickoff 때부터
   일관 적용). [[Backend Index]] 참고.
 
-## 왜 Server와 iOS를 분리했는가(또는 분리할지)
+## 왜 Server와 iOS/Android를 분리했는가
 
-- Status: **미정**
+- Status: 확정(2026-07-27, Mobile Experience Start Criteria — 결정 당시 M23, 이후 M23은 "Obsidian Integration & Auto Save"로 재정의됨)
 - 질문: iOS/Android 앱 코드를 이 저장소(`ok041110-del/ai-workspace`)
   안에 둘지, 별도 저장소로 분리할지?
-- 현재 상태: M23 착수 전이라 아직 결정되지 않음. [[iOS Design]]의
-  "미결정 사항" 절에 동일 질문 기록. M23 kickoff 시 확정 예정.
+- 답: Client 코드는 별도 저장소로 분리한다. 이 저장소
+  (`ok041110-del/ai-workspace`)는 Server(API)까지만 담당하고 Mobile
+  Client(iOS/Android)는 포함하지 않는다. Push는 이 저장소의 Server가
+  생성·관리하되, 실제 전송은 FCM/APNs를 통해 수행한다(별도 Push
+  서비스가 아니라 외부 발송 채널만 이용). [[iOS Design]]/
+  [[PREPARATION_SUMMARY]]의 "Mobile Experience Start Criteria" 참고.
 
 ## 관련 문서
 

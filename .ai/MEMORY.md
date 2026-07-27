@@ -1043,3 +1043,219 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   (동시성 경쟁 조건)·M9-T03(세션 리셋)·M10-T02/T03(run_parallel 개별
   실패 격리+재시도, M4-T06 이월 부채)·M14(Model 라우팅)은 해소되어
   더 이상 부채 목록에 없다.
+- **M23-T01 완료: Reading Profiles(2026-07-27)**. M23-Preparation
+  (T01A~T01D)에서 도입한 Retrieval First/Minimum Retrieval/Short
+  Prompt Workflow/Template First/Standard Execution Workflow
+  원칙을 15개 작업 유형(Architecture Design/Feature Design/API
+  Design/Backend·Frontend·Mobile Implementation/Dashboard·
+  Automation Development/ADR·Decision 작성/Bug Fix/Refactoring/
+  Documentation/Milestone Planning/Daily 기록)별 표준 Reading
+  Profile로 세분화. Vault `00 System/READING_PROFILES.md` 신규 —
+  각 Profile은 목적/필수 문서/선택 문서/읽지 않는 문서/쓸 Template/
+  예상 Retrieval 순서/예상 출력 문서 7항목 고정. `PROJECT_INDEX`
+  (Reading Profiles Index 절)/`EXECUTION_PROFILE`(Context
+  Retrieval·Template Selection 단계에 적용 절차)/`PROMPT_PROFILE`
+  (Reading Profile 연계 절)에 연결해 기존 Router/Standard Workflow
+  체계와 일관되게 유지. Milestone 23(Mobile Experience) 본 기능
+  착수는 여전히 대기 상태(PREPARATION_SUMMARY의 Start Criteria
+  1~3 미해결) — 이번 Task는 그 착수 전 Retrieval 기반을 한 단계
+  더 다진 것.
+- **M23 Start Criteria 5개 전 항목 확정(2026-07-27, 사용자 결정)**:
+  (1) Client(iOS/Android) 코드는 이 저장소(`ok041110-del/
+  ai-workspace`)와 분리된 별도 저장소로 구성한다(저장소 자체는
+  아직 미생성). (2) 이 저장소는 Server(API)까지만 담당하고 Mobile
+  Client는 포함하지 않는다. (3) Push는 이 저장소의 Server가
+  생성·관리하고, 실제 전송은 FCM/APNs를 이용한다(별도 Push 서비스
+  아님). Vault `Decisions Index`("왜 Server와 iOS/Android를
+  분리했는가")와 `iOS Design`/`PREPARATION_SUMMARY`에 반영.
+  `.ai/TASKS.md`에 "Milestone 23 — Mobile Experience" 절 신설,
+  이 저장소(Server) 쪽 제안 Task List(M23-T02 Push 아키텍처 설계
+  ~ M23-T05 Push 등록 API)를 승인 대기 상태로 기록. Client 저장소
+  생성 자체는 별도 명시적 승인이 필요함을 명시(Task List 승인과
+  분리).
+- **Milestone 23이 "Mobile Experience"에서 "Obsidian Integration &
+  Auto Save"로 재정의됨(2026-07-27, 사용자 지시)**. 구 M23-T02~T05
+  (Push Notification 아키텍처/구현) 제안은 별도 Milestone(번호
+  미정)으로 이월하되, 그때 확정했던 M23 Start Criteria 3개 결정
+  (Client 별도 저장소/이 저장소는 Server API까지만/Push는 이
+  저장소 Server가 생성·관리하고 FCM·APNs로 전송)은 그대로 유효하게
+  유지한다. 새 M23 Task List: T01(Reading Profiles, 완료) → T02
+  (Obsidian Integration Architecture, 완료) → T03(Vault Save
+  Engine) → T04(Auto Save Workflow) → T05(Vault Synchronization)
+  → T06(Execution Engine, 자연어 명령 라우팅) → T07(Execution
+  Environment Integration). **M23-T02 완료**: ADR-0035로 신규
+  `vault/` 패키지를 설계 — `storage/`와 나란한 최상위 패키지지만
+  Core Domain·`web/` 양쪽 모두 이 계층을 모르는 완전 독립 계층으로
+  결정(Production Platform이 지킨 "위 계층이 아래를 모른다" 원칙을
+  반대 방향으로도 적용 — 이 계층은 AI Workspace 제품 기능이 아니라
+  개발 도구). 새 Core Interface는 추가하지 않음(27종 유지). Vault
+  Directory Mapping 13종(kind→대상 Vault 파일, Tag Rule 11종과
+  1:1), 4단계 Save Flow(구조화 입력→Document Router→Markdown
+  Generator→Vault Writer), File Strategy(신규 생성 vs 기존 문서
+  대상 섹션만 치환, 실제 변경 시에만 저장)를 결정. 실제 코드
+  구현은 없음(설계 전용 Task) — 구현은 M23-T03부터. `docs/
+  ARCHITECTURE.md` v0.25.0 §3.21 신규, Vault `Vault Integration
+  Architecture.md` 신규.
+- **M23-T03 완료: Vault Save Engine(2026-07-27)**. ADR-0035의
+  설계를 그대로 `src/ai_workspace/vault/` 코드로 구현 — `models.py`
+  (`VaultDocumentKind`/`VaultDocumentRequest`), `mapping.py`
+  (`VAULT_DIRECTORY_MAP`), `router.py`(`DocumentRouter`),
+  `markdown_generator.py`(`render_section`/`render_daily_file` —
+  ADR/Decision은 실제 Vault 관행에 맞춘 전용 형식, 나머지는 공통
+  Summary 형식, YAGNI), `writer.py`(`VaultWriter` — 신규 생성은
+  기존 파일을 덮어쓰지 않고, 섹션 upsert는 내용이 실제로 바뀔 때만
+  파일을 쓴다), `engine.py`(`VaultSaveEngine`, Save Flow 전체
+  진입점). `tests/vault/` 18개 신규(교체/신규 삽입/no-op/fallback
+  케이스 포함), `ruff`/`mypy` 클린. Core Domain·`web/` 양쪽 모두
+  이 패키지를 참조하지 않음 확인(ADR-0035의 완전 독립 원칙 유지).
+  **참고**: 이 세션 환경에는 `pyyaml`/`fastapi`/`uvicorn`이 설치돼
+  있지 않아(poetry.lock이 pyproject.toml과 어긋남) 전체 `pytest`/
+  `mypy src`는 기존 Milestone 코드에서도 동일하게 실패한다 — `vault/`
+  와 무관한 사전 존재 환경 제약이며 이번 Task에서 `pyproject.toml`/
+  `poetry.lock`은 건드리지 않았다.
+- **M23-T04 완료: Auto Save Workflow(2026-07-27)**. `vault/
+  validation.py`(`find_broken_backlinks` — Vault 전체 `[[..]]`가
+  실제 파일명을 가리키는지, `find_missing_tags` — 새로 만든 파일의
+  frontmatter `tags` 확인)와 `vault/auto_save.py`(`run_auto_save`
+  — 여러 `VaultDocumentRequest`를 `VaultSaveEngine`으로 저장한 뒤
+  자동으로 Validation을 돌려 `AutoSaveReport`를 만든다.
+  `AutoSaveReport.summary()`가 "저장됨 N개/변경 없음 N개/Validation
+  통과(또는 실패 목록)" 완료 보고 문구를 생성)를 신규 구현.
+  append 모드는 기존 파일의 frontmatter를 건드리지 않으므로 Tag
+  검증은 create 모드(현재는 Daily)로 새로 생성된 파일에만 적용하도록
+  범위를 좁힘(과잉 검증 방지). `tests/vault/` 9개 추가(총 27개),
+  `ruff`/`mypy` 클린.
+- **M23-T05 완료: Vault Synchronization(2026-07-27)**. `vault/
+  sync.py` 신규 — `rename_document()`(파일명 변경 + Vault 전체
+  `[[..]]`/`[[..|별칭]]`/`[[..#절]]` Backlink 일괄 갱신),
+  `delete_document()`(다른 문서가 참조 중이면 기본 거부, `force=
+  True`로만 강제 삭제 — Orphan Backlink 방지), `content_hash()` +
+  `VaultWriter.upsert_section(expected_hash=...)`(Conflict Handling
+  — 저장 시점 사이 파일이 바뀌면 `VaultConflictError`). **Version
+  Strategy는 별도 시스템을 새로 만들지 않고 git 기반 유지로
+  결정**(Vault가 이미 git으로 버전 관리됨, 최소 복잡성 원칙 — 새
+  ADR 불필요, 기존 ADR-0035 연장). Link/Backlink 검증은 M23-T04의
+  `find_broken_backlinks()`를 그대로 재사용(중복 구현 없음).
+  `tests/vault/` 11개 추가(총 38개), `ruff`/`mypy` 클린.
+- **M23-T06 완료: Execution Engine(2026-07-27)**. 자연어 명령
+  해석은 AI(이 세션) 고유의 역할이라 정규식/키워드 매칭식 "명령
+  파서"를 코드로 만들지 않기로 판단(만들어도 아무도 호출하지 않는
+  죽은 코드가 됨) — 대신 Vault `EXECUTION_PROFILE`에 "Execution
+  Engine" 절을 추가해 사용자 명령→PROJECT_INDEX→AI_CONTEXT→TASKS→
+  READING_PROFILES→Retrieval→Template 선택→작업 수행→Vault 저장
+  (`vault.auto_save.run_auto_save()`)→Validation(`AutoSaveReport`)
+  →완료 보고 흐름과 "지원 명령 예시" 표(다음 Task 진행/M23-T05
+  진행/ADR 작성/Bug Fix/Feature Design/API 설계 → 적용 Reading
+  Profile)를 명문화했다. 5~6단계(Document Update/Validation)를
+  이미 존재하는 `run_auto_save()`/`AutoSaveReport`를 구체적으로
+  가리키도록 갱신. 코드 변경 없음(의도적), `tests/vault/` 38개
+  그대로.
+- **M23-T07 완료 & Milestone 23(Obsidian Integration & Auto Save)
+  전체 완료(2026-07-27, T01~T07)**. `tests/integration/
+  test_m23_vault_environment_integration.py` 신규 3개 — 실제
+  `Vault/`를 대상으로 Filesystem 접근/Retrieval Validation(실제
+  전체 문서에서 `find_broken_backlinks()` 실행)/Auto Save
+  Round-trip(실제 Vault 복사본에 `run_auto_save()`로 저장, 원본
+  불변 확인)을 검증. **실제 버그 발견**: 검증 중
+  `EXECUTION_PROFILE.md`(이번 Milestone에서 직접 도입한 버그)와
+  `Backend Index.md`(M23-Preparation 시점부터 있던 훨씬 이전
+  버그) 둘 다에서 줄바꿈 때문에 `[[..]]` Backlink가 깨져 있던 것을
+  발견해 수정 — Validation 계층이 실전에서 처음으로 실제 문제를
+  잡아낸 사례. MCP는 M23-Prep-T08 Optional 이월 결정을 재확인만
+  하고 범위에 넣지 않음. `tests/vault`+신규 통합 테스트 41개 전부
+  통과, `ruff`/`mypy` 클린. **Milestone 23 전체 완료 — 다음은
+  별도 Milestone(번호 미정, 원 M23 Mobile Experience 이월분) 착수
+  또는 사용자가 지정하는 새 작업.**
+- **Milestone 23 Verification 완료(2026-07-27, 사용자 요청, 코드
+  변경 없음)**. 8개 검증 항목(Architecture/Save Engine/Auto Save
+  Workflow/Execution Engine/Routing/Mock Save/Synchronization/
+  Documentation)을 실제 코드·테스트·문서 기준으로 대조(Mock/
+  `tmp_path`만 사용, 실제 Vault 미변경). 핵심 파이프라인(Routing/
+  Save/Validation/Sync/Conflict Handling)은 설계대로 완성 확인.
+  **발견된 Gap 3건**(전부 이미 알려진 의도적 범위 축소를 재확인한
+  것, 새 문제 아님): (1) Markdown 형식 렌더링이 ADR/Decision
+  2종만 대상 문서 실제 관행과 검증됐고 나머지 10종(Milestone/
+  Backend 등 표 구조, Dashboard/Automation/iOS 등 주제별 절
+  구조)은 범용 "제목+요약" 형식이라 저장 **위치**는 항상 맞지만
+  **형식**이 기존 문서 관행과 다를 수 있음. (2) Auto Save는
+  시스템이 자동 호출하는 트리거가 아니라 AI가 EXECUTION_PROFILE
+  절차를 따라 수동으로 `run_auto_save()`를 호출하는 구조임을
+  `src/ai_workspace/` 전체 grep으로 재확인(`vault/` 밖에서 호출
+  0건). (3) `delete_document(force=True)` 이후 다른 문서에 남은
+  Orphan Backlink는 자동 정리되지 않음(다음 Validation에서만
+  발견). 상세 체크리스트는 `.ai/TASKS.md`의 "Milestone 23
+  Verification" 절 참고.
+- **M23-Final: Milestone 23(Obsidian Integration & Auto Save) —
+  Completed(2026-07-27, 사용자 승인)**. Verification의 ⚠️ 3건은
+  전부 기존 설계(YAGNI)에 따른 의도된 동작으로 확정, 신규 결함
+  아님 — M23 범위를 확장하지 않고 문서만 최종 정리했다(구현/
+  리팩터링 없음). M23 DoD(GitHub↔Obsidian Vault 통합/Retrieval
+  First 유지하며 Markdown 자동 생성·저장·갱신/짧은 명령으로
+  Retrieval→작업→Vault 저장 기반 마련/기본 원칙 8개 준수/Task
+  List T01~T07 전부 완료/Verification으로 누락 확인) 전 항목
+  충족 확인. ADR-0035에 Verification 결과 addendum 추가,
+  `docs/ROADMAP.md`에 "Completed" 반영, `.ai/TASKS.md`에 "M23-Final"
+  절로 최종 DoD 표와 Completed 선언 추가. **다음 Milestone은 미정**
+  — 원 M23이 다루던 Mobile Experience 이월분(Start Criteria 3개
+  결정은 [[PREPARATION_SUMMARY]]에 보존) 또는 사용자가 지정하는
+  새 작업 중 착수 시점에 결정한다.
+- **Milestone 24(Real Obsidian Vault Integration) T01~T08 구현
+  완료(2026-07-27, ADR-0036)**. 사용자가 "Mock/tmp_path가 아니라
+  실제 Obsidian Vault를 대상으로 동작해야 한다"는 목표로 요청.
+  신규: `vault/connection.py`(`resolve_default_vault_root()`+
+  `connect()` — 실제 Vault 탐색·존재/디렉터리/쓰기 권한 검증,
+  실패 시 `VaultConnectionError`), `vault/filesystem.py`
+  (`VaultFileSystem` — Create/Read/Update/Delete/Exists/Rename/
+  Move 7종 명시적 Adapter), `vault/atomic.py`(`atomic_write_text()`
+  — 임시 파일+`os.replace()` 원자적 저장, `VaultWriter`가 내부
+  사용, 공개 동작 불변). **Auto Save Validation을 Vault 전체
+  스캔에서 저장한 파일만 검사하는 Incremental 방식으로 전환**
+  (`find_broken_backlinks()`에 `only_paths` 추가, 생략 시 기존과
+  동일한 전체 스캔 — 하위 호환 유지) — 이번 저장과 무관한 기존
+  문제 때문에 Auto Save가 실패한 것처럼 보이던 문제를 해소.
+  `run_auto_save_on_default_vault()`(신규)가 `vault_root` 생략 시
+  실제 Vault에 자동 연결. **범위를 의도적으로 넓히지 않음**:
+  TASKS/MEMORY/ROADMAP(GitHub 원문)은 `vault/`가 쓰지 않는 경계를
+  유지(ADR-0035부터), Design/Implementation/Memory/Roadmap용 새
+  Vault 폴더도 만들지 않음(실제 Vault PARA 구조에 대응 폴더가
+  없어 kind를 추가하지 않기로 ADR-0036에 명시적 기록). `tests/
+  vault/`(Mock, 38개) 전부 무변경 통과 + `tests/integration/
+  test_m24_real_vault_e2e.py`(신규, 5개, `tmp_path` 미사용)가
+  실제 `Vault/`를 대상으로 Connect/Create/Update/Rename/Delete/
+  Auto Save 왕복을 검증 — 테스트가 만든 파일은 존재할 수 없는
+  미래 날짜 제목을 써서 스스로 정리하고, 기존 `ADR Index.md`에
+  대한 유일한 실제 쓰기는 `finally`로 원본을 그대로 복원해 실제
+  Vault는 테스트 전후 `git status`/`git diff` 기준 완전히 무변경.
+  Milestone 24 자체의 "Completed" 선언은 M23과 동일하게 사용자의
+  별도 확인을 거쳐야 하므로 이번 턴에서는 선언하지 않음 — Task
+  List(T01~T08)만 구현 완료로 기록.
+- **Milestone 24(Real Obsidian Vault Integration) — Completed
+  (2026-07-27, 사용자 승인 "승인.").**
+- **Milestone 25(Production Vault Activation) T01~T05 구현 완료
+  (2026-07-27)**. M24 구현을 실제 운영 환경에서 활성화 — 구현
+  자체는 변경하지 않고 권한 확인→안전성 검증→실제 동기화 순으로
+  진행. **M25-T01**: `connection.connect()` 실제 호출 + `os.access()`
+  로 Read/Write/Create/Update/Delete/Rename 권한과 PARA 구조 15개
+  디렉터리 존재를 문서 생성 없이 순수 읽기 전용으로 확인, 전부
+  통과. **M25-T02**: 실제 Vault 루트에 `TEST_DOCUMENT.md`를
+  `VaultFileSystem`/`VaultWriter`로 실제 생성→수정→검증→삭제까지
+  수행(Frontmatter/UTF-8/Backlink/Tag 전부 정상), 종료 후
+  `git status`/`git diff -- Vault/`로 완전 무변경 확인("Obsidian
+  에서 정상 표시"는 이 세션에 Obsidian 앱이 없어 Frontmatter
+  파싱·Validation 통과로 대리 확인했다고 정직하게 기록). **M25-T03**:
+  실제 동기화 대상을 ADR/API/Decision(+표 형식 Backend Index)으로
+  한정(TASKS/MEMORY/ROADMAP은 ADR-0035/0036 경계 유지, Design/
+  Implementation/Documentation은 대응 Vault 폴더 없어 제외) —
+  대조 결과 `Backend Index`의 `vault/` 행이 M24/ADR-0036을 빠뜨리고
+  있던 유일한 실제 Gap을 발견해 수정. 이미 정확한 ADR Index
+  섹션(ADR-0035/0036)을 자동 생성기로 재렌더링해 덮어쓰는 것은
+  품질 저하 위험이 있어 하지 않기로 판단. **M25-T04**: 실제
+  Vault 전체(34개 파일) 대상 Backlink(9건, 전부 기존에 알려진
+  `[[...]]` 문법 설명용 프롬프트 예시)/Frontmatter(누락 0건)/
+  중복 헤딩(`AI_RULES.md`의 "## 원문" 2회 발견됐으나 하나는
+  코드 펜스 안 예시라 실질 중복 아님, `system` kind라 자동 저장
+  대상도 아님)/누락 여부 전부 확인, 신규 결함 없음. **M25-T05**:
+  DoD 9개 항목 전부 충족 확인. **Milestone 25 자체의 "Completed"
+  선언은 M23/M24와 동일하게 사용자의 별도 확인을 거쳐야 하므로
+  이번 턴에서는 선언하지 않음** — Task List(T01~T05)만 구현
+  완료로 기록.

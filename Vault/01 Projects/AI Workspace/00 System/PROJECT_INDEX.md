@@ -30,6 +30,15 @@ Router 역할만 한다. 프로젝트 설명은 [[AI_CONTEXT]], 운영 규칙은
 | 프롬프트를 어떻게 짧게 쓸지 모르겠다 | [[PROMPT_PROFILE]] |
 | Vault 운영 규칙 자체가 궁금하다 | [[AI_RULES]] |
 
+## Reading Profiles Index — 작업 유형별 표준 Retrieval
+
+위 표가 작업 종류 → 문서 1줄 라우팅이라면, 작업 유형별로 필수/
+선택/제외 문서와 Template·Retrieval 순서·예상 출력까지 정해진
+표준 절차가 필요할 때는 [[READING_PROFILES]]를 먼저 연다(Backend
+Implementation/API Design/ADR 작성/Bug Fix 등 15종 정의). 이 표와
+[[READING_PROFILES]]는 같은 원칙(Retrieval First/Minimum Retrieval)
+을 다른 세밀도로 적용한 것이며, 서로 대체하지 않는다.
+
 ## Short Prompt Workflow
 
 이 표로 문서를 먼저 찾은 뒤에는, 그 문서의 제목/경로만 프롬프트에
@@ -86,6 +95,7 @@ Baseline·M23 착수 조건은 [[PREPARATION_SUMMARY]] 참고 — 새 세션은
 - [[AI_RULES]]
 - [[PROMPT_PROFILE]]
 - [[EXECUTION_PROFILE]]
+- [[READING_PROFILES]]
 - [[PREPARATION_SUMMARY]]
 
 ## 원문
