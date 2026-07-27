@@ -673,10 +673,10 @@ Review" 참고). **Milestone 14 완료 — 2026-07-26 사용자 승인.**
 |---|---|---|
 | M15-T01 | `Budget`/`BudgetDecision` domain + `BudgetPolicyEngine` Interface + 구현체 | **완료** |
 | M15-T02 | `EngineRuntime.estimate_cost()` + `CodingAgent` 연동 | **완료** |
-| M15-T03 | End-to-End 통합 테스트 | 진행 예정 |
+| M15-T03 | End-to-End 통합 테스트 | **완료** |
 | M15-T04 | 문서화 + Milestone 15 Review | 진행 예정 |
 
-**진행 상태**: M15-T01~T02 완료, M15-T03 진행 중.
+**진행 상태**: M15-T01~T03 완료, M15-T04(문서화 + Review) 진행 중.
 
 ---
 

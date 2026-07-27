@@ -4625,10 +4625,10 @@ Retry, Dashboard, Provider별 과금 API 연동, 예산 누적 추적(Task 단�
 |---|---|---|
 | M15-T01 | `Budget`/`BudgetDecision` domain + `BudgetPolicyEngine` Interface + `InMemoryBudgetPolicyEngine` | **완료** |
 | M15-T02 | `EngineRuntime.estimate_cost()` 추가 + `CodingAgent` 연동 | **완료** |
-| M15-T03 | End-to-End 통합 테스트 | 진행 예정 |
+| M15-T03 | End-to-End 통합 테스트 | **완료** |
 | M15-T04 | 문서화 + Milestone 15 Review | 진행 예정 |
 
-**진행 상태**: M15-T01~T02 완료. M15-T03(End-to-End 통합 테스트) 진행 중.
+**진행 상태**: M15-T01~T03 완료. M15-T04(문서화 + Review) 진행 중.
 
 #### M15-T01: `Budget`/`BudgetDecision` domain + `BudgetPolicyEngine` Interface + 구현체
 - 상태: **DONE (2026-07-27)** — `domain/budget.py`에 `Budget`
@@ -4664,6 +4664,25 @@ Retry, Dashboard, Provider별 과금 API 연동, 예산 누적 추적(Task 단�
   `CodingAgent` 3개 — 예산 없음/예산 내/예산 초과). `pytest`(508개),
   `ruff`, `mypy` 통과. 다음 Task: **M15-T03**(End-to-End 통합 테스트).
 - 의존성: M15-T01.
+
+#### M15-T03: End-to-End 통합 테스트
+- 상태: **DONE (2026-07-27)** — `tests/integration/
+  test_m15_token_cost_optimization.py` 신규. 실제 `ManagedEngineRuntime`
+  + 실제 `ClaudeCodeEngineAdapter`(M15가 새로 만든 로직 없음, M3/M14의
+  기존 구현 그대로) + 실제 `CodingAgent`에 `InMemoryBudgetPolicyEngine`
+  을 주입해 3가지 시나리오를 검증: (1) 예산 내(`max_tokens=10_000`) —
+  `ClaudeCodeEngineAdapter`가 실제로 1회 실행되고 `CodeCompleted`가
+  발행되며 Task가 `REVIEW`로 전환됨(Milestone DoD 4번 허용 경로),
+  (2) 예산 초과(`max_tokens=1`) — `ClaudeCodeEngineAdapter`가 아예
+  호출되지 않고(`executed_commands == []`) Task가 `BLOCKED`로 전환,
+  `CodeCompleted`도 발행되지 않음(Milestone DoD 4번 차단 경로, Approval/
+  Retry 없이 단순 차단), (3) `budget_policy_engine` 미주입 — M15 이전과
+  완전히 동일하게 동작(Milestone DoD 5번). 프로세스 경계만 M11-T03과
+  동일하게 `FakeExecutionEnvironment`로 대체하고, 그 외에는 전부 실제
+  구현체를 조립했다(M6/M13/M14가 확립한 "진짜 컴포넌트로 조립" 통합
+  테스트 방식). `pytest`(511개, 기존 508개 + 신규 3개), `ruff`, `mypy`
+  통과. 다음 Task: **M15-T04**(문서화 + Milestone 15 Review).
+- 의존성: M15-T02.
 
 ---
 
