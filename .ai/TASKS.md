@@ -5674,12 +5674,30 @@ Credential 관리, Engine Selection/Budget/Knowledge 개선,
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M19-T01 | Reliability Domain 정의(`RetryPolicy` 확장, `RetryDecision`, `RetryExecutor`) | 진행 예정 |
+| M19-T01 | Reliability Domain 정의(`RetryPolicy` 확장, `RetryDecision`, `RetryExecutor`) | **완료** |
 | M19-T02 | Execution Reliability 구현(Retry/Timeout/Cancellation, `ExecutionDispatcher` 연동) | 진행 예정 |
 | M19-T03 | End-to-End 통합 테스트 | 진행 예정 |
 | M19-T04 | 문서화 + Milestone 19 Review | 진행 예정 |
 
-**진행 상태**: Task List 승인 완료, 구현 착수.
+**진행 상태**: M19-T01 완료. M19-T02 진행 중.
+
+#### M19-T01: Reliability Domain 정의
+- 상태: **DONE (2026-07-27)** — `domain/retry_policy.py`의 기존
+  `RetryPolicy`(M3)에 `retry_delay_seconds: float = 0.0`/
+  `non_retryable_exceptions: tuple[type[BaseException], ...] = ()`
+  필드와 `decide(exception) -> RetryDecision` 메서드 추가(둘 다
+  기본값이 있어 `RecoveringEngineRuntime`의 기존 호출부 전부 무영향
+  — 새 이름을 만들지 않고 같은 개념을 확장). `RetryDecision`
+  (should_retry/reason) 신규 — `EngineSelectionDecision`/
+  `BudgetDecision`과 동일한 명명 패턴. `runtime/execution/
+  retry_executor.py`의 `RetryExecutor`(제네릭 `Callable[[], T]`를
+  받아 `RetryPolicy`에 따라 재시도 — 반환 타입을 모르므로
+  `EngineExecutionResult`를 전혀 참조하지 않음, 순수 재시도 메커니즘)
+  신규. 단위 테스트 11개 신규(domain 6개, runtime/execution 5개 —
+  기본 동작/재시도 성공/횟수 소진 후 예외 재전파/재시도 불가 예외
+  즉시 실패/delay 적용 확인). `pytest`(578개), `ruff`, `mypy` 통과.
+  다음 Task: **M19-T02**(Execution Reliability 구현).
+- 의존성: 없음.
 
 ---
 
