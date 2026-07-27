@@ -106,6 +106,9 @@ ai-workspace/
 7. Approval Required — 아키텍처 변경/신규 기능/리팩토링/Milestone 완료는 사용자
    승인 후 진행한다.
 8. 항상 이유(선택 이유, 설계 이유, 장단점, 대안)를 설명한다.
+9. GitHub Flow — `main` 단일 상시 브랜치 + `feature/*`/`fix/*`/`docs/*`/
+   `refactor/*`/`chore/*` 작업 브랜치 + PR 기반 병합을 따른다(`.ai/RULES.md`
+   §8).
 
 ## 문서 링크
 

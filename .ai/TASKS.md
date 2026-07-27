@@ -8684,6 +8684,86 @@ M26-T01**로 번호를 새로 부여했다(투명하게 기록).
 
 ---
 
+## GitHub Flow Migration
+
+**목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
+가 우연히 Default Branch로 고정돼 있던 문제를 바로잡아, `main` 단일
+상시 브랜치 + Pull Request 기반 **GitHub Flow**를 이 저장소의 공식
+브랜치 전략으로 확립한다.
+
+**진행 경과**
+
+| 단계 | 내용 | 상태 |
+|---|---|---|
+| Phase 1 | `claude/m23-t01-reading-profiles-pmnpue` → `claude/ai-workspace-docs-setup-aj3jvo` → `main` 순차 Fast-forward 병합(충돌 0건, `pytest` 46개 통과) | **완료** |
+| (사용자 직접 조치) | GitHub Default Branch를 `main`으로 변경, 이전 Default였던 `claude/ai-workspace-docs-setup-aj3jvo` 포함 사용하지 않는 브랜치 전부 삭제(`claude/ai-workspace-m11-execution-yrw0bx`/`claude/milestone-6-planning-lzc855`/`sop-skills-implementation-...`/`claude/m23-t01-reading-profiles-pmnpue`) | **완료** |
+| Phase 3(M24-T04) | Git Vault Sync 검증 + 문서/규칙 업데이트 + GitHub Flow Baseline 확정 평가 | **완료(아래 참고)** |
+
+### M24-T04: GitHub Flow Migration (Phase 3)
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Git Vault Sync 검증(Repository/Branch/Push/Pull/설정 이상 여부) | ✅ |
+| 2 | README/`.ai/RULES.md`/`docs/ROADMAP.md`/`docs/ARCHITECTURE.md`/CONTRIBUTING.md 검토, Git Flow·`develop`·`claude/*` 언급 제거 | ✅ (제거할 내용 없음 확인) |
+| 3 | Claude Code가 따를 GitHub Flow 규칙을 `.ai/RULES.md`에 명문화 | ✅ |
+| 4 | GitHub Flow 운영 검증(브랜치 전략/PR 흐름/Merge 정책/Branch Protection/GitHub 설정/프로젝트 구조/Claude Code 작업 방식) | ✅ |
+| 5 | GitHub Flow Baseline 확정 여부 평가 | ✅ |
+| 6 | 신규 기능/리팩터링/테스트 코드 수정/CI 구축/Git Vault Sync 설정 변경/테스트용 브랜치·PR 생성 금지 준수 | ✅ |
+
+**구현 내용**
+
+- **T04-1 Git Vault Sync 검증**: `git remote show origin`으로
+  `HEAD branch: main` 확인, GitHub API(`search_repositories`)로
+  `default_branch: "main"`/`private: false`/`permissions.push:
+  true`/`admin: true` 확인. `git fetch origin main`(Pull)과 이전
+  Task들의 실제 push 이력(Pull/Push 정상)으로 재확인. **Git Vault
+  Sync 자체에서(즉 이 세션이) 확인할 수 없는 항목**: 실제 iOS
+  Git Vault Sync 앱이 이 저장소를 열어 정상 동작하는지는 이 세션이
+  모바일 앱을 실행할 수 없어 직접 검증 불가 — 서버 측(GitHub
+  저장소/브랜치) 조건은 전부 충족을 확인했다는 선에서 보고한다.
+- **T04-2 프로젝트 문서 정리**: `README.md`/`.ai/RULES.md`/`docs/
+  ROADMAP.md`/`docs/ARCHITECTURE.md` 전수 검색 결과 Git Flow/
+  `develop` 브랜치/`claude/*` 브랜치 전략을 설명하는 내용이
+  **어디에도 없었다**(제거 대상 0건 — 이전에는 브랜치 전략 자체가
+  문서화된 적이 없었다). `CONTRIBUTING.md`는 이 저장소에 존재하지
+  않아 해당 없음.
+- **T04-3 Claude Code 규칙 업데이트**: `.ai/RULES.md`에 신규
+  **§8 Git Branch Strategy(GitHub Flow)** 추가(v0.4.0 → v0.5.0) —
+  Default Branch=`main`, 모든 작업 브랜치는 `main`에서 생성, 허용
+  접두사(`feature/*`/`fix/*`/`docs/*`/`refactor/*`/`chore/*`),
+  금지 브랜치(`claude/*`/`develop`/`release/*`/`hotfix/*`), PR
+  기반 Merge, Merge 후 작업 브랜치 삭제, AI 세션에 대한 구속력
+  명시. `README.md` "개발 철학" 목록에 9번 항목으로 GitHub Flow
+  요약과 `.ai/RULES.md` §8 링크 추가(최소 변경).
+- **핵심 발견(자기 적용 사례)**: 방금 작성한 §8 규칙에 따르면
+  이 세션이 계속 써 온 `claude/*` 브랜치명 자체가 금지 대상이다
+  — 그래서 이 문서 변경분부터 새 규칙을 즉시 자기 적용해
+  `docs/github-flow-migration-phase3`(신규, `main`에서 분기)
+  브랜치에서 작업하고 PR로 병합을 요청한다(아래 참고). 이 세션의
+  기존 지정 브랜치(`claude/m23-t01-reading-profiles-pmnpue`)는
+  사용자가 이미 삭제해 원격에 존재하지 않음을 확인했다.
+
+**T04-4 GitHub Flow 운영 검증**
+
+| 항목 | 결과 |
+|---|---|
+| 브랜치 전략 | ✅ `main` 단일 상시 브랜치만 원격에 존재(`git ls-remote --heads origin` 확인), §8 규칙 문서화 완료 |
+| Pull Request 흐름 | ✅ PR #1~#4 전부 정상적으로 생성·병합된 이력 확인(Merge 방식: `merge`) |
+| Merge 정책 | ⚠️ **미확정** — 지금까지는 PR마다 `merge`(병합 커밋) 방식을 수동으로 선택했다. Squash/Merge/Rebase 중 어느 것을 표준으로 할지 저장소 설정(Settings → General → Pull Requests)에 명시적으로 고정돼 있지 않다 — **개선 제안**: Squash and merge를 기본/유일 옵션으로 강제하면 `main` 커밋 이력이 Task 단위로 깔끔하게 유지된다(§5.3 "하나의 커밋은 하나의 Task"와도 일치) |
+| Branch Protection | ⚠️ **이 세션에서 직접 확인 불가** — 설정 조회 API를 노출하는 도구가 없어, 사용자가 "이미 완료"라고 알려주신 것을 그대로 신뢰하는 것 외에 검증 방법이 없다. **권장**: GitHub 웹 UI(Settings → Branches → main)에서 "Require pull request before merging"/"Require status checks"/"Do not allow force pushes"가 실제로 켜져 있는지 직접 한 번 더 확인 |
+| GitHub 설정 | ✅ `default_branch: main`, 저장소 정상(archived/disabled 아님), 관리 권한 보유 확인 |
+| 프로젝트 구조 | ✅ Milestone 26(Vault Root Refactoring)으로 Vault 콘텐츠가 저장소 root에 있고, GitHub Flow(브랜치 전략)와는 독립적인 관심사라 충돌 없음 |
+| Claude Code 작업 방식 | ⚠️ **이번 Task로 규칙은 갖췄지만 강제 메커니즘은 없음** — `.ai/RULES.md` §8은 "따라야 하는 문서"일 뿐, 이 세션(또는 향후 세션)이 실수로 다시 `claude/*` 브랜치를 만드는 것을 코드/설정 차원에서 막지는 못한다. **개선 제안**: Branch Protection의 브랜치 이름 패턴 제한(GitHub Rulesets)으로 `claude/*`/`develop`/`release/*`/`hotfix/*` 생성 자체를 서버 단에서 차단하면 완전히 강제할 수 있다(이번 Task 범위 밖 — GitHub 설정 변경 금지 조항에 해당해 수행하지 않음, 다음 Task로 제안) |
+
+**T04-5 GitHub Flow Baseline 평가**: 아래 "Baseline 평가" 참고.
+
+**의존성**: GitHub Flow Migration Phase 1(브랜치 Fast-forward 병합) +
+사용자의 Default Branch 변경/브랜치 정리 완료.
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |
