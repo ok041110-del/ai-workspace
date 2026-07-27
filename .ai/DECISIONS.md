@@ -1788,3 +1788,18 @@
   신규(이 ADR의 Vault 반영본), `Architecture Overview`/`Architecture
   Map`/`ADR Index`에 backlink 추가. 실제 구현은 M23-T03(Vault Save
   Engine)부터 시작한다.
+- **Verification(2026-07-27, Milestone 23 Verification, 사용자
+  요청)**: M23-T03~T07로 이 ADR의 설계가 실제 구현·테스트·실제
+  Vault 대상 통합 테스트까지 완료된 뒤, 이 ADR이 정의한 4개 결정
+  (Vault Directory Mapping/Save Flow/File Strategy/Metadata 처리)
+  이 코드와 일치하는지 검증했다. Mock(`tmp_path`) 38개 + 실제
+  `Vault/` 대상 통합 테스트 3개 전부 통과, 실제 Vault는 검증
+  과정에서 전혀 수정하지 않음(코드 검토와 Mock만 사용). 검증에서
+  ⚠️ 3건(Template 형식 렌더링이 ADR/Decision 2종만 대상 문서 실제
+  관행과 검증됨/Auto Save는 AI가 절차를 따라 호출하는 수동 구조/
+  `delete_document(force=True)` 이후 Orphan Backlink 미정리)을
+  발견했으나, 전부 이 ADR과 M23-T06에서 이미 명시한 의도적 범위
+  축소(YAGNI)의 재확인이며 새 결함이 아니라고 최종 확정했다(사용자
+  승인, M23-Final) — 이 ADR의 결정을 변경하거나 범위를 확장하지
+  않는다. 상세 체크리스트는 `.ai/TASKS.md`의 "Milestone 23
+  Verification"/"M23-Final" 절 참고.

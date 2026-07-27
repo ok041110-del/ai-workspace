@@ -8142,6 +8142,40 @@ Decision 2종만 실전 검증됐고 나머지는 아직 범용 형식이라는 
 
 ---
 
+## M23-Final — Verification 결과 반영 및 Milestone 23 Completed 선언
+
+**사용자 결정(2026-07-27)**: Verification에서 표시된 ⚠️ 3건
+(Template 형식 적용 범위/Auto Save 수동 호출 구조/강제 삭제 후
+Orphan Backlink 미정리)은 전부 기존 설계(YAGNI)에 따른 의도된
+동작이며 새 결함이 아니다 — **M23의 범위를 확장하지 않는다.**
+이 절은 그 결정에 따라 문서만 최종 정리한다. 구현/리팩터링 없음.
+
+### M23 DoD 최종 확인
+
+Milestone 23 kickoff 시점의 목표·원칙(위 "목표"/"기본 원칙" 절)을
+기준으로 최종 확인한다.
+
+| # | DoD 항목(Milestone 23 목표) | 상태 |
+|---|---|---|
+| 1 | AI Workspace(GitHub)와 Obsidian Vault를 통합한다 | ✅ `vault/`(M23-T03~T05) + Vault Integration Architecture(M23-T02) |
+| 2 | Retrieval First Workflow를 유지하면서 Markdown 문서를 자동 생성·저장·갱신하는 구조를 구현한다 | ✅ Markdown Generator/Vault Writer/Auto Save Workflow(M23-T03~T04), 단 "자동"은 AI가 절차를 따라 호출하는 구조(Verification 기록, 의도된 동작) |
+| 3 | 사용자가 짧은 명령만 입력해도 AI가 Retrieval → 작업 → Vault 저장까지 수행할 수 있는 기반을 마련한다 | ✅ Execution Engine 절(M23-T06) + READING_PROFILES + `run_auto_save()` |
+| 4 | 기본 원칙 8개(Retrieval First/Minimum Retrieval/Template First/Short Prompt Workflow/Standard Execution Workflow/기존 구조 유지/변경된 파일만 수정/Obsidian Vault 기준 설계) 준수 | ✅ 전 Task write-up과 Verification에서 확인, 위반 없음 |
+| 5 | Task List(T01~T07) 전부 완료 | ✅ 위 Task List 표 |
+| 6 | Verification으로 설계 대비 누락 확인 | ✅ Milestone 23 Verification 절(⚠️ 3건, 전부 의도된 동작으로 확정) |
+
+**M23 DoD 전 항목 충족. 신규 결함 없음(사용자 확정).**
+
+### Milestone 23 상태
+
+**Milestone 23(Obsidian Integration & Auto Save) — Completed.**
+(2026-07-27, 사용자 승인) 다음 Milestone은 미정 — 원 M23이 다루던
+Mobile Experience 이월분([[Decisions Index]]/[[PREPARATION_SUMMARY]]
+의 Start Criteria 3개 결정 보존) 또는 사용자가 지정하는 새 작업
+중 착수 시점에 결정한다.
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |

@@ -1185,3 +1185,17 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   Orphan Backlink는 자동 정리되지 않음(다음 Validation에서만
   발견). 상세 체크리스트는 `.ai/TASKS.md`의 "Milestone 23
   Verification" 절 참고.
+- **M23-Final: Milestone 23(Obsidian Integration & Auto Save) —
+  Completed(2026-07-27, 사용자 승인)**. Verification의 ⚠️ 3건은
+  전부 기존 설계(YAGNI)에 따른 의도된 동작으로 확정, 신규 결함
+  아님 — M23 범위를 확장하지 않고 문서만 최종 정리했다(구현/
+  리팩터링 없음). M23 DoD(GitHub↔Obsidian Vault 통합/Retrieval
+  First 유지하며 Markdown 자동 생성·저장·갱신/짧은 명령으로
+  Retrieval→작업→Vault 저장 기반 마련/기본 원칙 8개 준수/Task
+  List T01~T07 전부 완료/Verification으로 누락 확인) 전 항목
+  충족 확인. ADR-0035에 Verification 결과 addendum 추가,
+  `docs/ROADMAP.md`에 "Completed" 반영, `.ai/TASKS.md`에 "M23-Final"
+  절로 최종 DoD 표와 Completed 선언 추가. **다음 Milestone은 미정**
+  — 원 M23이 다루던 Mobile Experience 이월분(Start Criteria 3개
+  결정은 [[PREPARATION_SUMMARY]]에 보존) 또는 사용자가 지정하는
+  새 작업 중 착수 시점에 결정한다.
