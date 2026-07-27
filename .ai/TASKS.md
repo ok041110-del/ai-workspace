@@ -4623,12 +4623,47 @@ Retry, Dashboard, Provider별 과금 API 연동, 예산 누적 추적(Task 단�
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M15-T01 | `Budget`/`BudgetDecision` domain + `BudgetPolicyEngine` Interface + `InMemoryBudgetPolicyEngine` | 진행 예정 |
-| M15-T02 | `EngineRuntime.estimate_cost()` 추가 + `CodingAgent` 연동 | 진행 예정 |
+| M15-T01 | `Budget`/`BudgetDecision` domain + `BudgetPolicyEngine` Interface + `InMemoryBudgetPolicyEngine` | **완료** |
+| M15-T02 | `EngineRuntime.estimate_cost()` 추가 + `CodingAgent` 연동 | **완료** |
 | M15-T03 | End-to-End 통합 테스트 | 진행 예정 |
 | M15-T04 | 문서화 + Milestone 15 Review | 진행 예정 |
 
-**진행 상태**: Task List 승인 완료, 구현 착수.
+**진행 상태**: M15-T01~T02 완료. M15-T03(End-to-End 통합 테스트) 진행 중.
+
+#### M15-T01: `Budget`/`BudgetDecision` domain + `BudgetPolicyEngine` Interface + 구현체
+- 상태: **DONE (2026-07-27)** — `domain/budget.py`에 `Budget`
+  (max_tokens/max_cost_usd, 둘 다 선택적)/`BudgetDecision`(allowed/
+  reason) 신규(Provider 독립, 어떤 Provider/Engine 개념도 참조하지
+  않음). `interfaces/budget_policy_engine.py`에 `BudgetPolicyEngine`
+  Interface 신규(`LLMPolicyEngine`과 동일한 설계 원칙 — side-effect
+  없음, `check(estimate) -> BudgetDecision`). `engines/
+  budget_policy_engine.py`에 `InMemoryBudgetPolicyEngine` 최소
+  구현체(단일 `Budget` 보관, `budget=None`이면 항상 허용). `tests/
+  interfaces/fakes.py`에 `FakeBudgetPolicyEngine` 추가. 단위 테스트
+  9개(domain 4개, engine 5개) 신규. `pytest`(498개), `ruff`, `mypy`
+  통과. 다음 Task: **M15-T02**.
+- 의존성: 없음.
+
+#### M15-T02: `EngineRuntime.estimate_cost()` + `CodingAgent` 연동
+- 상태: **DONE (2026-07-27)** — `interfaces/engine_runtime.py`에
+  `estimate_cost(task, required_capabilities) -> CostEstimate` 추가
+  (`run()`과 동일한 엔진 선택 규칙, 세션 미생성). `InMemoryEngineRuntime`/
+  `ManagedEngineRuntime`이 각자의 어댑터 선택 로직을 재사용해 구현,
+  `RecoveringEngineRuntime`은 `inner.estimate_cost()`에 순수 위임(read-
+  only라 재시도 불필요). `FakeEngineRuntime`/`RecordingEngineRuntime`/
+  `SpyEngineRuntime`/`ScriptedEngineRuntime` 등 기존 `EngineRuntime`
+  테스트 더블 전부 새 추상 메서드에 맞춰 갱신(M14에서 겪은 "ABC
+  인스턴스화 실패" 재발 방지). `CodingAgent`에 선택적
+  `budget_policy_engine` DI 추가 — `_on_mission_planned()`에서 실행
+  직전 `engine_runtime.estimate_cost()` → `BudgetPolicyEngine.check()`
+  를 거쳐, 초과 시 `Task`를 `BLOCKED`로 전환하고 `return`(Approval/
+  Retry 없음, M13 Scheduler 가드와 동일한 "조용히 멈춤" 패턴).
+  미주입 시(기본값 `None`) 이 확인 자체를 건너뛴다. 단위 테스트
+  10개 신규(`EngineRuntime` 계약 2개, `ManagedEngineRuntime` 2개,
+  `RecoveringEngineRuntime` 1개, `InMemoryEngineRuntime` 2개,
+  `CodingAgent` 3개 — 예산 없음/예산 내/예산 초과). `pytest`(508개),
+  `ruff`, `mypy` 통과. 다음 Task: **M15-T03**(End-to-End 통합 테스트).
+- 의존성: M15-T01.
 
 ---
 
