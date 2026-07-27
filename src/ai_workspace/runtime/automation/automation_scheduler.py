@@ -5,7 +5,9 @@ from datetime import datetime
 
 from ai_workspace.domain.automation import AutomationRule, TriggerKind
 from ai_workspace.interfaces.automation_repository import AutomationRepository
+from ai_workspace.interfaces.event_bus import Event, EventBus
 from ai_workspace.runtime.automation.trigger_evaluator import (
+    EventTriggerEvaluator,
     IntervalTriggerEvaluator,
     StartupTriggerEvaluator,
     TimeTriggerEvaluator,
@@ -33,15 +35,16 @@ class AutomationScheduler:
 
     **Trigger 평가와 완전히 분리**(사용자 승인 조건 1): 이 클래스는
     "지금 발동해야 하는가"를 스스로 판단하지 않고
-    `TriggerEvaluator`에게 위임한다. Event Trigger는 이 클래스가
-    다루지 않는다(주기적 `tick()`으로 평가할 수 있는 대상이 아니라
-    `EventBus` 구독이 필요 — M21-T04에서 별도로 연동).
+    `TriggerEvaluator`에게 위임한다. Event Trigger는 `tick()`/
+    `start()`가 다루지 않는다 — 주기 평가 대상이 아니라
+    `bind_event_bus()`로 별도 구독한다(M21-T04).
 
     **실행은 `action_executor`에 위임**(사용자 승인 조건 5 —
     `ExecutionDispatcher`가 유일한 실행 진입점): 이 클래스는
     `ExecutionDispatcher`를 알지 못한다. Action을 실제로 실행하는
-    방법(M21-T04에서 `EngineSelectionPolicy`→`ExecutionDispatcher`
-    로 연결)은 생성자로 주입된 콜러블이 담당한다."""
+    방법(M21-T04의 `AutomationActionExecutor` —
+    `EngineSelectionPolicy`→`ExecutionDispatcher`로 연결)은 생성자로
+    주입된 콜러블이 담당한다."""
 
     def __init__(
         self, *, automation_repository: AutomationRepository, action_executor: ActionExecutor
@@ -49,6 +52,7 @@ class AutomationScheduler:
         self._automation_repository = automation_repository
         self._action_executor = action_executor
         self._startup_evaluator = StartupTriggerEvaluator()
+        self._event_evaluator = EventTriggerEvaluator()
 
     def start(self, *, now: datetime | None = None) -> None:
         """Workspace(서버) 시작 시 한 번 호출한다 — Startup Trigger만
@@ -76,6 +80,24 @@ class AutomationScheduler:
             rule.next_execution_at = evaluator.compute_next_execution_at(rule, now=moment)
             self._automation_repository.save(rule)
 
+    def bind_event_bus(self, event_bus: EventBus) -> None:
+        """Event Trigger를 위해 `EventBus`를 구독한다(M21-T04).
+        `AutomationScheduler`는 이벤트를 받을 뿐 발행하지 않는다 —
+        `ExecutionDispatcher`가 Dashboard를 모르는 것과 동일하게,
+        이 Scheduler도 Event의 발행처(Dashboard 등)를 알 필요가
+        없다."""
+        event_bus.subscribe(self._on_event)
+
+    def _on_event(self, event: Event) -> None:
+        now = utc_now()
+        for rule in self._automation_repository.list_rules():
+            if not rule.enabled or rule.trigger.kind is not TriggerKind.EVENT:
+                continue
+            if rule.trigger.event_type != event.event_type:
+                continue
+            if self._event_evaluator.should_fire(rule, now=now):
+                self._fire(rule, now)
+
     def _enabled_rules_with_kind(self, kind: TriggerKind) -> list[AutomationRule]:
         return [
             rule
@@ -86,4 +108,11 @@ class AutomationScheduler:
     def _fire(self, rule: AutomationRule, now: datetime) -> None:
         rule.last_executed_at = now.isoformat()
         self._automation_repository.save(rule)
-        self._action_executor(rule)
+        try:
+            self._action_executor(rule)
+        except Exception:
+            # EventBus.publish()와 동일한 원칙: 한 Rule의 Action 실행
+            # 실패가 다른 Rule 평가나 호출자(EventBus 구독 경로 등)에
+            # 영향을 주지 않는다. last_executed_at은 "실행을 시도한
+            # 시점"을 기록할 뿐, 성공을 보장하지 않는다.
+            pass

@@ -6316,12 +6316,44 @@ Rule 추천.
 | M21-T01 | Automation 도메인 + `AutomationRepository` Interface + `InMemoryAutomationRepository` | **완료** |
 | M21-T02 | `AutomationService`(CRUD) 구현 | **완료** |
 | M21-T03 | `AutomationScheduler` + Time/Interval/Startup Trigger 구현 | **완료** |
-| M21-T04 | Event Trigger + `ExecutionDispatcher` 연동 | 진행 예정 |
+| M21-T04 | Event Trigger + `ExecutionDispatcher` 연동 | **완료** |
 | M21-T05 | Automation API + Dashboard 연계 | 진행 예정 |
 | M21-T06 | Dashboard Web UI Automation 화면 | 진행 예정 |
 | M21-T07 | 전체 흐름 검증 + 문서화 | 진행 예정 |
 
-**진행 상태**: M21-T01~T03 완료. M21-T04 진행 예정.
+**진행 상태**: M21-T01~T04 완료. M21-T05 진행 예정.
+
+#### M21-T04: Event Trigger + ExecutionDispatcher 연동
+- 상태: **DONE (2026-07-27)** — `trigger_evaluator.py`에
+  `EventTriggerEvaluator` 신규(사전 필터링은 `AutomationScheduler`
+  책임이라 `should_fire`는 항상 True — event가 이미 일치를 확인한
+  뒤에만 호출됨). `AutomationScheduler`에 `bind_event_bus(event_bus)`
+  추가 — `EventBus`를 구독해 `event_type`이 일치하는 활성 EVENT
+  Rule만 발동시킨다. `_fire()`가 `action_executor` 호출을
+  `try/except Exception: pass`로 감싸도록 변경(`InMemoryEventBus.
+  publish()`와 동일한 "구독자 예외가 다른 구독자에 영향을 주지
+  않는다" 원칙 적용) — `last_executed_at`은 "실행 시도 시점"만
+  기록하고 성공을 보장하지 않는다.
+
+  `runtime/automation/automation_action_executor.py`의
+  `AutomationActionExecutor`(사용자 승인 조건 5 — `ExecutionDispatcher`
+  가 유일한 실행 진입점) 신규: RUN_TASK는 새 `Task` 생성 →
+  `EngineRegistry.list_candidates()` → `EngineSelectionPolicy.select()`
+  → `ExecutionDispatcher.dispatch()`로 M17/M18 파이프라인을 그대로
+  재사용(새 실행 경로를 만들지 않음). DASHBOARD_REFRESH/NOTIFICATION
+  은 실행할 Task가 없어 아무것도 하지 않음(Dashboard는 이미
+  `ExecutionDispatcher`가 발행하는 Event로 갱신되고, 실제 알림
+  발송은 Out of Scope). **범위 결정**: RUN_WORKFLOW는 이번
+  Milestone이 Task 단위 실행 경로만 다루므로
+  `AutomationActionNotSupportedError`를 던지며 아직 지원하지
+  않는다(향후 Milestone에서 Workflow 실행 경로가 별도로 필요).
+
+  실제 `ClaudeCodeEngineAdapter`+`FakeExecutionEnvironment`로 RUN_TASK
+  가 진짜 실행됨을 통합 테스트로 증명. 단위/통합 테스트 8개 신규
+  (executor 4개, scheduler event/예외격리 4개). `pytest`(696개),
+  `ruff`, `mypy` 통과. 다음 Task: **M21-T05**(Automation API +
+  Dashboard 연계).
+- 의존성: M21-T03.
 
 #### M21-T03: AutomationScheduler + Time/Interval/Startup Trigger
 - 상태: **DONE (2026-07-27)** — `runtime/automation/trigger_evaluator.py`

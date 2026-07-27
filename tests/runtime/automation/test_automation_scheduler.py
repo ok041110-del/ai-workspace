@@ -1,6 +1,8 @@
 from datetime import datetime
 
 from ai_workspace.domain.automation import Action, ActionKind, AutomationRule, Trigger, TriggerKind
+from ai_workspace.events.event_bus import InMemoryEventBus
+from ai_workspace.interfaces.event_bus import Event
 from ai_workspace.runtime.automation.automation_repository import InMemoryAutomationRepository
 from ai_workspace.runtime.automation.automation_scheduler import AutomationScheduler
 
@@ -151,3 +153,72 @@ def test_tick_skips_startup_and_event_rules() -> None:
     scheduler.tick(now=datetime(2026, 7, 27, 9, 5))
 
     assert fired == []
+
+
+def test_bind_event_bus_fires_rule_on_matching_event() -> None:
+    scheduler, repository, fired = make_scheduler()
+    repository.save(
+        make_rule("r1", Trigger(kind=TriggerKind.EVENT, event_type="engine_execution_completed"))
+    )
+    event_bus = InMemoryEventBus()
+    scheduler.bind_event_bus(event_bus)
+
+    event_bus.publish(
+        Event(event_id="e1", event_type="engine_execution_completed", payload={})
+    )
+
+    assert len(fired) == 1
+    assert repository.get("r1").last_executed_at is not None
+
+
+def test_bind_event_bus_ignores_non_matching_event_type() -> None:
+    scheduler, repository, fired = make_scheduler()
+    repository.save(
+        make_rule("r1", Trigger(kind=TriggerKind.EVENT, event_type="engine_execution_completed"))
+    )
+    event_bus = InMemoryEventBus()
+    scheduler.bind_event_bus(event_bus)
+
+    event_bus.publish(Event(event_id="e1", event_type="other_event", payload={}))
+
+    assert fired == []
+
+
+def test_bind_event_bus_ignores_disabled_rule() -> None:
+    scheduler, repository, fired = make_scheduler()
+    repository.save(
+        make_rule(
+            "r1",
+            Trigger(kind=TriggerKind.EVENT, event_type="engine_execution_completed"),
+            enabled=False,
+        )
+    )
+    event_bus = InMemoryEventBus()
+    scheduler.bind_event_bus(event_bus)
+
+    event_bus.publish(
+        Event(event_id="e1", event_type="engine_execution_completed", payload={})
+    )
+
+    assert fired == []
+
+
+def test_action_executor_exception_does_not_break_other_rules() -> None:
+    repository = InMemoryAutomationRepository()
+    fired: list[str] = []
+
+    def flaky_executor(rule: AutomationRule) -> None:
+        if rule.rule_id == "r1":
+            raise RuntimeError("boom")
+        fired.append(rule.rule_id)
+
+    scheduler = AutomationScheduler(
+        automation_repository=repository, action_executor=flaky_executor
+    )
+    repository.save(make_rule("r1", Trigger(kind=TriggerKind.STARTUP)))
+    repository.save(make_rule("r2", Trigger(kind=TriggerKind.STARTUP)))
+
+    scheduler.start(now=datetime(2026, 7, 27, 0, 0))
+
+    assert fired == ["r2"]
+    assert repository.get("r1").last_executed_at is not None

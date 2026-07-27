@@ -106,6 +106,21 @@ class StartupTriggerEvaluator(TriggerEvaluator):
         return None
 
 
+class EventTriggerEvaluator(TriggerEvaluator):
+    """Workspace Event 발생 시 발동하는 Event Trigger 평가기(M21-T04).
+    `AutomationScheduler`가 `EventBus`를 구독해 `event_type`이
+    일치하는 Rule에 대해서만 이 평가기를 호출하므로(사전 필터링은
+    Scheduler 책임), `should_fire`는 항상 True다 — event가 이미
+    일치를 확인한 뒤에만 불린다. 일정 기반이 아니므로 다음 예정
+    시각은 계산할 수 없다."""
+
+    def should_fire(self, rule: AutomationRule, *, now: datetime) -> bool:
+        return True
+
+    def compute_next_execution_at(self, rule: AutomationRule, *, now: datetime) -> str | None:
+        return None
+
+
 def _parse_time_of_day(value: str) -> tuple[int, int]:
     hour_str, minute_str = value.split(":")
     return int(hour_str), int(minute_str)
