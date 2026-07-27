@@ -77,14 +77,16 @@ Mobile Experience(M23) 목표 검토를 시작하려면 아래를 먼저
 
 | # | 조건 | 현재 상태 |
 |---|---|---|
-| 1 | Client 코드 저장소 위치(이 저장소 내부 vs 별도 저장소) 결정 | 미정([[Decisions Index]] "왜 Server와 iOS를 분리했는가" 참고) |
-| 2 | 서버 지원 범위 확정(서버 API 소비 전용 / PWA / 네이티브 앱 코드까지 이 저장소가 포함하는지) | 미정 — M23 kickoff 시 사용자 확인 필요 |
-| 3 | Push 발송 주체(서버 자체 vs 별도 서비스) 결정 | 미정([[iOS Design]] "미결정 사항" 참고) |
+| 1 | Client 코드 저장소 위치(이 저장소 내부 vs 별도 저장소) 결정 | **확정**(2026-07-27) — 별도 저장소로 분리. [[Decisions Index]] "왜 Server와 iOS/Android를 분리했는가" 참고. 저장소 자체는 아직 미생성 |
+| 2 | 서버 지원 범위 확정(서버 API 소비 전용 / PWA / 네이티브 앱 코드까지 이 저장소가 포함하는지) | **확정**(2026-07-27) — 이 저장소는 Server(API)까지만 담당, Mobile Client 코드는 포함하지 않음 |
+| 3 | Push 발송 주체(서버 자체 vs 별도 서비스) 결정 | **확정**(2026-07-27) — 이 저장소의 Server가 Push를 생성·관리하고 실제 전송은 FCM/APNs 이용. [[iOS Design]] 참고 |
 | 4 | M22 Production API(`uptime`/`started_at`/`version`/`health_status`)가 M23 요구를 충족하는지 재확인 | 충족(설계 시점부터 M23 재사용 목적으로 준비됨, ADR-0034) |
 | 5 | Vault Index가 M23 작업에 필요한 최소 컨텍스트(Backend/API/Production)를 제공하는지 확인 | 충족(T04~T05 완료) |
 
-1~3은 사용자 결정이 필요한 미해결 항목이며, M23 목표 검토
-(kickoff) 시점에 명시적으로 다시 확인한다.
+**M23 Start Criteria 5개 전 항목 충족(2026-07-27, 사용자 확정).**
+Milestone 23(Mobile Experience) 목표 검토(Feature Design)를
+착수할 수 있다 — 진행 상태는 `.ai/TASKS.md`의 "Milestone 23 —
+Mobile Experience" 절 참고.
 
 ## 향후 개선 대상(Deferred Items)
 

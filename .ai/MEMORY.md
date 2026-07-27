@@ -1060,3 +1060,16 @@ Event Store)은 제안 단계이며 각 구현 Milestone에서 확정한다.
   착수는 여전히 대기 상태(PREPARATION_SUMMARY의 Start Criteria
   1~3 미해결) — 이번 Task는 그 착수 전 Retrieval 기반을 한 단계
   더 다진 것.
+- **M23 Start Criteria 5개 전 항목 확정(2026-07-27, 사용자 결정)**:
+  (1) Client(iOS/Android) 코드는 이 저장소(`ok041110-del/
+  ai-workspace`)와 분리된 별도 저장소로 구성한다(저장소 자체는
+  아직 미생성). (2) 이 저장소는 Server(API)까지만 담당하고 Mobile
+  Client는 포함하지 않는다. (3) Push는 이 저장소의 Server가
+  생성·관리하고, 실제 전송은 FCM/APNs를 이용한다(별도 Push 서비스
+  아님). Vault `Decisions Index`("왜 Server와 iOS/Android를
+  분리했는가")와 `iOS Design`/`PREPARATION_SUMMARY`에 반영.
+  `.ai/TASKS.md`에 "Milestone 23 — Mobile Experience" 절 신설,
+  이 저장소(Server) 쪽 제안 Task List(M23-T02 Push 아키텍처 설계
+  ~ M23-T05 Push 등록 API)를 승인 대기 상태로 기록. Client 저장소
+  생성 자체는 별도 명시적 승인이 필요함을 명시(Task List 승인과
+  분리).

@@ -7562,6 +7562,50 @@ Planning/Daily 기록) 각각에 대해 필수/선택/제외 문서, 쓸 Templat
 
 ---
 
+## Milestone 23 — Mobile Experience
+
+**목표**: AI Workspace Server가 이미 제공하는 API(`/api/status`,
+`/api/dashboard`, `/api/health`, `/ws/dashboard` 등)를 소비하는
+Mobile Experience를 시작한다. 이 저장소(`ok041110-del/ai-workspace`)
+는 Server 쪽 작업(Push 생성·관리 포함)만 담당하고, iOS/Android
+Client 코드는 별도 저장소에서 진행한다.
+
+**M23 Start Criteria(2026-07-27 사용자 확정, [[PREPARATION_SUMMARY]]
+참고)**:
+1. Client 코드 저장소는 이 저장소와 분리된 별도 Repository로
+   구성한다(저장소 자체는 아직 미생성).
+2. 이 저장소는 Server(API)까지 담당하며 Mobile Client(iOS/Android)
+   는 포함하지 않는다.
+3. Push는 이 저장소의 Server가 생성·관리하고, 실제 전송은
+   FCM/APNs를 이용한다.
+4. M22 Production API 표준 필드(`uptime`/`started_at`/`version`/
+   `health_status`)가 M23 요구를 충족함(기존 확인 유지).
+5. Vault Index가 M23 작업에 필요한 최소 컨텍스트를 제공함(기존
+   확인 유지).
+
+**Non-goal(이 저장소 범위 밖)**: iOS/Android 앱 코드 자체(별도
+저장소 kickoff는 그 저장소에서 별도 진행), SwiftUI/WidgetKit/
+ActivityKit/Jetpack Compose 등 Client 기술 스택 구현, Client 저장소
+자체 생성(별도 승인 필요 — 아래 참고).
+
+**이 저장소(Server) 쪽 제안 Task List(승인 대기, 아직 미착수)**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M23-T02 | Push Notification 아키텍처 설계 — FCM/APNs 연동 방식, 발송 트리거(Execution 실패/Automation 발동 등 Event 매핑), 새 외부 의존성 도입 여부를 ADR로 결정 | 제안(승인 대기) |
+| M23-T03 | `PushNotificationService`(가칭) Interface/Engine 구현 — 서버가 Push Payload를 생성·관리하는 책임만 지고, 실제 전송은 FCM/APNs Adapter로 위임 | 제안(승인 대기) |
+| M23-T04 | Automation/Execution 주요 Event(Automation 발동/Execution 실패 등)를 Push 발송 트리거로 연동 | 제안(승인 대기) |
+| M23-T05 | Client가 소비할 Push 등록 API(디바이스 토큰 등록/해제) 설계 및 구현 — Client 저장소가 아직 없어도 서버 계약은 먼저 정의 가능 | 제안(승인 대기) |
+
+Client 저장소 생성 자체(이름/조직/초기 구조)는 GitHub 저장소를
+새로 만드는 행위이므로, 이 Task List와 별도로 진행 전 명시적
+승인을 받는다(Task Driven Development 승인 필요 원칙).
+
+**의존성**: M23-Preparation(T01~T07+T01A~T01D) + M23-T01(Reading
+Profiles) 완료, M23 Start Criteria 5개 전 항목 확정.
+
+---
+
 ## 진행 로그
 
 | 날짜 | 내용 |

@@ -19,10 +19,9 @@ AI Workspace 자체는 코드를 작성하지 않는다 — 역할을 가진 Age
 
 | 저장소 | 역할 | 상태 |
 |---|---|---|
-| `ok041110-del/ai-workspace` | Python 백엔드(Server/Dashboard/Automation/Production) | 진행 중 |
+| `ok041110-del/ai-workspace` | Python 백엔드(Server/Dashboard/Automation/Production), Mobile Client는 포함하지 않음(2026-07-27 확정) | 진행 중 |
 | (이 Vault) | Knowledge Base(Obsidian) | 이 저장소 내 `Vault/`로 체크인 |
-| iOS 앱 | Mobile Experience(M23) | 미착수 — [[iOS Design]] 참고 |
-| Android 앱 | Mobile Experience(M23) | 미착수 — [[Android Placeholder]] 참고 |
+| iOS/Android 앱(별도 저장소, 이름 미정) | Mobile Experience(M23) Client — Server와 분리된 저장소(2026-07-27 확정) | 미생성 — [[iOS Design]]/[[Android Placeholder]] 참고 |
 
 ## 현재 진행률
 
