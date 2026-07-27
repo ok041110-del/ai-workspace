@@ -5944,7 +5944,7 @@ Approval UI, 사용자 인증/권한 관리.
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M20-T01 | Dashboard 도메인 및 이벤트 정의 | 진행 예정 |
+| M20-T01 | Dashboard 도메인 및 이벤트 정의 | **완료** |
 | M20-T02 | 실행 계층과 Dashboard 연결(`ExecutionDispatcher` Event 발행 + `InMemoryDashboardRepository` 구독) | 진행 예정 |
 | M20-T03 | Read Model 및 ViewModel(`DashboardService` + `DashboardViewModel`) | 진행 예정 |
 | M20-T04 | 서버 런타임 구축(`workspace start`, FastAPI app 골격) | 진행 예정 |
@@ -5952,7 +5952,24 @@ Approval UI, 사용자 인증/권한 관리.
 | M20-T06 | 전체 흐름 검증(End-to-End 통합 테스트 + 의존성 검증) | 진행 예정 |
 | M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
 
-**진행 상태**: Task List 승인 완료, 구현 착수.
+**진행 상태**: M20-T01 완료. M20-T02 진행 중.
+
+#### M20-T01: Dashboard 도메인 및 이벤트 정의
+- 상태: **DONE (2026-07-27)** — `domain/dashboard.py`에 `EngineStatus`
+  (READY/RUNNING/AUTH_REQUIRED/ERROR)/`WorkspaceStatus`/
+  `ExecutionRecord`/`ExecutionStats`/`ReliabilityStats` 신규(Provider
+  독립, 한국어 라벨은 이 계층 책임이 아님 — `web/` 계층의
+  `DashboardViewModel`이 담당 예정). `runtime/execution/events.py`
+  에 `ENGINE_EXECUTION_STARTED`/`ENGINE_EXECUTION_COMPLETED` 신규
+  (`agents/events.py`와 동일 패턴, `ExecutionDispatcher`가 발행할
+  예정이나 이번 Task는 상수 정의까지만). `interfaces/
+  dashboard_repository.py`에 `DashboardRepository`(저장 3개+조회
+  5개 메서드, `EventBus`를 알지 못함 — Event 구독은 구체 구현체
+  책임) 신규. `tests/interfaces/fakes.py`에 `FakeDashboardRepository`
+  추가. 단위 테스트 12개 신규(domain 6개, interfaces 5개, events
+  1개). `pytest`(600개), `ruff`, `mypy` 통과. 다음 Task:
+  **M20-T02**(실행 계층과 Dashboard 연결).
+- 의존성: 없음.
 
 ---
 

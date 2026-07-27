@@ -5,6 +5,13 @@ from collections.abc import Callable
 
 from ai_workspace.domain.agent import Agent, AgentCapability, AgentRole, AgentStatus
 from ai_workspace.domain.budget import Budget, BudgetDecision
+from ai_workspace.domain.dashboard import (
+    EngineStatus,
+    ExecutionRecord,
+    ExecutionStats,
+    ReliabilityStats,
+    WorkspaceStatus,
+)
 from ai_workspace.domain.knowledge import KnowledgeDocument
 from ai_workspace.domain.llm_policy import LLMPolicyDecision
 from ai_workspace.domain.project import Project
@@ -36,6 +43,7 @@ from ai_workspace.interfaces.automation_engine import (
 )
 from ai_workspace.interfaces.budget_policy_engine import BudgetPolicyEngine
 from ai_workspace.interfaces.context_manager import ContextManager, SnapshotNotFoundError
+from ai_workspace.interfaces.dashboard_repository import DashboardRepository
 from ai_workspace.interfaces.engine_adapter import (
     CostEstimate,
     EngineAdapter,
@@ -642,3 +650,70 @@ class FakeKnowledgeProvider(KnowledgeProvider):
     def provide(self, query: str) -> list[KnowledgeDocument]:
         self.received_queries.append(query)
         return list(self._documents)
+
+
+class FakeDashboardRepository(DashboardRepository):
+    def __init__(self) -> None:
+        self._workspace_status = WorkspaceStatus(
+            project_name=None, current_task_title=None, status="idle", started_at=None
+        )
+        self._engine_statuses: dict[str, EngineStatus] = {}
+        self._executions: list[ExecutionRecord] = []
+        self.auth_failure_calls: list[str] = []
+
+    def record_execution_started(
+        self, *, engine_name: str, task_title: str, started_at: str
+    ) -> None:
+        self._workspace_status = WorkspaceStatus(
+            project_name=self._workspace_status.project_name,
+            current_task_title=task_title,
+            status="running",
+            started_at=started_at,
+        )
+        self._engine_statuses[engine_name] = EngineStatus.RUNNING
+
+    def record_execution_completed(self, record: ExecutionRecord) -> None:
+        self._executions.insert(0, record)
+        self._engine_statuses[record.engine] = (
+            EngineStatus.READY if record.success else EngineStatus.ERROR
+        )
+        self._workspace_status = WorkspaceStatus(
+            project_name=self._workspace_status.project_name,
+            current_task_title=None,
+            status="idle",
+            started_at=None,
+        )
+
+    def record_authentication_failure(self, *, engine_name: str) -> None:
+        self.auth_failure_calls.append(engine_name)
+        self._engine_statuses[engine_name] = EngineStatus.AUTH_REQUIRED
+
+    def workspace_status(self) -> WorkspaceStatus:
+        return self._workspace_status
+
+    def engine_statuses(self) -> dict[str, EngineStatus]:
+        return dict(self._engine_statuses)
+
+    def recent_executions(self, limit: int = 20) -> list[ExecutionRecord]:
+        return list(self._executions[:limit])
+
+    def execution_stats(self) -> ExecutionStats:
+        return ExecutionStats(
+            total=len(self._executions),
+            success=sum(1 for record in self._executions if record.success),
+            failure=sum(
+                1
+                for record in self._executions
+                if not record.success and not record.cancelled and not record.timed_out
+            ),
+            cancelled=sum(1 for record in self._executions if record.cancelled),
+            timed_out=sum(1 for record in self._executions if record.timed_out),
+        )
+
+    def reliability_stats(self) -> ReliabilityStats:
+        return ReliabilityStats(
+            retry_count=sum(record.retry_count for record in self._executions),
+            timeout_count=sum(1 for record in self._executions if record.timed_out),
+            cancelled_count=sum(1 for record in self._executions if record.cancelled),
+            authentication_failure_count=len(self.auth_failure_calls),
+        )

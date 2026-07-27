@@ -847,7 +847,7 @@ Dashboard(CQRS Read Model)를 구축한다. FastAPI+uvicorn(신규 런타임
 
 | Task | 내용 | 상태 |
 |---|---|---|
-| M20-T01 | Dashboard 도메인 및 이벤트 정의 | 진행 예정 |
+| M20-T01 | Dashboard 도메인 및 이벤트 정의 | **완료** |
 | M20-T02 | 실행 계층과 Dashboard 연결 | 진행 예정 |
 | M20-T03 | Read Model 및 ViewModel | 진행 예정 |
 | M20-T04 | 서버 런타임 구축 | 진행 예정 |
@@ -855,7 +855,7 @@ Dashboard(CQRS Read Model)를 구축한다. FastAPI+uvicorn(신규 런타임
 | M20-T06 | 전체 흐름 검증 | 진행 예정 |
 | M20-T07 | 문서화 및 아키텍처 정리 | 진행 예정 |
 
-**진행 상태**: Task List 승인 완료, 구현 착수.
+**진행 상태**: M20-T01 완료, M20-T02 진행 중.
 
 ---
 
