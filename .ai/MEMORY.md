@@ -679,6 +679,56 @@
   때문, 코드 문제 아님). **새 최상위 Interface 1개**
   (`DashboardRepository`) 추가로 ADR-0032 기록. 새로 발생한 기술
   부채 없음. 이월 부채는 M19와 동일하게 유지, 신규 이월 없음.
+- **Milestone 21(Automation Engine) 완료 — 2026-07-27 사용자 승인.**
+  목표는 "조건/일정에 따라 Task를 자동 실행하는 Automation(Dashboard와
+  독립적인 Domain, `ExecutionDispatcher`를 통해서만 Task 실행)"
+  (MVP). **핵심 발견**: M4-T07에 이미 `AutomationEngine`
+  (trigger_id↔Workflow 연결 관리만 담당, "언제 발동할지"·"실제
+  실행"은 원래부터 호출자 책임으로 명시적으로 떠넘겨져 있었음)이
+  존재 — M21이 요청한 `AutomationRule`(4종 Trigger+Action)/
+  `AutomationScheduler`(실제 일정 평가+자동 실행)는 그 떠넘겨진
+  책임을 처음 구현하는 것이라 M16 `KnowledgeRepository`/M18
+  `EngineExecutionResult`와 같은 "이름은 유사하지만 다른 개념"
+  패턴으로 판단해 완전히 새 컴포넌트 세트를 도입(기존
+  `AutomationEngine`은 무수정 유지). 사용자 최종 승인 조건 6개:
+  (1) `AutomationScheduler`와 Trigger 책임 분리, (2) Dashboard는
+  계속 Read Model 유지, (3) Automation CRUD는 API를 통해서만, (4)
+  Dashboard는 Automation 미제어, (5) `ExecutionDispatcher` 유일한
+  실행 진입점 유지, (6) `last_executed_at`/`next_execution_at`을
+  도메인에 내장해 M23 Mobile과 연계. `domain/automation.py`
+  (`TriggerKind`/`Trigger`/`ActionKind`/`Action` — kind로 태그된
+  Flat 구조, `AutomationRule`은 `Task`처럼 가변 엔티티),
+  `interfaces/automation_repository.py`의 `AutomationRepository`
+  (**신규 최상위 Interface, 27번째**), `runtime/automation/`
+  (`InMemoryAutomationRepository`/`AutomationService`(CRUD 유일
+  진입점)/`TriggerEvaluator` 계층(Time/Interval/Startup/Event 4종,
+  "언제 발동할지" 판단 전담)/`AutomationScheduler`(Rule을 별도
+  보관하지 않고 매 호출마다 Repository 재조회 — CRUD가 API를
+  거치기만 하면 자동 반영)/`AutomationActionExecutor`(RUN_TASK를
+  M17/M18 파이프라인 `EngineSelectionPolicy.select()`→
+  `ExecutionDispatcher.dispatch()`로 그대로 실행, RUN_WORKFLOW는
+  `AutomationActionNotSupportedError`로 이번 범위 밖 명시)).
+  Dashboard 연계는 **Reader→Reader** 패턴으로 확장 —
+  `DashboardService`가 선택적 `automation_service` DI로
+  `AutomationService.list_rules()`(읽기 전용)만 호출해
+  `AutomationStatus` 집계(CQRS "쓰기측이 읽기측을 모른다" 방향성만
+  유지). `web/automation_routes.py` REST API 8종, `web/app.py`를
+  `lifespan` Context Manager로 전환해 서버 기동 시 Startup Trigger
+  평가+주기적 `tick()` 백그라운드 Task 실행. 실제
+  `ClaudeCodeEngineAdapter` 조합으로 Event Trigger→실제 Task
+  실행까지 이어짐과 REST API로 만든 Rule이 Dashboard에 반영됨을
+  통합 테스트로 증명(M21-T07). **실제 브라우저 검증**(Playwright,
+  세션 한정 설치)에서 Web UI 다중 필드 표시 버그(`querySelector`
+  단일 요소 한계)를 발견해 `querySelectorAll`로 즉시 수정 — pytest
+  로는 잡히지 않는 정적 JS 결함을 실제 조작으로 잡은 사례. 신규
+  소스/정적 파일 11개, 기존 파일 수정 5개(전부 선택적 DI/기본값
+  유지로 하위 호환). 전체 `pytest` 720개(M20 완료 635개 → M21에서
+  85개 신규) 통과, `ruff`/`mypy` 클린. **새 최상위 Interface 1개**
+  (`AutomationRepository`) 추가로 ADR-0033 기록. 신규 기술 부채
+  2건: RUN_WORKFLOW 미지원(`ExecutionDispatcher` 유일 진입점 원칙과
+  정합성 있는 설계를 후속 Milestone으로 이월), Dashboard 서버의
+  `InMemoryEngineRegistry`에 실제 `EngineAdapter`가 등록돼 있지
+  않음(Workspace Core/CLI 경로와의 실제 통합은 Out of Scope로 이월).
 - **DX-01(Stage Checkpoint)**: `.ai/RULES.md` §2.4에 따라 2026-07-25부터
   Task 내부 4개 단계 경계마다 Smart Model Router를 실행해 Model/Effort를
   점검한다(`.ai/DECISIONS.md`의 `DX-01` 항목 참고). T1-23(첫 적용)에서는
