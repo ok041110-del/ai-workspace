@@ -9810,7 +9810,7 @@ Rule 기반 계층으로 유지한다.
 | Task | 내용 | 상태 |
 |---|---|---|
 | M30-T01 | Context Intelligence Architecture 설계 | **완료** |
-| M30-T02 | Context Analyzer | 예정 |
+| M30-T02 | Context Analyzer | **완료** |
 | M30-T03 | Freshness & Gap Analyzer | 예정 |
 | M30-T04 | Integration | 예정 |
 | M30-T05 | Presentation | 예정 |
@@ -9853,6 +9853,51 @@ Rule 기반 계층으로 유지한다.
 | ADR 작성 | ✅ (ADR-0044) |
 
 코드 변경 없음(설계 Task). 다음 Task: **M30-T02**(Context Analyzer).
+
+### M30-T02: Context Analyzer
+
+**목표**: T01 설계대로 `KnowledgeAdapter`를 만들고, Knowledge 문서를
+Markdown 제목 단위로 쪼개 subject가 언급된 항목을 `ProjectContext`
+로 모으는 `ContextAnalyzer`를 구현한다.
+
+**구현 내용**
+
+- `integration/knowledge_adapter.py`(신규) — `KnowledgeAdapter`가
+  `KnowledgeRepository`(필수)/`KnowledgeSearch`(선택)만 생성자로
+  주입받아 `KnowledgeDocumentView`로 변환해 노출한다. Knowledge
+  조회/검색 로직은 새로 만들지 않고 전부 위임한다. `integration/
+  __init__.py`/`tests/integration_layer/test_connector_layering.py`
+  의 `_ADAPTERS`에 등록(§8 규칙 19 대상에 신규 Adapter 편입).
+- `intelligence/context.py`(신규) — `ContextAnalyzer.analyze(subject)`
+  가 `KnowledgeAdapter.list_all()`이 반환한 문서를 Markdown 제목
+  (`#`/`##`/`###`) 단위로 평면 분할한 뒤, subject가 언급된 (제목,
+  본문) 구간만 `ContextEntry`로 채택해 `ProjectContext`를 만든다.
+  **실제 구현 중 발견한 표기 불일치**: 이 저장소는 Task 문서
+  제목엔 "M29-T01:", ADR 제목엔 "(Milestone 29-T01)"처럼 같은
+  식별자를 문서 종류마다 다르게 표기한다 — `subject`가 "M30-T01"
+  하나만 들어와도 두 표기를 모두 만들어 대조하는
+  `_subject_variants()`를 추가해 실제로 놓치지 않도록 했다(설계
+  단계에서 예상 못 한 디테일, 표준 Interface나 데이터 변경 없이
+  Analyzer 내부 Rule로 흡수).
+  `_split_sections()`는 평면 분할이라 상위 제목(`## Milestone 30`)
+  본문에 하위 제목(`### M30-T01`) 텍스트가 섞이지 않는다는 한계를
+  docstring에 명시했다 — 실질적으로는 하위 제목 자체가 별도 항목
+  으로 매칭되어 누락은 없다.
+  `intelligence/`는 여전히 `integration/`의 Adapter에만 의존한다
+  (§8 규칙 21 유지, `test_intelligence_layering.py`의
+  `allowed_prefixes`에 `knowledge_adapter` 추가).
+
+**테스트**: `tests/integration_layer/test_knowledge_adapter.py`(신규
+3개), `tests/intelligence/test_context_analyzer.py`(신규 5개).
+`pytest`(912개, 기존 904개 + 신규 8개), `ruff check src tests`,
+`mypy src` 전부 클린.
+
+**완료 조건 확인**: 데이터 소스 정의대로 `KnowledgeAdapter` 동작
+확인, `ProjectContext` 생성 테스트 통과(언급된 항목 채택/무관 항목
+제외/Milestone 추출/언급 없을 때 빈 결과/`by_kind()` 필터). 새 Core
+Domain Interface 없음(27종 그대로), Core Domain 코드 무변경.
+
+다음 Task: **M30-T03**(Freshness & Gap Analyzer).
 
 ---
 

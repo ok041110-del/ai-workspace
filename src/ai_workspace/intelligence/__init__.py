@@ -42,6 +42,11 @@ Vault Task 문서(`VaultAdapter.list_tasks()`)를 단일 데이터 소스로
   publish_intelligence_report()`로 `15 Project Intelligence/
   Project Intelligence.md`에 노출한다(`publish()`). 새 판단 기준
   없이 이미 만든 세 Analyzer를 조합만 한다.
+- `context.ContextAnalyzer`(Milestone 30-T02, ADR-0044) —
+  `KnowledgeAdapter.list_all()`이 반환한 Knowledge 문서 텍스트를
+  Markdown 제목 단위로 쪼개, subject(Task/Milestone 식별자)가
+  언급된 항목만 `ProjectContext`로 모은다. 새 지식을 만들지 않고
+  LLM도 호출하지 않는다 — 이미 있는 문서를 구조적으로 파싱할 뿐이다.
 """
 
 from __future__ import annotations
