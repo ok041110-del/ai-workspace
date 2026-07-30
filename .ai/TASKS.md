@@ -10053,6 +10053,19 @@ M30-T05 항목).
 Freshness 감점)은 단순 근사이며 가중치 근거가 없다. 전부 실제
 요구사항이 생기면 별도 Milestone/ADR에서 재검토한다.
 
+**사용자 승인(2026-07-30)**: Scope 준수/Architecture 유지/Interface
+유지/Rule 기반 구현/Documentation 완료/Test 통과를 모두 만족함을
+확인해 **Milestone 30(Context Intelligence) 공식 완료(Approved)**.
+"M28(Live Task Management & Integration)→M29(Project Intelligence)
+→M30(Context Intelligence)"로 이어지며, AI Workspace가 단순 작업
+관리 도구를 넘어 프로젝트 상태를 이해하고 현재 작업에 필요한 맥락
+까지 제공하는 기반 계층을 갖췄다는 점에서 프로젝트 차원의 의미가
+있음을 사용자가 확인함 — 이후 Session Resume/AI Agent 협업/장기
+메모리 활용 등 상위 기능의 토대가 된다.
+
+**다음은 Milestone 31(Capability Intelligence)** — 세부 Task는
+착수 시점에 별도 제안·승인 후 정의한다.
+
 ---
 
 ## GitHub Flow Migration
