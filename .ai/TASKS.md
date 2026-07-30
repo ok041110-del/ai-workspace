@@ -11777,7 +11777,7 @@ Approval Required 대상).
 
 ---
 
-## Milestone 39 — Memory Engine
+## Milestone 39 — Execution Memory
 
 **목표**(2026-07-30 사용자 확정): M38 Review가 M39 이후로 미룬 세
 Engine(Memory Engine/Architecture Guardian/Learning Engine) 중
@@ -11867,13 +11867,13 @@ test_recommendation_execution_service.py`(신규 2 — 주입 시 자동
 엔드포인트는 범위 밖으로 남아 M40(Learning Engine) 이후 논의
 대상이다.
 
-**Milestone 39(Memory Engine) T01(ADR-0053 초안 검토·조건부 승인
+**Milestone 39(Execution Memory) T01(ADR-0053 초안 검토·조건부 승인
 반영)~T04(구현+통합+테스트+문서화) 전체 완료.**
 
 **사용자 승인(2026-07-30)**: DoD 10개 항목/MDD Review/ADR-0053/
-Tests/Documentation을 확인해 **Milestone 39(Memory Engine) 공식
+Tests/Documentation을 확인해 **Milestone 39(Execution Memory) 공식
 완료(Approved)**. "M29(Project Intelligence)→…→M38(AutomationScheduler
-연결)→M39(Memory Engine)"으로 이어지며, Execution Platform이
+연결)→M39(Execution Memory)"으로 이어지며, Execution Platform이
 처음으로 자신의 실행 결과를 스스로 기억하기 시작했다 — 저장과
 조회만 제공하고 학습(추천/판단 변경)은 하지 않는다는 계층 분리를
 명확히 지켰다.
