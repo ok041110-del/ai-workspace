@@ -47,6 +47,11 @@ Vault Task 문서(`VaultAdapter.list_tasks()`)를 단일 데이터 소스로
   Markdown 제목 단위로 쪼개, subject(Task/Milestone 식별자)가
   언급된 항목만 `ProjectContext`로 모은다. 새 지식을 만들지 않고
   LLM도 호출하지 않는다 — 이미 있는 문서를 구조적으로 파싱할 뿐이다.
+- `context_quality.ContextFreshnessGapAnalyzer`(Milestone 30-T03) —
+  `ProjectContext`를 입력으로 Freshness(제목에서 추출한 Milestone
+  번호 거리)와 Gap(ADR/TASK/ARCHITECTURE 중 언급 0건)을 Rule 기반
+  으로 판단한다. Adapter를 직접 호출하지 않고 Context 산출물만
+  재사용한다.
 """
 
 from __future__ import annotations

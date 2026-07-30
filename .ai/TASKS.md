@@ -9811,7 +9811,7 @@ Rule 기반 계층으로 유지한다.
 |---|---|---|
 | M30-T01 | Context Intelligence Architecture 설계 | **완료** |
 | M30-T02 | Context Analyzer | **완료** |
-| M30-T03 | Freshness & Gap Analyzer | 예정 |
+| M30-T03 | Freshness & Gap Analyzer | **완료** |
 | M30-T04 | Integration | 예정 |
 | M30-T05 | Presentation | 예정 |
 
@@ -9898,6 +9898,41 @@ Markdown 제목 단위로 쪼개 subject가 언급된 항목을 `ProjectContext`
 Domain Interface 없음(27종 그대로), Core Domain 코드 무변경.
 
 다음 Task: **M30-T03**(Freshness & Gap Analyzer).
+
+### M30-T03: Freshness & Gap Analyzer
+
+**목표**: T02의 `ProjectContext`를 입력으로 Freshness(Healthy/
+Warning)와 Gap(필요 문서 없음)을 Rule 기반으로 판단한다.
+
+**구현 내용**
+
+- `intelligence/context_quality.py`(신규)의
+  `ContextFreshnessGapAnalyzer` — Adapter를 새로 호출하지 않고
+  `ProjectContext`만 입력으로 받는다(새로운 데이터 접근 경로 없음,
+  T03 health_risk.py와 동일한 설계 원칙).
+  - **Gap**: ADR/TASK/ARCHITECTURE 3종 중 subject 언급이 0건인
+    kind마다 `ContextGap` 1건. RULE/PROJECT는 범용 문서라 Gap
+    판정에서 제외(ADR-0044 결정 그대로).
+  - **Freshness**: `current_milestone`(선택 인자)이 주어지면, 매칭된
+    항목의 Milestone 번호와의 거리가 임계값(기본 3) 초과일 때
+    Warning. `current_milestone`을 생략하면 항상 Healthy(비교
+    기준이 없으므로 판단하지 않음, 억지 판정 금지).
+  - **score**: Gap 개수 기반 기본 점수(0.0~1.0)에서 Freshness가
+    Warning이면 0.2 감점한다 — 새 판단 기준을 늘리지 않고 이미
+    계산한 Gap/Freshness만 조합.
+
+**테스트**: `tests/intelligence/test_context_quality.py`(신규 7개
+— 전체 Gap/Gap 없음/rule·project 제외 확인/current_milestone 없을
+때 Healthy/먼 Milestone Warning/가까운 Milestone Healthy/score
+감점). `pytest`(919개, 기존 912개 + 신규 7개), `ruff check src
+tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**: Health/Gap 테스트 통과. 새 Core Domain
+Interface 없음(27종 그대로), Core Domain 코드 무변경,
+`intelligence/`는 여전히 자기 자신의 다른 모듈에만 의존(§8 규칙
+21 유지 — `context_quality.py`는 Adapter조차 직접 참조하지 않음).
+
+다음 Task: **M30-T04**(Integration).
 
 ---
 
