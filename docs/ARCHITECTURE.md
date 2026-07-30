@@ -1040,6 +1040,23 @@ GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
   Integration Layer/Workflow·Agent 연동/Conversation Layer)는
   진행 중이며 각 Task 완료마다 이 절에 추가한다.
 
+- **구현 상태(Milestone 28-T02, Automatic Document
+  Synchronization)**: `vault/task_sync.py`(신규) — `sync_task_change()`
+  가 Task 상태 변경을 Daily Note("오늘 작업"/"진행중"/"완료" 섹션에
+  Backlink 줄 추가, 없으면 생성)/`11 Milestones/Milestones
+  Index.md`("## Task 변경 로그" — `docs/ROADMAP.md`는 GitHub 원문
+  이라 Vault가 직접 못 쓰므로 이 Vault 대응 문서로 대신함)/`12
+  Decisions/Decisions Index.md`("## Task 연결", Task의 `## Decision`
+  절에 실제 Wikilink가 있을 때만)에 반영한다. 신규 헬퍼
+  `_upsert_bullet_section()`은 `writer.upsert_section()`(섹션
+  전체 치환)과 달리 누적 로그용으로 "중복 없는 줄 추가"를
+  구현한다(서로 다른 저장 전략을 하나로 억지로 합치지 않음).
+  `transition_and_sync()`가 `task_lifecycle.transition_task_status()`
+  + `sync_task_change()`를 잇는 단일 진입점. 모든 신규 링크는
+  파일명/기존 문서 제목만 가리켜 Wiki Link/Backlink가 깨지지
+  않는다(`find_broken_backlinks()` 통합 테스트로 확인). Core Domain
+  참조 없음, 새 Interface 없음.
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```

@@ -8782,7 +8782,7 @@ Task로 진행한다.
 | Task | 내용 | 상태 |
 |---|---|---|
 | M28-T01 | Task Lifecycle(Status Transition, `updated` 자동 갱신, Archive 처리) | **완료** |
-| M28-T02 | Automatic Document Synchronization(Task 변경 → Daily/Decision/Roadmap/Milestone 갱신) | 착수 예정 |
+| M28-T02 | Automatic Document Synchronization(Task 변경 → Daily/Decision/Roadmap/Milestone 갱신) | **완료** |
 | M28-T03 | Integration Layer(Vault Adapter/Workflow Adapter/Agent Adapter) | 착수 예정 |
 | M28-T04 | Workflow Engine Integration | 착수 예정 |
 | M28-T05 | Agent Assignment | 착수 예정 |
@@ -8831,6 +8831,71 @@ Task로 진행한다.
 없음/frontmatter 없음), `ruff check src tests` 클린, `mypy
 src/ai_workspace/vault` 클린, `pytest`(812개, 기존 806개 + 신규 6개)
 전부 통과.
+
+### M28-T02: Automatic Document Synchronization
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Task 변경 시 Daily Note 갱신 | ✅ |
+| 2 | Task 변경 시 Decision 갱신 | ✅ |
+| 3 | Task 변경 시 Roadmap 갱신 | ✅ (Vault 쪽 대응 문서로 구현, 아래 참고) |
+| 4 | Task 변경 시 Milestone 갱신 | ✅ |
+| 5 | Wiki Link 유지 | ✅ |
+| 6 | Backlink 손실 없음 | ✅ |
+| 7 | 테스트 통과 | ✅ |
+
+**구현 내용**
+
+- `vault/task_sync.py`(신규): `sync_task_change(vault_root,
+  task_id, old_status, new_status, *, date=None)`가 Task 상태
+  변경 하나를 관련 문서 3곳에 반영한다.
+  1. **Daily Note**: 오늘(또는 지정한 날짜) Daily Note가 없으면
+     `render_daily_file()`로 만들고, 새 상태에 대응하는 섹션
+     (`TODO`→"오늘 작업", `IN_PROGRESS`/`REVIEW`→"진행중",
+     `DONE`→"완료")에 `- [[task_id]] {이전} → {새} 상태` 줄을
+     추가한다. `ARCHIVED`는 `DONE` 시점에 이미 "완료"에 기록됐으므로
+     Daily Note를 다시 건드리지 않는다.
+  2. **Milestone/Roadmap**: `docs/ROADMAP.md`는 GitHub 원문이라
+     Vault가 직접 쓸 수 없다(`AI_RULES` "GitHub 문서를 수정하지
+     않는다"). 그 대신 **Vault 쪽 대응 문서**인 `11 Milestones/
+     Milestones Index.md`에 "## Task 변경 로그" 절을 만들고(없으면
+     새로 생성) 같은 방식으로 로그 줄을 추가한다 — 이 매핑을 문서
+     상단 안내문으로 명시했다.
+  3. **Decision**: Task 문서의 `## Decision` 절에 실제 Wikilink가
+     있을 때만(빈 `-` placeholder는 무시) `12 Decisions/Decisions
+     Index.md`에 "## Task 연결" 절로 `[[task_id]] → [[결정 제목]]`
+     을 기록한다 — 모든 Task가 아니라 실제로 판단이 내려진 Task만
+     대상이 되게 해 과도한 자동화(YAGNI)를 피했다.
+  - 공통 저장 전략 `_upsert_bullet_section()`: 섹션이 없으면
+    "## 관련 문서" 앞에 새로 만들고(`writer.py`의 관련 문서 삽입
+    규칙과 동일), 있으면 중복 없이 줄만 추가하며, 빈 `-`
+    placeholder만 있으면 그 자리를 대체한다. `writer.upsert_section()`
+    (섹션 전체 치환)과 달리 **누적 로그**에 맞게 새로 작성했다 —
+    기존 함수를 억지로 재사용하지 않고 그 옆에 필요한 만큼만
+    추가했다(Cohesion 원칙, 서로 다른 책임을 억지로 합치지 않음).
+  - `transition_and_sync(vault_root, task_id, new_status, *,
+    today=None)`: `transition_task_status()` + `sync_task_change()`
+    를 이어 붙인 편의 함수 — "Task 변경 시 자동 문서 갱신"의 단일
+    진입점. 둘을 분리해 둔 `task_lifecycle.py`/`task_sync.py`는
+    각각 독립적으로도 쓸 수 있다(테스트에서 실제로 두 경로 모두
+    검증).
+  - Wiki Link/Backlink 유지: 새로 만드는 모든 링크는 파일명
+    (`task_id`) 또는 이미 존재하는 문서 제목만 가리키므로 끊어질
+    수 없다. 실제 Vault 대상 `find_broken_backlinks()` 통합 테스트
+    (신규 broken link 0건 유지)로 확인했다.
+  - `11 Milestones/Milestones Index.md`/`12 Decisions/Decisions
+    Index.md` 상단에 이 자동 생성 절을 설명하는 안내문 추가(사람이
+    나중에 "## Task 변경 로그"/"## Task 연결" 절을 보고 당황하지
+    않도록).
+
+**검증**: `tests/vault/test_task_sync.py`(신규 6개 — Daily 생성+
+추가/멱등성/Milestone 로그/Decision 있음/Decision 없음/
+`transition_and_sync` 통합), `ruff check src tests` 클린, `mypy
+src/ai_workspace/vault` 클린, `tests/integration/
+test_m23_vault_environment_integration.py`(Broken Backlink 0건
+유지) 포함 `pytest`(818개, 기존 812개 + 신규 6개) 전부 통과.
 
 ---
 

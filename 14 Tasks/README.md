@@ -22,6 +22,12 @@ Checklist)를 바로 보고 갱신하기 위한 것으로, Milestone 27
 `updated`를 자동 갱신한다. `Archived`로 전이하면 문서가 `Archive/
 {task_id}.md`로 옮겨진다(같은 파일명이라 Wikilink는 유지).
 
+상태를 바꾸면서 관련 문서도 함께 갱신하고 싶으면
+`vault.task_sync.transition_and_sync()`를 대신 쓴다(Milestone
+28-T02) — 상태 전이와 함께 오늘 Daily Note, [[Milestones Index]]의
+"Task 변경 로그", (있으면) [[Decisions Index]]의 "Task 연결"까지
+한 번에 갱신한다.
+
 ## 관련 문서
 
 - [[Template - Task]]
