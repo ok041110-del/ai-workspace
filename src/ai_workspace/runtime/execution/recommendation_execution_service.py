@@ -10,21 +10,30 @@ select()` → `ExecutionDispatcher.dispatch()`)를 직접 재사용한다 —
 버리는 기존 계약이라 실행 결과를 Vault에 남길 수 없기 때문이다
 (ADR-0050 결정 4). M37부터는 실행 시작/완료 시점에
 `TaskLifecycleTransitioner`(ADR-0051)로 기존 Task 상태 전이 기계
-(`_ALLOWED_TRANSITIONS`, M28)에도 연결한다."""
+(`_ALLOWED_TRANSITIONS`, M28)에도 연결한다.
+
+**Memory 기록(M39, ADR-0053)**: `execution_memory_store`를 선택적으로
+주입하면 실행 결과가 `ExecutionMemory`로 자동 기록된다. 미주입 시
+(기본값 `None`) 기록을 건너뛰어 M38 이전과 완전히 동일하게 동작한다
+(M38의 `recommendation_execution_service: RecommendationExecutionService
+| None = None` 패턴과 동일한 선택적 의존성 도입 방식)."""
 
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ai_workspace.domain.automation import Action
+from ai_workspace.domain.execution_memory import ExecutionMemory
 from ai_workspace.domain.execution_result import EngineExecutionResult
 from ai_workspace.domain.task import Task
 from ai_workspace.integration.vault_adapter import TaskTransitionOutcome, VaultAdapter
 from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
 from ai_workspace.interfaces.engine_registry import EngineRegistry
 from ai_workspace.interfaces.engine_selection_policy import EngineSelectionPolicy
+from ai_workspace.memory.execution_memory_store import ExecutionMemoryStore
 from ai_workspace.runtime.execution.execution_dispatcher import ExecutionDispatcher
 from ai_workspace.runtime.execution.recommendation_action_builder import ActionBuilder
 from ai_workspace.runtime.execution.recommendation_execution_gate import (
@@ -62,12 +71,14 @@ class RecommendationExecutionService:
         engine_registry: EngineRegistry,
         engine_selection_policy: EngineSelectionPolicy,
         execution_dispatcher: ExecutionDispatcher,
+        execution_memory_store: ExecutionMemoryStore | None = None,
     ) -> None:
         self._recommendation_service = recommendation_service
         self._vault_adapter = vault_adapter
         self._engine_registry = engine_registry
         self._engine_selection_policy = engine_selection_policy
         self._execution_dispatcher = execution_dispatcher
+        self._execution_memory_store = execution_memory_store
         self._gate = ExecutionGate()
         self._builder = ActionBuilder()
         self._transitioner = TaskLifecycleTransitioner()
@@ -84,7 +95,9 @@ class RecommendationExecutionService:
               를 호출한다(실제 부작용 발생). Task 상태 전이는
               `TaskLifecycleTransitioner`가 현재 상태를 확인해
               유효한 경우에만 발생한다(ADR-0051) — 예상과 다른
-              상태면 조용히 건너뛴다.
+              상태면 조용히 건너뛴다. `execution_memory_store`가
+              주입돼 있으면 실행 결과가 `ExecutionMemory`로 자동
+              기록된다(M39, ADR-0053) — 미주입 시 기록을 건너뛴다.
         """
         report = self._recommendation_service.generate()
         decision = self._gate.check(report.next_action, manual_trigger=manual_trigger)
@@ -118,6 +131,17 @@ class RecommendationExecutionService:
         if completion_status is not None:
             transitions.append(
                 self._vault_adapter.transition_task(target_task_id, completion_status)
+            )
+
+        if self._execution_memory_store is not None:
+            self._execution_memory_store.record(
+                ExecutionMemory(
+                    task_id=target_task_id,
+                    action=action.task_title,
+                    result="success" if result.success else "failure",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    reason=result.error,
+                )
             )
 
         return RecommendationExecutionOutcome(

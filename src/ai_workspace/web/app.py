@@ -9,6 +9,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
 
 from ai_workspace.interfaces.event_bus import EventBus
+from ai_workspace.memory.execution_memory_store import ExecutionMemoryStore
 from ai_workspace.runtime.automation.automation_scheduler import AutomationScheduler
 from ai_workspace.runtime.automation.automation_service import AutomationService
 from ai_workspace.runtime.dashboard.dashboard_service import DashboardService
@@ -34,6 +35,7 @@ def create_app(
     production_config: ProductionConfig | None = None,
     lifecycle_manager: LifecycleManager | None = None,
     health_monitor: HealthMonitor | None = None,
+    execution_memory_store: ExecutionMemoryStore | None = None,
 ) -> FastAPI:
     """Dashboard/Automation/Production API의 FastAPI 앱을
     조립한다(M20-T04/T05, M21-T05, M22-T05). `Core` 계층(domain/
@@ -63,7 +65,12 @@ def create_app(
     수행한 뒤에야 주기적 tick Task를 취소한다 — `lifecycle_manager`
     미주입 시(기존 M20/M21 호출부)는 이전과 동일하게 즉시
     `automation_scheduler.start()`를 호출하고 대기 없이 tick Task를
-    취소한다."""
+    취소한다.
+
+    `execution_memory_store`를 주입하면(M39) `app.state.
+    execution_memory_store`로 노출한다 — 새 REST 엔드포인트는
+    추가하지 않는다(YAGNI, ADR-0053). 미주입 시(기본값 `None`)
+    `app.state`에 아무것도 실리지 않는다."""
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -92,6 +99,8 @@ def create_app(
 
     app = FastAPI(title="AI Workspace Dashboard API", lifespan=lifespan)
     app.state.dashboard_service = dashboard_service
+    if execution_memory_store is not None:
+        app.state.execution_memory_store = execution_memory_store
     app.include_router(dashboard_router)
 
     if automation_service is not None and automation_scheduler is not None:

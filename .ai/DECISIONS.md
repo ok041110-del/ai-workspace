@@ -3330,3 +3330,113 @@
   `ActionBuilder`/`TaskLifecycleTransitioner` 무변경. `done→archived`
   자동화·재시도 정책·`review→done` 자동화·CLI·Hook은 계속 범위 밖
   (YAGNI, 다음 Milestone 이후 논의).
+
+## ADR-0053: Memory Engine 도입 — Execution 결과를 기존 MemoryEngine에 저장만, 조회 API 제공, Learning 없음 (Milestone 39)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 "M39 Memory Engine 구현 진행"
+  요청. 초안 제안서를 검토한 사용자가 조건부 승인 — Scope를
+  "저장(store)"과 "조회(query)"로만 한정하고 `RecommendationRuleAnalyzer`
+  등 소비 측 반영(Rule 변경)은 M40(Learning Engine)으로 명시적으로
+  이관할 것, Memory Record 모델에 embedding/score/vector/confidence를
+  절대 포함하지 말 것을 조건으로 제시 — 반영. 구현 완료 후 반영)
+- 날짜: 2026-07-30
+- 배경: `docs/ARCHITECTURE.md` §2.1(2026-07-30, M38 Review 직후
+  재구성)이 "M36~M38(Execution Platform)은 생각하고 실행할 수 있을
+  뿐, 아직 스스로 기억하고(Memory Engine) 설계를 감시하고
+  (Architecture Guardian) 학습하는(Learning Engine) 단계가 아니다"
+  라고 명시하며 M39 이후 이 세 Engine을 각각 별도 제안·승인
+  대상으로 남겨뒀다. 이 중 Memory Engine을 M39로 착수한다. 기존
+  `MemoryEngine`(M1, `remember`/`recall`/`search`)과 `ContextManager`
+  (M1, Snapshot 생명주기)는 이미 존재하지만 어느 것도 M36~M38
+  Execution 결과를 자동으로 기록하지 않는다 — Agent가 수동으로
+  `remember()`를 호출해야만 채워지고, 그런 호출부 자체가 없다.
+- 결정:
+  1. **새 Interface를 만들지 않는다.** 기존 `MemoryEngine`
+     (`interfaces/memory_engine.py`, M1)을 그대로 재사용한다 —
+     `InMemoryContextManager`가 Snapshot을 JSON으로 직렬화해
+     `MemoryEngine.remember()`에 저장하는 것과 동일한 패턴이다.
+  2. **`ExecutionMemory`(신규, `domain/execution_memory.py`)** —
+     `task_id`/`action`/`result`("success"|"failure")/`timestamp`/
+     `reason`(선택) 5개 필드만 가진 순수 dataclass. **embedding/
+     score/vector/confidence는 의도적으로 포함하지 않는다** — 과거
+     기록으로 판단·추천을 바꾸는 것(Learning)은 M40 이후의 책임이다.
+  3. **`ExecutionMemoryStore`(신규, `memory/execution_memory_store.py`)**
+     — `MemoryEngine` 하나를 감싸는 얇은 서비스. `record()`는
+     `ExecutionMemory`를 JSON 직렬화해 `remember(uuid, json)`으로
+     저장하고, `query(task_id=None)`는 `search("")`(빈 문자열은
+     모든 값의 substring이라는 성질 이용)로 전체 key를 얻은 뒤
+     역직렬화해 반환한다 — `MemoryEngine` interface에 새 메서드를
+     추가하지 않는다.
+  4. **`RecommendationExecutionService`(M36)에 `execution_memory_store:
+     ExecutionMemoryStore | None = None` 선택적 의존성을 추가한다**
+     (M38의 `recommendation_execution_service` 선택적 주입과 동일한
+     패턴). `execute()`가 `ExecutionDispatcher.dispatch()` 결과를
+     얻은 직후, 주입돼 있으면 자동으로 `ExecutionMemory`를
+     기록한다 — 미주입 시(기본값) 기록을 건너뛰어 M38 이전과 완전히
+     동일하게 동작한다. **Agent 수동 `remember()` 호출을 기다리지
+     않고 Execution Platform이 스스로 기록한다**는 점이 M1 이후
+     처음이다.
+  5. **영속화(Vault 파일 등)는 이번 범위에 포함하지 않는다.**
+     `web/server.py`의 `build_app()`은 매 프로세스 기동마다 새로
+     만들어지는 `InMemoryMemoryEngine()`을 사용한다 — 재시작하면
+     기록이 사라진다. `interfaces/memory_engine.py`가 `vault/`나
+     `domain/`을 모르는 순수 Core Domain 계약이라, Vault에 영속화
+     하려면 `vault/`(Core Domain을 알지 못하는 계층, `docs/
+     ARCHITECTURE.md` §7 "vault/는 Core Domain을 알지 못한다")를
+     알아야 하는 구현체가 필요한데, 이는 `MemoryEngine`이라는
+     Milestone 1부터 있던 기초 Core Engine 계약의 구현체가 M28+에
+     생긴 Vault Integration Layer에 의존하게 만드는 방향의
+     결합이라 이번 Milestone에서는 시도하지 않는다(YAGNI + 레이어
+     결합 최소화). 영속화가 실제로 필요해지면(예: M40 Learning
+     Engine이 재시작 후에도 과거 기록을 참고해야 하는 경우) 별도
+     제안·승인 대상이다.
+  6. **`RecommendationRuleAnalyzer`(M35)는 이번 범위에서 손대지
+     않는다.** `ExecutionMemoryStore.query()`를 향후 참고할 수 있는
+     기반만 제공할 뿐, 실제로 Rule/추천 판단을 바꾸는 소비 로직은
+     M40(Learning Engine, 별도 승인 대상)의 책임이다(사용자 조건).
+  7. **`web/app.py`의 `create_app()`에 `execution_memory_store`를
+     선택적으로 받아 `app.state.execution_memory_store`로 노출한다.**
+     새 REST 엔드포인트는 추가하지 않는다 — "조회 API"는
+     `ExecutionMemoryStore.query()` 메서드 자체이며, 이번
+     Milestone에서는 HTTP로 노출하지 않는다(YAGNI).
+- 대안:
+  - **새 `ExecutionHistory` Interface를 신설한다** — 기각. 기존
+    `MemoryEngine`(key-value+substring search)으로 표현 가능한
+    범위라 27개 Core Domain Interface를 불필요하게 늘린다(MDD
+    Interface Review).
+  - **`VaultMemoryEngine`을 만들어 Vault 파일에 영속화한다** —
+    기각(이번 범위에서는). 최초 제안서에는 포함했으나, 구현 검토
+    과정에서 `vault/`를 아는 `MemoryEngine` 구현체가 M1 기초 계약과
+    M28+ Vault Layer 사이에 새로운 하향 의존을 만든다는 점을
+    발견해 제외했다. 대신 사용자가 조건으로 건 "저장/조회만" 범위와
+    맞춰 In-Memory로 좁혔다.
+  - **EventBus 구독으로 자동 기록한다**(M20 `InMemoryDashboardRepository`
+    패턴 재사용) — 기각. `ENGINE_EXECUTION_COMPLETED` Event
+    payload(`runtime/execution/events.py`)에 `task_id`가 없어
+    `ExecutionMemory`를 만들 수 없다(payload 필드 추가가 별도로
+    필요). `RecommendationExecutionService.execute()` 내부에는 이미
+    `target_task_id`/`action`/`result`가 모두 있어 그 자리에서 직접
+    기록하는 편이 새 Event 필드 확장 없이 더 최소한의 변경이다.
+  - **`RecommendationRuleAnalyzer`가 이번에 바로 Memory를 참고하게
+    한다** — 기각(사용자 조건). Memory Engine과 Learning Engine의
+    책임을 계층으로 분리하는 것이 장기적 확장성에 더 유리하다는
+    사용자 판단(Execution → Memory 저장이 M39, Memory → Learning →
+    Recommendation 개선이 M40).
+- 이유: M36~M38(Execution Platform)이 실제 부작용을 일으키기
+  시작했음에도 그 결과를 아무도 기억하지 않는다는 공백을, 새
+  Interface·새 정책 없이 기존 `MemoryEngine` 계약 재사용만으로
+  메운다. "저장"과 "활용(Learning)"을 명확히 분리해 M39는 순수하게
+  기억하는 역할만 수행하고, 추천/판단을 바꾸는 책임은 M40 이후로
+  넘긴다 — Memory Engine → Architecture Guardian → Learning Engine
+  순서로 발전하는 전체 흐름(`docs/ARCHITECTURE.md` §2.1)과 일관된다.
+- 결과/영향: `domain/execution_memory.py`(신규)/`memory/
+  execution_memory_store.py`(신규)/`runtime/execution/
+  recommendation_execution_service.py`(확장)/`web/server.py`·
+  `web/app.py`(Composition Root 배선) 구현 완료, 신규 테스트 11개
+  포함 pytest 1021개, ruff, mypy(194 source files) 전부 통과.
+  `docs/ARCHITECTURE.md` §3.8/§8(신규 규칙)/§2.1 갱신,
+  `.ai/TASKS.md`에 Milestone 39 절 신규 추가. 새 Core Domain
+  Interface/Adapter 없음(27종 그대로). `ExecutionGate`/
+  `ActionBuilder`/`TaskLifecycleTransitioner`/`MemoryEngine`
+  interface 무변경. 영속화·Learning(Rule 반영)·REST 엔드포인트는
+  계속 범위 밖(YAGNI, M40 이후 논의).

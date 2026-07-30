@@ -11,6 +11,8 @@ from ai_workspace.intelligence.capability_service import CapabilityIntelligenceS
 from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
 from ai_workspace.intelligence.report import ProjectIntelligenceService
 from ai_workspace.interfaces.execution_environment import ExecutionResult
+from ai_workspace.memory.execution_memory_store import ExecutionMemoryStore
+from ai_workspace.memory.memory_engine import InMemoryMemoryEngine
 from ai_workspace.runtime.agent.agent_manager import InMemoryAgentManager
 from ai_workspace.runtime.agent.agent_registry import InMemoryAgentRegistry
 from ai_workspace.runtime.agent.agent_scheduler import InMemoryAgentScheduler
@@ -238,3 +240,59 @@ def test_publish_writes_recommendation_execution_file(tmp_path: Path) -> None:
     assert path.exists()
     assert outcome.gate_decision.approved is False
     assert "Recommendation Execution" in path.read_text(encoding="utf-8")
+
+
+def test_execute_records_execution_memory_when_store_injected(tmp_path: Path) -> None:
+    vault_adapter = VaultAdapter(tmp_path)
+    vault_adapter.create_task(
+        "M39-T01",
+        "Gate",
+        status="todo",
+        priority="high",
+        milestone="M39",
+        owner="AI",
+        created="2026-07-30",
+        updated="2026-07-30",
+    )
+    recommendation_service = RecommendationIntelligenceService(
+        vault_adapter,
+        ProjectIntelligenceService(vault_adapter),
+        CapabilityIntelligenceService(_make_agent_adapter()),
+    )
+    execution_environment = FakeExecutionEnvironment()
+    execution_environment.result = ExecutionResult(returncode=0, stdout="ok", stderr="")
+    registry = InMemoryEngineRegistry()
+    registry.register(
+        "claude_code",
+        ClaudeCodeEngineAdapter(
+            execution_environment=execution_environment, subprocess_timeout_seconds=5.0
+        ),
+    )
+    auth = InMemoryAuthenticationManager(frozenset({"claude_code"}))
+    dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
+    memory_store = ExecutionMemoryStore(InMemoryMemoryEngine())
+    service = RecommendationExecutionService(
+        recommendation_service,
+        vault_adapter,
+        registry,
+        InMemoryEngineSelectionPolicy(),
+        dispatcher,
+        memory_store,
+    )
+
+    outcome = service.execute(manual_trigger=True)
+
+    records = memory_store.query(task_id="M39-T01")
+    assert len(records) == 1
+    assert records[0].action == "Gate"
+    assert records[0].result == "success"
+    assert records[0].reason is None
+    assert outcome.result is not None and outcome.result.success is True
+
+
+def test_execute_skips_memory_recording_when_store_not_injected(tmp_path: Path) -> None:
+    service, _execution_environment = _make_service(tmp_path)
+
+    outcome = service.execute(manual_trigger=False)
+
+    assert outcome.gate_decision.approved is False
