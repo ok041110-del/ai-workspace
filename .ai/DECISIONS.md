@@ -3331,7 +3331,7 @@
   자동화·재시도 정책·`review→done` 자동화·CLI·Hook은 계속 범위 밖
   (YAGNI, 다음 Milestone 이후 논의).
 
-## ADR-0053: Memory Engine 도입 — Execution 결과를 기존 MemoryEngine에 저장만, 조회 API 제공, Learning 없음 (Milestone 39)
+## ADR-0053: Execution Memory 도입 — Execution 결과를 기존 MemoryEngine에 저장만, 조회 API 제공, Learning 없음 (Milestone 39)
 
 - 상태: 승인됨 (2026-07-30, 사용자가 "M39 Memory Engine 구현 진행"
   요청. 초안 제안서를 검토한 사용자가 조건부 승인 — Scope를
