@@ -34,16 +34,16 @@ Production(Configuration/Lifecycle/Health) → web/(FastAPI, 유일하게 프레
 
 ## 핵심 컴포넌트
 
-| 컴포넌트 | 역할 | 관련 문서 |
-|---|---|---|
-| Workspace Core | 최상위 오케스트레이터, Task를 직접 실행하지 않고 Agent Runtime에 위임 | |
-| Agent Runtime | Registry/Scheduler/Manager, Capability 기준으로 Agent 선택 | |
-| EventBus | Agent/Engine/Workspace Core 사이 pub/sub. Event Store는 독립 구독자 | 아래 EventBus 절 |
-| Engine Runtime → Engine Adapter | 구현 엔진(Claude Code/Codex/Gemini CLI) 호출 경로 | |
-| ExecutionDispatcher | `EngineSelectionDecision` → 실제 실행. 유일한 실행 진입점(M18) | [[Automation Index]] |
-| DashboardService | CQRS Read Model, Task를 실행하지 않고 조회만 | [[Dashboard Index]] |
-| AutomationScheduler | 조건/일정에 따라 Task 자동 실행. Dashboard와 독립적인 Domain | [[Automation Index]] |
-| LifecycleManager / HealthMonitor | Server Runtime의 생명주기/상태(비즈니스 로직 없음) | [[Production Index]] |
+| 컴포넌트                             | 역할                                                          | 관련 문서                |
+| -------------------------------- | ----------------------------------------------------------- | -------------------- |
+| Workspace Core                   | 최상위 오케스트레이터, Task를 직접 실행하지 않고 Agent Runtime에 위임             |                      |
+| Agent Runtime                    | Registry/Scheduler/Manager, Capability 기준으로 Agent 선택        |                      |
+| EventBus                         | Agent/Engine/Workspace Core 사이 pub/sub. Event Store는 독립 구독자 | 아래 EventBus 절        |
+| Engine Runtime → Engine Adapter  | 구현 엔진(Claude Code/Codex/Gemini CLI) 호출 경로                   |                      |
+| ExecutionDispatcher              | `EngineSelectionDecision` → 실제 실행. 유일한 실행 진입점(M18)          | [[Automation Index]] |
+| DashboardService                 | CQRS Read Model, Task를 실행하지 않고 조회만                          | [[Dashboard Index]]  |
+| AutomationScheduler              | 조건/일정에 따라 Task 자동 실행. Dashboard와 독립적인 Domain                | [[Automation Index]] |
+| LifecycleManager / HealthMonitor | Server Runtime의 생명주기/상태(비즈니스 로직 없음)                         | [[Production Index]] |
 
 ## CQRS
 
