@@ -1,7 +1,10 @@
-"""Workspace Adapter Layer — Workflow↔Task 연결 (Milestone 28-T04).
+"""Workspace Adapter Layer — Workflow↔Task Connector (Milestone 28-T04).
 
-Vault Task 문서와 Core Domain `Workflow`/`Task`를 잇는다. 사용자가
-T04 승인 시 제시한 4개 원칙을 그대로 따른다:
+Vault Task 문서와 Core Domain `Workflow`/`Task`를 잇는다. Adapter(외부
+시스템 하나와의 연결)와 구분되는 **Connector**(여러 Adapter를 조합하는
+유스케이스 오케스트레이션, Milestone 28-T05/ADR-0040에서 명명)다 —
+`VaultAdapter`/`WorkflowAdapter`를 조합만 하고 자체 상태 전이 규칙은
+갖지 않는다. 사용자가 T04 승인 시 제시한 4개 원칙을 그대로 따른다:
 
 1. Workflow ↔ Vault는 직접 의존하지 않는다 — 이 파일은 `vault`를
    전혀 import하지 않고, `VaultAdapter`/`WorkflowAdapter`(둘 다

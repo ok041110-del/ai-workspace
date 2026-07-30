@@ -2170,3 +2170,71 @@
   `.ai/TASKS.md`에 반영. 새 Core Domain Interface 없음(27종
   그대로) — Integration Layer는 기존 Interface에 의존만 하고
   새 계약을 추가하지 않는다.
+
+## ADR-0040: Integration Layer 내부 분류 — Adapter vs Connector (Milestone 28-T05)
+
+- 상태: 승인됨 (2026-07-30, 사용자 승인 — "Go Ahead" + 방향 지정)
+- 날짜: 2026-07-30
+- 배경: M28-T04에서 `WorkflowTaskLink`(Vault Task↔Core Domain
+  Workflow/Task 연결)를 만들며, `VaultAdapter`/`WorkflowAdapter`
+  (외부 시스템 하나만 연결하는 것)와 `WorkflowTaskLink`(둘을
+  조합하는 것)가 서로 다른 책임임이 드러났다. M28-T05(Agent
+  Assignment)를 시작하며 사용자가 이 구분을 공식화할 것을 조건으로
+  승인했다: "`WorkflowTaskLink`에 Agent 책임을 추가하지 않는다,
+  `WorkflowAgentLink`를 별도 Connector로 구현한다, Adapter는
+  계속 외부 시스템 연결만, Connector는 여러 Adapter를 조합하는
+  유스케이스 오케스트레이션만 담당한다." M28 완료 후 예정된
+  Architecture Freeze에서 Integration Layer 역할을 명확히 하고,
+  M29(Project Intelligence)/M40 이후 Runtime·Service 계층 확장의
+  기반이 되게 하려는 목적.
+- 결정:
+  1. Integration Layer(ADR-0039) 안에서 두 종류의 구성원을
+     공식적으로 구분한다.
+     - **Adapter**: 외부 시스템 **하나**와의 연결만 담당
+       (`VaultAdapter`→`vault/`, `WorkflowAdapter`→`WorkflowEngine`/
+       `TaskEngine`, `AgentAdapter`→`AgentManager`/`AgentRegistry`/
+       `AgentScheduler`). 다른 Adapter를 참조하지 않는다(ADR-0039
+       결정 2 유지).
+     - **Connector**: 여러 Adapter를 조합해 유스케이스 하나를
+       오케스트레이션한다(`WorkflowTaskLink`—M28-T04, Vault Task로
+       Workflow 만들기/상태 반영; `WorkflowAgentLink`—M28-T05, Task에
+       Agent 배정/추적). Connector도 자체 비즈니스 로직(상태 전이
+       규칙, 선택 알고리즘)은 만들지 않는다 — 항상 Adapter가 감싼
+       Core Domain Engine에 위임하고, Connector 자신은 조합·ID
+       변환·파생 값 계산만 한다(ADR-0039 원칙 4 그대로 적용).
+  2. **Connector는 유스케이스 하나만 책임진다** — Agent 배정
+     책임을 이미 있던 `WorkflowTaskLink`에 얹지 않고 별도
+     `WorkflowAgentLink`를 새로 만든다. Connector끼리도 서로
+     참조하지 않는다(Adapter들이 서로 참조하지 않는 것과 같은
+     원칙을 Connector 층위에도 적용).
+  3. `WorkflowAgentLink`는 `AgentAdapter`/`WorkflowAdapter`만
+     조합한다(Vault는 모른다) — Task 상태를 Vault에 반영하는 것은
+     이미 `WorkflowTaskLink`의 책임이라 중복하지 않는다.
+  4. Agent 배정 관계(`AgentAssignment`: `WorkflowLink` + `Agent`)와
+     Agent별 진행률(`agent_progress()`)은 `domain.Task`/
+     `domain.Agent`에 필드를 추가하지 않고 `WorkflowAgentLink`
+     내부 상태로만 관리한다(ADR-0039/T04와 동일한 Domain 오염
+     금지 원칙 — Agent도 Task와 마찬가지로 순수하게 유지).
+- 대안:
+  - Agent 배정을 `WorkflowTaskLink`에 메서드로 추가 — 기각(사용자
+    명시적 반대). 한 Connector가 두 유스케이스(Task↔Workflow 연결,
+    Task↔Agent 배정)를 동시에 책임지면 나중에 Notification/Sync
+    등 다른 관심사가 추가될 때 같은 문제가 반복된다.
+  - Adapter/Connector 구분을 문서로만 남기고 코드/네이밍에는 반영
+    안 함 — 기각. Architecture Freeze에서 "Integration Layer의
+    역할이 명확해야 한다"는 목적에 안 맞는다 — 코드 구조(파일명,
+    docstring, 패키지 `__init__.py`)에 직접 반영해야 나중에 실수로
+    섞이지 않는다.
+- 이유: Adapter/Connector를 구분해 두면 M29(Project Intelligence)
+  이후 새 유스케이스(예: "Vault Task 변경 → Notification 발송")가
+  생겨도 기존 Adapter/Connector를 건드리지 않고 새 Connector 하나만
+  추가하면 된다 — Integration Layer가 "무엇이 Adapter이고 무엇이
+  Connector인지" 매번 재판단할 필요 없이 일관된 확장 패턴을 갖는다.
+- 결과/영향: `integration/workflow_agent_link.py`(신규,
+  `WorkflowAgentLink`/`AgentAssignment`), `integration/__init__.py`
+  갱신(Adapter/Connector 구분 명시), `integration/
+  workflow_task_link.py` docstring에 "Connector" 용어 반영(로직
+  무변경). `tests/integration_layer/test_workflow_agent_link.py`
+  (신규 6개). `docs/ARCHITECTURE.md`/`.ai/TASKS.md`에 반영. 새 Core
+  Domain Interface 없음, `domain.Task`/`domain.Agent` 필드 추가
+  없음.

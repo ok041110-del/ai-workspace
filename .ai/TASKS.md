@@ -8785,7 +8785,7 @@ Task로 진행한다.
 | M28-T02 | Automatic Document Synchronization(Task 변경 → Daily/Decision/Roadmap/Milestone 갱신) | **완료** |
 | M28-T03 | Integration Layer(Vault Adapter/Workflow Adapter/Agent Adapter) | **완료** |
 | M28-T04 | Workflow Engine Integration | **완료** |
-| M28-T05 | Agent Assignment | 착수 예정 |
+| M28-T05 | Agent Assignment | **완료** |
 | M28-T06 | Conversation Layer Integration | 착수 예정 |
 
 ### M28-T01: Task Lifecycle
@@ -9039,6 +9039,67 @@ src/ai_workspace/engines src/ai_workspace/domain` 클린,
 
 **Milestone 28-T04(Workflow Engine Integration) 완료.** 다음 Task:
 **M28-T05**(Agent Assignment).
+
+### M28-T05: Agent Assignment
+
+**설계 승인**(2026-07-30, 사용자): "Go Ahead" — 단, `WorkflowTaskLink`
+에 Agent 책임을 추가하지 말고 `WorkflowAgentLink`를 별도 Connector로
+구현할 것, Adapter는 외부 시스템 연결만·Connector는 여러 Adapter를
+조합하는 유스케이스 오케스트레이션만 담당하는 구분을 지킬 것을
+조건으로 승인. 이 구분을 ADR-0040으로 공식화했다 — M28 완료 후
+Architecture Freeze에서 Integration Layer 역할을 명확히 하려는
+목적(사용자 코멘트).
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Agent 지정 가능(Agent Assignment) | ✅ |
+| 2 | Agent 상태 추적(Agent Status) | ✅ |
+| 3 | Workflow와 연결 | ✅ |
+| 4 | Agent Registry 연동 | ✅ (AgentAdapter 재사용으로 충족) |
+| 5 | Agent Manager 연동 | ✅ (AgentAdapter 재사용으로 충족) |
+| 6 | 진행률 기록(Agent Progress) | ✅ |
+| 7 | 테스트 통과 | ✅ |
+
+**구현 내용**
+
+- `integration/workflow_agent_link.py`(신규)의 `WorkflowAgentLink`
+  — `WorkflowTaskLink`(T04)와 별도인 새 Connector. `AgentAdapter`/
+  `WorkflowAdapter`만 조합한다(Vault는 모른다 — Task 상태의 Vault
+  반영은 이미 `WorkflowTaskLink` 책임이라 중복하지 않음).
+- `AgentAssignment`(값 객체) — `WorkflowLink` + `Agent`.
+  `domain.Task`/`domain.Agent` 어느 쪽에도 필드를 추가하지
+  않는다(Domain 오염 금지, T04와 동일 원칙) — 배정 관계는
+  `WorkflowAgentLink`가 내부 `dict`로만 관리.
+- `assign_agent()` — `AgentAdapter.select_agent()`(→
+  `AgentScheduler.select()`)가 고른 Agent를 배정. 후보 없으면
+  `NoAvailableAgentError`.
+- `transition_agent_status()` — `AgentAdapter.transition_agent()`
+  (→ `AgentManager.transition()`)에 위임해 배정된 Agent 상태를
+  전이. 배정 전이면 `AgentNotAssignedError`.
+- `agent_progress()` — 해당 Agent에게 배정된 Task 중 Core Domain
+  기준 `DONE` 비율을 매번 파생 계산(캐시된 필드 없음).
+- **ADR-0040(Adapter vs Connector 공식화)**: `integration/
+  __init__.py`를 갱신해 두 종류 구성원(외부 시스템 1개만 연결하는
+  Adapter / 여러 Adapter를 조합하는 Connector)을 명시하고, Connector
+  는 서로도 참조하지 않는다는 원칙을 문서화. `workflow_task_link.py`
+  docstring에도 "Connector" 용어 반영(로직 무변경).
+
+**검증**: `tests/integration_layer/test_workflow_agent_link.py`
+(신규 6개 — 배정/후보 없음/미배정 상태 전이 거부/상태 전이 반영/
+진행률 계산/미배정 Agent 진행률 0), `tests/integration_layer/
+test_architecture_boundary.py`(기존 3개, 무변경 통과), `ruff check
+src tests` 클린, `mypy src/ai_workspace/integration
+src/ai_workspace/vault src/ai_workspace/engines src/ai_workspace/domain
+src/ai_workspace/runtime/agent` 클린, `pytest`(843개, 기존 837개 +
+신규 6개) 전부 통과.
+
+**Milestone 28-T05(Agent Assignment) 완료.** 다음 Task:
+**M28-T06**(Conversation Layer Integration) — M28의 마지막 Task이며,
+완료 후 사용자가 요청한 Architecture Freeze(ADR 전체 재검토/Layer
+의존성 검증/Integration Boundary 검증/Interface 목록 확정/M29
+요구사항 재정의)를 진행한다.
 
 ---
 

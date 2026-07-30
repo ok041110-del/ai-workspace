@@ -242,6 +242,12 @@ tags: [decision]
 - 결정: 신규 최상위 패키지 `integration/`(Vault/Workflow/Agent Adapter 3종)을 "Adapter 3개"가 아니라 향후 Runtime/Service/Notification/Sync까지 확장 가능한 Workspace Adapter Layer로 정의. 공유 기반 클래스는 두지 않음(Speculative Generality 회피). Core Domain↔vault 직접 import 금지를 `ast` 기반 테스트로 강제
 - 영향: `docs/ARCHITECTURE.md` §8 규칙 18 신설, §3 Workspace Adapter Layer 절 추가. 상세는 [[Architecture Overview]]
 
+## ADR-0040: Integration Layer 내부 분류 — Adapter vs Connector (Milestone 28-T05)
+
+- 목적: Integration Layer 안에서 "외부 시스템 연결"과 "여러 Adapter를 조합하는 오케스트레이션"을 명확히 구분
+- 결정: Adapter(Vault/Workflow/Agent, 외부 시스템 1개만 연결) vs Connector(WorkflowTaskLink/WorkflowAgentLink, 여러 Adapter 조합, 유스케이스 1개만 책임). Connector끼리도 서로 참조하지 않음 — Agent 배정을 WorkflowTaskLink에 얹지 않고 별도 WorkflowAgentLink로 분리
+- 영향: `integration/__init__.py`에 분류 명시, `docs/ARCHITECTURE.md` §3에 반영. 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

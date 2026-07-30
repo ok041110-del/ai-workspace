@@ -101,6 +101,17 @@ Notification/Sync 등)으로 정의했다. 각 Adapter는 연결·변환·위임
 하고 비즈니스 로직을 갖지 않는다. `ast` 기반 테스트가 이 경계를
 자동으로 강제한다.
 
+## Adapter vs Connector(Milestone 28-T05, ADR-0040)
+
+Integration Layer 안에서 두 종류를 구분한다: **Adapter**(외부
+시스템 하나와의 연결만, `VaultAdapter`/`WorkflowAdapter`/
+`AgentAdapter`)와 **Connector**(여러 Adapter를 조합해 유스케이스
+하나를 오케스트레이션, `WorkflowTaskLink`/`WorkflowAgentLink`).
+Connector도 자체 비즈니스 로직은 갖지 않고 항상 Adapter가 감싼
+Core Domain Engine에 위임한다. Connector끼리도 서로 참조하지
+않는다 — Agent 배정은 `WorkflowTaskLink`가 아니라 별도
+`WorkflowAgentLink`가 담당한다.
+
 ## 관련 문서
 
 - [[Overview]]
