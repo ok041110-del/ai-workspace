@@ -3,8 +3,9 @@
 `snapshot.ProjectSnapshotWithTasks`/`health_risk.ProjectHealthReport`
 (M29-T02/T03 산출물)만 입력으로 받는 순수 Rule 기반 추천 계층이다.
 Adapter를 직접 호출하지 않는다 — 새로운 데이터 접근 경로 없음. **AI
-추론이나 LLM 호출은 포함하지 않는다**(사용자 지시 — Rule 기반만,
-AI 추론은 M33(Planning Intelligence) 이후)."""
+추론이나 LLM 호출은 포함하지 않는다**(사용자 지시 — Rule 기반만.
+M33(Session Resume)도 이 Recommendation을 그대로 재사용할 뿐 AI
+추론을 추가하지 않는다 — LLM 기반 추천은 이후 Milestone 과제)."""
 
 from __future__ import annotations
 

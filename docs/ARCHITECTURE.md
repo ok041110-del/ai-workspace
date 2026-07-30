@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.41.0 |
+| 문서 버전 | v0.42.0 |
 | 작성일 | 2026-07-30 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. Milestone 29(Project Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0043, `intelligence/` 신규 Layer, 결과는 Vault `15 Project Intelligence/Project Intelligence.md`에 노출, "의존성 위험" Deferred by Design). 새 Core Domain Interface 없음, 27종 유지. Milestone 30(Context Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0044, `intelligence/context*.py`, 결과는 Vault `15 Project Intelligence/Project Context.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. Milestone 31(Capability Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0045, `intelligence/capability*.py`, `AgentAdapter` 확장, 결과는 Vault `15 Project Intelligence/Capability Intelligence.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. **Milestone 32(Intelligence Synthesis) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0046, `intelligence/synthesis*.py`, M29~M31 Service 3개를 조합해 결과는 Vault `15 Project Intelligence/Intelligence Overview.md`에 노출). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지. **M29~M32로 Intelligence Layer 기반 완성**(Project/Context/Capability/Synthesis) — 다음 단계는 이를 활용하는 상위 기능(Session Resume/Workflow Intelligence/Agent Orchestration/Automation 등) 확장이며, Milestone 33은 착수 시점에 별도 제안·승인) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. Milestone 29(Project Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0043, `intelligence/` 신규 Layer, 결과는 Vault `15 Project Intelligence/Project Intelligence.md`에 노출, "의존성 위험" Deferred by Design). 새 Core Domain Interface 없음, 27종 유지. Milestone 30(Context Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0044, `intelligence/context*.py`, 결과는 Vault `15 Project Intelligence/Project Context.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. Milestone 31(Capability Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0045, `intelligence/capability*.py`, `AgentAdapter` 확장, 결과는 Vault `15 Project Intelligence/Capability Intelligence.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. Milestone 32(Intelligence Synthesis) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0046, `intelligence/synthesis*.py`, M29~M31 Service 3개를 조합해 결과는 Vault `15 Project Intelligence/Intelligence Overview.md`에 노출). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지. M29~M32로 Intelligence Layer 기반 완성(Project/Context/Capability/Synthesis). **Milestone 33(Session Resume) 구현 완료 — Milestone Review 작성, 사용자 승인 대기**(ADR-0047, `intelligence/session_resume*.py`, "현재 작업" 선택 규칙 1개 + M29~M32 재사용, 결과는 Vault `15 Project Intelligence/Session Resume.md`에 노출). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지. Intelligence Layer를 실제 사용 시나리오(세션 시작)에 처음 연결한 Execution 쪽 첫 기능) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -1436,11 +1436,65 @@ at the Intelligence Layer)으로, M29~M31 위에 새 기능을 얹는 것이
   `generate()`/`publish()`를 제공하고, `vault/
   intelligence_overview.py`(신규) → `VaultAdapter.
   publish_intelligence_overview()`(신규 메서드)로 `15 Project
-  Intelligence/Overview.md`에 노출한다.
+  Intelligence/Intelligence Overview.md`에 노출한다.
 - **M32-T04 구현 완료(Milestone 32 전체 완료)**: 전체 스택 통합
   테스트로 Vault 노출까지 검증, 문서화 완료. `docs/ARCHITECTURE.md`/
   `.ai/DECISIONS.md`/`.ai/TASKS.md`/Vault(ADR Index/Milestones
   Index) 갱신 확인.
+
+### 3.26 Session Resume (Milestone 33, ADR-0047, 설계: M33-T01)
+
+새 세션 시작 시 "지금 무엇을 하고 있었는가"를 자동 복원하는 Read
+Only 계층. M29(Project Intelligence)/M30(Context Intelligence)/
+M31(Capability Intelligence)/M32(Intelligence Synthesis)를 그대로
+재사용하고, "현재 작업(Current Work)" 판정 규칙 1개만 새로 더한다
+— Intelligence Layer를 처음으로 실제 사용 시나리오(세션 시작)에
+연결하는 Execution 쪽 첫 기능이다.
+
+- **M8 세션 연속성과의 구분**: M8(`PlanningAgent`의
+  `memory_snapshot_id` 자동 복원)은 Agent 실행 컨텍스트(LLM에
+  넘길 요약 텍스트)를 `ContextManager`/`MemoryEngine`으로 복원하는
+  내부 메커니즘이다. M33 Session Resume은 사람이 읽는 보고서를
+  Intelligence Layer에서 만드는 Read Only Query Layer로, Interface·
+  Layer가 M8과 겹치지 않는다.
+- **설계 결론(ADR-0047)**: 새 Adapter/Interface를 만들지 않는다.
+  "현재 작업" 판정은 `VaultAdapter.list_tasks()`(M29부터 존재)가
+  이미 노출한 `status`/`updated` 값에서 "활성 상태(in-progress/
+  review) Task 중 `updated`가 가장 최근인 1건"을 고르는 순수
+  선택 로직(`intelligence/session_resume.py`의
+  `CurrentWorkSelector`)일 뿐, 새 지표·점수가 아니다.
+- **조합 방식**: `intelligence/session_resume_service.py`의
+  `SessionResumeService`가 `VaultAdapter` + `ProjectIntelligenceService`/
+  `ContextIntelligenceService`/`CapabilityIntelligenceService`(M29~M31)
+  + `IntelligenceSynthesisAnalyzer`(M32, Overview 합성 로직 재사용)를
+  조합한다. M32 `IntelligenceSynthesisService`를 감싸지 않고
+  Analyzer만 재사용하는 이유는 M29 `ProjectIntelligenceReport.
+  recommendations`("다음 작업")가 Overview 밖에 있어 직접 필요하기
+  때문이다 — 세 리포트를 어차피 손에 쥐고 있어야 한다.
+- **"다음 작업"은 새로 만들지 않는다**: M29-T04가 이미 계산해 둔
+  `ProjectRecommendation`을 그대로 옮겨 담는다(DRY, AI 추론 없음).
+- **경계**: `intelligence/session_resume*.py`는 `integration/`의
+  `VaultAdapter`(기존 허용 Adapter)와 `intelligence/`의 기존
+  Service/Analyzer에만 의존한다(§8 규칙 21 그대로 적용, 새 규칙
+  추가 없음).
+- **범위**: Current Work Selector(M33-T02, 완료)/Integration
+  (M33-T03, `SessionResumeService`)/Presentation(M33-T04, Vault
+  노출). CLI 노출·자동 트리거(세션 시작 Hook/Automation Engine
+  연결)는 범위 밖(M29~M32와 동일하게 Vault 노출까지만, YAGNI). 새
+  Core Domain Interface 없음, `domain/` 필드 추가 없음.
+- **M33-T02 구현 완료**: `intelligence/session_resume.py`의
+  `CurrentWork`/`CurrentWorkSelector`(활성 Task 중 `updated` 최신
+  1건 선택, 동률이면 `task_id`가 더 큰 쪽, 활성 Task 없으면
+  `None`).
+- **M33-T03 구현 완료**: `intelligence/session_resume_service.py`의
+  `SessionResumeService`가 Current Work 판정 → subject/milestone
+  결정 → Project/Context/Capability 리포트 생성 → Overview 합성을
+  한 번에 실행해 `SessionResumeReport`를 만든다.
+- **M33-T04 구현 완료(Milestone 33 전체 완료)**: `session_resume_
+  service.py`에 `render_markdown()`/`publish()`를 추가해
+  `VaultAdapter.publish_session_resume()`(신규 메서드)로 `15
+  Project Intelligence/Session Resume.md`에 노출한다(M29~M32와
+  동일 패턴, 같은 폴더 재사용).
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 

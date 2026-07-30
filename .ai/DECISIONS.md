@@ -2778,3 +2778,85 @@
   §3.25(신규) 갱신, `.ai/TASKS.md`에 Milestone 32 절 신규 추가. 새
   Core Domain Interface 없음(27종 그대로), 새 Integration Layer
   Adapter 없음(`VaultAdapter` 확장 1건), `domain/` 필드 추가 없음.
+
+## ADR-0047: Session Resume 도입 — Current Work Selector 1개 + M29~M32 재사용으로 세션 시작 시 자동 복원 문서 생성 (Milestone 33-T01~T04)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 "M33은 새로운 Intelligence를
+  계산하지 않는다 — 이미 구축된 Project/Context/Capability
+  Intelligence와 Intelligence Overview를 활용해 현재 프로젝트
+  상태를 자동으로 복원하는 Read-Only Session Resume를 구현한다"고
+  확정)
+- 날짜: 2026-07-30
+- 배경: M29~M32로 Intelligence Layer 기반이 완성됐지만, 지금까지는
+  모두 "리포트를 만들어 Vault에 둔다"까지였다 — 세션을 새로 시작한
+  사람(또는 AI)이 "지금 무엇을 하고 있었는가"를 알려면 여전히 3~4개
+  파일을 직접 열어야 했다. 기존 세션 연속성 기능(M8,
+  `PlanningAgent`의 `memory_snapshot_id` 자동 복원)은 이것과 다른
+  계층이다 — M8은 Agent 실행 컨텍스트(LLM에 넘길 요약 텍스트)를
+  `ContextManager`/`MemoryEngine`으로 복원하는 내부 메커니즘이고,
+  M33은 사람이 읽는 보고서를 Intelligence Layer에서 만드는 Read
+  Only Query Layer다 — Interface·Layer가 겹치지 않는다.
+- 결정:
+  1. **"현재 작업" 판정 규칙 1개만 새로 추가한다.** 새 지표·점수가
+     아니라, `VaultAdapter.list_tasks()`(M29부터 존재)가 이미
+     노출한 `status`/`updated` 값에서 "활성 상태(in-progress/
+     review) Task 중 `updated`가 가장 최근인 1건"을 고르는 순수
+     선택 로직이다(`intelligence/session_resume.py`의
+     `CurrentWorkSelector`). Health/Risk/Coverage 같은 새 판단
+     기준을 만드는 것이 아니라, 이미 계산 가능한 값 중 "지금 보여줄
+     것 하나"를 고르는 것뿐이다.
+  2. **새 Adapter/Interface를 만들지 않는다.**
+     `intelligence/session_resume_service.py`의
+     `SessionResumeService`는 `VaultAdapter`(기존, "현재 작업" 조회용)
+     + `ProjectIntelligenceService`/`ContextIntelligenceService`/
+     `CapabilityIntelligenceService`(M29~M31, 리포트 3종 생성) +
+     `IntelligenceSynthesisAnalyzer`(M32, Overview 합성)를 그대로
+     조합한다. `IntelligenceSynthesisService`(M32 Service)를 감싸지
+     않고 Analyzer 클래스만 재사용하는 이유는 M29
+     `ProjectIntelligenceReport.recommendations`("다음 작업")가
+     Overview 밖에 있어 직접 필요하기 때문이다 — 어차피 세 리포트를
+     손에 쥐고 있어야 하므로, Overview까지 자체적으로 다시 합성하는
+     편이 M32 Service를 감싸는 것보다 단순하다(추가 의존성 없음).
+  3. **"다음 작업"은 새로 만들지 않고 M29 Recommendation을 그대로
+     노출한다.** M29-T04가 이미 "Rule 기반, AI 추론 없음"으로 다음
+     행동을 계산해 두었으므로, Session Resume이 이를 다시 계산할
+     이유가 없다(DRY) — Recommendation을 그대로 옮겨 담는다.
+  4. **결과는 같은 Vault 폴더에 새 파일로 노출한다** —
+     `vault/session_resume.py`(M29~M32와 동일 패턴, 원자적 전체
+     교체)가 `15 Project Intelligence/Session Resume.md`에 쓴다.
+  5. **CLI 노출·자동 트리거는 범위 밖이다.** "문서를 만드는 능력"
+     까지가 M33이고, "언제 자동으로 만들지"(세션 시작 Hook/Automation
+     Engine 연결)는 M29~M32도 CLI 연동 없이 Vault만 노출한 것과
+     같은 이유로 다음 Milestone 대상이다(YAGNI, 현재 CLI는
+     Intelligence/Vault를 전혀 모른다).
+- 대안:
+  - `IntelligenceSynthesisService`(M32)를 그대로 주입받아
+    `generate()` 결과(Overview)만 쓰고 "다음 작업"은 Overview의
+    Finding으로 대체한다 — 기각. Overview의 Finding은 Risk/Gap만
+    담고 있어 M29 Recommendation의 "다음 행동" 의미를 대체하지
+    못한다 — 이미 있는 Recommendation을 버리고 Finding으로 재해석
+    하면 오히려 "새로운 판단"을 만드는 셈이 된다.
+  - "현재 작업" 판정에 Owner 필드나 Priority까지 반영하는 복합
+    규칙을 만든다 — 기각. M31이 이미 "Vault Task의 `owner`는 고정
+    명명 규칙이 없어 신호로 쓰지 않는다"고 결정했고, Priority까지
+    섞으면 "가장 최근 갱신"이라는 단순하고 예측 가능한 규칙이
+    깨진다(KISS, YAGNI).
+  - Session Resume 전용 CLI 명령을 이번에 함께 추가한다 — 기각.
+    CLI(`cli/main.py`)는 현재 `WorkspaceCore`만 조립하고
+    Vault/Intelligence를 전혀 참조하지 않는다 — 새 배선이 필요해
+    Scope가 커진다. Vault 노출만으로 DoD("Session Resume 생성
+    여부")를 충족한다.
+- 이유: 새 Interface/Adapter/판단 기준 없이 "현재 작업 선택" 규칙
+  하나만 더해도 M29~M32가 이미 계산해 둔 값들로 "지금 무엇을 하고
+  있었는가"에 답하는 문서를 만들 수 있음을 확인했다 — Intelligence
+  Layer를 처음으로 실제 사용 시나리오(세션 시작)에 연결하는
+  Execution 쪽 첫걸음이라는 점에서 M29~M32와 다른 성격이지만, "새로운
+  지식을 만들지 않는다"는 원칙은 그대로 유지한다.
+- 결과/영향: `intelligence/session_resume.py`(신규)/`intelligence/
+  session_resume_service.py`(신규)/`vault/session_resume.py`
+  (신규)/`integration/vault_adapter.py`(`publish_session_resume()`
+  추가) 구현 완료(M33-T02~T04, 신규 테스트 8개 포함 pytest 962개,
+  ruff, mypy 전부 통과). `docs/ARCHITECTURE.md` §3.26(신규) 갱신,
+  `.ai/TASKS.md`에 Milestone 33 절 신규 추가. 새 Core Domain
+  Interface 없음(27종 그대로), 새 Integration Layer Adapter 없음
+  (`VaultAdapter` 확장 1건), `domain/` 필드 추가 없음.

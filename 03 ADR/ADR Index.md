@@ -284,6 +284,12 @@ tags: [decision]
 - 결정: 새 Adapter/Interface 없이 `intelligence/synthesis.py`(Analyzer)/`synthesis_service.py`(조합)가 기존 3개 Service의 `generate()` 결과만 합성. §8 규칙 21은 변경 없이 그대로 적용(Adapter가 아니라 같은 계층의 Service를 조합하므로 애초에 금지 대상 아님)
 - 영향: `docs/ARCHITECTURE.md` §3.25(신규) 갱신, `.ai/TASKS.md` Milestone 32 절 신규. `integration/vault_adapter.py`(확장 1건)/`intelligence/synthesis*.py`(신규)/`vault/intelligence_overview.py`(신규) 구현 완료, `pytest` 954개·ruff·mypy 전부 클린. 새 Core Domain Interface 없음(27종 유지). 상세는 [[Architecture Overview]]
 
+## ADR-0047: Session Resume 도입 — Current Work Selector 1개 + M29~M32 재사용으로 세션 시작 시 자동 복원 문서 생성 (Milestone 33-T01~T04)
+
+- 목적: 세션을 새로 시작할 때 "지금 무엇을 하고 있었는가"를 알려면 리포트 3~4개를 직접 열어야 하는 문제 해결
+- 결정: 새 Adapter/Interface 없이 `intelligence/session_resume.py`(Current Work Selector)/`session_resume_service.py`(조합)가 `VaultAdapter.list_tasks()` + M29~M31 Service 3개 + M32 `IntelligenceSynthesisAnalyzer`만 재사용. "현재 작업" 판정은 이미 있는 status/updated 값을 고르는 Rule 1개뿐, 새 지표 없음. M8 세션 연속성(Agent 실행 컨텍스트 복원)과는 별개 계층
+- 영향: `docs/ARCHITECTURE.md` §3.26(신규) 갱신, `.ai/TASKS.md` Milestone 33 절 신규. `integration/vault_adapter.py`(확장 1건)/`intelligence/session_resume*.py`(신규)/`vault/session_resume.py`(신규) 구현 완료, `pytest` 962개·ruff·mypy 전부 클린. 새 Core Domain Interface 없음(27종 유지). 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

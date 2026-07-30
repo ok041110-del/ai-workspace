@@ -73,6 +73,24 @@ Service(`ProjectIntelligenceService`/`ContextIntelligenceService`/
   Capability)별로 그대로 옮겨 담은 목록(target 기준 정렬, 새
   우선순위 알고리즘 없음)
 
+## `Session Resume.md` (Milestone 33, ADR-0047)
+
+`src/ai_workspace/intelligence/session_resume_service.py`의
+`SessionResumeService.publish()`가 "현재 작업"을 고른 뒤 위 세
+Service(`ProjectIntelligenceService`/`ContextIntelligenceService`/
+`CapabilityIntelligenceService`) + M32 `IntelligenceSynthesisAnalyzer`
+를 그대로 실행해 조합한다(`vault.session_resume.
+write_session_resume_report()`) — 새로운 데이터 소스나 판단 기준을
+추가하지 않는다.
+
+- **현재 작업**: 활성 상태(in-progress/review) Task 중 `updated`가
+  가장 최근인 1건(없으면 "현재 진행 중인 Task 없음")
+- **Project 상태**: 진행률/Health(M29 재사용)
+- **관련 Context**: 현재 작업을 subject로 한 Context Intelligence
+  결과(M30 재사용)
+- **Capability 상태**: Coverage(M31 재사용)
+- **다음 작업**: M29 Recommendation을 그대로 노출(새 추천 로직 없음)
+
 ## 관련 문서
 
 - [[Milestones Index]]
@@ -83,6 +101,7 @@ Service(`ProjectIntelligenceService`/`ContextIntelligenceService`/
 
 - `.ai/TASKS.md`의 "Milestone 29 — Project Intelligence"/"Milestone
   30 — Context Intelligence"/"Milestone 31 — Capability
-  Intelligence"/"Milestone 32 — Intelligence Synthesis" 절
-- `.ai/DECISIONS.md`의 ADR-0043/ADR-0044/ADR-0045/ADR-0046
+  Intelligence"/"Milestone 32 — Intelligence Synthesis"/"Milestone
+  33 — Session Resume" 절
+- `.ai/DECISIONS.md`의 ADR-0043/ADR-0044/ADR-0045/ADR-0046/ADR-0047
 - `src/ai_workspace/intelligence/`
