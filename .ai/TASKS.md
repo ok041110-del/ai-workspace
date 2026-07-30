@@ -10303,10 +10303,17 @@ In-Memory 전용이라 실제 Agent 프로세스가 떠 있지 않으면
 "정의됐는데 활성 Agent가 없는 Capability"(공급 자체의 Gap)만
 판정한다 — 수요 신호가 필요해지면 별도 ADR 대상이다.
 
-**사용자 승인 대기**: Scope 준수/Architecture 유지/Interface 유지/
-Rule 기반 구현/Documentation 완료/Test 통과는 위 표대로 전부
-확인됨. M29/M30과 동일하게, 최종 "공식 완료(Approved)" 표기는
-사용자 확인 후 기록한다.
+**사용자 승인(2026-07-30)**: Scope 준수/Architecture 유지/Interface
+유지/Rule 기반 구현/Documentation 완료/Test 통과를 모두 만족함을
+확인해 **Milestone 31(Capability Intelligence) 공식 완료(Approved)**.
+"M29(Project Intelligence)→M30(Context Intelligence)→M31(Capability
+Intelligence)"로 이어지며, AI Workspace가 프로젝트 상태/현재 작업
+맥락에 이어 "이 시스템이 실제로 수행할 수 있는 능력"까지 이해하는
+기반 계층을 갖췄다는 점에서 프로젝트 차원의 의미가 있음을 사용자가
+확인함.
+
+**다음은 Milestone 32** — 세부 Task는 착수 시점에 별도 제안·승인
+후 정의한다.
 
 ---
 
