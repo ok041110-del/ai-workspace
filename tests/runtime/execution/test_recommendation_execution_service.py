@@ -65,6 +65,7 @@ def test_execute_rejects_when_manual_trigger_is_false(tmp_path: Path) -> None:
 
     assert outcome.gate_decision.approved is False
     assert outcome.result is None
+    assert outcome.lifecycle_transitions == []
     assert execution_environment.executed_commands == []
 
 
@@ -122,6 +123,54 @@ def test_execute_runs_next_task_via_execution_dispatcher(tmp_path: Path) -> None
     assert outcome.result is not None
     assert outcome.result.success is True
     assert len(execution_environment.executed_commands) == 1
+    assert [t.new_status for t in outcome.lifecycle_transitions] == ["in-progress", "review"]
+    tasks = {t.task_id: t.status for t in vault_adapter.list_tasks()}
+    assert tasks["M36-T02"] == "review"
+
+
+def test_execute_reverts_task_to_todo_on_execution_failure(tmp_path: Path) -> None:
+    vault_adapter = VaultAdapter(tmp_path)
+    vault_adapter.create_task(
+        "M37-T01",
+        "Gate",
+        status="todo",
+        priority="high",
+        milestone="M37",
+        owner="AI",
+        created="2026-07-30",
+        updated="2026-07-30",
+    )
+    recommendation_service = RecommendationIntelligenceService(
+        vault_adapter,
+        ProjectIntelligenceService(vault_adapter),
+        CapabilityIntelligenceService(_make_agent_adapter()),
+    )
+    execution_environment = FakeExecutionEnvironment()
+    execution_environment.result = ExecutionResult(returncode=1, stdout="", stderr="boom")
+    registry = InMemoryEngineRegistry()
+    registry.register(
+        "claude_code",
+        ClaudeCodeEngineAdapter(
+            execution_environment=execution_environment, subprocess_timeout_seconds=5.0
+        ),
+    )
+    auth = InMemoryAuthenticationManager(frozenset({"claude_code"}))
+    dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
+    service = RecommendationExecutionService(
+        recommendation_service,
+        vault_adapter,
+        registry,
+        InMemoryEngineSelectionPolicy(),
+        dispatcher,
+    )
+
+    outcome = service.execute(manual_trigger=True)
+
+    assert outcome.result is not None
+    assert outcome.result.success is False
+    assert [t.new_status for t in outcome.lifecycle_transitions] == ["in-progress", "todo"]
+    tasks = {t.task_id: t.status for t in vault_adapter.list_tasks()}
+    assert tasks["M37-T01"] == "todo"
 
 
 def test_render_markdown_shows_rejected_gate_decision(tmp_path: Path) -> None:
@@ -133,6 +182,51 @@ def test_render_markdown_shows_rejected_gate_decision(tmp_path: Path) -> None:
     assert "## Gate 판정" in markdown
     assert "거부" in markdown
     assert "## 실행된 Action" not in markdown
+    assert "## Task Status 이력" in markdown
+    assert "발생한 전이 없음" in markdown
+
+
+def test_render_markdown_shows_lifecycle_transitions_on_success(tmp_path: Path) -> None:
+    vault_adapter = VaultAdapter(tmp_path)
+    vault_adapter.create_task(
+        "M37-T02",
+        "Transitioner",
+        status="todo",
+        priority="high",
+        milestone="M37",
+        owner="AI",
+        created="2026-07-30",
+        updated="2026-07-30",
+    )
+    recommendation_service = RecommendationIntelligenceService(
+        vault_adapter,
+        ProjectIntelligenceService(vault_adapter),
+        CapabilityIntelligenceService(_make_agent_adapter()),
+    )
+    execution_environment = FakeExecutionEnvironment()
+    execution_environment.result = ExecutionResult(returncode=0, stdout="ok", stderr="")
+    registry = InMemoryEngineRegistry()
+    registry.register(
+        "claude_code",
+        ClaudeCodeEngineAdapter(
+            execution_environment=execution_environment, subprocess_timeout_seconds=5.0
+        ),
+    )
+    auth = InMemoryAuthenticationManager(frozenset({"claude_code"}))
+    dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
+    service = RecommendationExecutionService(
+        recommendation_service,
+        vault_adapter,
+        registry,
+        InMemoryEngineSelectionPolicy(),
+        dispatcher,
+    )
+
+    markdown = render_markdown(service.execute(manual_trigger=True))
+
+    assert "## Task Status 이력" in markdown
+    assert "M37-T02: todo → in-progress" in markdown
+    assert "M37-T02: in-progress → review" in markdown
 
 
 def test_publish_writes_recommendation_execution_file(tmp_path: Path) -> None:
