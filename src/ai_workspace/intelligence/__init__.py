@@ -52,10 +52,13 @@ Vault Task 문서(`VaultAdapter.list_tasks()`)를 단일 데이터 소스로
   번호 거리)와 Gap(ADR/TASK/ARCHITECTURE 중 언급 0건)을 Rule 기반
   으로 판단한다. Adapter를 직접 호출하지 않고 Context 산출물만
   재사용한다.
-- `context_service.ContextIntelligenceService`(Milestone 30-T04) —
+- `context_service.ContextIntelligenceService`(Milestone 30-T04/T05) —
   위 두 Analyzer를 Context→Freshness/Gap 순서로 실행해
-  `ProjectContextReport`를 만든다. `KnowledgeAdapter`만 생성자로
-  주입받는다.
+  `ProjectContextReport`를 만들고(`generate()`), `render_markdown()`
+  으로 Markdown 문자열로 렌더링한 뒤 `VaultAdapter.
+  publish_project_context()`로 `15 Project Intelligence/Project
+  Context.md`에 노출한다(`publish()`). `KnowledgeAdapter`(필수)/
+  `VaultAdapter`(선택)만 생성자로 주입받는다.
 """
 
 from __future__ import annotations

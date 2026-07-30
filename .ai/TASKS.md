@@ -9813,7 +9813,7 @@ Rule 기반 계층으로 유지한다.
 | M30-T02 | Context Analyzer | **완료** |
 | M30-T03 | Freshness & Gap Analyzer | **완료** |
 | M30-T04 | Integration | **완료** |
-| M30-T05 | Presentation | 예정 |
+| M30-T05 | Presentation | **완료** |
 
 ### M30-T01: Context Intelligence Architecture
 
@@ -9959,6 +9959,70 @@ check src tests`, `mypy src` 전부 클린.
 Domain 코드 무변경, §8 규칙 21 유지.
 
 다음 Task: **M30-T05**(Presentation).
+
+### M30-T05: Presentation
+
+**목표**: T04의 `ContextIntelligenceService`를 실제로 Vault에
+노출한다.
+
+**구현 내용**
+
+- `intelligence/context_service.py`(T04에서 확장) — `render_markdown()`
+  (순수 함수)이 `ProjectContextReport`를 Markdown으로 렌더링하고,
+  `publish()`가 `VaultAdapter.publish_project_context()`(신규
+  메서드)를 통해 실제로 Vault에 쓴다. `vault_adapter`를 주입하지
+  않고 `publish()`를 호출하면 `ValueError`.
+- `vault/context_report.py`(신규) — `write_project_context_report()`
+  가 `15 Project Intelligence/Project Context.md`에 원자적으로
+  전체 교체(overwrite)한다(`vault/intelligence_report.py`, M29-T05
+  와 동일한 패턴, 같은 폴더를 재사용해 새 최상위 폴더를 만들지
+  않았다).
+- `VaultAdapter.publish_project_context()`(신규 메서드) — 위 writer
+  를 Integration Layer에 노출.
+- **Dashboard 대신 Vault를 선택**(M29-T05와 동일한 이유 — DoD는
+  "Vault를 통해 결과 확인"만 요구, FastAPI 연동은 범위 확장이라
+  보류). `06 Dashboard/Dashboard Index.md`에 [[Project Context]]
+  연결 절을 추가했다.
+- Vault 문서: `15 Project Intelligence/README.md`(두 리포트 설명
+  으로 갱신), `15 Project Intelligence/Project Context.md`(신규,
+  실제 생성된 리포트), `06 Dashboard/Dashboard Index.md`,
+  [[Milestones Index]] M30 행 갱신.
+
+**실제 결과 확인 및 버그 발견·수정**: 이 저장소의 실제 vault_root에
+`ContextIntelligenceService.publish("M30-T05", current_milestone=30)`
+를 실행해 검증하던 중, `docs/ARCHITECTURE.md` 최상단 `# ARCHITECTURE
+— AI Workspace` 절처럼 본문 한 줄에 여러 Milestone 이력이 나열된
+경우 Freshness가 실제로는 최근(M30)인데도 본문 "첫 Milestone 언급"
+(예: "Milestone 1~22")을 잘못 골라 Warning으로 오판하는 버그를
+발견했다. `intelligence/context.py`의 Milestone 추출을 "본문 전체
+첫 언급"에서 "subject 언급 위치와 텍스트 거리가 가장 가까운 언급"
+으로 고쳐 해결(`_extract_milestone_near_subject()`,
+`_all_milestone_matches()` 신규) — 회귀 방지 테스트
+(`test_analyze_ignores_unrelated_milestone_mentions_before_subject`)
+를 추가했다. 수정 후 실제 리포트가 Freshness Healthy로 정정됨을
+확인하고 Vault에 커밋했다.
+
+**테스트**: `tests/vault/test_context_report.py`(신규 2개), `tests/
+integration_layer/test_vault_adapter.py`에 `publish_project_context()`
+테스트 1개 추가, `tests/intelligence/test_context_service.py`에
+`render_markdown()`/`publish()` 테스트 3개 추가, `tests/intelligence/
+test_context_analyzer.py`에 Milestone 오판 회귀 방지 테스트 1개
+추가. `pytest`(929개, 기존 922개 + 신규 7개), `ruff check src
+tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| Vault를 통해 결과 확인 가능 | ✅ (`15 Project Intelligence/Project Context.md`) |
+| Architecture 문서 최신화 | ✅ (`docs/ARCHITECTURE.md` §3.23 갱신) |
+| Review 완료 | Milestone Review는 M30 전체 완료 후 별도 요청 예정(M29와 동일한 프로세스) |
+
+새 Core Domain Interface 없음(27종 그대로), Layer Boundary 변경
+없음(§8 규칙 21 그대로), Core Domain 코드 무변경.
+
+**Milestone 30(Context Intelligence) T01~T05 전체 완료.** Milestone
+Review는 사용자 요청에 따라 별도로 진행한다.
 
 ---
 

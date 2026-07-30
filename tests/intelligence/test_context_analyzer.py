@@ -97,6 +97,34 @@ def test_analyze_extracts_milestone_from_matched_entries() -> None:
     assert adr_entry.milestone == "M30"
 
 
+def test_analyze_ignores_unrelated_milestone_mentions_before_subject() -> None:
+    """`docs/ARCHITECTURE.md`의 최상단 절처럼, 본문에 subject와
+    무관한 Milestone(예: "Milestone 1~22 완료")이 먼저 나오고 그
+    뒤에야 실제 subject가 언급되는 절이면, 첫 언급이 아니라 subject
+    가 실제로 있는 줄에서 Milestone을 뽑아야 한다."""
+    repository = FakeKnowledgeRepository(
+        [
+            KnowledgeDocument(
+                document_id="architecture",
+                kind=KnowledgeKind.ARCHITECTURE,
+                title="ARCHITECTURE",
+                content=(
+                    "# ARCHITECTURE — AI Workspace\n\n"
+                    "Milestone 1~22 완료. Milestone 28 완료. "
+                    "Milestone 30(Context Intelligence) 진행 중 — M30-T05부터 계속.\n"
+                ),
+                source_path="docs/ARCHITECTURE.md",
+            )
+        ]
+    )
+    analyzer = ContextAnalyzer(KnowledgeAdapter(repository))
+
+    context = analyzer.analyze("M30-T05")
+
+    assert len(context.entries) == 1
+    assert context.entries[0].milestone == "M30"
+
+
 def test_analyze_returns_empty_when_subject_not_mentioned() -> None:
     analyzer = ContextAnalyzer(_make_adapter())
 

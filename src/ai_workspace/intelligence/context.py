@@ -61,6 +61,45 @@ def _extract_milestone(text: str) -> str | None:
     return f"M{match.group(1)}" if match else None
 
 
+def _all_milestone_matches(text: str) -> list[tuple[int, str]]:
+    """(위치, "M숫자") 목록. `_MILESTONE_PATTERN`/`_M_TASK_PATTERN` 둘 다
+    훑는다(하나만으로는 "Milestone 30"/"M30-T05" 표기가 섞인 문장을
+    놓칠 수 있음)."""
+    matches = [(m.start(), f"M{m.group(1)}") for m in _MILESTONE_PATTERN.finditer(text)]
+    matches += [(m.start(), f"M{m.group(1)}") for m in _M_TASK_PATTERN.finditer(text)]
+    return matches
+
+
+def _extract_milestone_near_subject(heading: str, body: str, variants: list[str]) -> str | None:
+    """Milestone 번호는 문서 전체가 아니라 subject가 실제로 언급된
+    위치에서 **가장 가까운** 언급을 뽑는다. `docs/ARCHITECTURE.md`의
+    최상단 `# ARCHITECTURE — AI Workspace` 절처럼 본문 한 줄에 모든
+    Milestone의 역사(`Milestone 1~22 완료. ... Milestone 30 진행
+    중 — M30-T05...`)가 나열되는 경우, "첫 Milestone 언급"을 그대로
+    쓰면(예: "Milestone 1~22") subject가 실제로 속한 Milestone(30)과
+    무관한 값이 나온다 — 위치 거리로 가장 가까운 언급을 골라 이
+    오탐을 피한다."""
+    milestone = _extract_milestone(heading)
+    if milestone is not None:
+        return milestone
+
+    milestone_matches = _all_milestone_matches(body)
+    if not milestone_matches:
+        return None
+
+    subject_positions = [
+        index
+        for variant in variants
+        for index in (body.find(variant),)
+        if index != -1
+    ]
+    if not subject_positions:
+        return milestone_matches[0][1]
+
+    subject_index = min(subject_positions)
+    return min(milestone_matches, key=lambda item: abs(item[0] - subject_index))[1]
+
+
 def _split_sections(document: KnowledgeDocumentView) -> list[tuple[str, str]]:
     """문서 텍스트를 (제목, 본문) 목록으로 쪼갠다. 첫 제목 이전 텍스트는
     버린다(frontmatter/도입부는 subject 매칭 대상이 아니다). 평면
@@ -108,7 +147,7 @@ class ContextAnalyzer:
                         kind=document.kind,
                         heading=heading,
                         source_path=document.source_path,
-                        milestone=_extract_milestone(heading) or _extract_milestone(body),
+                        milestone=_extract_milestone_near_subject(heading, body, variants),
                     )
                 )
         return ProjectContext(subject=subject, entries=entries)
