@@ -2070,3 +2070,103 @@
   `.ai/RULES.md`에 반영. 새 Interface 없음(27종 그대로) —
   `vault/`는 애초에 Interface 계층이 아니라 데이터/함수 계층
   (ADR-0035)이므로 이 확장도 그 성격을 유지한다.
+
+## ADR-0039: Workspace Adapter Layer 도입 — `integration/` 신규 최상위 패키지(Vault/Workflow/Agent Adapter), Core Domain↔vault 직접 의존 금지를 코드로 강제 (Milestone 28-T03)
+
+- 상태: 승인됨 (2026-07-30, 사용자 승인 — "Approve with Architecture
+  Direction")
+- 날짜: 2026-07-30
+- 배경: Milestone 28은 Task Lifecycle(T01)/자동 문서 갱신(T02)까지
+  `vault/` 안에서 완결했지만, 이후 Task(T04 Workflow Engine
+  Integration, T05 Agent Assignment, T06 Conversation Layer
+  Integration)는 전부 Core Domain(`domain`/`interfaces`/`engines`)
+  과 `vault/`를 함께 다뤄야 한다. ADR-0035는 "Core Domain은 vault를
+  모르고 vault는 Core Domain을 모른다"를 이미 원칙으로 세워뒀으므로,
+  이 경계를 지키면서 둘을 연결할 **제3의 계층**이 필요했다. 사용자가
+  T03 설계 검토에서 "Vault/Workflow/Agent Adapter 3개로 구현하되,
+  이를 단순한 '세 개의 Adapter'가 아니라 향후 Runtime/Service/
+  Notification/Sync 등이 추가될 수 있는 **Workspace Adapter Layer**
+  의 첫 구성 요소로 문서·아키텍처에 정의할 것"을 조건으로 승인했다.
+- 결정:
+  1. `src/ai_workspace/integration/`을 신규 최상위 패키지로 만든다
+     (`domain`/`interfaces`/`engines`/`vault`/`web` 등과 같은 층위).
+     이 패키지가 **Workspace Adapter Layer**의 구현체다 — "Adapter
+     3개"가 아니라, 외부 관심사 하나당 Adapter 하나를 추가하는
+     확장 가능한 계층으로 공식 정의한다(패키지 docstring에 이
+     정의와 향후 확장 후보를 명시).
+  2. 초기 구성원은 3개만 만든다: `VaultAdapter`(`vault/`를 아는
+     유일한 Integration Layer 구성원), `WorkflowAdapter`
+     (`WorkflowEngine`/`TaskEngine` Interface에만 의존),
+     `AgentAdapter`(`AgentManager`/`AgentRegistry`/`AgentScheduler`
+     Interface에만 의존). 셋은 서로를 참조하지 않는다 — Task↔
+     Workflow 연결(T04)/Workflow↔Agent 연결(T05)은 이 Adapter들을
+     조합해 쓰는 상위 호출자(Conversation Layer 등)의 책임으로
+     미룬다(YAGNI, 지금 만들지 않는다).
+  3. **공유 기반 클래스/Protocol을 만들지 않는다.** 세 Adapter의
+     메서드 시그니처가 서로 다른 관심사를 다뤄 억지로 공통 인터페이스를
+     뽑으면 Speculative Generality(`.ai/RULES.md` §4.2 금지 목록)가
+     된다. "Layer"라는 개념은 (a) 패키지 경계(`integration/`),
+     (b) `XxxAdapter` 이름 규칙, (c) 이 ADR + `docs/ARCHITECTURE.md`
+     문서화로 정의한다 — 실제로 여러 Adapter가 같은 메서드를
+     공유해야 하는 필요가 생기면 그때 Interface를 뽑는다(ADR-0029와
+     같은 점진적 확장 패턴).
+  4. **원칙 — 연결·변환·위임만, 비즈니스 로직 금지**: Adapter는
+     자체 알고리즘(계획 수립, 상태 전이 규칙, 자연어 해석 등)을
+     갖지 않는다. `WorkflowAdapter.plan()`은 `WorkflowEngine.plan()`
+     을 그대로 호출하고, `AgentAdapter.create_agent()`는
+     `AgentManager.create()` + `AgentRegistry.register()`를 잇는
+     것 이상을 하지 않는다. `VaultAdapter`도 `vault.task_lifecycle`/
+     `vault.task_sync`/`vault.engine`을 그대로 호출하며 vault 내부
+     타입(`TaskStatus` 등)은 바깥으로 노출하지 않고 문자열로만
+     주고받는다 — Core Domain이 vault 타입을 몰라도 되게 하기
+     위함이다("Workspace Intelligence"는 여기 두지 않는다 —
+     Conversation Layer(T06)나 Core Engine의 몫).
+  5. `docs/ARCHITECTURE.md` §8(의존성 규칙)에 새 규칙 18을 추가한다:
+     "Core Domain(`domain`/`interfaces`/`engines`)과 `vault/`는
+     서로 직접 참조하지 않는다. 이 경계를 넘는 통신은 반드시
+     `integration/`의 Adapter를 통해서만 이뤄진다."
+  6. 자동 검증을 코드로 만든다 — `tests/integration_layer/
+     test_architecture_boundary.py`가 `ast` 모듈로 `src/ai_workspace/`
+     전체의 import 문을 파싱해 (a) `domain`/`interfaces`/`engines`
+     어떤 파일도 `ai_workspace.vault`를 import하지 않는지, (b)
+     `vault/` 어떤 파일도 `ai_workspace.{domain,interfaces,engines}`
+     를 import하지 않는지, (c) `integration/` 밖의 어떤 파일도 두
+     쪽을 동시에 import하지 않는지 확인한다. 이 규칙은 앞으로도
+     리뷰가 아니라 테스트 실패로 강제된다.
+  7. 이 계층의 단위 테스트는 `tests/integration/`(기존 Milestone
+     End-to-End 테스트 전용, M23~M24부터 써 온 이름)과 겹치지 않게
+     `tests/integration_layer/`에 둔다 — 이름 충돌은 우연이며,
+     `src/ai_workspace/integration/`을 미러링하는 새 디렉터리임을
+     여기 명시적으로 기록한다.
+- 대안:
+  - Adapter 3개에 공통 `WorkspaceAdapter` Protocol/ABC를 강제 —
+    기각(위 결정 3). 지금은 억지 추상화만 될 뿐 실질적 이득이 없다.
+  - `vault/`가 직접 `domain.Task`/`WorkflowEngine`을 import하도록
+    허용(Integration Layer 생략) — 기각. ADR-0035가 이미 확립한
+    "vault는 Core Domain을 모른다" 원칙(GitHub 원문↔Vault 동기화
+    도구라는 vault의 정체성)을 무너뜨린다.
+  - Core Domain의 `TaskEngine`/`WorkflowEngine`을 vault의
+    `VaultDocumentKind.TASK`와 즉시 통합(Task 개념 통일) —
+    기각/보류. 두 "Task"(vault의 Markdown 문서, Core Domain의
+    `domain.Task`)를 지금 억지로 합치면 그 통합 로직 자체가
+    설계 없이 만들어진 비즈니스 로직이 된다 — T04(Workflow Engine
+    Integration)에서 명시적으로 설계·승인받고 진행한다.
+- 이유: Integration Layer를 "3개의 구체적인 Adapter"가 아니라
+  이름 있는 계층으로 정의해 두면, T04(Workflow)/T05(Agent)/T06
+  (Conversation)이 이 Adapter들을 조합하는 데서 그치고, 이후
+  Milestone(사용자가 언급한 Runtime/Service/Notification/Sync,
+  나아가 M40 이후 Core 확장)도 같은 패키지에 새 Adapter만 추가하는
+  형태로 자연스럽게 이어진다 — 매번 "이 새 기능은 어느 계층에
+  속하는가"를 재설계할 필요가 없다.
+- 결과/영향: `src/ai_workspace/integration/`(신규) —
+  `__init__.py`(Layer 정의 docstring)/`vault_adapter.py`/
+  `workflow_adapter.py`/`agent_adapter.py`. `vault/task_sync.py`의
+  `TaskSyncResult`에 `task_id`/`old_status`/`new_status` 필드
+  추가(기존 필드는 무변경, `VaultAdapter.transition_task()`가
+  실제 이전 상태를 돌려주기 위해 필요했음 — 기존 T02 테스트
+  전부 무변경 통과 확인). `tests/integration_layer/`(신규 13개 —
+  Adapter별 단위 테스트 + Architecture Boundary 자동 검증 3개).
+  `docs/ARCHITECTURE.md` §8 규칙 18, §9 디렉터리 구조,
+  `.ai/TASKS.md`에 반영. 새 Core Domain Interface 없음(27종
+  그대로) — Integration Layer는 기존 Interface에 의존만 하고
+  새 계약을 추가하지 않는다.

@@ -8783,7 +8783,7 @@ Task로 진행한다.
 |---|---|---|
 | M28-T01 | Task Lifecycle(Status Transition, `updated` 자동 갱신, Archive 처리) | **완료** |
 | M28-T02 | Automatic Document Synchronization(Task 변경 → Daily/Decision/Roadmap/Milestone 갱신) | **완료** |
-| M28-T03 | Integration Layer(Vault Adapter/Workflow Adapter/Agent Adapter) | 착수 예정 |
+| M28-T03 | Integration Layer(Vault Adapter/Workflow Adapter/Agent Adapter) | **완료** |
 | M28-T04 | Workflow Engine Integration | 착수 예정 |
 | M28-T05 | Agent Assignment | 착수 예정 |
 | M28-T06 | Conversation Layer Integration | 착수 예정 |
@@ -8896,6 +8896,85 @@ src/ai_workspace/vault` 클린, `pytest`(812개, 기존 806개 + 신규 6개)
 src/ai_workspace/vault` 클린, `tests/integration/
 test_m23_vault_environment_integration.py`(Broken Backlink 0건
 유지) 포함 `pytest`(818개, 기존 812개 + 신규 6개) 전부 통과.
+
+### M28-T03: Integration Layer(Workspace Adapter Layer)
+
+**설계 승인**(2026-07-30, 사용자): "Approve with Architecture
+Direction" — 구현은 Vault/Workflow/Agent Adapter 3개로 진행하되,
+문서·아키텍처에서는 이를 향후 Runtime/Service/Notification/Sync
+Adapter가 추가될 수 있는 **Workspace Adapter Layer**의 첫 구성
+요소로 정의할 것을 조건으로 승인. 상세는 ADR-0039.
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Core Domain → vault 의존성 없음 | ✅ |
+| 2 | vault → Core Domain 의존성 없음 | ✅ |
+| 3 | Integration Layer만 양쪽을 사용 | ✅ |
+| 4 | Vault Adapter/Workflow Adapter/Agent Adapter 구현 | ✅ |
+| 5 | ADR 작성(Workspace Adapter Layer 개념 명시) | ✅ (ADR-0039) |
+| 6 | 테스트 통과 | ✅ |
+
+**구현 내용**
+
+- `src/ai_workspace/integration/`(신규 최상위 패키지):
+  - `__init__.py` — Workspace Adapter Layer 정의(패키지 docstring):
+    "Adapter 3개"가 아니라 확장 가능한 계층으로 명시, 현재 구성원과
+    향후 확장 후보(Runtime/Service/Notification/Sync) 나열.
+  - `vault_adapter.py`의 `VaultAdapter` — `vault/`를 아는 유일한
+    구성원. `create_task()`는 `vault.engine.VaultSaveEngine`을,
+    `transition_task()`는 `vault.task_lifecycle.
+    transition_task_status()`/`vault.task_sync.transition_and_sync()`
+    를 그대로 호출한다(`sync_related_documents` 플래그로 선택).
+    `vault.task_lifecycle.TaskStatus`는 이 파일 밖으로 노출하지
+    않고 문자열로만 주고받는다 — 반환값도 이 파일 안에서 정의한
+    `TaskTransitionOutcome`(문자열/`bool`만) 하나로 통일했다.
+  - `workflow_adapter.py`의 `WorkflowAdapter` — `WorkflowEngine`/
+    `TaskEngine` **Interface**에만 생성자 의존(Interface First),
+    `plan()`/`create_task()`/`transition_task()`가 각각 그대로
+    위임한다. 자체 계획 수립 로직 없음.
+  - `agent_adapter.py`의 `AgentAdapter` — `AgentManager`/
+    `AgentRegistry`/`AgentScheduler` Interface에만 의존.
+    `create_agent()`가 `AgentManager.create()` + `AgentRegistry.
+    register()`를 잇는 것 — 두 Interface를 조합하는 것 자체가
+    이 Adapter의 유일한 역할이다.
+  - 세 Adapter는 서로를 참조하지 않는다(의도적) — Task↔Workflow
+    (M28-T04)/Workflow↔Agent(M28-T05) 연결은 다음 Task에서 이
+    Adapter들을 조합하는 상위 계층으로 만든다.
+  - **공유 기반 클래스 없음**: 서로 다른 관심사에 억지로 공통
+    Interface를 뽑는 대신, 패키지 경계 + 이름 규칙(`XxxAdapter`)
+    + ADR-0039/`docs/ARCHITECTURE.md`로 "Layer" 개념을 정의했다
+    (Speculative Generality 회피, `.ai/RULES.md` §4.2).
+- **부수 변경**: `vault/task_sync.py`의 `TaskSyncResult`에
+  `task_id`/`old_status`/`new_status` 필드 추가(기존 필드 무변경)
+  — `VaultAdapter.transition_task()`가 실제 이전 상태를 돌려주려면
+  필요했다. 기존 M28-T02 테스트 6개 전부 무변경 통과 확인.
+- **경계 강제(자동화)**: `tests/integration_layer/
+  test_architecture_boundary.py`(신규 3개) — `ast` 모듈로
+  `src/ai_workspace/` 전체 import 문을 파싱해 Core Domain↔vault
+  직접 의존 0건, `integration/` 밖에서 양쪽 동시 import 0건을
+  코드로 강제한다. 앞으로 이 규칙을 어기면 리뷰가 아니라 테스트
+  실패로 드러난다.
+- `docs/ARCHITECTURE.md` §8에 의존성 규칙 18(Core Domain↔vault
+  직접 참조 금지) 추가, §9 디렉터리 구조에 `integration/` 반영,
+  §3에 "Workspace Adapter Layer(Milestone 28-T03, ADR-0039)" 절
+  신설.
+- 단위 테스트 디렉터리 이름 안내: 기존 `tests/integration/`은
+  Milestone 23부터 써 온 "End-to-End 통합 테스트" 전용 이름이라,
+  `src/ai_workspace/integration/`을 미러링하는 단위 테스트는 이름
+  충돌을 피해 `tests/integration_layer/`에 뒀다(ADR-0039에 이유
+  기록).
+
+**검증**: `tests/integration_layer/`(신규 13개 — Vault/Workflow/
+Agent Adapter 단위 테스트 10개 + Architecture Boundary 자동 검증
+3개), `ruff check src tests` 클린, `mypy src/ai_workspace/integration
+src/ai_workspace/vault` 클린, `pytest`(831개, 기존 818개 + 신규
+13개) 전부 통과.
+
+**Milestone 28-T03(Workspace Adapter Layer) 완료.** 다음 Task:
+**M28-T04**(Workflow Engine Integration — `WorkflowAdapter`를 써서
+Vault Task와 Core Domain Workflow를 실제로 연결).
 
 ---
 

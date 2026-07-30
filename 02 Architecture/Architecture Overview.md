@@ -91,6 +91,16 @@ Core Domain·`web/` 양쪽 모두 모르는 독립 계층 `vault/`가 GitHub
 Owner/Checklist/Notes/Related Documents/Decision을 담은 문서를
 Obsidian 안에서 직접 관리할 수 있다. [[Template - Task]] 참고.
 
+## Workspace Adapter Layer(Milestone 28-T03, ADR-0039)
+
+Core Domain과 `vault/`는 여전히 서로를 모른다(ADR-0035 유지) —
+그 경계를 넘는 유일한 통로가 새 최상위 패키지 `integration/`이다.
+"Adapter 3개"가 아니라, 외부 관심사마다 하나씩 늘어나는 확장
+가능한 계층(Vault/Workflow/Agent, 향후 Runtime/Service/
+Notification/Sync 등)으로 정의했다. 각 Adapter는 연결·변환·위임만
+하고 비즈니스 로직을 갖지 않는다. `ast` 기반 테스트가 이 경계를
+자동으로 강제한다.
+
 ## 관련 문서
 
 - [[Overview]]

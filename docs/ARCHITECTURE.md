@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.33.0 |
-| 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). **Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — ADR-0038: `VaultDocumentKind.TASK` 신규(개별 Task 문서), Daily/Decision Template 확장, Project Workspace Template 정의(설계만)**. 새 Interface 없이 27종 유지) |
+| 문서 버전 | v0.34.0 |
+| 작성일 | 2026-07-30 |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). **Milestone 28(Live Task Management & Integration) 진행 중 — T01(Task Lifecycle)/T02(Automatic Document Synchronization)/T03(Workspace Adapter Layer, ADR-0039: 신규 최상위 패키지 `integration/`, Core Domain↔vault 직접 의존 금지를 §8 규칙 18 + `ast` 기반 테스트로 강제) 완료, T04(Workflow Engine Integration)부터 진행**. 새 Interface 없이 27종 유지) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -1057,6 +1057,50 @@ GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
   않는다(`find_broken_backlinks()` 통합 테스트로 확인). Core Domain
   참조 없음, 새 Interface 없음.
 
+### Workspace Adapter Layer(Milestone 28-T03, ADR-0039)
+
+`vault/`(§3.21)와 Core Domain(§3.4~3.21의 `domain`/`interfaces`/
+`engines`)은 서로 직접 참조하지 않는다(ADR-0035) — 이 절은 그
+경계를 넘는 유일한 통로인 신규 최상위 패키지 `integration/`을
+설명한다.
+
+- **Workspace Adapter Layer**: `integration/`이 구현하는 계층
+  이름(ADR-0039). "Adapter 3개"가 아니라, 외부 관심사(Vault,
+  Workflow, Agent, 그리고 향후 Runtime/Service/Notification/Sync
+  등)마다 하나씩 늘어나는 확장 가능한 계층으로 정의한다. 각
+  Adapter는 **연결·변환·위임만** 담당하고 비즈니스 로직이나
+  Workspace Intelligence(자연어 해석, 계획 수립 등)를 갖지 않는다.
+- **구성원(Milestone 28-T03)**:
+  - `vault_adapter.VaultAdapter` — `vault/`를 아는 유일한 Integration
+    Layer 구성원. `create_task()`/`transition_task()`가 `vault.
+    engine`/`vault.task_lifecycle`/`vault.task_sync`를 그대로
+    호출한다. vault 내부 타입(`TaskStatus` 등)은 바깥에 노출하지
+    않고 문자열로만 주고받는다.
+  - `workflow_adapter.WorkflowAdapter` — `WorkflowEngine`/`TaskEngine`
+    **Interface**에만 의존(Interface First, 구체 구현은 생성자로
+    주입). `plan()`/`transition_task()`는 각각 Core Domain Engine을
+    그대로 호출한다.
+  - `agent_adapter.AgentAdapter` — `AgentManager`/`AgentRegistry`/
+    `AgentScheduler` Interface에만 의존. `create_agent()`가
+    `AgentManager.create()` + `AgentRegistry.register()`를 잇는다.
+  - 세 Adapter는 서로를 참조하지 않는다 — Task↔Workflow 연결
+    (M28-T04)/Workflow↔Agent 연결(M28-T05)은 이들을 조합해 쓰는
+    상위 호출자(Conversation Layer, M28-T06)의 책임으로 남겨뒀다.
+- **공유 기반 클래스를 두지 않은 이유**: 세 Adapter의 메서드
+  시그니처가 서로 다른 관심사를 다뤄 억지로 공통 Interface를 뽑으면
+  Speculative Generality가 된다(ADR-0039 결정 3). "Layer"는
+  패키지 경계 + `XxxAdapter` 이름 규칙 + 이 문서로 정의하고,
+  실제로 여러 Adapter가 공유해야 하는 필요가 생기면 그때 Interface를
+  뽑는다.
+- **경계 강제**: `tests/integration_layer/test_architecture_boundary.py`
+  가 `ast` 모듈로 `src/ai_workspace/` 전체 import 문을 파싱해
+  (a) Core Domain이 `vault`를 import하지 않는지, (b) `vault`가
+  Core Domain을 import하지 않는지, (c) `integration/` 밖의 어떤
+  파일도 둘을 동시에 import하지 않는지 확인한다 — §8 규칙 18을
+  코드로 강제한다.
+- 새 Core Domain Interface 없음(27종 그대로) — Integration Layer는
+  기존 Interface에 의존만 하고 새 계약을 추가하지 않는다.
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -1199,6 +1243,15 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
     22) — 조립은 항상 `web/server.py`의 `build_app()`이 전담하고,
     `LifecycleManager`는 이미 조립된 컴포넌트의 Startup/Shutdown
     순서만 조율한다.
+18. **Core Domain(`domain`/`interfaces`/`engines`)과 `vault/`는
+    서로 직접 참조하지 않는다**(ADR-0035, Milestone 28-T03로
+    ADR-0039에서 강제 방식 추가). 이 경계를 넘는 통신은 반드시
+    `integration/`의 Workspace Adapter Layer(`VaultAdapter`/
+    `WorkflowAdapter`/`AgentAdapter`)를 통해서만 이뤄진다.
+    `integration/`을 제외한 어떤 모듈도 `vault`와 `domain`/
+    `interfaces`/`engines`를 동시에 import할 수 없다 —
+    `tests/integration_layer/test_architecture_boundary.py`가
+    `ast` 기반으로 이를 테스트 실패로 강제한다.
 
 ## 9. 디렉터리 구조와 컴포넌트 매핑
 
@@ -1252,8 +1305,15 @@ src/ai_workspace/
 │                       #   sync.py(Rename/Delete/Conflict, M23-T05)
 │                       #   + connection.py/filesystem.py/atomic.py
 │                       #   (Real Vault Connection/Adapter/Atomic
-│                       #   Write, M24, ADR-0036)
+│                       #   Write, M24, ADR-0036) + task_lifecycle.py
+│                       #   (Status Transition/Archive, Milestone 28-T01)
+│                       #   + task_sync.py(Automatic Document
+│                       #   Synchronization, Milestone 28-T02)
 │                       #   — Core Domain·web/을 모두 모름, Milestone 23~24
+├── integration/       # Workspace Adapter Layer(ADR-0039, Milestone
+│                       #   28-T03) — vault_adapter.py/workflow_adapter.py/
+│                       #   agent_adapter.py. Core Domain↔vault 경계를
+│                       #   넘는 유일한 통로, 연결·변환·위임만 담당
 ├── web/               # Infrastructure 계층 — FastAPI/uvicorn을 아는 유일한 곳
 │                       #   (Milestone 20): dashboard_viewmodel.py, routes.py,
 │                       #   dashboard_broadcaster.py, app.py, server.py,

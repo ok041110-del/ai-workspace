@@ -39,6 +39,9 @@ _DAILY_SECTION_BY_STATUS: dict[TaskStatus, str] = {
 
 @dataclass(frozen=True)
 class TaskSyncResult:
+    task_id: str
+    old_status: str
+    new_status: str
     daily_path: Path
     daily_updated: bool
     milestone_updated: bool
@@ -146,6 +149,9 @@ def sync_task_change(
                 atomic_write_text(decisions_index, decisions_text)
 
     return TaskSyncResult(
+        task_id=task_id,
+        old_status=old_status.value,
+        new_status=new_status.value,
         daily_path=daily_path,
         daily_updated=daily_updated,
         milestone_updated=milestone_updated,
