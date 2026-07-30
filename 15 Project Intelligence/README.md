@@ -127,6 +127,25 @@ write_recommendation_intelligence_report()`). Execution Layer
 - **근거**: 현재 작업/Workflow 진행 상황/Capability Coverage/Project
   Recommendation 전체를 함께 노출해 판단 근거를 투명하게 보여줌
 
+## `Recommendation Execution.md` (Milestone 36, ADR-0050)
+
+`src/ai_workspace/runtime/execution/recommendation_execution_service.py`
+의 `RecommendationExecutionService.publish()`가 M35 `NextAction`의
+`source=next_task` 추천을, 수동 트리거(`manual_trigger=True`)로만,
+기존 `ExecutionDispatcher`(M18)/`EngineRegistry`/
+`EngineSelectionPolicy`(M17)로 실제 실행한 결과를 기록한다
+(`vault.recommendation_execution.
+write_recommendation_execution_report()`). **이 문서만 유일하게
+"보고"가 아니라 "실행"의 결과를 담는다** — 나머지 문서는 전부 Read
+Only 리포트다.
+
+- **Gate 판정**: 승인/거부 여부와 사유(`next_task` 외 4개 source는
+  "지원하지 않음(Not Supported)")
+- **실행된 Action**: 승인된 경우에만 Project/Task 표시
+- **실행 결과**: 성공 여부/Engine/소요 시간/오류(승인된 경우에만)
+- Task 상태는 자동으로 전이하지 않음(성공해도 Vault Task를 자동으로
+  `done` 처리하지 않음)
+
 ## 관련 문서
 
 - [[Milestones Index]]
@@ -139,7 +158,8 @@ write_recommendation_intelligence_report()`). Execution Layer
   30 — Context Intelligence"/"Milestone 31 — Capability
   Intelligence"/"Milestone 32 — Intelligence Synthesis"/"Milestone
   33 — Session Resume"/"Milestone 34 — Workflow Intelligence"/
-  "Milestone 35 — Recommendation Intelligence" 절
+  "Milestone 35 — Recommendation Intelligence"/"Milestone 36 —
+  Execution" 절
 - `.ai/DECISIONS.md`의 ADR-0043/ADR-0044/ADR-0045/ADR-0046/ADR-0047/
-  ADR-0048/ADR-0049
-- `src/ai_workspace/intelligence/`
+  ADR-0048/ADR-0049/ADR-0050
+- `src/ai_workspace/intelligence/`, `src/ai_workspace/runtime/execution/`

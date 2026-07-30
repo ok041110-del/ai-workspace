@@ -1,0 +1,146 @@
+from pathlib import Path
+
+from tests.interfaces.fakes import FakeExecutionEnvironment
+
+from ai_workspace.adapters.claude_code_engine_adapter import ClaudeCodeEngineAdapter
+from ai_workspace.engines.authentication_manager import InMemoryAuthenticationManager
+from ai_workspace.engines.engine_selection_policy import InMemoryEngineSelectionPolicy
+from ai_workspace.integration.agent_adapter import AgentAdapter
+from ai_workspace.integration.vault_adapter import VaultAdapter
+from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
+from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
+from ai_workspace.intelligence.report import ProjectIntelligenceService
+from ai_workspace.interfaces.execution_environment import ExecutionResult
+from ai_workspace.runtime.agent.agent_manager import InMemoryAgentManager
+from ai_workspace.runtime.agent.agent_registry import InMemoryAgentRegistry
+from ai_workspace.runtime.agent.agent_scheduler import InMemoryAgentScheduler
+from ai_workspace.runtime.engine.engine_registry import InMemoryEngineRegistry
+from ai_workspace.runtime.execution.execution_dispatcher import ExecutionDispatcher
+from ai_workspace.runtime.execution.recommendation_execution_service import (
+    RecommendationExecutionService,
+    render_markdown,
+)
+
+
+def _make_agent_adapter() -> AgentAdapter:
+    return AgentAdapter(InMemoryAgentManager(), InMemoryAgentRegistry(), InMemoryAgentScheduler())
+
+
+def _make_service(
+    vault_root: Path,
+) -> tuple[RecommendationExecutionService, FakeExecutionEnvironment]:
+    vault_adapter = VaultAdapter(vault_root)
+    recommendation_service = RecommendationIntelligenceService(
+        vault_adapter,
+        ProjectIntelligenceService(vault_adapter),
+        CapabilityIntelligenceService(_make_agent_adapter()),
+    )
+
+    execution_environment = FakeExecutionEnvironment()
+    execution_environment.result = ExecutionResult(returncode=0, stdout="ok", stderr="")
+    registry = InMemoryEngineRegistry()
+    registry.register(
+        "claude_code",
+        ClaudeCodeEngineAdapter(
+            execution_environment=execution_environment, subprocess_timeout_seconds=5.0
+        ),
+    )
+    auth = InMemoryAuthenticationManager(frozenset({"claude_code"}))
+    dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
+
+    service = RecommendationExecutionService(
+        recommendation_service,
+        vault_adapter,
+        registry,
+        InMemoryEngineSelectionPolicy(),
+        dispatcher,
+    )
+    return service, execution_environment
+
+
+def test_execute_rejects_when_manual_trigger_is_false(tmp_path: Path) -> None:
+    service, execution_environment = _make_service(tmp_path)
+
+    outcome = service.execute(manual_trigger=False)
+
+    assert outcome.gate_decision.approved is False
+    assert outcome.result is None
+    assert execution_environment.executed_commands == []
+
+
+def test_execute_runs_next_task_via_execution_dispatcher(tmp_path: Path) -> None:
+    vault_adapter = VaultAdapter(tmp_path)
+    vault_adapter.create_task(
+        "M36-T01",
+        "설계",
+        status="done",
+        priority="high",
+        milestone="M36",
+        owner="AI",
+        created="2026-07-30",
+        updated="2026-07-30",
+    )
+    vault_adapter.create_task(
+        "M36-T02",
+        "Gate",
+        status="todo",
+        priority="high",
+        milestone="M36",
+        owner="AI",
+        created="2026-07-30",
+        updated="2026-07-30",
+    )
+    recommendation_service = RecommendationIntelligenceService(
+        vault_adapter,
+        ProjectIntelligenceService(vault_adapter),
+        CapabilityIntelligenceService(_make_agent_adapter()),
+    )
+    execution_environment = FakeExecutionEnvironment()
+    execution_environment.result = ExecutionResult(returncode=0, stdout="ok", stderr="")
+    registry = InMemoryEngineRegistry()
+    registry.register(
+        "claude_code",
+        ClaudeCodeEngineAdapter(
+            execution_environment=execution_environment, subprocess_timeout_seconds=5.0
+        ),
+    )
+    auth = InMemoryAuthenticationManager(frozenset({"claude_code"}))
+    dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
+    service = RecommendationExecutionService(
+        recommendation_service,
+        vault_adapter,
+        registry,
+        InMemoryEngineSelectionPolicy(),
+        dispatcher,
+    )
+
+    outcome = service.execute(manual_trigger=True)
+
+    assert outcome.gate_decision.approved is True
+    assert outcome.action is not None
+    assert outcome.action.task_title == "Gate"
+    assert outcome.result is not None
+    assert outcome.result.success is True
+    assert len(execution_environment.executed_commands) == 1
+
+
+def test_render_markdown_shows_rejected_gate_decision(tmp_path: Path) -> None:
+    service, _execution_environment = _make_service(tmp_path)
+
+    outcome = service.execute(manual_trigger=False)
+    markdown = render_markdown(outcome)
+
+    assert "## Gate 판정" in markdown
+    assert "거부" in markdown
+    assert "## 실행된 Action" not in markdown
+
+
+def test_publish_writes_recommendation_execution_file(tmp_path: Path) -> None:
+    service, _execution_environment = _make_service(tmp_path)
+
+    outcome, path = service.publish(manual_trigger=False)
+
+    assert path == tmp_path / "15 Project Intelligence" / "Recommendation Execution.md"
+    assert path.exists()
+    assert outcome.gate_decision.approved is False
+    assert "Recommendation Execution" in path.read_text(encoding="utf-8")

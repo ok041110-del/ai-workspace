@@ -302,6 +302,12 @@ tags: [decision]
 - 결정: 새 Intelligence를 계산하지 않고, M29 `ProjectRecommendation`/M31 `CapabilityGapReport`/M33 `CurrentWorkSelector`(Analyzer만 재사용)/M34 `WorkflowFlowAnalyzer`(Analyzer만 재사용)를 입력으로 5단계 Priority Rule(Current Work→Workflow Next→Workflow Blocked→Capability Gap→Project Recommendation) 1개로 단일 `NextAction`을 고른다. 판정 로직은 `intelligence/recommendation_rules.py`의 `RecommendationRuleAnalyzer`(순수 Analyzer)에 캡슐화하고 `recommendation_service.py`의 `RecommendationIntelligenceService`는 조합만 담당. 자동 실행하지 않는다(Automation은 M36 이후)
 - 영향: `docs/ARCHITECTURE.md` §3.28(신규) 갱신, `.ai/TASKS.md` Milestone 35 절 신규. `integration/vault_adapter.py`(확장 1건)/`intelligence/recommendation_rules.py`(신규)/`intelligence/recommendation_service.py`(신규)/`vault/recommendation_intelligence.py`(신규) 구현 완료, `pytest` 988개·ruff·mypy 전부 클린. 새 Core Domain Interface 없음(27종 유지). 상세는 [[Architecture Overview]]
 
+## ADR-0050: Execution 도입 — next_task Recommendation만, 수동 트리거로만, 새 실행 경로 없이 기존 ExecutionDispatcher/EngineRegistry/EngineSelectionPolicy 재사용 (Milestone 36-T01~T04)
+
+- 목적: M35 NextAction은 추천만 하고 실행하지 않아, 이미 존재하는 ExecutionDispatcher(M18)/AutomationActionExecutor(M21) 파이프라인과 연결되지 않는 문제 해결 — M29~M35와 달리 실제 부작용(AI Engine 실행)을 일으키는 첫 Milestone이라 범위를 최소로 좁힘
+- 결정: NextAction의 5가지 source 중 next_task만 실행 대상(나머지는 "지원하지 않음(Not Supported)"), 자동 트리거 없이 manual_trigger=True 수동 호출로만 실행. `runtime/execution/recommendation_execution_gate.py`의 `ExecutionGate`(판정만)와 `recommendation_action_builder.py`의 `ActionBuilder`(변환만)로 책임 분리. `AutomationActionExecutor`를 감싸지 않고 그 내부와 동일한 `EngineRegistry`→`EngineSelectionPolicy`→`ExecutionDispatcher` 3단계를 `recommendation_execution_service.py`가 직접 재사용(반환값을 버리지 않기 위함). Task 상태 자동 전이 없음 — 실행 결과만 Vault에 보고
+- 영향: `docs/ARCHITECTURE.md` §3.29(신규) 갱신, `.ai/TASKS.md` Milestone 36 절 신규. `integration/vault_adapter.py`(확장 1건)/`runtime/execution/recommendation_execution_gate.py`(신규)/`recommendation_action_builder.py`(신규)/`recommendation_execution_service.py`(신규)/`vault/recommendation_execution.py`(신규) 구현 완료, `pytest` 998개·ruff·mypy 전부 클린. 새 Core Domain Interface 없음(27종 유지), `AutomationActionExecutor`/`AutomationScheduler`/`ExecutionDispatcher` 무변경. 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
