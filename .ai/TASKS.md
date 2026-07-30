@@ -10649,6 +10649,16 @@ Review).
 - 실제 저장소 Vault를 대상으로 `publish()`를 실행해 `Session
   Resume.md`가 생성됨을 확인(활성 Task 0건 → "현재 진행 중인 Task
   없음"으로 정상 표시).
+- **실제 검증 중 발견해 수정한 버그**: 활성 Task가 없을 때 빈
+  subject(`""`)를 `ContextAnalyzer.analyze()`에 그대로 넘기면 —
+  이 메서드가 "빈 subject 아니어야 함"을 명시적 전제조건으로 문서화
+  하고 있었음에도 — 모든 Knowledge 문서의 모든 제목이 매칭돼 버려
+  Session Resume이 관련 없는 항목 수백 줄로 오염되는 결함을
+  실제 Vault(대용량 `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`
+  포함)로 검증하다 발견했다. 현재 작업이 없으면 Context Intelligence
+  호출 자체를 건너뛰고 "해당 없음"을 직접 반환하도록
+  `SessionResumeService.generate()`를 수정하고, 회귀 테스트를
+  추가했다(`test_session_resume_service.py`).
 - `docs/ARCHITECTURE.md` §3.26(신규)/상단 상태 갱신, `.ai/
   DECISIONS.md`(ADR-0047 신규), `.ai/TASKS.md`(본 절), Vault(ADR
   Index/Milestones Index) 갱신.
@@ -10681,8 +10691,14 @@ Review).
 생기면 그때부터 실제로 채워진다. (2) CLI 노출·자동 트리거(세션
 시작 Hook)는 명시적으로 범위 밖으로 남겨 M34 이후 논의 대상이다.
 
-**사용자 승인 대기**: 위 Review 결과를 바탕으로 **Milestone
-33(Session Resume) 완료 승인**을 요청한다.
+**사용자 승인(2026-07-30)**: DoD 10개 항목/Architecture/MDD/Layer/
+Interface/Adapter/ADR/Tests/Documentation Review를 모두 확인해
+**Milestone 33(Session Resume) 공식 완료(Approved)**. "M29(Project
+Intelligence)→M30(Context Intelligence)→M31(Capability
+Intelligence)→M32(Intelligence Synthesis)→M33(Session Resume)"로
+이어지며, Intelligence Layer가 처음으로 실제 사용 시나리오(세션
+시작)에 연결됐다. `15 Project Intelligence/Session Resume.md`가
+공식 결과로 확정된다.
 
 **다음은 Milestone 34** — 세부 Task는 착수 시점에 별도 제안·승인
 후 정의한다.
