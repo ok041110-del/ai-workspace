@@ -148,6 +148,12 @@ recommendation_execution.write_recommendation_execution_report()`).
   `in-progress→todo`만 자동화. `review→done`은 자동화하지 않음(사람
   검토 유지). 현재 상태가 예상과 다르면 전이하지 않음(방어적)
 
+**Milestone 38(ADR-0052) 갱신**: 이 문서를 만드는 `publish()`가 이제
+`AutomationScheduler`의 `RUN_RECOMMENDATION` Action(`manual_trigger=True`
+고정)으로도 호출될 수 있다 — 이전까지는 API/테스트로만 수동 호출
+가능했다. 렌더링 내용·Gate 판정 로직은 전혀 바뀌지 않았다(새 정책
+없음, `source=next_task`만 여전히 승인).
+
 ## 관련 문서
 
 - [[Milestones Index]]

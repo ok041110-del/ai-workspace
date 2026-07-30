@@ -8,6 +8,7 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8080
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_AUTOMATION_TICK_SECONDS = 30.0
+DEFAULT_VAULT_ROOT = "."
 
 
 class InvalidConfigurationError(ValueError):
@@ -25,7 +26,12 @@ class ProductionConfig:
     `engine_settings`는 이번 Milestone 시점에 이 서버가 실제
     `EngineAdapter`를 등록하지 않는다는 알려진 한계(M21 Review)를
     반영해 최소 자리표시자로 둔다 — 구체적인 키는 아직 정의하지
-    않는다."""
+    않는다.
+
+    `vault_root`(M38)는 `VaultAdapter`가 바인딩할 경로다. ADR-0037로
+    "Vault == Repository Root"가 확정됐으므로 기본값은 현재
+    작업 디렉터리(`"."`)다 — 서버는 저장소 루트에서 기동된다는
+    전제를 그대로 따른다."""
 
     host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
@@ -34,6 +40,7 @@ class ProductionConfig:
     automation_enabled: bool = True
     automation_tick_seconds: float = DEFAULT_AUTOMATION_TICK_SECONDS
     engine_settings: dict[str, str] = field(default_factory=dict)
+    vault_root: str = DEFAULT_VAULT_ROOT
 
     def __post_init__(self) -> None:
         if self.log_level not in _VALID_LOG_LEVELS:

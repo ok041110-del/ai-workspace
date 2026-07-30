@@ -22,6 +22,7 @@ def test_action_kind_covers_expected_kinds() -> None:
         "run_workflow",
         "dashboard_refresh",
         "notification",
+        "run_recommendation",
     }
 
 

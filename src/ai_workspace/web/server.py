@@ -9,6 +9,14 @@ from fastapi import FastAPI
 from ai_workspace.engines.authentication_manager import InMemoryAuthenticationManager
 from ai_workspace.engines.engine_selection_policy import InMemoryEngineSelectionPolicy
 from ai_workspace.events.event_bus import InMemoryEventBus
+from ai_workspace.integration.agent_adapter import AgentAdapter
+from ai_workspace.integration.vault_adapter import VaultAdapter
+from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
+from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
+from ai_workspace.intelligence.report import ProjectIntelligenceService
+from ai_workspace.runtime.agent.agent_manager import InMemoryAgentManager
+from ai_workspace.runtime.agent.agent_registry import InMemoryAgentRegistry
+from ai_workspace.runtime.agent.agent_scheduler import InMemoryAgentScheduler
 from ai_workspace.runtime.automation.automation_action_executor import AutomationActionExecutor
 from ai_workspace.runtime.automation.automation_repository import InMemoryAutomationRepository
 from ai_workspace.runtime.automation.automation_scheduler import AutomationScheduler
@@ -17,6 +25,9 @@ from ai_workspace.runtime.dashboard.dashboard_repository import InMemoryDashboar
 from ai_workspace.runtime.dashboard.dashboard_service import DashboardService
 from ai_workspace.runtime.engine.engine_registry import InMemoryEngineRegistry
 from ai_workspace.runtime.execution.execution_dispatcher import ExecutionDispatcher
+from ai_workspace.runtime.execution.recommendation_execution_service import (
+    RecommendationExecutionService,
+)
 from ai_workspace.runtime.production.config import ProductionConfig
 from ai_workspace.runtime.production.config_loader import load_production_config
 from ai_workspace.runtime.production.health import HealthMonitor
@@ -48,7 +59,16 @@ def build_app(
 
     `LifecycleManager`/`HealthMonitor`는 여기서 조립된 컴포넌트를
     그대로 주입받을 뿐(사용자 승인 조건 2/3 — 생성이 아닌 생명주기
-    관리, 조회 전용) 새로운 컴포넌트를 만들지 않는다."""
+    관리, 조회 전용) 새로운 컴포넌트를 만들지 않는다.
+
+    `VaultAdapter`/`AgentAdapter`/`RecommendationExecutionService`
+    (M38)는 M29~M37이 만들었지만 이 Composition Root에는 한 번도
+    조립된 적이 없던 컴포넌트다 — 새 정책 없이 기존 생성자 그대로
+    조립만 한다(`tests/runtime/execution/test_recommendation_execution_service.py`
+    와 동일한 패턴). `RUN_RECOMMENDATION` Action이 `AutomationScheduler`
+    로 발동하면 `AutomationActionExecutor`가 `RecommendationExecutionService.
+    publish(manual_trigger=True)`를 호출한다 — `ExecutionGate`는
+    `source=next_task`만 여전히 승인한다(M36과 동일, 새 정책 없음)."""
     config = config or load_production_config()
 
     event_bus = InMemoryEventBus()
@@ -63,12 +83,31 @@ def build_app(
         authentication_manager=authentication_manager,
         event_bus=event_bus,
     )
+    engine_selection_policy = InMemoryEngineSelectionPolicy()
+
+    vault_adapter = VaultAdapter(Path(config.vault_root))
+    agent_adapter = AgentAdapter(
+        InMemoryAgentManager(), InMemoryAgentRegistry(), InMemoryAgentScheduler()
+    )
+    recommendation_execution_service = RecommendationExecutionService(
+        RecommendationIntelligenceService(
+            vault_adapter,
+            ProjectIntelligenceService(vault_adapter, agent_adapter),
+            CapabilityIntelligenceService(agent_adapter, vault_adapter),
+        ),
+        vault_adapter,
+        engine_registry,
+        engine_selection_policy,
+        execution_dispatcher,
+    )
+
     automation_repository = InMemoryAutomationRepository()
     automation_service = AutomationService(automation_repository=automation_repository)
     action_executor = AutomationActionExecutor(
         engine_registry=engine_registry,
-        engine_selection_policy=InMemoryEngineSelectionPolicy(),
+        engine_selection_policy=engine_selection_policy,
         execution_dispatcher=execution_dispatcher,
+        recommendation_execution_service=recommendation_execution_service,
     )
     automation_scheduler = AutomationScheduler(
         automation_repository=automation_repository, action_executor=action_executor

@@ -11613,6 +11613,155 @@ M36(Execution)→M37(Task Lifecycle)"로 이어지며, 새 상태·새 전이
 
 ---
 
+## Milestone 38 — AutomationScheduler 연결
+
+**목표**(2026-07-30 사용자 확정): M37이 "M38 이후"로 미룬 6개 항목
+(`done→archived` 자동화/재시도 정책/`review→done` 자동화/
+`AutomationScheduler` 연결/CLI/Hook) 중 `AutomationScheduler` 연결만
+범위로 확정한다(ADR-0052). **새 기능 Milestone이 아니라 M21~M37이
+만든 컴포넌트를 Composition Root(`web/server.py`의 `build_app()`)에서
+실제로 조립하는 배선 Milestone**이다 — 사용자 권고에 따라 자동 실행
+대상은 M36과 동일하게 `source=next_task`만 유지하고 나머지 4개
+source(`current_work`/`blocked_task`/`capability_gap`/
+`project_recommendation`)는 계속 Not Supported로 남긴다.
+
+**MDD Review 요약**
+
+- **Scope(YAGNI)**: `ExecutionGate` 판정 로직 변경 없음(여전히
+  `source=next_task`만 승인). `done→archived`/재시도 정책/
+  `review→done` 자동화/CLI/Hook은 계속 범위 밖.
+- **발견(범위 확정에 영향)**: `VaultAdapter`/`AgentAdapter`가
+  `tests/`에서만 생성되고 `web/server.py`(`build_app()`)나 CLI
+  어디에도 실제로 조립된 적이 없었다 — M29~M37 전체가 단위 테스트로만
+  검증된 "워크숍 단계"였다는 뜻. "AutomationScheduler 연결"을
+  완성하려면 이 배선 자체가 필요하다는 사실을 사용자에게 보고하고
+  범위에 포함하기로 확정(사용자 승인).
+- **Reuse**: `RecommendationExecutionService`/
+  `RecommendationIntelligenceService`/`ProjectIntelligenceService`/
+  `CapabilityIntelligenceService`/`VaultAdapter`/`AgentAdapter`(전부
+  M29~M37 기존 클래스) 그대로 재사용 — 생성자 조합은
+  `tests/runtime/execution/test_recommendation_execution_service.py`
+  와 동일한 패턴.
+- **Interface/Service/Adapter**: 새 Interface/Adapter 0개(27종 유지).
+  `domain.automation.ActionKind`에 `RUN_RECOMMENDATION` 1개만 추가
+  (추가 필드 없음) — Trigger→Action 매핑 표현을 위한 최소 확장.
+- **Layer**: 새 Layer 없음. `AutomationActionExecutor`(기존 파일)에
+  선택적 의존성 1개 추가, `ProductionConfig`(기존 파일)에
+  `vault_root` 필드 1개 추가, `build_app()`(기존 함수)에 조립 코드
+  추가.
+
+**결정(ADR-0052, 상세 근거는 `.ai/DECISIONS.md` 참고)**
+
+- `AutomationActionExecutor.__init__()`에 `recommendation_execution_service:
+  RecommendationExecutionService | None = None` 추가. `RUN_RECOMMENDATION`
+  발동 시 주입돼 있으면 `publish(manual_trigger=True)` 호출, 아니면
+  `RUN_WORKFLOW`와 동일하게 `AutomationActionNotSupportedError`.
+- `manual_trigger=True`를 고정 전달하는 이유: `ExecutionGate`가
+  막으려는 것은 "사람이 개입하지 않은 자동/주기적 트리거의 실수
+  승인"인데, `AutomationRule`은 사용자가 `AutomationService`(M21
+  CRUD 진입점)로 명시적으로 만들고 활성화한 것이므로 이미 사람의
+  승인을 거친 상태다. `ExecutionGate` 내부 판정 로직 자체는 전혀
+  바꾸지 않는다.
+- `ProductionConfig.vault_root: str = "."`(신규, ADR-0037 "Vault ==
+  Repository Root"를 그대로 반영) + `AI_WORKSPACE_VAULT_ROOT` Env
+  Var. `build_app()`이 `VaultAdapter(Path(config.vault_root))`로
+  바인딩한다.
+
+**구현 내용**
+
+- `domain/automation.py`(확장) — `ActionKind.RUN_RECOMMENDATION`
+  추가, `Action` docstring 갱신.
+- `runtime/automation/automation_action_executor.py`(확장) —
+  `recommendation_execution_service` 선택적 의존성 + `_run_recommendation()`.
+- `runtime/production/config.py`/`config_loader.py`(확장) —
+  `vault_root` 필드 + `AI_WORKSPACE_VAULT_ROOT` Env Var.
+- `web/server.py`(Composition Root 배선) — `VaultAdapter`/
+  `AgentAdapter`(`InMemoryAgentManager`/`InMemoryAgentRegistry`/
+  `InMemoryAgentScheduler`)/`RecommendationIntelligenceService`/
+  `RecommendationExecutionService`를 최초로 조립해
+  `AutomationActionExecutor`에 주입. `EngineSelectionPolicy` 인스턴스는
+  기존 RUN_TASK 배선과 공유(중복 생성 없음).
+
+**테스트**: `tests/domain/test_automation.py`(`ActionKind` 카탈로그
+갱신), `tests/runtime/automation/test_automation_action_executor.py`
+(신규 2개 — 의존성 미주입 시 Not Supported, 주입 시 Vault에
+`Recommendation Execution.md` 작성 확인), `tests/runtime/production/
+test_config.py`/`test_config_loader.py`(신규 각 1개 —
+`vault_root` 기본값/Env Var), `tests/web/test_server.py`(신규 1개
+— `build_app()`이 조립한 `AutomationScheduler.run_now()`로
+`RUN_RECOMMENDATION` Rule을 실제로 실행해 Vault 파일이 쓰여짐을
+검증, `tmp_path`를 `vault_root`로 써서 실제 저장소 Vault는 건드리지
+않음). `pytest` 1010개(기존 1005개 + 신규 5개) 전부 통과,
+`ruff check src tests` clean, `mypy`(192 source files) clean.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 기존 27개 Core Domain Interface 변경 없음 | ✅ |
+| 2 | 새 Interface/Adapter 0개(생성자 조합만 재사용) | ✅ |
+| 3 | `ExecutionGate` 판정 로직 무변경(`source=next_task`만 승인 유지) | ✅ |
+| 4 | `RUN_RECOMMENDATION` 미주입 시 기존 `RUN_WORKFLOW`와 동일하게 Not Supported | ✅ |
+| 5 | `AutomationScheduler`/`ExecutionDispatcher`/`ActionBuilder`/`TaskLifecycleTransitioner` 무변경 | ✅ |
+| 6 | `build_app()`에서 `VaultAdapter`/`AgentAdapter`/Recommendation 파이프라인 최초 실배선 | ✅ |
+| 7 | 실제 저장소 Vault를 건드리지 않는 테스트 설계(`tmp_path` 사용) | ✅ |
+| 8 | 기존 M21~M37 pytest 회귀 없음 + 신규 테스트 통과 | ✅ |
+| 9 | `pytest`/`ruff`/`mypy` 통과 | ✅ |
+| 10 | Architecture/ADR-0052/TASKS 최신화 | ✅ |
+
+**개선 여지(참고용, 이번에 처리하지 않음)**: `done→archived` 자동화·
+재시도 정책·`review→done` 자동화·CLI·Hook은 여전히 범위 밖으로
+남아 다음 Milestone 이후 논의 대상이다. 실제 운영 환경에서
+`AutomationScheduler.tick()`이 주기적으로 `RUN_RECOMMENDATION`을
+발동시키려면 사용자가 `AutomationRule`을 직접 등록해야 한다(자동
+생성되는 기본 Rule 없음 — 이번 범위에 포함되지 않음, YAGNI).
+
+**Milestone 38(AutomationScheduler 연결) T01(설계+MDD Review+구현)
+전체 완료.**
+
+### Milestone 38 Review
+
+**Review 결과 요약**
+
+| 항목 | 결과 |
+|---|---|
+| DoD 검증 | 10개 항목 전부 충족 |
+| Architecture Review | `web/server.py`의 `build_app()`(Composition Root)에 `VaultAdapter`/`AgentAdapter`/`RecommendationIntelligenceService`/`RecommendationExecutionService`를 최초 실배선함을 §3.31과 ADR-0052에 명시. `ExecutionGate`는 손대지 않아 `source=next_task`만 승인하는 M36 결정을 그대로 유지함을 문서에 반영 |
+| MDD Review | Scope(YAGNI: `ExecutionGate` 정책 무변경)/Reuse(기존 5개 클래스 생성자 조합만 재사용)/Interface(`ActionKind` 1개 추가 외 신규 0개)/Service(`RecommendationExecutionService` 그대로)/Adapter(신규 0개)/Layer(신규 Layer 없음) 전 항목 검토 결과가 ADR-0052/TASKS 양쪽에 기록됨 |
+| Layer Boundary Review | 코드 변경 없이 기존 경계 테스트를 그대로 실행해 위반 없음 확인 — `AutomationActionExecutor`는 여전히 Infrastructure Layer에서만 `RecommendationExecutionService`를 참조(Core Domain 무참조) |
+| Interface Review | Core Domain 27종 무변경. `ExecutionGate`/`ActionBuilder`/`TaskLifecycleTransitioner` 무변경. `ActionKind.RUN_RECOMMENDATION` 1개만 신규(추가 필드 없음) |
+| ADR Review | ADR-0052 1건만 신규, 기존 ADR(특히 ADR-0050의 `manual_trigger` 안전장치)과 충돌 없음 — Rule 생성/활성화 자체를 수동 승인으로 해석한 근거를 ADR 안에 명시 |
+| pytest/ruff/mypy | 1010 passed(기존 1005 + 신규 5), ruff clean, mypy clean(192 source files) |
+| 문서 최신화 | `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`/`.ai/TASKS.md`/Vault(ADR Index/Milestones Index/Automation Index/`15 Project Intelligence/README.md`) 전부 갱신 확인 |
+
+**개선 여지(참고용, 이번에 처리하지 않음)**: `done→archived` 자동화·
+재시도 정책·`review→done` 자동화·CLI·Hook은 명시적으로 범위 밖으로
+남겨 다음 Milestone(M39) 이후 논의 대상이다. 실제 운영 환경에서
+`AutomationScheduler.tick()`이 주기적으로 `RUN_RECOMMENDATION`을
+발동시키려면 사용자가 `AutomationRule`을 직접 등록해야 한다(자동
+생성되는 기본 Rule 없음, YAGNI).
+
+**사용자 승인(2026-07-30)**: DoD 10개 항목/Architecture/MDD/Layer/
+Interface/ADR/Tests/Documentation Review를 모두 확인해 **Milestone
+38(AutomationScheduler 연결) 공식 완료(Approved)**. "M29(Project
+Intelligence)→…→M37(Task Lifecycle)→M38(AutomationScheduler 연결)"
+로 이어지며, M21 Automation Engine과 M29~M37 Intelligence→
+Execution→Task Lifecycle 파이프라인이 처음으로 실제 서버
+Composition Root에서 연결돼 **Intelligence → Execution → Automation
+기본 폐쇄 루프**가 완성됐다. 새 정책 없이(`ExecutionGate`
+무변경) 기존 27개 Core Domain Interface를 그대로 유지했다.
+
+**사용자 제안(2026-07-30, 참고용)**: M29~M38을 "Automation Core
+v1.0"(또는 "Core Automation Platform") 단계로 묶어 아키텍처 문서에
+별도 섹션으로 정리해 두면, M39 이후 정책 확장(재시도/승인/이벤트/
+CLI 등)의 기준점으로 쓰기 좋다는 제안을 받았다 — 별도 승인 후
+착수할 예정이며, 이번 M38 완료 자체에는 반영하지 않았다.
+
+**다음은 Milestone 39** — 세부 Task는 착수 시점에 별도 제안·승인
+후 정의한다.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

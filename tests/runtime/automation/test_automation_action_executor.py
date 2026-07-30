@@ -5,13 +5,24 @@ from ai_workspace.adapters.claude_code_engine_adapter import ClaudeCodeEngineAda
 from ai_workspace.domain.automation import Action, ActionKind, AutomationRule, Trigger, TriggerKind
 from ai_workspace.engines.authentication_manager import InMemoryAuthenticationManager
 from ai_workspace.engines.engine_selection_policy import InMemoryEngineSelectionPolicy
+from ai_workspace.integration.agent_adapter import AgentAdapter
+from ai_workspace.integration.vault_adapter import VaultAdapter
+from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
+from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
+from ai_workspace.intelligence.report import ProjectIntelligenceService
 from ai_workspace.interfaces.execution_environment import ExecutionResult
+from ai_workspace.runtime.agent.agent_manager import InMemoryAgentManager
+from ai_workspace.runtime.agent.agent_registry import InMemoryAgentRegistry
+from ai_workspace.runtime.agent.agent_scheduler import InMemoryAgentScheduler
 from ai_workspace.runtime.automation.automation_action_executor import (
     AutomationActionExecutor,
     AutomationActionNotSupportedError,
 )
 from ai_workspace.runtime.engine.engine_registry import InMemoryEngineRegistry
 from ai_workspace.runtime.execution.execution_dispatcher import ExecutionDispatcher
+from ai_workspace.runtime.execution.recommendation_execution_service import (
+    RecommendationExecutionService,
+)
 
 _TRIGGER = Trigger(kind=TriggerKind.STARTUP)
 
@@ -81,3 +92,55 @@ def test_run_workflow_action_raises_not_supported() -> None:
 
     with pytest.raises(AutomationActionNotSupportedError):
         executor(rule)
+
+
+def test_run_recommendation_action_raises_not_supported_without_injected_service() -> None:
+    executor, _execution_environment = make_executor()
+    rule = make_rule(Action(kind=ActionKind.RUN_RECOMMENDATION))
+
+    with pytest.raises(AutomationActionNotSupportedError):
+        executor(rule)
+
+
+def test_run_recommendation_action_calls_recommendation_execution_service_publish(
+    tmp_path,
+) -> None:
+    execution_environment = FakeExecutionEnvironment()
+    execution_environment.result = ExecutionResult(returncode=0, stdout="ok", stderr="")
+    registry = InMemoryEngineRegistry()
+    registry.register(
+        "claude_code",
+        ClaudeCodeEngineAdapter(
+            execution_environment=execution_environment, subprocess_timeout_seconds=5.0
+        ),
+    )
+    auth = InMemoryAuthenticationManager(frozenset({"claude_code"}))
+    dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
+
+    vault_adapter = VaultAdapter(tmp_path)
+    agent_adapter = AgentAdapter(
+        InMemoryAgentManager(), InMemoryAgentRegistry(), InMemoryAgentScheduler()
+    )
+    recommendation_execution_service = RecommendationExecutionService(
+        RecommendationIntelligenceService(
+            vault_adapter,
+            ProjectIntelligenceService(vault_adapter, agent_adapter),
+            CapabilityIntelligenceService(agent_adapter, vault_adapter),
+        ),
+        vault_adapter,
+        registry,
+        InMemoryEngineSelectionPolicy(),
+        dispatcher,
+    )
+    executor = AutomationActionExecutor(
+        engine_registry=registry,
+        engine_selection_policy=InMemoryEngineSelectionPolicy(),
+        execution_dispatcher=dispatcher,
+        recommendation_execution_service=recommendation_execution_service,
+    )
+    rule = make_rule(Action(kind=ActionKind.RUN_RECOMMENDATION))
+
+    executor(rule)
+
+    published_path = tmp_path / "15 Project Intelligence" / "Recommendation Execution.md"
+    assert published_path.exists()
