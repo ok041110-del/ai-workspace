@@ -14,6 +14,8 @@ from ai_workspace.integration.vault_adapter import VaultAdapter
 from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
 from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
 from ai_workspace.intelligence.report import ProjectIntelligenceService
+from ai_workspace.memory.execution_memory_store import ExecutionMemoryStore
+from ai_workspace.memory.memory_engine import InMemoryMemoryEngine
 from ai_workspace.runtime.agent.agent_manager import InMemoryAgentManager
 from ai_workspace.runtime.agent.agent_registry import InMemoryAgentRegistry
 from ai_workspace.runtime.agent.agent_scheduler import InMemoryAgentScheduler
@@ -68,7 +70,14 @@ def build_app(
     와 동일한 패턴). `RUN_RECOMMENDATION` Action이 `AutomationScheduler`
     로 발동하면 `AutomationActionExecutor`가 `RecommendationExecutionService.
     publish(manual_trigger=True)`를 호출한다 — `ExecutionGate`는
-    `source=next_task`만 여전히 승인한다(M36과 동일, 새 정책 없음)."""
+    `source=next_task`만 여전히 승인한다(M36과 동일, 새 정책 없음).
+
+    `ExecutionMemoryStore`(M39)도 이 시점에 처음 조립돼
+    `RecommendationExecutionService`에 주입된다 — 매 실행 결과가
+    `ExecutionMemory`로 자동 기록된다(ADR-0053). 이 서버 프로세스가
+    살아있는 동안만 유지되는 `InMemoryMemoryEngine`을 사용한다 —
+    영속화는 이번 Milestone 범위 밖이다(YAGNI, `.ai/DECISIONS.md`
+    ADR-0053 참고)."""
     config = config or load_production_config()
 
     event_bus = InMemoryEventBus()
@@ -89,6 +98,7 @@ def build_app(
     agent_adapter = AgentAdapter(
         InMemoryAgentManager(), InMemoryAgentRegistry(), InMemoryAgentScheduler()
     )
+    execution_memory_store = ExecutionMemoryStore(InMemoryMemoryEngine())
     recommendation_execution_service = RecommendationExecutionService(
         RecommendationIntelligenceService(
             vault_adapter,
@@ -99,6 +109,7 @@ def build_app(
         engine_registry,
         engine_selection_policy,
         execution_dispatcher,
+        execution_memory_store,
     )
 
     automation_repository = InMemoryAutomationRepository()
@@ -139,6 +150,7 @@ def build_app(
         production_config=config,
         lifecycle_manager=lifecycle_manager,
         health_monitor=health_monitor,
+        execution_memory_store=execution_memory_store,
     )
 
 

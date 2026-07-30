@@ -11777,6 +11777,112 @@ Approval Required 대상).
 
 ---
 
+## Milestone 39 — Memory Engine
+
+**목표**(2026-07-30 사용자 확정): M38 Review가 M39 이후로 미룬 세
+Engine(Memory Engine/Architecture Guardian/Learning Engine) 중
+Memory Engine을 착수한다(ADR-0053). **Execution 결과를 Memory에
+축적한다**만 M39 범위다 — 기존 `MemoryEngine`(M1)을 재사용해
+"저장"과 "조회 API"만 제공하고, 과거 기록으로 추천/판단을 바꾸는
+"Learning"은 명시적으로 M40 이후로 이관한다(사용자 조건부 승인 2건
+반영: ① `RecommendationRuleAnalyzer` 반영은 M40으로, ②
+`ExecutionMemory`에 embedding/score/vector/confidence 금지).
+
+**MDD Review 요약**
+
+- **Scope(YAGNI)**: Vector/Embedding/Scoring/Rule 변경/Recommendation
+  개선 전부 범위 밖(사용자 명시 제외 목록). Vault 영속화도 범위
+  밖으로 확정(아래 "발견" 참고) — 프로세스 생존 기간 동안만
+  유지되는 In-Memory 저장.
+- **발견(범위 확정에 영향)**: 최초 제안서는 "Vault 파일에 영속화"를
+  포함했으나, 설계 검토 중 `interfaces/memory_engine.py`(M1 기초
+  Core Domain 계약)의 구현체가 `vault/`(Core Domain을 모르는 계층,
+  M28+)를 알아야 하는 하향 결합이 생긴다는 사실을 발견해 제외했다
+  (ADR-0053 대안 문단 참고). 영속화가 실제로 필요해지면 별도
+  제안·승인 대상이다.
+- **Reuse**: `MemoryEngine`(M1, remember/recall/search 그대로),
+  `InMemoryContextManager`의 "JSON 직렬화해 remember()에 저장"
+  패턴(M1) 그대로 재사용. `RecommendationExecutionService`(M36)의
+  선택적 의존성 주입 패턴(M38의
+  `recommendation_execution_service: ... | None = None`과 동일)도
+  그대로 재사용.
+- **Interface/Service/Adapter**: 새 Interface 0개(27종 유지,
+  `MemoryEngine` interface 무변경). 새 Service 1개
+  (`ExecutionMemoryStore`, `MemoryEngine`을 감싸는 얇은 계층 —
+  `ContextManager`와 병렬 관계, Snapshot이 아니라 Execution 이력을
+  다룸). 새 Adapter 0개.
+- **Layer**: 새 Layer 없음. `RecommendationExecutionService`(기존
+  파일)에 선택적 의존성 1개 추가, `web/server.py`/`web/app.py`
+  (기존 파일)에 조립 코드 추가.
+
+**결정(ADR-0053, 상세 근거는 `.ai/DECISIONS.md` 참고)**
+
+- `domain/execution_memory.py`(신규) — `ExecutionMemory` frozen
+  dataclass: `task_id`/`action`/`result`("success"|"failure")/
+  `timestamp`/`reason`(선택) 5개 필드만.
+- `memory/execution_memory_store.py`(신규) — `ExecutionMemoryStore`:
+  `record()`는 JSON 직렬화해 `MemoryEngine.remember(uuid, json)`,
+  `query(task_id=None)`는 `search("")`(빈 문자열은 모든 값의
+  substring)로 전체 key를 얻어 역직렬화 후 timestamp 오름차순 반환.
+- `runtime/execution/recommendation_execution_service.py`(확장) —
+  `execution_memory_store: ExecutionMemoryStore | None = None` 선택적
+  의존성. `execute()`가 `ExecutionDispatcher.dispatch()` 직후 주입돼
+  있으면 자동 기록, 미주입 시 M38 이전과 동일.
+- `web/server.py`(Composition Root 배선) — `InMemoryMemoryEngine()`
+  + `ExecutionMemoryStore`를 조립해 `RecommendationExecutionService`
+  에 주입.
+- `web/app.py`(확장) — `execution_memory_store`를 선택적으로 받아
+  `app.state.execution_memory_store`로 노출(새 REST 엔드포인트
+  없음, YAGNI).
+
+**구현 내용**: 위 결정 그대로 5개 파일(신규 2 + 확장 3).
+
+**테스트**: `tests/domain/test_execution_memory.py`(신규 2),
+`tests/memory/test_execution_memory_store.py`(신규 6 — record/query
+왕복, 정렬, task_id 필터, 빈 조회, 실패 사유 보존, 공유
+`MemoryEngine`에서 무관한 key 무시), `tests/runtime/execution/
+test_recommendation_execution_service.py`(신규 2 — 주입 시 자동
+기록/미주입 시 회귀 없음), `tests/web/test_server.py`(신규 1 —
+`build_app()` Composition Root 배선 확인). `pytest` 1021개(기존
+1010개 + 신규 11개) 전부 통과, `ruff check src tests` clean,
+`mypy`(194 source files) clean.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 기존 27개 Core Domain Interface 변경 없음(`MemoryEngine` 무변경) | ✅ |
+| 2 | 새 Interface/Adapter 0개(`ExecutionMemoryStore` 1개는 Service) | ✅ |
+| 3 | Execution 결과가 Agent 수동 호출 없이 Memory에 자동 기록됨 | ✅ |
+| 4 | `ExecutionMemoryStore.query()`로 저장된 기록을 조회할 수 있음 | ✅ |
+| 5 | `ExecutionMemory`에 embedding/score/vector/confidence 없음 | ✅ |
+| 6 | `RecommendationRuleAnalyzer`/추천 판단 로직 무변경(Learning 없음) | ✅ |
+| 7 | `execution_memory_store` 미주입 시 M38 이전과 완전히 동일하게 동작 | ✅ |
+| 8 | 기존 M21~M38 pytest 회귀 없음 + 신규 테스트 통과 | ✅ |
+| 9 | `pytest`/`ruff`/`mypy` 통과 | ✅ |
+| 10 | Architecture/ADR-0053/TASKS 최신화 | ✅ |
+
+**개선 여지(참고용, 이번에 처리하지 않음)**: 영속화(Vault 파일 등,
+프로세스 재시작 시 소실)·Learning(Rule/추천 반영)·REST 조회
+엔드포인트는 범위 밖으로 남아 M40(Learning Engine) 이후 논의
+대상이다.
+
+**Milestone 39(Memory Engine) T01(ADR-0053 초안 검토·조건부 승인
+반영)~T04(구현+통합+테스트+문서화) 전체 완료.**
+
+**사용자 승인(2026-07-30)**: DoD 10개 항목/MDD Review/ADR-0053/
+Tests/Documentation을 확인해 **Milestone 39(Memory Engine) 공식
+완료(Approved)**. "M29(Project Intelligence)→…→M38(AutomationScheduler
+연결)→M39(Memory Engine)"으로 이어지며, Execution Platform이
+처음으로 자신의 실행 결과를 스스로 기억하기 시작했다 — 저장과
+조회만 제공하고 학습(추천/판단 변경)은 하지 않는다는 계층 분리를
+명확히 지켰다.
+
+**다음은 Milestone 40** — 세부 Task는 착수 시점에 별도 제안·승인
+후 정의한다.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
