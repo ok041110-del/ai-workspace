@@ -2958,3 +2958,96 @@
   (`VaultAdapter` 확장 1건), `domain/` 필드 추가 없음,
   `domain.Workflow`/`WorkflowEngine`/`WorkflowAdapter` 무변경
   (사용하지 않음).
+
+## ADR-0049: Recommendation Intelligence 도입 — 5단계 Priority Rule 1개로 M29~M34 Intelligence를 그대로 소비하는 Decision Layer (Milestone 35-T01~T04)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 M35 Milestone 계획(목표/Scope/
+  DoD/Architecture/Task 구성 T01~T04/구현 전략/MDD Review)을 승인하며
+  "T01부터 T04까지 중간 승인 없이 구현한 뒤 Milestone Review로 최종
+  승인을 다시 요청"하는 진행 방식까지 확정)
+- 날짜: 2026-07-30
+- 배경: M29(Project)/M30(Context)/M31(Capability)/M32(Synthesis)/
+  M33(Session Resume)/M34(Workflow)까지 Intelligence Layer는 "지금
+  상태가 어떤가"를 관찰·정리하는 계층만 갖췄다. M29 Recommendation
+  (`ProjectRecommendationEngine`)이 존재하지만 Project Snapshot/
+  Health/Risk만 보고 Session Resume(현재 작업)이나 Workflow
+  Intelligence(Blocked/Next)는 전혀 고려하지 않는다 — "그래서 지금
+  무엇을 하는 것이 가장 적절한가"에 답하는 단일 창구가 없다.
+- 결정:
+  1. **새로운 Intelligence를 계산하지 않는다.** M29
+     `ProjectIntelligenceService.generate().recommendations`,
+     M31 `CapabilityIntelligenceService.generate().gap_report`,
+     M33 `session_resume.CurrentWorkSelector`(Analyzer만 재사용,
+     M33 Service 전체를 감싸지 않음 — ADR-0047과 같은 이유), M34
+     `workflow_flow.WorkflowFlowAnalyzer`(Analyzer만 재사용)를 그대로
+     소비한다. 새 지표·점수·Health/Risk 분류를 만들지 않는다.
+  2. **5단계 Priority Rule 1개만 추가한다** — 순서대로 첫 번째로
+     해당하는 조건에서 멈추고 단일 `NextAction`을 반환한다
+     (`intelligence/recommendation_rules.py`의
+     `RecommendationRuleAnalyzer`):
+     1) Current Work가 있으면 그 Task를 계속 수행하라고 추천
+     2) 아니면 Workflow Intelligence의 Next(선행 완료된 `todo`)
+        Task가 있으면 그 Task를 시작하라고 추천(Milestone/Task ID
+        정렬 순으로 결정적 선택)
+     3) 아니면 Workflow Intelligence에 Blocked Task가 있으면 그
+        Task의 Block 해소를 추천
+     4) 아니면 Capability Gap이 있으면 그 Capability 보완을 추천
+     5) 아니면 M29 `ProjectRecommendation` 목록 중 priority
+        (high>medium>low, 동률이면 target 사전순)가 가장 높은 것을
+        그대로 노출
+     다섯 조건이 모두 해당 없으면 `next_action=None`("추천할 다음
+     행동 없음")을 반환한다 — Session Resume의 "활성 Task 없음"과
+     같은 방어적 처리.
+  3. **판정 규칙은 `RecommendationRuleAnalyzer`(순수 함수적
+     Analyzer)에 전부 캡슐화하고, `RecommendationIntelligenceService`
+     (`intelligence/recommendation_service.py`)는 `VaultAdapter.
+     list_tasks()` 1회 조회 + `ProjectIntelligenceService`/
+     `CapabilityIntelligenceService`(주입) 실행 + `CurrentWorkSelector`/
+     `WorkflowFlowAnalyzer`(같은 tasks 목록 재사용) 실행 + Analyzer
+     호출을 조합·오케스트레이션만 한다.** M29
+     Analyzer/Service 분리, M34 Analyzer/Service 분리와 동일한
+     패턴이며, Automation(M36 이후)이 `RecommendationRuleAnalyzer`를
+     그대로 재사용할 수 있게 한다.
+  4. **새 Adapter/Interface를 만들지 않는다.** `VaultAdapter`에
+     `publish_recommendation_intelligence()` 메서드 1개만 추가한다
+     (M29~M34와 동일 패턴).
+  5. **결과는 같은 Vault 폴더에 새 파일로 노출한다** —
+     `vault/recommendation_intelligence.py`(신규, 원자적 전체 교체)가
+     `15 Project Intelligence/Recommendation Intelligence.md`에 쓴다.
+  6. **자동 실행하지 않는다.** Recommendation은 추천 문서를 만들
+     뿐이며, Task 상태 전이·Workflow 수정·Task 생성을 수행하지
+     않는다 — Automation은 M36 이후 범위다. CLI 노출·자동 트리거도
+     범위 밖(M29~M34와 동일한 이유, YAGNI).
+- 대안:
+  - Workflow Intelligence의 "Next Task"를 고를 때 Milestone 우선순위
+    (Priority 필드)나 Owner까지 반영하는 복합 규칙을 만든다 — 기각.
+    M31/M34가 이미 "owner는 고정 명명 규칙이 없어 신호로 쓰지 않는다"
+    /"priority까지 섞으면 예측 가능한 규칙이 깨진다"고 결정했고,
+    Milestone/Task ID 정렬만으로 결정적 선택이 이미 가능하다(KISS).
+  - `NextAction`을 하나가 아니라 5단계 전부를 항상 리스트로 반환한다
+    — 기각. "그래서 지금 무엇을 하는 것이 가장 적절한가"라는 단일
+    질문에 답하는 Decision Layer라는 성격에 맞지 않는다(사용자
+    Scope: "Next Action을 결정"). 근거가 되는 하위 리포트(Current
+    Work/Workflow/Capability Gap/Project Recommendation 전체)는
+    Report 안에 그대로 포함해 투명성은 유지한다.
+  - `SessionResumeService`(M33) 전체를 주입받아 그 결과만 쓴다 —
+    기각. M33은 Context Intelligence(M30)까지 조합하는데, M35는
+    Context를 전혀 쓰지 않는 5단계 Rule이라 불필요한 의존성이
+    생긴다 — ADR-0047이 M32 Service 대신 Analyzer만 재사용한 것과
+    같은 이유로, M33에서도 `CurrentWorkSelector`(Analyzer)만
+    가져온다.
+- 이유: 새 Interface/Adapter/판단 기준(Health/Risk/Coverage류) 없이,
+  이미 계산된 4개 Intelligence 출력을 순서대로 확인하는 Rule 1개만
+  더해도 "지금 무엇을 하는 것이 가장 적절한가"에 답할 수 있음을
+  확인했다 — M29~M34가 지켜온 "새로운 지식을 만들지 않는다" 원칙을
+  그대로 유지하면서, Execution Layer 이전의 마지막 Decision Layer를
+  완성한다(Automation은 M36 이후).
+- 결과/영향: `intelligence/recommendation_rules.py`(신규)/
+  `intelligence/recommendation_service.py`(신규)/`vault/
+  recommendation_intelligence.py`(신규)/`integration/vault_adapter.py`
+  (`publish_recommendation_intelligence()` 추가) 구현 완료
+  (M35-T02~T04, 신규 테스트 12개 포함 pytest 988개, ruff, mypy 전부
+  통과). `docs/ARCHITECTURE.md` §3.28(신규) 갱신, `.ai/TASKS.md`에
+  Milestone 35 절 신규 추가. 새 Core Domain Interface 없음(27종
+  그대로), 새 Integration Layer Adapter 없음(`VaultAdapter` 확장
+  1건), `domain/` 필드 추가 없음.

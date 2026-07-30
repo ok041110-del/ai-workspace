@@ -18,6 +18,9 @@ from ai_workspace.vault.engine import VaultSaveEngine
 from ai_workspace.vault.intelligence_overview import write_intelligence_overview_report
 from ai_workspace.vault.intelligence_report import write_project_intelligence_report
 from ai_workspace.vault.models import VaultDocumentKind, VaultDocumentRequest
+from ai_workspace.vault.recommendation_intelligence import (
+    write_recommendation_intelligence_report,
+)
 from ai_workspace.vault.session_resume import write_session_resume_report
 from ai_workspace.vault.task_lifecycle import TaskStatus, transition_task_status
 from ai_workspace.vault.task_query import list_task_documents
@@ -197,3 +200,10 @@ class VaultAdapter:
         덮어쓴다(ADR-0048, Milestone 34-T04). 렌더링 로직은 갖지
         않는다."""
         return write_workflow_intelligence_report(self._vault_root, markdown)
+
+    def publish_recommendation_intelligence(self, markdown: str) -> Path:
+        """`intelligence/recommendation_service.py`가 렌더링한
+        Markdown을 `15 Project Intelligence/Recommendation
+        Intelligence.md`에 덮어쓴다(ADR-0049, Milestone 35-T04).
+        렌더링 로직은 갖지 않는다."""
+        return write_recommendation_intelligence_report(self._vault_root, markdown)
