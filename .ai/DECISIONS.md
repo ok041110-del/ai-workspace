@@ -2860,3 +2860,101 @@
   `.ai/TASKS.md`에 Milestone 33 절 신규 추가. 새 Core Domain
   Interface 없음(27종 그대로), 새 Integration Layer Adapter 없음
   (`VaultAdapter` 확장 1건), `domain/` 필드 추가 없음.
+
+## ADR-0048: Workflow Intelligence 도입 — "Workflow" = Milestone Task 실행 흐름(domain.Workflow 아님), Blocked Rule 1개 + WorkflowFlowAnalyzer 캡슐화 (Milestone 34-T01~T04)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 M34 Milestone 계획(목표/Scope/
+  DoD/Task 구성/Architecture 영향/구현 전략)을 승인하며 3가지 수정
+  권고 — ① ADR에 Workflow 의미 명시 ② Blocked Rule 기반 정의
+  ③ WorkflowFlowAnalyzer로 흐름 분석 캡슐화 — 를 명시적으로 반영할
+  것을 조건으로 확정)
+- 날짜: 2026-07-30
+- 배경: M29~M33으로 Intelligence Layer가 Vault Task 문서를 단일
+  데이터 소스로 삼아 Project/Context/Capability/Synthesis/Session
+  Resume을 구축했다. `docs/ARCHITECTURE.md` §7과 `.ai/TASKS.md`
+  Milestone 32/33 절이 다음 단계로 "Workflow Intelligence"를
+  명시했지만, 착수 전 조사 결과 **이 저장소에는 `domain.Workflow`
+  인스턴스를 조회할 수 있는 기존 데이터 소스가 없다** —
+  `domain/workflow.py`의 `Workflow`는 `workflow_id`/`mission_id`/
+  `task_ids`/`dependencies`만 가진 휘발성 in-memory 값 객체로,
+  상태·타임스탬프·영속 저장소가 전혀 없고 `WorkflowAdapter`에도
+  `list_workflows()` 같은 조회 메서드가 없다. M29 Project
+  Intelligence조차 `domain.Workflow`를 전혀 참조하지 않는다(Vault
+  Task 문서만 읽음). 반면 이 저장소가 실제로 반복하는 "Workflow"는
+  Milestone 안의 Task 실행 순서(`M33-T01`→`T02`→`T03`→`T04`처럼
+  매 Task 말미에 "다음 Task"를 명시하는 순차 흐름) 그 자체이며, 이는
+  이미 `VaultAdapter.list_tasks()`(M29부터 존재)로 조회 가능하다.
+- 결정:
+  1. **"Workflow"를 재정의한다 — `domain.Workflow`가 아니라 Milestone
+     안의 Task 실행 흐름이다.** `domain/workflow.py`/
+     `interfaces/workflow_engine.py`/`runtime/workflow/
+     workflow_runner.py`/`integration/workflow_adapter.py`는 이번
+     Milestone에서 전혀 사용하지 않는다 — 새 영속 계층을 만들어
+     `Workflow` 인스턴스를 저장하기 시작하는 것은 Scope를 크게
+     키우는 선택이라 채택하지 않는다(YAGNI). "Workflow Intelligence"
+     라는 이름은 유지하되, 대상은 "Vault Task 문서에 이미 기록된
+     Milestone·Task 실행 순서"로 한정한다 — 이 재정의를 코드 주석과
+     문서에 명시해, 향후 누군가 `domain.Workflow`와 혼동하지 않도록
+     한다.
+  2. **Blocked를 Rule 기반으로 정의한다.** Task ID(`M{n}-T{nn}`)에서
+     추출한 T-번호로 같은 Milestone 내 Task를 정렬했을 때, `status`가
+     `todo`이면서 그보다 T-번호가 작은(선행) Task 중 완료 상태
+     (`done`/`archived`)가 아닌 것이 하나라도 있으면 **Blocked**다.
+     선행 Task가 모두 완료됐는데 아직 `todo`인 Task는 **Next(다음
+     실행 가능)**로 구분한다. `in-progress`/`review`는 진행 중,
+     `done`/`archived`는 완료로 그대로 노출한다 — 새 상태 분류를
+     만들지 않고 기존 `status` 값과 Task ID 순서만으로 판정하는
+     순수 Rule이다.
+  3. **분석 로직을 `WorkflowFlowAnalyzer`(신규, `intelligence/
+     workflow_flow.py`)라는 순수 Analyzer에 전부 캡슐화한다.**
+     입력은 `VaultAdapter.list_tasks()`가 반환하는
+     `TaskDocumentView` 목록뿐이고, 출력은 Milestone별 정렬된 Task
+     흐름 + Blocked/Next 판정이다. `WorkflowIntelligenceService`
+     (`intelligence/workflow_service.py`, M34-T03)는 `VaultAdapter`
+     호출과 `WorkflowFlowAnalyzer` 실행을 조합·오케스트레이션만
+     하고, Blocked/Next 규칙 자체는 갖지 않는다 — M29
+     `ProjectSnapshotAnalyzer`/`HealthRiskAnalyzer`와 Service를
+     분리해 온 기존 패턴과 동일하며, M35(Recommendation)/M36
+     (Automation)이 이 Analyzer를 그대로 재사용할 수 있게 한다.
+  4. **새 Adapter/Interface를 만들지 않는다.** `VaultAdapter`에
+     `publish_workflow_intelligence()` 메서드 1개만 추가한다
+     (M29~M33과 동일 패턴). Core Domain Interface 27종은 그대로다.
+  5. **결과는 같은 Vault 폴더에 새 파일로 노출한다** —
+     `vault/workflow_intelligence.py`(신규, 원자적 전체 교체)가
+     `15 Project Intelligence/Workflow Intelligence.md`에 쓴다.
+  6. **CLI 노출·자동 트리거·M35 Recommendation·M36 Automation
+     연동은 범위 밖이다.** M29~M33과 동일한 이유(YAGNI, 현재 CLI는
+     Intelligence/Vault를 전혀 모른다)로 다음 Milestone 대상이다.
+- 대안:
+  - `domain.Workflow`/`WorkflowAdapter`를 이번에 확장해 Workflow
+    인스턴스를 Vault 또는 별도 저장소에 영속화한 뒤 그것을 분석
+    대상으로 삼는다 — 기각. 새 영속 계층 + 새 Adapter 메서드 +
+    기존 `WorkflowRunner` 실행 경로와의 동기화까지 필요해 M34
+    단독으로 감당하기엔 Scope가 지나치게 커지고, "이미 있는 것을
+    재사용"하는 M29~M33의 설계 철학과 어긋난다.
+  - Blocked 판정에 `priority`나 `owner`까지 반영하는 복합 규칙을
+    만든다 — 기각. M31이 "Vault Task의 `owner`는 고정 명명 규칙이
+    없어 신호로 쓰지 않는다"고 이미 결정했고, Priority까지 섞으면
+    "선행 Task 완료 여부"라는 단순하고 예측 가능한 규칙이 깨진다
+    (KISS, YAGNI).
+  - Blocked/Next 판정 로직을 `WorkflowIntelligenceService` 안에 직접
+    작성한다(별도 Analyzer 없이) — 기각. 사용자 권고대로 Service에는
+    조합·오케스트레이션만 남기고 판정 규칙은 Analyzer에 모아둬야
+    M35/M36이 재사용하기 쉽다 — M29의 Analyzer/Service 분리 패턴과도
+    일관된다.
+- 이유: 새 Interface/Adapter/영속 계층 없이, 이미 Vault에 기록된
+  Task ID 순서·상태만으로 "지금 Milestone의 실행 흐름 중 어디가
+  막혔고 다음에 무엇을 해야 하는가"에 답할 수 있음을 확인했다 —
+  M29~M33이 지켜온 "새로운 지식을 만들지 않는다" 원칙을 그대로
+  유지하면서, Workflow라는 이름이 가리키는 대상을 이 저장소의 실제
+  데이터 현실에 맞게 재정의한 것이 이번 결정의 핵심이다.
+- 결과/영향: `intelligence/workflow_flow.py`(신규)/`intelligence/
+  workflow_service.py`(신규)/`vault/workflow_intelligence.py`
+  (신규)/`integration/vault_adapter.py`(`publish_workflow_intelligence()`
+  추가) 구현 완료(M34-T02~T04, 신규 테스트 14개 포함 pytest 976개,
+  ruff, mypy 전부 통과). `docs/ARCHITECTURE.md` §3.27(신규) 갱신,
+  `.ai/TASKS.md`에 Milestone 34 절 신규 추가. 새 Core Domain
+  Interface 없음(27종 그대로), 새 Integration Layer Adapter 없음
+  (`VaultAdapter` 확장 1건), `domain/` 필드 추가 없음,
+  `domain.Workflow`/`WorkflowEngine`/`WorkflowAdapter` 무변경
+  (사용하지 않음).

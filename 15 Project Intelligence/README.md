@@ -91,6 +91,24 @@ write_session_resume_report()`) — 새로운 데이터 소스나 판단 기준�
 - **Capability 상태**: Coverage(M31 재사용)
 - **다음 작업**: M29 Recommendation을 그대로 노출(새 추천 로직 없음)
 
+## `Workflow Intelligence.md` (Milestone 34, ADR-0048)
+
+`src/ai_workspace/intelligence/workflow_service.py`의
+`WorkflowIntelligenceService.publish()`가 Vault Task 문서(`14
+Tasks/`)를 읽어 Milestone별 Task 실행 흐름을 계산한다
+(`vault.workflow_intelligence.write_workflow_intelligence_report()`).
+여기서 "Workflow"는 `domain.Workflow`(영속 저장소 없는 휘발성 값
+객체)가 아니라 **Milestone 안의 Task 실행 순서**를 가리킨다 —
+`domain.Workflow`/`WorkflowEngine`/`WorkflowAdapter`는 사용하지
+않는다.
+
+- **Milestone별 진행률**: 완료 Task 수 / 전체 Task 수
+- **Blocked**: `todo` Task 중 Task ID 순서상 선행 Task가 아직
+  완료(`done`/`archived`)되지 않은 것(Rule 기반, `WorkflowFlowAnalyzer`)
+- **Next(다음 실행 가능)**: 선행 Task가 모두 완료된 `todo` Task
+- 미완료 Task가 없는(이미 끝난) Milestone은 표시하지 않음 — 진행
+  중인 Milestone이 하나도 없으면 "현재 진행 중인 Milestone 없음"
+
 ## 관련 문서
 
 - [[Milestones Index]]
@@ -102,6 +120,7 @@ write_session_resume_report()`) — 새로운 데이터 소스나 판단 기준�
 - `.ai/TASKS.md`의 "Milestone 29 — Project Intelligence"/"Milestone
   30 — Context Intelligence"/"Milestone 31 — Capability
   Intelligence"/"Milestone 32 — Intelligence Synthesis"/"Milestone
-  33 — Session Resume" 절
-- `.ai/DECISIONS.md`의 ADR-0043/ADR-0044/ADR-0045/ADR-0046/ADR-0047
+  33 — Session Resume"/"Milestone 34 — Workflow Intelligence" 절
+- `.ai/DECISIONS.md`의 ADR-0043/ADR-0044/ADR-0045/ADR-0046/ADR-0047/
+  ADR-0048
 - `src/ai_workspace/intelligence/`

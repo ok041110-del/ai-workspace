@@ -290,6 +290,12 @@ tags: [decision]
 - 결정: 새 Adapter/Interface 없이 `intelligence/session_resume.py`(Current Work Selector)/`session_resume_service.py`(조합)가 `VaultAdapter.list_tasks()` + M29~M31 Service 3개 + M32 `IntelligenceSynthesisAnalyzer`만 재사용. "현재 작업" 판정은 이미 있는 status/updated 값을 고르는 Rule 1개뿐, 새 지표 없음. M8 세션 연속성(Agent 실행 컨텍스트 복원)과는 별개 계층
 - 영향: `docs/ARCHITECTURE.md` §3.26(신규) 갱신, `.ai/TASKS.md` Milestone 33 절 신규. `integration/vault_adapter.py`(확장 1건)/`intelligence/session_resume*.py`(신규)/`vault/session_resume.py`(신규) 구현 완료, `pytest` 962개·ruff·mypy 전부 클린. 새 Core Domain Interface 없음(27종 유지). 상세는 [[Architecture Overview]]
 
+## ADR-0048: Workflow Intelligence 도입 — "Workflow" = Milestone Task 실행 흐름(domain.Workflow 아님), Blocked Rule 1개 + WorkflowFlowAnalyzer 캡슐화 (Milestone 34-T01~T04)
+
+- 목적: `domain.Workflow`가 영속 저장소 없는 휘발성 값 객체라 조회할 데이터가 없는 상황에서, "Workflow Intelligence"가 실제로 무엇을 분석할지 정의
+- 결정: "Workflow"를 `domain.Workflow`가 아니라 Milestone 안의 Task 실행 순서로 재정의. Blocked = Task ID T-번호 순으로 정렬했을 때 선행 Task 중 미완료가 있는 `todo` Task, 선행이 모두 완료된 `todo`는 Next. 판정 규칙은 `intelligence/workflow_flow.py`의 `WorkflowFlowAnalyzer`(순수 Analyzer)에 전부 캡슐화하고, `workflow_service.py`의 `WorkflowIntelligenceService`는 `VaultAdapter` 조회 + Analyzer 실행 조합만 담당(사용자 3가지 권고 반영). 새 Adapter/Interface 없이 `VaultAdapter` 확장 1건만 추가
+- 영향: `docs/ARCHITECTURE.md` §3.27(신규) 갱신, `.ai/TASKS.md` Milestone 34 절 신규. `integration/vault_adapter.py`(확장 1건)/`intelligence/workflow_flow.py`(신규)/`intelligence/workflow_service.py`(신규)/`vault/workflow_intelligence.py`(신규) 구현 완료, `pytest` 976개·ruff·mypy 전부 클린. 새 Core Domain Interface 없음(27종 유지), `domain.Workflow`/`WorkflowEngine`/`WorkflowAdapter` 무변경(사용하지 않음). 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

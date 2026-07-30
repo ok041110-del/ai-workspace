@@ -22,6 +22,7 @@ from ai_workspace.vault.session_resume import write_session_resume_report
 from ai_workspace.vault.task_lifecycle import TaskStatus, transition_task_status
 from ai_workspace.vault.task_query import list_task_documents
 from ai_workspace.vault.task_sync import transition_and_sync
+from ai_workspace.vault.workflow_intelligence import write_workflow_intelligence_report
 
 
 @dataclass(frozen=True)
@@ -189,3 +190,10 @@ class VaultAdapter:
         덮어쓴다(ADR-0047, Milestone 33-T04). 렌더링 로직은 갖지
         않는다."""
         return write_session_resume_report(self._vault_root, markdown)
+
+    def publish_workflow_intelligence(self, markdown: str) -> Path:
+        """`intelligence/workflow_service.py`가 렌더링한 Markdown을
+        `15 Project Intelligence/Workflow Intelligence.md`에
+        덮어쓴다(ADR-0048, Milestone 34-T04). 렌더링 로직은 갖지
+        않는다."""
+        return write_workflow_intelligence_report(self._vault_root, markdown)
