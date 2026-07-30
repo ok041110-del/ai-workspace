@@ -308,6 +308,12 @@ tags: [decision]
 - 결정: NextAction의 5가지 source 중 next_task만 실행 대상(나머지는 "지원하지 않음(Not Supported)"), 자동 트리거 없이 manual_trigger=True 수동 호출로만 실행. `runtime/execution/recommendation_execution_gate.py`의 `ExecutionGate`(판정만)와 `recommendation_action_builder.py`의 `ActionBuilder`(변환만)로 책임 분리. `AutomationActionExecutor`를 감싸지 않고 그 내부와 동일한 `EngineRegistry`→`EngineSelectionPolicy`→`ExecutionDispatcher` 3단계를 `recommendation_execution_service.py`가 직접 재사용(반환값을 버리지 않기 위함). Task 상태 자동 전이 없음 — 실행 결과만 Vault에 보고
 - 영향: `docs/ARCHITECTURE.md` §3.29(신규) 갱신, `.ai/TASKS.md` Milestone 36 절 신규. `integration/vault_adapter.py`(확장 1건)/`runtime/execution/recommendation_execution_gate.py`(신규)/`recommendation_action_builder.py`(신규)/`recommendation_execution_service.py`(신규)/`vault/recommendation_execution.py`(신규) 구현 완료, `pytest` 998개·ruff·mypy 전부 클린. 새 Core Domain Interface 없음(27종 유지), `AutomationActionExecutor`/`AutomationScheduler`/`ExecutionDispatcher` 무변경. 상세는 [[Architecture Overview]]
 
+## ADR-0051: Task Lifecycle 도입 — M36 Execution 결과를 기존 Task 상태 전이 기계(_ALLOWED_TRANSITIONS)에 연결, 새 상태·새 전이 규칙 없음 (Milestone 37-T01~T04)
+
+- 목적: M36 ADR-0050 결정 5가 미뤄 둔 "Task 상태 자동 전이"를 이미 존재하는 검증된 상태 전이 기계(`_ALLOWED_TRANSITIONS`, M28)로 구현
+- 결정: 실행 시작 시 `todo→in-progress`, 성공 시 `in-progress→review`, 실패 시 `in-progress→todo`만 자동화(`review→done`은 사람 검토로 남김). `runtime/execution/recommendation_task_lifecycle.py`의 `TaskLifecycleTransitioner`는 현재 상태를 먼저 확인하고 예상과 다르면 전이하지 않는다(방어적, 사용자 권고). Presentation을 `_render_execution_section()`/`_render_lifecycle_section()`으로 분리(사용자 권고). `VaultAdapter` 확장 없이 기존 `transition_task()` 그대로 재사용
+- 영향: `docs/ARCHITECTURE.md` §3.30(신규) 갱신, `.ai/TASKS.md` Milestone 37 절 신규. `runtime/execution/recommendation_task_lifecycle.py`(신규)/`recommendation_execution_service.py`(확장) 구현 완료, `pytest` 1005개·ruff·mypy 전부 클린. 새 Core Domain Interface/Adapter 없음(27종 유지), `_ALLOWED_TRANSITIONS` 무변경. 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

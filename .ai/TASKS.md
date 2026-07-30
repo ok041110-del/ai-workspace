@@ -11392,6 +11392,221 @@ Execution.md`가 공식 결과로 확정된다.
 
 ---
 
+## Milestone 37 — Task Lifecycle
+
+**목표**(2026-07-30 사용자 확정 — Milestone 계획을 2가지 수정 권고
+반영 조건으로 승인): M36 Execution 결과(Gate 승인/실행 성공·실패)를
+이미 존재하는 Task 상태 전이 기계(`vault/task_lifecycle.py`의
+`_ALLOWED_TRANSITIONS`, M28)에 연결한다(ADR-0051). 새 상태·새 전이
+규칙·새 Adapter 없이, 실행 시작 시 `todo→in-progress`, 성공 시
+`in-progress→review`, 실패 시 `in-progress→todo`만 자동화한다.
+`review→done`은 자동화하지 않는다(사람 검토 유지).
+
+**Definition of Done**
+
+| # | 항목 |
+|---|---|
+| 1 | 기존 27개 Core Domain Interface 변경 없음 |
+| 2 | 새 Interface/Adapter 0개(`VaultAdapter.transition_task()` 그대로 재사용, 확장 없음) |
+| 3 | 새 상태·새 전이 규칙 0개(`_ALLOWED_TRANSITIONS` 무변경) |
+| 4 | `review→done`은 자동화하지 않음(사람 검토 유지) |
+| 5 | `TaskLifecycleTransitioner`는 현재 상태를 확인하고 유효한 전이만 결정(예상과 다른 상태면 조용히 건너뜀) |
+| 6 | 실행 실패 시 `todo`로 되돌아가 재시도 가능 |
+| 7 | Presentation을 "Execution 결과"와 "Task Status 이력"으로 렌더링 함수 분리 |
+| 8 | 기존 M29~M36 pytest 회귀 없음 + 신규 테스트 통과 |
+| 9 | `pytest`/`ruff`/`mypy` 통과 |
+| 10 | Architecture/ADR-0051/TASKS 최신화 |
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M37-T01 | Task Lifecycle 설계 | **완료** |
+| M37-T02 | TaskLifecycleTransitioner | **완료** |
+| M37-T03 | RecommendationExecutionService 통합 | **완료** |
+| M37-T04 | Presentation 분리 + E2E 검증 + 문서화 + Milestone Review | **완료** |
+
+### M37-T01: Task Lifecycle 설계
+
+**목표**: 전이 규칙, `TaskLifecycleTransitioner` 방어 로직,
+Presentation 분리 방식을 확정한다.
+
+**MDD Review 요약**(전체 서술은 세션 대화 기록 참고, 결론만 기록)
+
+- **Scope(YAGNI)**: `done→archived` 자동화, 재시도 정책, `review→
+  done` 자동화, `AutomationScheduler` 연결, CLI/Hook은 전부 범위
+  밖.
+- **Reuse**: `vault/task_lifecycle.py`의 `_ALLOWED_TRANSITIONS`(M28,
+  이미 검증된 상태 전이 기계), `VaultAdapter.transition_task()`
+  (M28, 전이+Daily Note/Milestones Index 동기화까지 이미 처리),
+  `report.workflow_report`의 `TaskFlowEntry.status`(M34, 현재 상태
+  재조회 없이 재사용) — 새 상태 조회 경로·새 전이 규칙을 만들지
+  않는다.
+- **Interface/Service/Adapter**: 새 Interface 불필요. 새 Adapter
+  불필요(`VaultAdapter` 확장 없음, M35/M36과 달리 이번엔 메서드
+  추가도 없음 — `transition_task()`가 이미 있음). 새 Service는
+  기존 `RecommendationExecutionService`(M36) 확장만으로 충분.
+- **Layer**: `runtime/execution/`(기존 Layer, M36 파일들과 같은
+  디렉터리)에 신규 파일 1개만 추가한다 — 새 Layer 없음.
+- **File Review**: `recommendation_task_lifecycle.py`(순수 Rule,
+  신규 — 기존 파일 중 "현재 상태 확인 후 전이 결정" 책임을 가진
+  것이 없음).
+
+**결정(ADR-0051, 상세 근거는 `.ai/DECISIONS.md` 참고)**
+
+- `TaskLifecycleTransitioner.decide_start(current_status)`(현재
+  `todo`일 때만 `in-progress` 반환)와 `decide_completion
+  (current_status, *, success)`(현재 `in-progress`일 때만 성공
+  여부로 `review`/`todo` 반환) — 둘 다 현재 상태를 먼저 확인하고
+  예상과 다르면 `None`(전이하지 않음)을 반환한다.
+- `RecommendationExecutionService.execute()`가 Gate 승인 →
+  `decide_start()` → (전이 시) `VaultAdapter.transition_task()` →
+  `ExecutionDispatcher.dispatch()` → `decide_completion()` → (전이
+  시) `VaultAdapter.transition_task()` 순서로 호출한다.
+- Presentation은 `_render_execution_section()`(M36의 Gate/Action/
+  실행 결과)과 `_render_lifecycle_section()`(신규, 전이 이력)으로
+  분리하고, 같은 Vault 문서(`Recommendation Execution.md`) 안에
+  별도 섹션(`## Task Status 이력`)으로 노출한다 — 새 Vault 파일
+  없음.
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| 전이 규칙 확정 | ✅ (시작/성공/실패 3가지, `_ALLOWED_TRANSITIONS` 그대로) |
+| Transitioner 방어 로직 결정 | ✅ (현재 상태 확인 후 유효한 전이만) |
+| Presentation 분리 방식 결정 | ✅ (렌더링 함수 분리, 같은 문서 안 별도 섹션) |
+| MDD Review 수행 | ✅ (Scope/Reuse/Interface/Service/Adapter/Layer/File 전 항목 검토) |
+| ADR 작성 | ✅ (ADR-0051) |
+
+코드 변경 없음(설계 결론만 확정). 다음 Task: **M37-T02**
+(TaskLifecycleTransitioner).
+
+### M37-T02: TaskLifecycleTransitioner
+
+**목표**: T01 설계대로 현재 상태를 확인하고 유효한 전이만 결정하는
+`TaskLifecycleTransitioner`를 구현한다.
+
+**구현 내용**
+
+- `runtime/execution/recommendation_task_lifecycle.py`(신규) —
+  `TaskLifecycleTransitioner.decide_start(current_status)`(현재
+  `todo`일 때만 `"in-progress"` 반환, 아니면 `None`)와
+  `decide_completion(current_status, *, success)`(현재
+  `in-progress`일 때만 성공 여부로 `"review"`/`"todo"` 반환, 아니면
+  `None`). `vault.task_lifecycle.TaskStatus`를 직접 import하지
+  않고 문자열 status 값만 주고받는다(§8 규칙 18/19 경계를 넘지
+  않기 위함).
+
+**테스트**: `tests/runtime/execution/test_recommendation_task_lifecycle.py`
+(신규 5개 — start: todo일 때/아닐 때, completion: 성공·실패 시
+in-progress일 때/아닐 때). `pytest`(1003개, 기존 998개 + 신규 5개),
+`ruff check src tests`, `mypy` 전부 클린.
+
+**완료 조건 확인**: `TaskLifecycleTransitioner` 테스트 통과. 새
+Core Domain Interface 없음(27종 그대로), Core Domain 코드 무변경,
+`_ALLOWED_TRANSITIONS` 무변경.
+
+다음 Task: **M37-T03**(RecommendationExecutionService 통합).
+
+### M37-T03: RecommendationExecutionService 통합
+
+**목표**: `RecommendationExecutionService.execute()`에 시작/완료
+전이를 연결하고, `RecommendationExecutionOutcome`에
+`lifecycle_transitions` 필드를 추가한다.
+
+**구현 내용**
+
+- `runtime/execution/recommendation_action_builder.py`(확장) —
+  `ActionBuilder.find_entry()`(신규 공개 메서드)가 `next_action.
+  target`과 같은 `task_id`를 가진 Milestone 이름 + `TaskFlowEntry`
+  를 반환한다(`build()`도 내부적으로 재사용) — M37이 현재 status를
+  새로 조회하지 않고 재사용하기 위함.
+- `runtime/execution/recommendation_execution_service.py`(확장) —
+  `execute()`가 `ActionBuilder.find_entry()`로 현재 status 확인 →
+  `TaskLifecycleTransitioner.decide_start()` → (전이 시)
+  `VaultAdapter.transition_task()` → `ExecutionDispatcher.
+  dispatch()` → `decide_completion()` → (전이 시) `VaultAdapter.
+  transition_task()` 순서로 호출해 `RecommendationExecutionOutcome.
+  lifecycle_transitions`(신규 필드, `list[TaskTransitionOutcome]`)
+  에 발생한 전이를 담는다. Gate가 승인하지 않으면 빈 목록.
+
+**테스트**: `tests/runtime/execution/test_recommendation_execution_service.py`
+(신규 1개 — 실행 실패 시 `todo`로 되돌아감, 기존 성공 케이스
+테스트에 전이 이력/최종 Vault Task 상태 검증 추가). `pytest`
+(1004개, 기존 1003개 + 신규 1개), `ruff check src tests`, `mypy`
+전부 클린.
+
+**완료 조건 확인**: `RecommendationExecutionService` ↔
+`TaskLifecycleTransitioner` 연결 확인, 성공/실패 각각 실제 Vault
+Task 상태 변경 검증. 새 Core Domain Interface 없음(27종 그대로),
+Core Domain 코드 무변경.
+
+다음 Task: **M37-T04**(Presentation 분리 + E2E 검증 + 문서화 +
+Milestone Review).
+
+### M37-T04: Presentation 분리 + E2E 검증 + 문서화 + Milestone Review
+
+**목표**: "Execution 결과"와 "Task Status 이력"을 렌더링 함수로
+분리하고, 전체 스택 검증과 문서 갱신을 마무리한다.
+
+**구현 내용**
+
+- `recommendation_execution_service.py`(확장) — `render_markdown()`
+  을 `_render_execution_section()`(Gate/Action/실행 결과, M36
+  그대로)과 `_render_lifecycle_section()`(신규, 발생한 전이 이력을
+  `task_id: old_status → new_status` 형태로 나열)으로 분리하고
+  둘을 조합만 한다. `VaultAdapter` 확장 없음(M35/M36과 달리 새
+  메서드 추가도 없음 — `transition_task()`가 이미 있었음).
+- 실제 저장소 Vault를 대상으로 `publish(manual_trigger=True)`를
+  실행해 "Task Status 이력" 섹션이 정상 표시됨을 확인 — 이 저장소
+  현실상 Gate가 거부(Not Supported)해 "발생한 전이 없음"으로
+  정상 표시됨(실제 Vault Task는 건드리지 않음). 성공/실패 각각의
+  전이는 단위 테스트(`FakeExecutionEnvironment`)로 실제 Vault Task
+  문서 상태 변경까지 검증됨.
+- `docs/ARCHITECTURE.md` §3.30(신규)/상단 상태 갱신, `.ai/
+  DECISIONS.md`(ADR-0051 신규), `.ai/TASKS.md`(본 절), Vault(ADR
+  Index/Milestones Index/`15 Project Intelligence/README.md`) 갱신.
+
+**테스트**: 전체 `pytest`/`ruff`/`mypy` 재실행으로 회귀 없음 확인
+(1005개 전부 통과, 기존 1004개 + 신규 1개 — `render_markdown`이
+Task Status 이력을 표시).
+
+**완료 조건 확인**: DoD 10개 항목 전부 충족.
+
+**Milestone 37(Task Lifecycle) T01~T04 전체 완료.**
+
+### Milestone 37 Review
+
+**Review 결과 요약**
+
+| 항목 | 결과 |
+|---|---|
+| DoD 검증 | 10개 항목 전부 충족 |
+| Architecture Review | `runtime/execution/recommendation_task_lifecycle.py`를 `runtime/execution/`(M36과 같은 디렉터리)에 추가(ADR-0051), 새 상태·새 전이 규칙 없이 기존 `_ALLOWED_TRANSITIONS`만 재사용함을 §3.30과 ADR에 명시, `review→done`을 자동화하지 않는 이유를 코드·문서 양쪽에 반영 |
+| Layer Boundary Review | `test_architecture_boundary.py`(§8 규칙 18)/`test_intelligence_layering.py`(§8 규칙 21)를 코드 변경 없이 그대로 실행해 위반 없음을 확인 — `TaskLifecycleTransitioner`는 `vault.task_lifecycle.TaskStatus`를 직접 import하지 않고 문자열 status만 사용 |
+| Interface Review | Core Domain 27종 무변경. Integration Layer 신규 Adapter 없음, `VaultAdapter` 확장도 없음(M35/M36과 달리 기존 `transition_task()` 그대로 재사용). `_ALLOWED_TRANSITIONS` 무변경 |
+| ADR Review | ADR-0051 1건만 신규, 기존 ADR과 충돌 없음(M36 ADR-0050 결정 5에서 미룬 항목을 이어받는 관계를 ADR 안에서도 명시) |
+| pytest/ruff/mypy | 1005 passed(기존 998 + 신규 7), ruff clean, mypy clean(192 source files) |
+| 문서 최신화 | `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`/`.ai/TASKS.md`/Vault(ADR Index/Milestones Index/`15 Project Intelligence/README.md`+`Recommendation Execution.md`) 전부 갱신 확인 |
+
+**개선 여지(참고용, 이번에 처리하지 않음)**: (1) M29~M36과 동일한
+"워크숍 단계" 한계로, 실제 Vault에서는 아직 등록된 Engine이 없어
+전이가 발생하는 실제 경로는 단위 테스트로만 검증됐다. (2)
+`done→archived` 자동화·재시도 정책·`review→done` 자동화·
+`AutomationScheduler` 연결·CLI·Hook은 명시적으로 범위 밖으로 남겨
+다음 Milestone(M38) 이후 논의 대상이다.
+
+**사용자 승인 대기**: DoD 10개 항목/Architecture/MDD/Layer/
+Interface/Adapter/ADR/Tests/Documentation Review 결과를 위와 같이
+정리했다. 사용자 최종 확인 후 Milestone 37(Task Lifecycle) 공식
+완료(Approved)로 확정한다.
+
+**다음은 Milestone 38** — 세부 Task는 착수 시점에 별도 제안·승인
+후 정의한다.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

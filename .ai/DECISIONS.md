@@ -3162,3 +3162,87 @@
   integration_layer/test_architecture_boundary.py`/`tests/
   intelligence/test_intelligence_layering.py` 회귀 없음(§8 규칙
   18/21 위반 없음을 실제 pytest로 확인).
+
+## ADR-0051: Task Lifecycle 도입 — M36 Execution 결과를 기존 Task 상태 전이 기계(_ALLOWED_TRANSITIONS)에 연결, 새 상태·새 전이 규칙 없음 (Milestone 37-T01~T04)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 M37 Milestone 계획을 조건부
+  승인 — ① `TaskLifecycleTransitioner`가 현재 상태를 확인하고 유효한
+  전이만 결정할 것 ② Presentation을 "Execution 결과"와 "Task Status
+  History"로 역할을 명확히 분리할 것 — 두 가지 수정 권고를 반영하는
+  조건으로 확정)
+- 날짜: 2026-07-30
+- 배경: M36 ADR-0050 결정 5가 "Task 상태 자동 전이는 필요성이
+  확인되면 다음 Milestone에서 추가한다"고 명시적으로 미뤘다.
+  `vault/task_lifecycle.py`의 `_ALLOWED_TRANSITIONS`(M28)는 이미
+  완성된 상태 전이 기계다 — `todo→in-progress`, `in-progress→
+  {review, todo}`, `review→done`, `done→archived`만 허용하고,
+  `VaultAdapter.transition_task()`가 검증·Daily Note/Milestones
+  Index 동기화까지 전부 처리한다. M37은 이 기존 기계에 M36 실행
+  결과를 연결하는 얇은 Rule 하나만 추가한다.
+- 결정:
+  1. **새 상태·새 전이 규칙을 만들지 않는다.** 기존
+     `_ALLOWED_TRANSITIONS`의 전이만 사용한다: 실행 시작 시
+     `todo→in-progress`, 실행 성공 시 `in-progress→review`(사람
+     검토 대기 — `review→done`은 자동화하지 않는다, 이 프로젝트의
+     실제 작업 흐름도 항상 사람이 Review를 거쳐 Done을 확정해 왔다),
+     실행 실패 시 `in-progress→todo`(되돌려 재시도 가능하게 함).
+  2. **`TaskLifecycleTransitioner`(신규,
+     `runtime/execution/recommendation_task_lifecycle.py`)는 현재
+     상태를 확인하고 유효한 전이만 결정한다**(사용자 권고). 순수
+     함수 2개로 나눈다 — `decide_start(current_status)`(현재
+     `todo`일 때만 `in-progress` 반환, 아니면 `None`)와
+     `decide_completion(current_status, *, success)`(현재
+     `in-progress`일 때만 `success` 여부로 `review`/`todo` 반환,
+     아니면 `None`). "현재 상태가 예상과 다르면 전이하지 않는다"는
+     방어적 규칙이 핵심이다 — 예를 들어 Gate 승인 시점과 실제 전이
+     시점 사이에 Task가 이미 다른 상태로 바뀌어 있어도
+     `InvalidTaskTransitionError`를 던지는 대신 조용히 건너뛴다.
+  3. **`RecommendationExecutionService.execute()`가 두 전이를
+     순서대로 호출한다**: Gate 승인 → `decide_start()` → (전이
+     발생 시) `VaultAdapter.transition_task()` → `ExecutionDispatcher.
+     dispatch()` → `decide_completion()` → (전이 발생 시)
+     `VaultAdapter.transition_task()`. 새 상태 조회 경로를 만들지
+     않는다 — 현재 상태는 이미 있는 `report.workflow_report`의
+     `TaskFlowEntry.status`(M34)를 그대로 읽는다.
+  4. **Presentation을 "Execution 결과"와 "Task Status History"로
+     분리한다**(사용자 권고). `render_markdown()` 내부를
+     `_render_execution_section()`(M36의 Gate/Action/실행 결과)과
+     `_render_lifecycle_section()`(신규, 이번 실행에서 발생한 전이
+     이력 — old_status/new_status 나열)로 나눠 각 함수가 서로 다른
+     책임만 갖게 한다. 같은 Vault 문서(`Recommendation Execution.md`)
+     안에 별도 섹션(`## Task Status 이력`)으로 노출한다 — 새 Vault
+     파일을 만들지 않는다(YAGNI, 이미 M36이 이 실행 1건을 다루는
+     단일 문서를 갖고 있어 분리할 이유가 없다).
+  5. **새 Adapter/Interface를 만들지 않는다.** `VaultAdapter.
+     transition_task()`(M28, 기존)를 그대로 재사용한다 — 이번
+     Milestone에서 Adapter를 확장하지 않는다.
+- 대안:
+  - `in-progress→review` 대신 `review→done`까지 자동화한다 — 기각.
+    `_ALLOWED_TRANSITIONS`상 허용되지만, 이 프로젝트 전체가 항상
+    사람이 Review를 거쳐 Done을 확정해 온 실제 작업 흐름과 어긋난다
+    (M29~M36 모든 Milestone Review도 사용자 최종 승인을 거쳤다).
+  - 실패 시 재시도 횟수 제한이나 별도 실패 상태를 새로 만든다 —
+    기각. 재시도 정책은 그 자체로 별도 설계가 필요해 Scope를 키운다
+    — 단순히 `todo`로 되돌려 다음 Recommendation 계산에서 자연히
+    다시 Next로 잡히게 하는 것으로 충분하다(YAGNI).
+  - `TaskLifecycleTransitioner`가 현재 상태를 스스로 다시 조회한다
+    (새 Vault 읽기 경로) — 기각. `report.workflow_report`가 이미
+    같은 시점에 계산한 상태를 갖고 있어 재조회는 중복이다.
+  - Task Status History를 별도 Vault 문서로 분리한다 — 기각.
+    사용자 권고의 "역할을 명확히 분리"는 Presentation 책임(렌더링
+    함수) 분리를 요구한 것이지 새 파일을 요구한 것이 아니며, 이번
+    실행 1건의 결과를 다루는 문서가 이미 있는데 굳이 나눌 이유가
+    없다(YAGNI).
+- 이유: 새 상태·새 전이 규칙·새 Adapter 없이, 이미 M28부터 존재한
+  검증된 상태 전이 기계에 M36 실행 결과를 연결하는 Rule 2개만
+  더해도 "실행이 시작·성공·실패했을 때 Task 상태가 어떻게 바뀌어야
+  하는가"에 답할 수 있음을 확인했다 — M29~M36이 지켜온 "새로운
+  메커니즘을 만들지 않는다" 원칙을 그대로 유지했다.
+- 결과/영향: `runtime/execution/recommendation_task_lifecycle.py`
+  (신규)/`recommendation_execution_service.py`(확장, 전이 연결 +
+  `render_markdown()` 분리) 구현 완료(M37-T02~T04, 신규 테스트 7개
+  포함 pytest 1005개, ruff, mypy 전부 통과). `docs/ARCHITECTURE.md`
+  §3.30(신규) 갱신, `.ai/TASKS.md`에 Milestone 37 절 신규 추가. 새
+  Core Domain Interface/Adapter 없음(27종 그대로, `VaultAdapter`
+  확장 없음), `vault/task_lifecycle.py`의 `_ALLOWED_TRANSITIONS`
+  무변경.
