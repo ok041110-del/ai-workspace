@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.38.0 |
 | 작성일 | 2026-07-30 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. **Milestone 29(Project Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0043, `intelligence/` 신규 Layer, 결과는 Vault `15 Project Intelligence/Project Intelligence.md`에 노출, "의존성 위험" Deferred by Design). 새 Core Domain Interface 없음, 27종 유지. 다음은 Milestone 30(Context Intelligence)) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. **Milestone 29(Project Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0043, `intelligence/` 신규 Layer, 결과는 Vault `15 Project Intelligence/Project Intelligence.md`에 노출, "의존성 위험" Deferred by Design). 새 Core Domain Interface 없음, 27종 유지. **Milestone 30(Context Intelligence) 진행 중 — M30-T01(Architecture 설계, ADR-0044) 완료, M30-T02부터 구현 계속**) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -1285,6 +1285,38 @@ Core Domain↔Vault 경계를 잇는 것과 달리, Intelligence Layer는 아무
   FastAPI 서버 통합은 범위 확장이라 YAGNI로 보류). `intelligence/`
   경계(§8 규칙 21)는 그대로 유지 — `report.py`도 `VaultAdapter`/
   `AgentAdapter`에만 의존한다.
+
+### 3.23 Context Intelligence (Milestone 30, ADR-0044, 설계: M30-T01)
+
+Milestone 16의 Knowledge Layer(§3.14)와 Milestone 29의 Intelligence
+Layer(§3.22)를 종합해, 지금 진행 중인 작업(Task/Milestone)과 관련된
+**맥락(Context)**을 모아 `ProjectContext`로 정리하는 Read Only 계층.
+새 지식을 만들지 않고, LLM 추론도 하지 않는다 — 이미 있는 Knowledge
+문서를 구조적으로 파싱·필터링할 뿐이다.
+
+- **설계 결론(ADR-0044)**: `KnowledgeRepository`/`KnowledgeSearch`
+  (M16, 27종 Interface 중 2종)를 그대로 재사용한다 — 새 Core Domain
+  Interface를 추가하지 않는다. 대신 신규 Integration Layer Adapter
+  `KnowledgeAdapter`(`integration/knowledge_adapter.py`)가 이 두
+  Interface만 감싸고, `intelligence/context.py`의 `ContextAnalyzer`
+  가 `KnowledgeAdapter.list_all()`이 반환한 문서 전체 텍스트를
+  Markdown 제목(`#`/`##`/`###`) 단위로 쪼개 subject(Task/Milestone
+  식별자)가 언급된 항목만 `ContextEntry`로 채택한다 — 이 저장소가
+  제목에 ADR/Milestone 번호를 담는 실제 작성 관례를 그대로
+  이용한다.
+- **Freshness/Gap**(`intelligence/context_quality.py`): Freshness는
+  제목에서 추출한 Milestone 번호와 현재 Milestone의 거리로
+  판단한다(파일 mtime은 이 저장소가 매 세션 fresh clone이라
+  무의미, git log 조회는 Adapter의 "외부 시스템 하나만" 원칙과
+  충돌해 채택하지 않음). Gap은 ADR/TASK/ARCHITECTURE 3종에서 subject
+  언급이 0건일 때만 판정한다(RULE/PROJECT는 범용 문서라 제외).
+- **경계**: `intelligence/context*.py`는 오직 `integration/`의
+  `KnowledgeAdapter`에만 의존한다(§8 규칙 21 그대로 적용, 새 규칙
+  추가 없음).
+- **범위**: Context Analyzer(M30-T02)/Freshness & Gap Analyzer
+  (M30-T03)/Integration(M30-T04, `ContextIntelligenceService`)/
+  Presentation(M30-T05, Vault 노출). 새 Core Domain Interface
+  없음, `domain/` 필드 추가 없음.
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 

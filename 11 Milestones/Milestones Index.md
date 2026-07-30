@@ -42,6 +42,7 @@ tags: [milestone]
 | M27 | Obsidian Workspace Templates(M25 요청) | `VaultDocumentKind.TASK` 신규(개별 Task 문서), Daily/Decision Template 확장, Project Workspace Template 정의(설계만) | ADR-0038 |
 | M28 | Live Task Management & Integration | Task Lifecycle/자동 문서 갱신(Vault 내부), 신규 `integration/` 패키지(Workspace Adapter Layer) — Vault/Workflow/Agent Adapter, Peer Connector(WorkflowTaskLink/WorkflowAgentLink), Orchestrating Connector(ConversationConnector). Core Domain↔vault 직접 의존 금지를 `ast` 테스트로 강제, Domain 모델 무변경. **Architecture Freeze 완료**(Peer Connector 상호 참조 위반 1건 발견·수정) | ADR-0039, 0040, 0041, 0042 |
 | M29 | Project Intelligence | Project/Workflow/Task/Agent/Event/Vault 데이터로 Project Snapshot/Health/Risk/Recommendation을 만드는 Read Only Intelligence Layer(`intelligence/`, 신규). T01(설계)~T05(Integration & Presentation) 전체 완료, Vault Task 문서를 단일 데이터 소스로 채택, 새 Core Domain Interface 없음(27종 유지), 결과는 [[Project Intelligence]]에 노출. "의존성 위험"은 Deferred by Design. **Milestone Review 완료 — 사용자 승인(2026-07-30)** | ADR-0043 |
+| M30 | Context Intelligence(진행 중) | Knowledge Layer(M16)/Intelligence Layer(M29)를 종합해 지금 작업(Task/Milestone)과 관련된 맥락을 정리하는 Read Only Context Intelligence. T01(설계) 완료 — `KnowledgeAdapter` 신규(기존 Knowledge Interface만 감쌈), 새 Core Domain Interface 없음(27종 유지). LLM 추론/새 지식 생성 없음 | ADR-0044 |
 
 ## M23-Preparation
 

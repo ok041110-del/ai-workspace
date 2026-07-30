@@ -9780,6 +9780,82 @@ Milestone Review를 수행한다. 단, Core Domain 변경/Interface
 
 ---
 
+## Milestone 30 — Context Intelligence
+
+**목표**(2026-07-30 사용자 확정): 프로젝트의 현재 작업(Task/
+Milestone)에 필요한 맥락(Context)을 기존 Knowledge Layer(M16)와
+Intelligence Layer(M29) 정보를 기반으로 수집·정리하는 Read Only
+Context Intelligence를 구현한다. **새로운 지식을 생성하지 않는다.
+LLM 기반 추론도 하지 않는다** — 기존 데이터를 수집·분석·정리하는
+Rule 기반 계층으로 유지한다.
+
+**Definition of Done**
+
+| # | 항목 |
+|---|---|
+| 1 | 기존 27개 Core Domain Interface 변경 없음 |
+| 2 | 기존 Knowledge Layer Interface(`KnowledgeRepository`/`KnowledgeSearch`/`KnowledgeProvider`)만 재사용 |
+| 3 | Task 또는 Milestone 기준 `ProjectContext` 생성 가능 |
+| 4 | 관련 ADR/RULES/Architecture/Decision/Task/Roadmap/PRD를 연결 가능 |
+| 5 | Context Freshness를 Rule 기반으로 판단 가능 |
+| 6 | Context Gap(필요 문서 없음, 연결 누락 등) 탐지 가능 |
+| 7 | Vault를 통해 결과 확인 가능 |
+| 8 | Integration Layer를 통해서만 접근 가능 |
+| 9 | Layer Boundary 테스트 통과 |
+| 10 | `pytest`/`ruff`/`mypy` 통과 |
+| 11 | Architecture/ADR/문서 최신화 |
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M30-T01 | Context Intelligence Architecture 설계 | **완료** |
+| M30-T02 | Context Analyzer | 예정 |
+| M30-T03 | Freshness & Gap Analyzer | 예정 |
+| M30-T04 | Integration | 예정 |
+| M30-T05 | Presentation | 예정 |
+
+### M30-T01: Context Intelligence Architecture
+
+**목표**: Context Intelligence의 데이터 소스, `ProjectContext` 모델,
+신규 Adapter 필요 여부를 결정한다.
+
+**결정(ADR-0044, 상세 근거는 `.ai/DECISIONS.md` 참고)**
+
+- 신규 Integration Layer Adapter `KnowledgeAdapter`를 추가한다 —
+  기존 `KnowledgeRepository`/`KnowledgeSearch` Interface만 감싼다
+  (새 Core Domain Interface 아님, 기존 Adapter 3종과 동일한 패턴).
+- `FileKnowledgeRepository`는 파일 하나를 문서 하나로 통째로
+  노출한다(M16 결정 그대로 유지, Interface 변경 없음). M30은 이미
+  반환된 문서 텍스트를 Markdown 제목(`#`/`##`/`###`) 단위로 쪼개
+  `subject`(Task/Milestone 식별자)가 언급된 항목만 추리는 방식으로
+  세부 참조(예: "ADR-0043")를 얻는다 — 이 저장소가 실제로 제목에
+  Milestone/Task 번호를 담는 관례를 그대로 활용, 새 지식을 만들지
+  않는다.
+- Freshness는 파일 mtime/git log 대신, 제목에서 추출한 Milestone
+  번호와 현재 Milestone 번호의 거리로 판단한다(fresh clone 환경이라
+  mtime이 무의미하고, git log는 Adapter가 "외부 시스템 하나만"
+  다뤄야 한다는 ADR-0039 원칙과 충돌).
+- Gap은 ADR/TASK/ARCHITECTURE 3종 Knowledge에서 subject 언급이
+  0건일 때만 판정한다(RULE/PROJECT는 특정 Task마다 언급되는 것이
+  자연스럽지 않은 범용 문서라 제외).
+- `ProjectContext`/`ContextEntry`/`ContextQuality`/
+  `ContextFreshness`/`ContextGap`은 `intelligence/`의 값 객체로
+  두고 `domain/`에는 아무것도 추가하지 않는다.
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| 데이터 소스 정의 | ✅ (Knowledge Layer 6개 문서, ADR-0044) |
+| Context 모델 정의 | ✅ (`ProjectContext`/`ContextEntry`/`ContextQuality` 등) |
+| Adapter 필요 여부 판단 | ✅ (`KnowledgeAdapter` 신규, 기존 Interface만 감쌈) |
+| ADR 작성 | ✅ (ADR-0044) |
+
+코드 변경 없음(설계 Task). 다음 Task: **M30-T02**(Context Analyzer).
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

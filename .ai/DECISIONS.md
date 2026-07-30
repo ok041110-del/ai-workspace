@@ -2541,3 +2541,85 @@
   새 Core Domain Interface 없음(27종 그대로), `domain.Project`/
   `domain.Task` 필드 추가 없음, `vault.models.VaultDocumentKind`
   변경 없음.
+
+## ADR-0044: Context Intelligence 설계 — `KnowledgeAdapter` 신규(Integration Layer), Markdown 제목 단위 파싱으로 `ProjectContext` 구성 (Milestone 30-T01)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 M30 목표/DoD/Task 분해를 직접
+  제시하고 승인 — "새로운 지식을 생성하지 않는다/LLM 기반 추론을
+  하지 않는다/기존 Knowledge Layer Interface만 재사용" 조건 포함)
+- 날짜: 2026-07-30
+- 배경: M29(Project Intelligence)가 Vault Task 데이터로 "프로젝트
+  상태"를 이해하는 기반을 만들었다면, M30(Context Intelligence)은
+  "지금 하는 작업(Task/Milestone)과 관련된 맥락"을 모아 정리한다.
+  이미 Milestone 16(ADR-0028)이 `KnowledgeRepository`/
+  `KnowledgeSearch`/`KnowledgeProvider`(Core Domain Interface 27종
+  중 3종)로 `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`/`.ai/RULES.md`
+  /`.ai/TASKS.md`/`docs/ROADMAP.md`/`docs/PRD.md` 6개 파일을
+  `KnowledgeDocument`로 노출하고 있어, M30의 자연스러운 데이터
+  소스다. 다만 `FileKnowledgeRepository`는 파일 하나를 문서 하나로
+  통째로 노출한다(M16, YAGNI로 문단 단위 파싱을 하지 않기로 결정)
+  — 그래서 "관련 ADR-0043" 같은 세부 항목 단위 참조를 얻으려면,
+  이미 반환된 문서 텍스트를 추가로 구조화해야 한다.
+- 결정:
+  1. **신규 Integration Layer Adapter `KnowledgeAdapter`를 만든다**
+     (`integration/knowledge_adapter.py`) — `KnowledgeRepository`/
+     `KnowledgeSearch` **Interface**에만 의존한다(Interface First,
+     기존 `VaultAdapter`/`WorkflowAdapter`/`AgentAdapter`와 동일한
+     설계). 새 Core Domain Interface가 아니다 — 이미 있는 3종
+     Interface를 감싸기만 한다. `integration/__init__.py`가 이미
+     "Adapter는 향후 Runtime/Service/Notification/Sync 등으로
+     확장 가능한 계층"이라고 명시해 둔 대로, 이번 확장은 그 경계
+     안에서의 신규 구성원 추가이지 Layer Boundary 변경이 아니다.
+  2. **새 지식을 만들지 않는다** — `KnowledgeAdapter`가 반환하는
+     6개 문서의 전체 텍스트를, Markdown 제목(`#`/`##`/`###`) 단위로
+     쪼개는 것까지만 한다(`intelligence/context.py`,
+     `ContextAnalyzer`). 각 (제목, 본문) 구간에 `subject`(예:
+     "M30-T03" 또는 "M29")가 부분 문자열로 포함되면 `ContextEntry`
+     로 채택한다 — 이 문서들이 실제로 `## ADR-0043: ... (Milestone
+     29-T01)`처럼 Milestone/Task 식별자를 제목에 담는 이 저장소의
+     실제 작성 관례를 그대로 이용한다. 새 데이터를 생성하거나
+     LLM으로 요약하지 않는다(사용자 지시).
+  3. **Freshness는 파일 mtime이 아니라 제목에서 추출한 Milestone
+     번호 거리로 판단한다**(`intelligence/context_quality.py`).
+     이 저장소는 매 세션 fresh clone이라 파일 mtime이 "체크아웃
+     시각"만 반영해 실제 최신성과 무관하다 — filesystem stat이나
+     git log 조회(별도 외부 시스템 접근)를 새로 추가하는 대신,
+     이미 파싱한 Milestone 번호(`현재 Milestone - 언급된 Milestone`)
+     로 "오래된 참조"를 근사한다. Adapter가 두 개의 서로 다른 외부
+     시스템(Knowledge Interface + git)에 동시에 의존하게 되는 것도
+     피한다(ADR-0039 "Adapter는 외부 시스템 하나만" 원칙 유지).
+  4. **Gap은 "특정 Knowledge 종류에 subject 언급이 0건"으로
+     판정한다** — ADR/TASK/ARCHITECTURE 3종은 Milestone 작업이면
+     최소 하나는 있어야 자연스러운 문서라 Gap 판정 대상으로 삼고,
+     RULE/PROJECT(ROADMAP/PRD)는 특정 Task마다 언급되지 않는 것이
+     정상인 범용 문서라 Gap 판정에서 제외한다.
+  5. `ProjectContext`/`ContextEntry`/`ContextQuality`/
+     `ContextFreshness`/`ContextGap`을 `intelligence/`의 새 domain
+     성격 값 객체로 둔다 — Core Domain `domain/`에는 아무것도
+     추가하지 않는다(§8 규칙 21 그대로, `intelligence/`는
+     `KnowledgeAdapter`에만 의존).
+- 대안:
+  - `KnowledgeRepository`/`KnowledgeSearch`에 문단/제목 단위 파싱을
+    추가한다(Interface 확장) — 기각(사용자 조건: 기존 Knowledge
+    Layer Interface만 재사용). M16이 YAGNI로 이미 보류한 결정을
+    M30에서 뒤집을 이유가 없다 — Integration Layer 위에서 파싱해도
+    같은 결과를 얻을 수 있다.
+  - Freshness를 파일 mtime/git log로 판단한다 — 기각(위 배경 설명,
+    mtime은 이 저장소 운영 방식과 안 맞고, git log는 Adapter의
+    "외부 시스템 하나" 원칙과 충돌).
+  - `intelligence/context.py`가 `KnowledgeRepository`를 직접
+    주입받는다(Adapter 생략) — 기각. §8 규칙 21이 이미
+    "`intelligence/`는 Integration Layer Adapter에만 의존"이라고
+    못박아 뒀고, M29도 예외 없이 이 규칙을 지켰다 — 일관성 유지.
+- 이유: 사용자가 요구한 "새 지식 생성 금지/LLM 추론 금지/기존
+  Interface만 재사용"을 문자 그대로 지키면서, 이 저장소의 실제
+  문서 작성 관례(제목에 ADR/Milestone 번호를 명시하는 습관)만으로
+  충분히 유용한 `ProjectContext`(관련 ADR/RULES/Architecture/
+  Decision/Task/Roadmap/PRD 연결 + Freshness + Gap)를 만들 수
+  있음을 확인했다 — M29-T01이 "새 Interface 없이 가능한가"를
+  먼저 검증했던 것과 같은 접근이다.
+- 결과/영향: 코드 변경 없음(설계 Task) — 다음 Task(M30-T02)에서
+  `integration/knowledge_adapter.py`/`intelligence/context.py`를
+  실제로 만든다. `docs/ARCHITECTURE.md` §3.23(신규) 갱신,
+  `.ai/TASKS.md`에 Milestone 30 절 신규 추가. 새 Core Domain
+  Interface 없음(27종 그대로), `domain/` 필드 추가 없음.
