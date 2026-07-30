@@ -3519,3 +3519,15 @@
   ③기존 폴더 구조)가 ④(신규 Frontmatter 제안) 없이 전부 해결됨을
   실증했다. Memory Cluster는 아직 매칭 문서가 없다(Execution Memory
   가 Vault에 노출되지 않음, ADR-0053).
+- **T02~T05 M40 명명 분석 완료(2026-07-30, `.ai/TASKS.md`의
+  "Pre-M40 T02~T05" 절 참고)**: M40의 Responsibility를 (a)Read-Only
+  Experience Reporting과 (b)Experience-Informed Recommendation 두
+  범위로 분석한 결과, 둘 다 부작용이 없어 Domain은 §13.2의
+  **Intelligence**로 확정된다(§2.1이 예약했던 "Learning Engine"은
+  §13.4가 금지한 동의어 `Learning`과 정확히 겹쳐 사용하지 않는다 —
+  새 Domain 0개). Responsibility는 `Recommendation Intelligence`
+  (산출물을 이름으로 삼은 선례)와 동일한 패턴으로 사용자 원안
+  **`Experience`**를 그대로 유지해, 최종 Milestone 이름을
+  **`Experience Intelligence`**로 확정했다. 이 결정은 이름만
+  확정하며, 실제 Scope((a)/(b) 선택)/DoD/MDD Review는 M40 착수
+  시점에 별도로 진행한다.
