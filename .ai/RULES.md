@@ -2,14 +2,25 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.6.0 |
-| 작성일 | 2026-07-27 |
+| 문서 버전 | v0.7.0 |
+| 작성일 | 2026-07-30 |
 | 적용 대상 | 이 저장소에서 작업하는 모든 AI 구현 엔진(Claude Code, Codex, Gemini CLI 등) 및 기여자 |
 
 이 문서는 AI Workspace 프로젝트에서 **반드시 지켜야 하는 개발 규칙**을 정의한다.
 아래 규칙은 사용자가 제시한 개발 철학을 프로젝트 내부 규정으로 명문화한 것이며,
 모든 Task 수행 시 최우선으로 준수해야 한다.
 
+> **v0.7.0 변경 (MDD Review Gate 도입, M34~)**: 신규 §2.1.1 MDD Review Gate
+> 추가 및 `.ai/skills/MDD-Review.md` 신설. M34부터는 Milestone 계획 승인과
+> T01~T0n 구현 착수 사이에 "새 코드가 정말 필요한가"를 검증하는 MDD
+> (Minimal Design Decision) Review를 필수 게이트로 둔다 — YAGNI → Reuse
+> First → Interface First → Service Reuse → Adapter Reuse → Layer 필요성
+> 순으로 검토한 뒤에만 최소 코드를 작성한다. 별도 Interface/원칙 신설이
+> 아니라 §1.2 Architecture First·§1.4 Approval Required·§4.2 Simplicity
+> First(YAGNI)를 Milestone 착수 시점에 명시적으로 적용하는 절차이며, M29~M33
+> 이 이미 실천해 온 "새 Interface 없이 기존 구조 재사용" 패턴을 앞으로도
+> 반복 가능하도록 명문화한 것이다.
+>
 > **v0.6.0 변경 (Branch Deletion 표준화, M24-T05)**: 신규 §8.5 Branch
 > Deletion 추가. PR 병합 후 작업 브랜치 삭제는 GitHub의 "Automatically
 > delete head branches" 기능에 위임하는 것을 표준으로 삼는다.
@@ -113,6 +124,18 @@
 - 모든 작업은 `.ai/TASKS.md`에 정의된 Task 단위로 수행한다.
 - Task 없이 임의로 코드를 작성하지 않는다. 새로운 작업이 필요하면 먼저 Task를
   정의한 뒤 진행한다.
+
+### 2.1.1 MDD Review Gate (M34~, `.ai/skills/MDD-Review.md`)
+- Milestone 계획(범위·DoD)이 사용자 승인을 받은 직후, T01~T0n 개별 Task
+  Planning 착수 전에 **MDD(Minimal Design Decision) Review**를 수행한다.
+- 목적은 "어떻게 구현할 것인가"가 아니라 "새로운 코드가 정말 필요한가"의
+  검증이다 — YAGNI → Reuse First → Interface First → Service Reuse →
+  Adapter Reuse → Layer 필요성 순으로 검토하고, 그 이후에만 최소 코드를
+  작성한다.
+- MDD Review 결과(재사용 전략/신규 Interface·Service·Adapter·Layer·File 필요
+  여부/최종 결정)는 §1.4 Approval Required 승인 대상이다 — 사용자 승인 없이
+  이 게이트를 건너뛰고 구현에 들어가지 않는다.
+- 절차·출력 형식은 `.ai/skills/MDD-Review.md` 참고.
 
 ### 2.2 One Task At A Time (한 번에 하나)
 - 동시에 여러 Task를 병행하지 않는다.
