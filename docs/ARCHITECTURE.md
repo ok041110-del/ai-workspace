@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.43.0 |
 | 작성일 | 2026-07-30 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. Milestone 29(Project Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0043, `intelligence/` 신규 Layer, 결과는 Vault `15 Project Intelligence/Project Intelligence.md`에 노출, "의존성 위험" Deferred by Design). 새 Core Domain Interface 없음, 27종 유지. Milestone 30(Context Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0044, `intelligence/context*.py`, 결과는 Vault `15 Project Intelligence/Project Context.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. Milestone 31(Capability Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0045, `intelligence/capability*.py`, `AgentAdapter` 확장, 결과는 Vault `15 Project Intelligence/Capability Intelligence.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. Milestone 32(Intelligence Synthesis) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0046, `intelligence/synthesis*.py`, M29~M31 Service 3개를 조합해 결과는 Vault `15 Project Intelligence/Intelligence Overview.md`에 노출). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지. M29~M32로 Intelligence Layer 기반 완성(Project/Context/Capability/Synthesis). **Milestone 33(Session Resume) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0047, `intelligence/session_resume*.py`, "현재 작업" 선택 규칙 1개 + M29~M32 재사용, 결과는 Vault `15 Project Intelligence/Session Resume.md`에 공식 확정). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지. **Intelligence Layer를 실제 사용 시나리오(세션 시작)에 처음 연결한 Execution 쪽 첫 기능**. **Milestone 34(Workflow Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0048, `intelligence/workflow_flow.py`/`workflow_service.py`, "Workflow"를 `domain.Workflow`가 아니라 Milestone Task 실행 흐름으로 재정의하고 Blocked/Next Rule 1개 + `WorkflowFlowAnalyzer` 캡슐화로 구현, 결과는 Vault `15 Project Intelligence/Workflow Intelligence.md`에 공식 확정). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지, `domain.Workflow`/`WorkflowEngine`/`WorkflowAdapter` 무변경(사용하지 않음) — 다음 단계는 M35(Recommendation)/M36(Automation) 등이며, Milestone 35는 착수 시점에 별도 제안·승인) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. Milestone 29(Project Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0043, `intelligence/` 신규 Layer, 결과는 Vault `15 Project Intelligence/Project Intelligence.md`에 노출, "의존성 위험" Deferred by Design). 새 Core Domain Interface 없음, 27종 유지. Milestone 30(Context Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0044, `intelligence/context*.py`, 결과는 Vault `15 Project Intelligence/Project Context.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. Milestone 31(Capability Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0045, `intelligence/capability*.py`, `AgentAdapter` 확장, 결과는 Vault `15 Project Intelligence/Capability Intelligence.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. Milestone 32(Intelligence Synthesis) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0046, `intelligence/synthesis*.py`, M29~M31 Service 3개를 조합해 결과는 Vault `15 Project Intelligence/Intelligence Overview.md`에 노출). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지. M29~M32로 Intelligence Layer 기반 완성(Project/Context/Capability/Synthesis). **Milestone 33(Session Resume) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0047, `intelligence/session_resume*.py`, "현재 작업" 선택 규칙 1개 + M29~M32 재사용, 결과는 Vault `15 Project Intelligence/Session Resume.md`에 공식 확정). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지. **Intelligence Layer를 실제 사용 시나리오(세션 시작)에 처음 연결한 Execution 쪽 첫 기능**. **Milestone 34(Workflow Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0048, `intelligence/workflow_flow.py`/`workflow_service.py`, "Workflow"를 `domain.Workflow`가 아니라 Milestone Task 실행 흐름으로 재정의하고 Blocked/Next Rule 1개 + `WorkflowFlowAnalyzer` 캡슐화로 구현, 결과는 Vault `15 Project Intelligence/Workflow Intelligence.md`에 공식 확정). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지, `domain.Workflow`/`WorkflowEngine`/`WorkflowAdapter` 무변경(사용하지 않음). **Milestone 35(Recommendation Intelligence) T01~T04 구현 완료, Milestone Review 결과 사용자 최종 승인 대기 중**(ADR-0049, `intelligence/recommendation_rules.py`/`recommendation_service.py`, M29/M31/M33/M34 Intelligence를 그대로 조합한 5단계 Priority Rule 1개로 단일 Next Action을 결정, 결과는 Vault `15 Project Intelligence/Recommendation Intelligence.md`에 노출). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지 — Execution Layer 이전의 마지막 Decision Layer, 자동 실행 없음(Automation은 M36 이후이며 착수 시점에 별도 제안·승인) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -1549,6 +1549,64 @@ Task 실행 순서)에 맞게 재정의했다.
   `VaultAdapter.publish_workflow_intelligence()`(신규 메서드)로 `15
   Project Intelligence/Workflow Intelligence.md`에 노출한다
   (M29~M33과 동일 패턴, 같은 폴더 재사용).
+
+### 3.28 Recommendation Intelligence (Milestone 35, ADR-0049, 설계: M35-T01)
+
+M29(Project)/M31(Capability)/M33(Session Resume)/M34(Workflow)
+Intelligence를 그대로 조합해 "지금 무엇을 하는 것이 가장 적절한가"를
+결정하는 Read Only Decision Layer. **Execution Layer 이전의 마지막
+Decision Layer**이며, 자동으로 실행하지 않고 추천만 제공한다 —
+Task 상태 전이·Workflow 수정·Task 생성을 수행하지 않는다(Automation은
+M36 이후).
+
+- **5단계 Priority Rule(ADR-0049)**: 순서대로 첫 번째로 해당하는
+  조건에서 멈추고 단일 `NextAction`을 고른다 — ① Current Work(M33
+  `CurrentWorkSelector`)가 있으면 계속 수행 ② Workflow Intelligence
+  (M34)의 Next Task가 있으면 시작 추천 ③ Blocked Task가 있으면 해소
+  추천 ④ Capability Gap(M31)이 있으면 보완 추천 ⑤ M29
+  `ProjectRecommendation` 중 priority(high>medium>low, 동률이면
+  target 사전순)가 가장 높은 것을 그대로 노출. 다섯 조건 모두 해당
+  없으면 `next_action=None`("추천할 다음 행동 없음").
+- **새로운 Intelligence를 계산하지 않는다**: M29
+  `ProjectIntelligenceService.generate().recommendations`, M31
+  `CapabilityIntelligenceService.generate().gap_report`, M33
+  `CurrentWorkSelector`(Analyzer만 재사용, M33 Service 전체를 감싸지
+  않음 — Context Intelligence까지 포함된 `SessionResumeService`는
+  M35에서 불필요), M34 `WorkflowFlowAnalyzer`(Analyzer만 재사용)를
+  입력으로 그대로 소비한다. 새 지표·점수·Health/Risk 분류가 없다.
+- **Analyzer/Service 책임 분리**: 판정 규칙은
+  `intelligence/recommendation_rules.py`의
+  `RecommendationRuleAnalyzer`(순수 Analyzer)에 전부 캡슐화하고,
+  `intelligence/recommendation_service.py`의
+  `RecommendationIntelligenceService`는 `VaultAdapter.list_tasks()`
+  1회 조회 + `ProjectIntelligenceService`/`CapabilityIntelligenceService`
+  (주입) 실행 + `CurrentWorkSelector`/`WorkflowFlowAnalyzer`(같은
+  tasks 목록 재사용) 실행 + Analyzer 호출을 조합만 담당한다(M29/M34
+  Analyzer/Service 분리 패턴과 동일) — Automation(M36 이후)이
+  `RecommendationRuleAnalyzer`를 그대로 재사용할 수 있게 하기 위함이다.
+- **경계**: `intelligence/recommendation_rules.py`/
+  `recommendation_service.py`는 `integration/`의 `VaultAdapter`(기존
+  허용 Adapter)와 `intelligence/`의 기존 Service/Analyzer에만
+  의존한다(§8 규칙 21 그대로 적용, 새 규칙 추가 없음).
+- **범위**: RecommendationRuleAnalyzer(M35-T02, 완료)/Integration
+  (M35-T03, `RecommendationIntelligenceService`)/Presentation
+  (M35-T04, Vault 노출). Task 우선순위 재계산·AI 추론·점수 계산·
+  Workflow 수정·Task 생성·Automation·CLI·Hook은 범위 밖(YAGNI). 새
+  Core Domain Interface 없음, `domain/` 필드 추가 없음.
+- **M35-T02 구현 완료**: `intelligence/recommendation_rules.py`의
+  `RecommendationRuleAnalyzer.analyze()` — Current Work/Workflow
+  Next/Workflow Blocked/Capability Gap/Project Recommendation을
+  순서대로 확인해 단일 `NextAction`(또는 `None`)을 반환한다.
+- **M35-T03 구현 완료**: `intelligence/recommendation_service.py`의
+  `RecommendationIntelligenceService.generate()`가 Task 목록 1회
+  조회 → Current Work/Workflow Flow 계산 → Project/Capability
+  리포트 생성 → Rule Analyzer 실행을 한 번에 수행해
+  `RecommendationIntelligenceReport`를 만든다.
+- **M35-T04 구현 완료(Milestone 35 전체 완료)**:
+  `recommendation_service.py`에 `render_markdown()`/`publish()`를
+  추가해 `VaultAdapter.publish_recommendation_intelligence()`(신규
+  메서드)로 `15 Project Intelligence/Recommendation Intelligence.md`
+  에 노출한다(M29~M34와 동일 패턴, 같은 폴더 재사용).
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 

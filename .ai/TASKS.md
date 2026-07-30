@@ -10903,6 +10903,234 @@ Intelligence.md`가 공식 결과로 확정된다.
 
 ---
 
+## Milestone 35 — Recommendation Intelligence
+
+**목표**(2026-07-30 사용자 확정 — Milestone 계획(목표/Scope/DoD/
+Architecture/Task 구성/구현 전략/MDD Review)을 승인하며 "T01~T04
+중간 승인 없이 구현 후 Milestone Review로 최종 승인" 진행 방식까지
+확정): M29(Project)/M31(Capability)/M33(Session Resume)/M34
+(Workflow) Intelligence를 그대로 조합해 "지금 무엇을 하는 것이
+가장 적절한가"를 결정하는 Read Only Recommendation Intelligence를
+구현한다(ADR-0049). Execution Layer 이전의 마지막 Decision Layer —
+자동 실행하지 않고 추천만 제공한다(Automation은 M36 이후).
+
+**Definition of Done**
+
+| # | 항목 |
+|---|---|
+| 1 | 기존 27개 Core Domain Interface 변경 없음 |
+| 2 | 새 Interface 0개 |
+| 3 | 새 Integration Layer Adapter 0개(`VaultAdapter` 메서드 1개만 확장 — `publish_recommendation_intelligence()`) |
+| 4 | `intelligence/recommendation_rules.py`/`recommendation_service.py`는 기존 Intelligence(M29/M31/M33/M34)만 사용 |
+| 5 | 새 점수·LLM·추론 없음, Recommendation은 Rule 기반(`RecommendationRuleAnalyzer`)으로만 결정 |
+| 6 | `15 Project Intelligence/Recommendation Intelligence.md` 생성 |
+| 7 | 5단계 Priority 모두 해당 없을 때도 예외 없이 정상 표시("추천할 다음 행동 없음") |
+| 8 | 기존 M29~M34 pytest 회귀 없음 + 신규 테스트 통과 |
+| 9 | `pytest`/`ruff`/`mypy` 통과 |
+| 10 | Architecture/ADR-0049/TASKS 최신화 |
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M35-T01 | Recommendation Rule 설계 | **완료** |
+| M35-T02 | RecommendationRuleAnalyzer | **완료** |
+| M35-T03 | Recommendation Intelligence Service(Integration) | **완료** |
+| M35-T04 | Presentation + E2E 검증 + 문서화 + Milestone Review | **완료** |
+
+### M35-T01: Recommendation Rule 설계
+
+**목표**: 5단계 Priority Rule, Analyzer/Service 책임 분리를 확정한다.
+
+**MDD Review 요약**(전체 서술은 세션 대화 기록 참고, 결론만 기록)
+
+- **Scope(YAGNI)**: Task 우선순위 재계산/AI 추론/점수 계산/Workflow
+  수정/Task 생성/Automation/CLI/Hook은 전부 제외(사용자 Scope 그대로
+  채택).
+- **Reuse**: `intelligence/recommendation.py`의 `ProjectRecommendation`
+  /`ProjectRecommendationEngine`(M29), `intelligence/capability_gap.py`
+  의 `CapabilityGapReport`(M31), `intelligence/session_resume.py`의
+  `CurrentWorkSelector`(M33), `intelligence/workflow_flow.py`의
+  `WorkflowFlowAnalyzer`(M34) — 4개 기존 Analyzer/Engine 산출물을
+  그대로 입력으로 소비한다. 새로운 Vault 조회 경로 없음(`VaultAdapter.
+  list_tasks()` 기존 메서드만 재사용).
+- **Interface/Service/Adapter**: 새 Interface 불필요(순수 함수적
+  Analyzer로 충분). 새 Service는 조합 전용
+  `RecommendationIntelligenceService` 1개만 필요(기존 4개 Service를
+  감싸는 게 아니라 필요한 Analyzer/Service만 선택적으로 조합 —
+  M33이 M32 Service 대신 Analyzer만 재사용한 것과 같은 이유로, M35도
+  `SessionResumeService`(Context까지 포함) 대신 `CurrentWorkSelector`
+  만 가져온다). 새 Adapter 불필요, `VaultAdapter` 확장 1건만.
+- **Layer**: 기존 Intelligence Layer 안에서 해결, 새 Layer/Engine/
+  Manager/Factory/Registry 불필요.
+- **File Review**: `recommendation_rules.py`(Rule, 신규 — 기존
+  `recommendation.py`는 M29 Project 전용이라 재사용 불가, 대상이
+  다름), `recommendation_service.py`(조합, 신규 — 기존 Service 중
+  이 4가지 조합을 담당하는 것이 없음), `vault/
+  recommendation_intelligence.py`(Writer, 신규 — 기존 Writer는
+  각자 다른 파일에 씀).
+
+**결정(ADR-0049, 상세 근거는 `.ai/DECISIONS.md` 참고)**
+
+- 5단계 Priority: ① Current Work 계속 수행 ② Workflow Next Task
+  시작 ③ Workflow Blocked 해소 ④ Capability Gap 보완 ⑤ M29
+  Project Recommendation(priority 최고) 그대로 노출. 모두 해당 없으면
+  `next_action=None`.
+- 판정 로직은 `RecommendationRuleAnalyzer`
+  (`intelligence/recommendation_rules.py`, 신규)에 전부 캡슐화하고,
+  `RecommendationIntelligenceService`(`intelligence/
+  recommendation_service.py`, M35-T03)는 `VaultAdapter.list_tasks()`
+  1회 조회 + 기존 Service/Analyzer 4개 실행 + Analyzer 호출 조합만
+  담당한다.
+- 새 Adapter/Interface를 만들지 않는다 — `VaultAdapter`에
+  `publish_recommendation_intelligence()` 메서드 1개만 추가(M35-T04).
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| 5단계 Priority Rule 정의 | ✅ (ADR-0049) |
+| Analyzer/Service 책임 분리 결정 | ✅ (`RecommendationRuleAnalyzer` ↔ `RecommendationIntelligenceService`) |
+| MDD Review 수행 | ✅ (Scope/Reuse/Interface/Service/Adapter/Layer/File 전 항목 검토) |
+| ADR 작성 | ✅ (ADR-0049) |
+
+코드 변경 없음(설계 결론만 확정). 다음 Task: **M35-T02**
+(RecommendationRuleAnalyzer).
+
+### M35-T02: RecommendationRuleAnalyzer
+
+**목표**: T01 설계대로 Current Work/Workflow Next/Workflow Blocked/
+Capability Gap/Project Recommendation을 순서대로 확인해 단일
+`NextAction`을 고르는 `RecommendationRuleAnalyzer`를 구현한다.
+
+**구현 내용**
+
+- `intelligence/recommendation_rules.py`(신규) — `NextAction`(값
+  객체)과 `RecommendationRuleAnalyzer.analyze()`가 M33 `CurrentWork`
+  /M34 `WorkflowFlowReport`/M31 `CapabilityGapReport`/M29
+  `ProjectRecommendation` 목록만 입력으로 받아 5단계 Priority를
+  순서대로 확인한다. Workflow Next/Blocked Task는 Milestone 정렬
+  순 → Task ID(T-번호) 정렬 순으로 첫 번째 항목을 결정적으로 고르고,
+  Priority 5(Project Recommendation)는 priority(high>medium>low,
+  동률이면 target 사전순)로 가장 높은 것을 고른다. 다섯 조건 모두
+  해당 없으면 `None`.
+
+**테스트**: `tests/intelligence/test_recommendation_rules.py`(신규
+7개 — Priority 1이 나머지를 모두 이기는지/Priority 2~4 각각 단독
+발생/Priority 5의 priority 정렬 및 동률 처리/모두 해당 없을 때
+`None`). `pytest`(983개, 기존 976개 + 신규 7개), `ruff check src
+tests`, `mypy` 전부 클린.
+
+**완료 조건 확인**: `RecommendationRuleAnalyzer` 테스트 통과. 새
+Core Domain Interface 없음(27종 그대로), Core Domain 코드 무변경.
+
+다음 Task: **M35-T03**(Recommendation Intelligence Service).
+
+### M35-T03: Recommendation Intelligence Service (Integration)
+
+**목표**: `VaultAdapter.list_tasks()` 1회 조회 + 기존 Service/
+Analyzer 4개 실행 + `RecommendationRuleAnalyzer`(T02) 호출을
+조합하는 `RecommendationIntelligenceService`를 구현한다.
+
+**구현 내용**
+
+- `intelligence/recommendation_service.py`(신규)의
+  `RecommendationIntelligenceService.generate()` — `VaultAdapter.
+  list_tasks()`로 Task 전체를 한 번만 조회한 뒤, `CurrentWorkSelector`
+  (M33)/`WorkflowFlowAnalyzer`(M34)에 같은 목록을 재사용해 전달하고,
+  `ProjectIntelligenceService`/`CapabilityIntelligenceService`(M29/
+  M31, 주입)를 각각 실행한 뒤 `RecommendationRuleAnalyzer`에 네
+  결과를 넘겨 `RecommendationIntelligenceReport`(단일 `next_action`
+  + 근거가 된 하위 리포트 전체)를 만든다. `SessionResumeService`
+  (M33) 전체가 아니라 `CurrentWorkSelector` Analyzer만 가져온다 —
+  M35는 Context Intelligence를 쓰지 않기 때문이다(ADR-0049).
+
+**테스트**: `tests/intelligence/test_recommendation_service.py`
+(신규 3개 — 아무 Task도 없을 때 Priority 4(Capability Gap)로
+귀결되는 이 저장소의 워크숍 단계 현실 확인/Current Work 존재 시
+Priority 1/Next Task 존재 시 Priority 2). `pytest`(986개, 기존
+983개 + 신규 3개), `ruff check src tests`, `mypy` 전부 클린.
+
+**완료 조건 확인**: `RecommendationIntelligenceService` ↔
+`RecommendationRuleAnalyzer` 연결 확인, Report 구성 테스트 통과.
+새 Core Domain Interface 없음(27종 그대로), Core Domain 코드
+무변경, §8 규칙 21 유지.
+
+다음 Task: **M35-T04**(Presentation + E2E 검증 + 문서화 + Milestone
+Review).
+
+### M35-T04: Presentation + E2E 검증 + 문서화 + Milestone Review
+
+**목표**: `RecommendationIntelligenceService`를 실제로 Vault에
+노출하고, 전체 스택 검증과 문서 갱신을 마무리한다.
+
+**구현 내용**
+
+- `intelligence/recommendation_service.py`(T03에서 확장) —
+  `render_markdown()`(순수 함수)이 `RecommendationIntelligenceReport`
+  를 다음 행동 + 근거(현재 작업/Workflow/Capability/Project
+  Recommendation) 섹션으로 Markdown 렌더링하고, `publish()`가
+  `VaultAdapter.publish_recommendation_intelligence()`(신규 메서드)
+  를 통해 실제로 Vault에 쓴다.
+- `vault/recommendation_intelligence.py`(신규) —
+  `write_recommendation_intelligence_report()`가 `15 Project
+  Intelligence/Recommendation Intelligence.md`에 원자적으로 전체
+  교체(overwrite)한다(M29~M34와 동일 패턴).
+- `VaultAdapter.publish_recommendation_intelligence()`(신규 메서드)
+  — 위 writer를 Integration Layer에 노출.
+- 실제 저장소 Vault를 대상으로 `publish()`를 실행해 `Recommendation
+  Intelligence.md`가 생성됨을 확인 — 활성 Agent 0명인 이 저장소의
+  워크숍 단계 현실상 Priority 1~3(Current Work/Next/Blocked Task)이
+  모두 해당 없어 Priority 4(Capability Gap, `coding` 보완)로
+  귀결됨을 실제 데이터로 확인했다(DoD 7의 "5단계 모두 해당 없을 때"
+  케이스는 `test_recommendation_rules.py`의 단위 테스트로 별도
+  검증).
+- `docs/ARCHITECTURE.md` §3.28(신규)/상단 상태 갱신, `.ai/
+  DECISIONS.md`(ADR-0049 신규), `.ai/TASKS.md`(본 절), Vault(ADR
+  Index/Milestones Index/`15 Project Intelligence/README.md`) 갱신.
+
+**테스트**: 전체 `pytest`/`ruff`/`mypy` 재실행으로 회귀 없음 확인
+(988개 전부 통과, 기존 986개 + 신규 2개 — `render_markdown` 다음
+행동/근거 표시, `publish` 파일 생성 검증).
+
+**완료 조건 확인**: DoD 10개 항목 전부 충족.
+
+**Milestone 35(Recommendation Intelligence) T01~T04 전체 완료.**
+
+### Milestone 35 Review
+
+**Review 결과 요약**
+
+| 항목 | 결과 |
+|---|---|
+| DoD 검증 | 10개 항목 전부 충족 |
+| Architecture Review | `intelligence/recommendation_rules.py`/`recommendation_service.py`를 M29~M34 Intelligence Layer와 같은 계층에 추가(ADR-0049), "새 Intelligence를 계산하지 않는다"는 원칙과 5단계 Priority Rule을 §3.28과 ADR에 명시, Execution Layer 이전 마지막 Decision Layer로서 자동 실행하지 않음을 코드·문서 양쪽에 반영 |
+| Layer Boundary Review | `test_intelligence_layering.py`를 코드 변경 없이 그대로 실행해 §8 규칙 21 위반 없음을 확인(`VaultAdapter`는 M29부터 이미 허용된 Adapter) |
+| Interface Review | Core Domain 27종 무변경. Integration Layer 신규 Adapter 없음, `VaultAdapter` 확장 1건(`publish_recommendation_intelligence()`) |
+| ADR Review | ADR-0049 1건만 신규, 기존 ADR과 충돌 없음(M33 `SessionResumeService` 대신 `CurrentWorkSelector`만 재사용한 이유를 ADR 안에서도 명시) |
+| pytest/ruff/mypy | 988 passed(기존 976 + 신규 12), ruff clean, mypy clean(187 source files) |
+| 문서 최신화 | `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`/`.ai/TASKS.md`/Vault(ADR Index/Milestones Index/`15 Project Intelligence/README.md`+`Recommendation Intelligence.md`) 전부 갱신 확인 |
+
+**개선 여지(참고용, 이번에 처리하지 않음)**: (1) 이 저장소는 아직
+`14 Tasks/*.md`에 실시간 Task 문서를 쓰지 않아(M29~M34와 동일한
+"워크숍 단계" 한계) Current Work/Workflow Next/Blocked Task가 항상
+`None`으로 관찰되고, 활성 Agent도 0명이라 Capability Gap이 항상
+존재해 Recommendation은 실제 Vault에서 거의 항상 Priority 4로
+귀결된다 — Vault Task 문서를 실시간으로 쓰고 Agent가 상시 구동되는
+워크플로가 생기면 그때부터 Priority 1~3/5도 실제로 관찰된다. (2)
+Task 우선순위 재계산·AI 추론·Automation·CLI·Hook은 명시적으로 범위
+밖으로 남겨 다음 Milestone(M36) 이후 논의 대상이다.
+
+**사용자 승인 대기**: DoD 10개 항목/Architecture/MDD/Layer/
+Interface/Adapter/ADR/Tests/Documentation Review 결과를 위와 같이
+정리했다. 사용자 최종 확인 후 Milestone 35(Recommendation
+Intelligence) 공식 완료(Approved)로 확정한다.
+
+**다음은 Milestone 36** — 세부 Task는 착수 시점에 별도 제안·승인
+후 정의한다.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

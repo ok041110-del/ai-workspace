@@ -296,6 +296,12 @@ tags: [decision]
 - 결정: "Workflow"를 `domain.Workflow`가 아니라 Milestone 안의 Task 실행 순서로 재정의. Blocked = Task ID T-번호 순으로 정렬했을 때 선행 Task 중 미완료가 있는 `todo` Task, 선행이 모두 완료된 `todo`는 Next. 판정 규칙은 `intelligence/workflow_flow.py`의 `WorkflowFlowAnalyzer`(순수 Analyzer)에 전부 캡슐화하고, `workflow_service.py`의 `WorkflowIntelligenceService`는 `VaultAdapter` 조회 + Analyzer 실행 조합만 담당(사용자 3가지 권고 반영). 새 Adapter/Interface 없이 `VaultAdapter` 확장 1건만 추가
 - 영향: `docs/ARCHITECTURE.md` §3.27(신규) 갱신, `.ai/TASKS.md` Milestone 34 절 신규. `integration/vault_adapter.py`(확장 1건)/`intelligence/workflow_flow.py`(신규)/`intelligence/workflow_service.py`(신규)/`vault/workflow_intelligence.py`(신규) 구현 완료, `pytest` 976개·ruff·mypy 전부 클린. 새 Core Domain Interface 없음(27종 유지), `domain.Workflow`/`WorkflowEngine`/`WorkflowAdapter` 무변경(사용하지 않음). 상세는 [[Architecture Overview]]
 
+## ADR-0049: Recommendation Intelligence 도입 — 5단계 Priority Rule 1개로 M29~M34 Intelligence를 그대로 소비하는 Decision Layer (Milestone 35-T01~T04)
+
+- 목적: M29 Recommendation이 Project Snapshot/Health/Risk만 보고 Session Resume(현재 작업)이나 Workflow Intelligence(Blocked/Next)는 고려하지 않아, "지금 무엇을 하는 것이 가장 적절한가"에 답하는 단일 창구가 없는 문제 해결
+- 결정: 새 Intelligence를 계산하지 않고, M29 `ProjectRecommendation`/M31 `CapabilityGapReport`/M33 `CurrentWorkSelector`(Analyzer만 재사용)/M34 `WorkflowFlowAnalyzer`(Analyzer만 재사용)를 입력으로 5단계 Priority Rule(Current Work→Workflow Next→Workflow Blocked→Capability Gap→Project Recommendation) 1개로 단일 `NextAction`을 고른다. 판정 로직은 `intelligence/recommendation_rules.py`의 `RecommendationRuleAnalyzer`(순수 Analyzer)에 캡슐화하고 `recommendation_service.py`의 `RecommendationIntelligenceService`는 조합만 담당. 자동 실행하지 않는다(Automation은 M36 이후)
+- 영향: `docs/ARCHITECTURE.md` §3.28(신규) 갱신, `.ai/TASKS.md` Milestone 35 절 신규. `integration/vault_adapter.py`(확장 1건)/`intelligence/recommendation_rules.py`(신규)/`intelligence/recommendation_service.py`(신규)/`vault/recommendation_intelligence.py`(신규) 구현 완료, `pytest` 988개·ruff·mypy 전부 클린. 새 Core Domain Interface 없음(27종 유지). 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

@@ -109,6 +109,24 @@ Tasks/`)를 읽어 Milestone별 Task 실행 흐름을 계산한다
 - 미완료 Task가 없는(이미 끝난) Milestone은 표시하지 않음 — 진행
   중인 Milestone이 하나도 없으면 "현재 진행 중인 Milestone 없음"
 
+## `Recommendation Intelligence.md` (Milestone 35, ADR-0049)
+
+`src/ai_workspace/intelligence/recommendation_service.py`의
+`RecommendationIntelligenceService.publish()`가 M29/M31/M33/M34
+Intelligence를 조합해 단일 다음 행동(Next Action)을 결정한다
+(`vault.recommendation_intelligence.
+write_recommendation_intelligence_report()`). Execution Layer
+이전의 마지막 Decision Layer — 자동으로 실행하지 않고 추천만
+제공한다.
+
+- **다음 행동**: 5단계 Priority Rule 중 첫 번째로 해당하는 것 —
+  ① Current Work(M33) 계속 수행 ② Workflow Next Task(M34) 시작
+  ③ Workflow Blocked Task(M34) 해소 ④ Capability Gap(M31) 보완
+  ⑤ M29 Project Recommendation(priority 최고) 그대로 노출. 모두
+  해당 없으면 "추천할 다음 행동 없음"
+- **근거**: 현재 작업/Workflow 진행 상황/Capability Coverage/Project
+  Recommendation 전체를 함께 노출해 판단 근거를 투명하게 보여줌
+
 ## 관련 문서
 
 - [[Milestones Index]]
@@ -120,7 +138,8 @@ Tasks/`)를 읽어 Milestone별 Task 실행 흐름을 계산한다
 - `.ai/TASKS.md`의 "Milestone 29 — Project Intelligence"/"Milestone
   30 — Context Intelligence"/"Milestone 31 — Capability
   Intelligence"/"Milestone 32 — Intelligence Synthesis"/"Milestone
-  33 — Session Resume"/"Milestone 34 — Workflow Intelligence" 절
+  33 — Session Resume"/"Milestone 34 — Workflow Intelligence"/
+  "Milestone 35 — Recommendation Intelligence" 절
 - `.ai/DECISIONS.md`의 ADR-0043/ADR-0044/ADR-0045/ADR-0046/ADR-0047/
-  ADR-0048
+  ADR-0048/ADR-0049
 - `src/ai_workspace/intelligence/`
