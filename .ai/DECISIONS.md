@@ -2706,3 +2706,75 @@
   전부 통과). `docs/ARCHITECTURE.md` §3.24(신규) 갱신, `.ai/TASKS.md`
   에 Milestone 31 절 신규 추가. 새 Core Domain Interface 없음
   (27종 그대로), `domain/` 필드 추가 없음.
+
+## ADR-0046: Intelligence Synthesis 도입 — 새 Analyzer/Adapter 없이 M29~M31 Service 3개를 조합해 `IntelligenceOverview` 생성 (Milestone 32-T01~T04)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 "M32는 기능 추가가 아니라
+  Intelligence Layer의 통합 계층(Integration at the Intelligence
+  Layer)을 완성하는 Milestone"이라고 확정 — Rule 기반만/LLM 추론
+  금지/새 Core Domain Interface 금지 조건은 M29-T01/M30-T01/
+  M31-T01에서 이미 확립된 원칙을 그대로 승계)
+- 날짜: 2026-07-30
+- 배경: M29(Project Intelligence)/M30(Context Intelligence)/
+  M31(Capability Intelligence)이 각각 독립적으로 계산한 리포트를
+  모두 `15 Project Intelligence/` Vault 폴더에 별개 파일(`Project
+  Intelligence.md`/`Project Context.md`/`Capability Intelligence.md`)
+  로만 노출하고 있어, 세 리포트를 교차로 보려면 파일을 3개 열어야
+  했다. M32는 이 셋을 잇는 마지막 조각으로, 새로운 데이터 소스나
+  판단 기준을 추가하지 않고 이미 완성된 3개 Service
+  (`ProjectIntelligenceService`/`ContextIntelligenceService`/
+  `CapabilityIntelligenceService`)의 `generate()` 결과만 조합한다.
+- 결정:
+  1. **새 Adapter/Interface를 만들지 않는다.** `intelligence/
+     synthesis.py`의 `IntelligenceSynthesisAnalyzer`는 이미 생성된
+     세 리포트(`ProjectIntelligenceReport`/`ProjectContextReport`/
+     `CapabilityIntelligenceReport`)만 입력으로 받는 순수 함수
+     계층이다 — Adapter를 전혀 참조하지 않는다.
+  2. **§8 규칙 21은 변경 없이 그대로 적용된다.** 지금까지 규칙 21은
+     "`intelligence/`의 Analyzer는 `integration/`의 Adapter에만
+     의존"이었다. M32는 Adapter가 아니라 **같은 `intelligence/`
+     계층의 다른 Service**(`report.py`/`context_service.py`/
+     `capability_service.py`)를 조합하므로 애초에 이 규칙이 금지하는
+     대상이 아니다 — `tests/intelligence/test_intelligence_layering.py`
+     를 그대로 실행해 위반이 없음을 코드로 확인했다(수정 불필요).
+     별도 규칙 신설도 하지 않는다.
+  3. **집계(Synthesis)와 조합(Service)을 분리한다**(M29/M30/M31과
+     동일한 2단 구조). `intelligence/synthesis.py`의
+     `IntelligenceSynthesisAnalyzer`는 세 리포트의 등급(Health/
+     Freshness/Coverage)과 Risk/Gap을 하나의 `Finding` 목록으로
+     모으기만 한다 — 새 우선순위 알고리즘·새 임계값을 만들지 않는다.
+     `intelligence/synthesis_service.py`의
+     `IntelligenceSynthesisService`가 세 Service를 생성자로 받아
+     순서대로 실행한 뒤 Analyzer에 넘기는 조합 책임만 진다(M29-T05
+     `report.py`와 동일한 Orchestrating 패턴).
+  4. **결과는 같은 Vault 폴더에 새 파일로 노출한다** —
+     `vault/intelligence_overview.py`(M29/M30/M31과 동일 패턴, 원자적
+     전체 교체)가 `15 Project Intelligence/Intelligence Overview.md`에 쓴다.
+     `VaultAdapter`에 `publish_intelligence_overview()` 메서드 1개만
+     추가한다(신규 Adapter 아님, M30/M31과 동일한 확장 방식).
+- 대안:
+  - 세 Service의 Adapter(`VaultAdapter`/`KnowledgeAdapter`/
+    `AgentAdapter`)를 Synthesis Service가 직접 다시 주입받아 세
+    Analyzer를 처음부터 다시 조립한다 — 기각. 이미 완성된 Service가
+    "생성→렌더링→발행"을 캡슐화하고 있는데 이를 우회하면 같은 로직이
+    두 곳에 중복된다(DRY 위반, YAGNI).
+  - Overview에 세 리포트 각각의 우선순위를 다시 계산하는 새
+    가중치/점수 체계를 도입한다 — 기각. 이번 Milestone의 목적은
+    "통합"이지 "새 판단 추가"가 아니다 — Finding을 그대로 나열하고
+    정렬만 하는 최소 구현으로 충분하다.
+  - `15 Project Intelligence/` 대신 새 최상위 Vault 폴더를 만든다 —
+    기각. M29~M31이 이미 이 폴더를 "Intelligence 결과 전용"으로
+    확립했고, Overview도 같은 성격의 산출물이다.
+- 이유: 새 Interface/Adapter/판단 기준 없이 기존 3개 Service만
+  조합해도 "프로젝트 상태 + 지금 작업 맥락 + 시스템 능력"을 한 문서로
+  볼 수 있음을 확인했다 — M29~M31이 세운 "새 데이터 소스·새 판단
+  없이 이미 있는 것만 재사용" 원칙을 통합 계층에도 그대로 적용한
+  결과다.
+- 결과/영향: `intelligence/synthesis.py`(신규)/`intelligence/
+  synthesis_service.py`(신규)/`vault/intelligence_overview.py`
+  (신규)/`integration/vault_adapter.py`(`publish_intelligence_
+  overview()` 추가) 구현 완료(M32-T02~T04, 신규 테스트 7개 포함
+  pytest 954개, ruff, mypy 전부 통과). `docs/ARCHITECTURE.md`
+  §3.25(신규) 갱신, `.ai/TASKS.md`에 Milestone 32 절 신규 추가. 새
+  Core Domain Interface 없음(27종 그대로), 새 Integration Layer
+  Adapter 없음(`VaultAdapter` 확장 1건), `domain/` 필드 추가 없음.

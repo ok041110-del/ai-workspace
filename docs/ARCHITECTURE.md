@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.40.0 |
+| 문서 버전 | v0.41.0 |
 | 작성일 | 2026-07-30 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. **Milestone 29(Project Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0043, `intelligence/` 신규 Layer, 결과는 Vault `15 Project Intelligence/Project Intelligence.md`에 노출, "의존성 위험" Deferred by Design). 새 Core Domain Interface 없음, 27종 유지. **Milestone 30(Context Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0044, `intelligence/context*.py`, 결과는 Vault `15 Project Intelligence/Project Context.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. **Milestone 31(Capability Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0045, `intelligence/capability*.py`, `AgentAdapter` 확장, 결과는 Vault `15 Project Intelligence/Capability Intelligence.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. 다음은 Milestone 32) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. Milestone 29(Project Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0043, `intelligence/` 신규 Layer, 결과는 Vault `15 Project Intelligence/Project Intelligence.md`에 노출, "의존성 위험" Deferred by Design). 새 Core Domain Interface 없음, 27종 유지. Milestone 30(Context Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0044, `intelligence/context*.py`, 결과는 Vault `15 Project Intelligence/Project Context.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. Milestone 31(Capability Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0045, `intelligence/capability*.py`, `AgentAdapter` 확장, 결과는 Vault `15 Project Intelligence/Capability Intelligence.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. **Milestone 32(Intelligence Synthesis) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0046, `intelligence/synthesis*.py`, M29~M31 Service 3개를 조합해 결과는 Vault `15 Project Intelligence/Intelligence Overview.md`에 노출). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -1387,6 +1387,60 @@ Read Only 계층. 새 데이터를 만들지 않고, LLM 추론도 하지 않는
   publish_capability_report()`로 `15 Project Intelligence/
   Capability Intelligence.md`에 노출한다(M29-T05/M30-T05와 동일
   패턴, 같은 폴더 재사용).
+
+### 3.25 Intelligence Synthesis (Milestone 32, ADR-0046, 설계: M32-T01)
+
+M29(Project Intelligence, §3.22)/M30(Context Intelligence, §3.23)/
+M31(Capability Intelligence, §3.24)이 각각 독립적으로 계산한 리포트를
+새로운 데이터 소스나 판단 기준 없이 하나의 `IntelligenceOverview`로
+합성하는 Read Only 계층. 세 Milestone을 잇는 통합 계층(Integration
+at the Intelligence Layer)으로, M29~M31 위에 새 기능을 얹는 것이
+아니라 이미 있는 것을 조합해 마무리하는 성격의 Milestone이다.
+
+- **설계 결론(ADR-0046)**: 새 Adapter/Interface를 만들지 않는다.
+  `intelligence/synthesis.py`의 `IntelligenceSynthesisAnalyzer`는
+  이미 생성된 세 리포트(`ProjectIntelligenceReport`/
+  `ProjectContextReport`/`CapabilityIntelligenceReport`)만 입력으로
+  받는 순수 함수 계층이다 — Adapter를 전혀 참조하지 않는다.
+- **§8 규칙 21과의 관계**: 규칙 21("`intelligence/`의 Analyzer는
+  `integration/`의 Adapter에만 의존")은 변경 없이 그대로 적용된다.
+  `IntelligenceSynthesisAnalyzer`/`IntelligenceSynthesisService`는
+  Adapter가 아니라 **같은 `intelligence/` 계층의 다른 Service**
+  (`report.py`/`context_service.py`/`capability_service.py`)를
+  조합하므로 애초에 이 규칙이 금지하는 대상이 아니다 —
+  `tests/intelligence/test_intelligence_layering.py`를 코드 변경
+  없이 그대로 실행해 위반이 없음을 확인했다.
+- **집계와 조합의 분리(M29/M30/M31과 동일한 2단 구조)**:
+  `intelligence/synthesis.py`의 `IntelligenceSynthesisAnalyzer`는
+  세 리포트의 등급(Health/Freshness/Coverage)과 Risk/Gap을 하나의
+  `SynthesizedFinding` 목록으로 모으기만 한다(target 기준 정렬 외
+  새 우선순위 알고리즘·새 임계값 없음). `intelligence/
+  synthesis_service.py`의 `IntelligenceSynthesisService`가 세
+  Service(`ProjectIntelligenceService`/`ContextIntelligenceService`/
+  `CapabilityIntelligenceService`)를 생성자로 받아 순서대로 실행한
+  뒤 Analyzer에 넘기는 조합 책임만 진다(M29-T05 `report.py`와 동일한
+  Orchestrating 패턴을 Service 3개 조합 층위로 한 단계 더 얹음).
+- **경계**: `intelligence/synthesis*.py`는 `intelligence/report.py`/
+  `context_service.py`/`capability_service.py`(같은 계층의 Service)
+  에만 의존하고, `integration/`/`domain/`/`interfaces/`/`engines/`/
+  `vault`를 직접 import하지 않는다.
+- **범위**: Synthesis Analyzer(M32-T02, 완료)/Integration(M32-T03,
+  `IntelligenceSynthesisService`)/Presentation(M32-T03, Vault 노출)/
+  E2E 검증·문서화(M32-T04). 새 Core Domain Interface 없음, `domain/`
+  필드 추가 없음.
+- **M32-T02 구현 완료**: `intelligence/synthesis.py`의
+  `IntelligenceSynthesisAnalyzer`(`SynthesizedFinding`/
+  `IntelligenceOverview` 신규 값 객체)가 세 리포트를 조합한다.
+- **M32-T03 구현 완료**: `intelligence/synthesis_service.py`의
+  `IntelligenceSynthesisService`가 세 Service를 조합해
+  `generate()`/`publish()`를 제공하고, `vault/
+  intelligence_overview.py`(신규) → `VaultAdapter.
+  publish_intelligence_overview()`(신규 메서드)로 `15 Project
+  Intelligence/Overview.md`에 노출한다.
+- **M32-T04 구현 완료(Milestone 32 전체 완료)**: 전체 스택 통합
+  테스트로 Vault 노출까지 검증, 문서화 완료. `docs/ARCHITECTURE.md`/
+  `.ai/DECISIONS.md`/`.ai/TASKS.md`/Vault(ADR Index/Milestones
+  Index) 갱신 확인.
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
