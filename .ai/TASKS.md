@@ -10510,6 +10510,201 @@ Workflow Intelligence/Agent Orchestration/Automation 등)으로
 
 ---
 
+## Milestone 33 — Session Resume
+
+**목표**(2026-07-30 사용자 확정 — "M33은 새로운 Intelligence를
+계산하지 않는다"): 새 세션이 시작될 때 "지금 무엇을 하고 있었는가"를
+자동 복원하는 Read Only Session Resume를 구현한다. M29(Project)/
+M30(Context)/M31(Capability) Intelligence와 M32(Intelligence
+Overview)를 그대로 활용하고, "현재 작업" 판정 규칙 1개만 새로
+더한다. **새로운 판단·새로운 Intelligence·LLM 추론을 하지 않는다.**
+
+**Definition of Done**
+
+| # | 항목 |
+|---|---|
+| 1 | 기존 27개 Core Domain Interface 변경 없음 |
+| 2 | 새 Interface 0개 |
+| 3 | 새 Integration Layer Adapter 0개(`VaultAdapter` 메서드 1개만 확장) |
+| 4 | `intelligence/session_resume*.py`는 `VaultAdapter`(기존)와 `intelligence/`의 기존 Service/Analyzer(M29~M32)에만 의존 |
+| 5 | "현재 작업" 판정은 이미 있는 `status`/`updated` 값을 읽는 Rule 1개뿐 — 새 지표·점수 없음 |
+| 6 | `15 Project Intelligence/Session Resume.md`에 현재 Milestone/Task, Project 상태, 관련 Context, Capability 상태, 다음 작업 노출 |
+| 7 | 활성 Task가 없을 때도 예외 없이 정상 표시 |
+| 8 | 기존 M29~M32 pytest 회귀 없음 + 신규 테스트 통과 |
+| 9 | `pytest`/`ruff`/`mypy` 통과 |
+| 10 | Architecture/ADR/문서 최신화 |
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M33-T01 | Session Resume 설계 | **완료** |
+| M33-T02 | Current Work Selector | **완료** |
+| M33-T03 | Session Resume Service(Integration) | **완료** |
+| M33-T04 | Presentation + E2E 검증 + 문서화 + Milestone Review | **완료** |
+
+### M33-T01: Session Resume 설계
+
+**목표**: 데이터 소스, "현재 작업" 판정 Rule, §8 규칙 21과의 관계를
+결정한다.
+
+**결정(ADR-0047, 상세 근거는 `.ai/DECISIONS.md` 참고)**
+
+- 새 Adapter/Interface를 만들지 않는다 — "현재 작업" 판정은
+  `VaultAdapter.list_tasks()`(M29부터 존재)가 이미 노출한 값에서
+  고르는 순수 선택 로직이다.
+- M8 세션 연속성(Agent 실행 컨텍스트 복원)과는 Interface·Layer가
+  겹치지 않는 별개 기능이다 — M33은 사람이 읽는 보고서를
+  Intelligence Layer에서 만든다.
+- `SessionResumeService`는 `VaultAdapter` + M29~M31 Service 3개 +
+  M32 `IntelligenceSynthesisAnalyzer`(Service가 아니라 Analyzer만
+  재사용)를 조합한다 — M29 `ProjectIntelligenceReport.
+  recommendations`가 Overview 밖에 있어 직접 필요하기 때문이다.
+- "다음 작업"은 M29 Recommendation을 그대로 노출한다(새 추천 로직
+  없음).
+- CLI 노출·자동 트리거는 범위 밖(M29~M32와 동일하게 Vault 노출까지).
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| 데이터 소스 정의 | ✅ (기존 `VaultAdapter`/M29~M32 Service, ADR-0047) |
+| "현재 작업" 판정 Rule 정의 | ✅ (활성 상태 + 최신 updated) |
+| Adapter 필요 여부 판단 | ✅ (신규 Adapter 없음) |
+| ADR 작성 | ✅ (ADR-0047) |
+
+코드 변경 없음(설계 결론만 확정). 다음 Task: **M33-T02**(Current
+Work Selector).
+
+### M33-T02: Current Work Selector
+
+**목표**: T01 설계대로 Vault Task 목록에서 "현재 작업" 1건(또는
+없음)을 고르는 `CurrentWorkSelector`를 구현한다.
+
+**구현 내용**
+
+- `intelligence/session_resume.py`(신규) — `CurrentWork`(값 객체)와
+  `CurrentWorkSelector.select(tasks)`가 활성 상태(in-progress/
+  review)이면서 archived가 아닌 Task 중 `updated`가 가장 최근인
+  1건을 고른다(동률이면 `task_id`가 더 큰 쪽, 활성 Task 없으면
+  `None`). `VaultAdapter.list_tasks()`가 반환하는 `TaskDocumentView`
+  만 입력으로 받는다 — 새로운 데이터 접근 경로 없음.
+
+**테스트**: `tests/intelligence/test_session_resume.py`(신규 4개 —
+활성 Task 없음/최신 갱신 선택/동률 처리/archived 제외).
+`pytest`(958개, 기존 954개 + 신규 4개), `ruff check src tests`,
+`mypy` 전부 클린.
+
+**완료 조건 확인**: `CurrentWorkSelector` 테스트 통과. 새 Core
+Domain Interface 없음(27종 그대로), Core Domain 코드 무변경.
+
+다음 Task: **M33-T03**(Session Resume Service).
+
+### M33-T03: Session Resume Service (Integration)
+
+**목표**: `CurrentWorkSelector`(T02) + M29~M31 Service 3개 + M32
+`IntelligenceSynthesisAnalyzer`를 조합해 `SessionResumeReport`를
+만든다.
+
+**구현 내용**
+
+- `intelligence/session_resume_service.py`(신규)의
+  `SessionResumeService.generate()` — `VaultAdapter.list_tasks()`로
+  Current Work 판정 → subject/milestone 결정(Task 없으면 subject
+  ""·milestone `None`) → `ProjectIntelligenceService`/
+  `ContextIntelligenceService`/`CapabilityIntelligenceService`
+  실행 → `IntelligenceSynthesisAnalyzer.analyze()`로 Overview
+  합성. `SessionResumeReport`(current_work + 세 리포트 + overview)
+  로 반환.
+
+**테스트**: `tests/intelligence/test_session_resume_service.py`
+(신규 4개 — 활성 Task 없을 때/현재 작업+Context 매칭/publish 검증/
+Markdown 섹션 확인). `pytest`(962개, 기존 958개 + 신규 4개), `ruff
+check src tests`, `mypy` 전부 클린.
+
+**완료 조건 확인**: 세 Service + Analyzer 연결 확인, Report 구성
+테스트 통과. 새 Core Domain Interface 없음(27종 그대로), Core
+Domain 코드 무변경, §8 규칙 21 유지.
+
+다음 Task: **M33-T04**(Presentation + E2E 검증 + 문서화 + Milestone
+Review).
+
+### M33-T04: Presentation + E2E 검증 + 문서화 + Milestone Review
+
+**목표**: `SessionResumeService`를 실제로 Vault에 노출하고, 전체
+스택 검증과 문서 갱신을 마무리한다.
+
+**구현 내용**
+
+- `intelligence/session_resume_service.py`(T03에서 확장) —
+  `render_markdown()`(순수 함수)이 `SessionResumeReport`를
+  Markdown으로 렌더링하고, `publish()`가 `VaultAdapter.
+  publish_session_resume()`(신규 메서드)를 통해 실제로 Vault에
+  쓴다.
+- `vault/session_resume.py`(신규) — `write_session_resume_report()`
+  가 `15 Project Intelligence/Session Resume.md`에 원자적으로 전체
+  교체(overwrite)한다(M29~M32와 동일 패턴).
+- `VaultAdapter.publish_session_resume()`(신규 메서드) — 위 writer를
+  Integration Layer에 노출.
+- 실제 저장소 Vault를 대상으로 `publish()`를 실행해 `Session
+  Resume.md`가 생성됨을 확인(활성 Task 0건 → "현재 진행 중인 Task
+  없음"으로 정상 표시).
+- **실제 검증 중 발견해 수정한 버그**: 활성 Task가 없을 때 빈
+  subject(`""`)를 `ContextAnalyzer.analyze()`에 그대로 넘기면 —
+  이 메서드가 "빈 subject 아니어야 함"을 명시적 전제조건으로 문서화
+  하고 있었음에도 — 모든 Knowledge 문서의 모든 제목이 매칭돼 버려
+  Session Resume이 관련 없는 항목 수백 줄로 오염되는 결함을
+  실제 Vault(대용량 `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`
+  포함)로 검증하다 발견했다. 현재 작업이 없으면 Context Intelligence
+  호출 자체를 건너뛰고 "해당 없음"을 직접 반환하도록
+  `SessionResumeService.generate()`를 수정하고, 회귀 테스트를
+  추가했다(`test_session_resume_service.py`).
+- `docs/ARCHITECTURE.md` §3.26(신규)/상단 상태 갱신, `.ai/
+  DECISIONS.md`(ADR-0047 신규), `.ai/TASKS.md`(본 절), Vault(ADR
+  Index/Milestones Index) 갱신.
+
+**테스트**: 전체 `pytest`/`ruff`/`mypy` 재실행으로 회귀 없음 확인.
+
+**완료 조건 확인**: DoD 10개 항목 전부 충족.
+
+**Milestone 33(Session Resume) T01~T04 전체 완료.**
+
+### Milestone 33 Review
+
+**Review 결과 요약**
+
+| 항목 | 결과 |
+|---|---|
+| DoD 검증 | 10개 항목 전부 충족 |
+| Architecture Review | `intelligence/session_resume*.py`를 M29~M32 Intelligence Layer와 같은 계층에 추가(ADR-0047), M29~M32 재사용 근거가 ADR에 명시, M8 세션 연속성과의 구분을 §3.26에 명문화 |
+| Layer Boundary Review | `test_intelligence_layering.py`를 코드 변경 없이 그대로 실행해 §8 규칙 21 위반 없음을 확인(`VaultAdapter`는 M29부터 이미 허용된 Adapter) |
+| Interface Review | Core Domain 27종 무변경. Integration Layer 신규 Adapter 없음, `VaultAdapter` 확장 1건(`publish_session_resume()`) |
+| ADR Review | ADR-0047 1건만 신규, 기존 ADR과 충돌 없음(M8과의 경계를 ADR 안에서도 명시) |
+| pytest/ruff/mypy | 962 passed, ruff clean, mypy clean(181 source files) |
+| 문서 최신화 | `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`/`.ai/TASKS.md`/Vault(ADR Index/Milestones Index/`15 Project Intelligence/README.md`+`Session Resume.md`) 전부 갱신 확인 |
+
+**개선 여지(참고용, 이번에 처리하지 않음)**: (1) 이 저장소는 아직
+`14 Tasks/*.md`에 실시간 Task 문서를 쓰지 않아(GitHub `.ai/TASKS.md`
+가 원문) 실제 Session Resume의 "현재 작업"이 항상 `None`으로
+관찰된다 — M29 `active_agent_count`/M31 Coverage와 같은 성격의
+"워크숍 단계" 한계이며, Vault Task 문서를 실시간으로 쓰는 워크플로가
+생기면 그때부터 실제로 채워진다. (2) CLI 노출·자동 트리거(세션
+시작 Hook)는 명시적으로 범위 밖으로 남겨 M34 이후 논의 대상이다.
+
+**사용자 승인(2026-07-30)**: DoD 10개 항목/Architecture/MDD/Layer/
+Interface/Adapter/ADR/Tests/Documentation Review를 모두 확인해
+**Milestone 33(Session Resume) 공식 완료(Approved)**. "M29(Project
+Intelligence)→M30(Context Intelligence)→M31(Capability
+Intelligence)→M32(Intelligence Synthesis)→M33(Session Resume)"로
+이어지며, Intelligence Layer가 처음으로 실제 사용 시나리오(세션
+시작)에 연결됐다. `15 Project Intelligence/Session Resume.md`가
+공식 결과로 확정된다.
+
+**다음은 Milestone 34** — 세부 Task는 착수 시점에 별도 제안·승인
+후 정의한다.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

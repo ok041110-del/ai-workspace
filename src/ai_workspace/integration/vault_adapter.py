@@ -18,6 +18,7 @@ from ai_workspace.vault.engine import VaultSaveEngine
 from ai_workspace.vault.intelligence_overview import write_intelligence_overview_report
 from ai_workspace.vault.intelligence_report import write_project_intelligence_report
 from ai_workspace.vault.models import VaultDocumentKind, VaultDocumentRequest
+from ai_workspace.vault.session_resume import write_session_resume_report
 from ai_workspace.vault.task_lifecycle import TaskStatus, transition_task_status
 from ai_workspace.vault.task_query import list_task_documents
 from ai_workspace.vault.task_sync import transition_and_sync
@@ -181,3 +182,10 @@ class VaultAdapter:
         `15 Project Intelligence/Intelligence Overview.md`에 덮어쓴다
         (ADR-0046, Milestone 32-T03). 렌더링 로직은 갖지 않는다."""
         return write_intelligence_overview_report(self._vault_root, markdown)
+
+    def publish_session_resume(self, markdown: str) -> Path:
+        """`intelligence/session_resume_service.py`가 렌더링한
+        Markdown을 `15 Project Intelligence/Session Resume.md`에
+        덮어쓴다(ADR-0047, Milestone 33-T04). 렌더링 로직은 갖지
+        않는다."""
+        return write_session_resume_report(self._vault_root, markdown)
