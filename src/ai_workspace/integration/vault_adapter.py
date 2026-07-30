@@ -15,6 +15,7 @@ from pathlib import Path
 from ai_workspace.vault.engine import VaultSaveEngine
 from ai_workspace.vault.models import VaultDocumentKind, VaultDocumentRequest
 from ai_workspace.vault.task_lifecycle import TaskStatus, transition_task_status
+from ai_workspace.vault.task_query import list_task_documents
 from ai_workspace.vault.task_sync import transition_and_sync
 
 
@@ -27,6 +28,24 @@ class TaskTransitionOutcome:
     daily_updated: bool | None
     milestone_updated: bool | None
     decision_updated: bool | None
+
+
+@dataclass(frozen=True)
+class TaskDocumentView:
+    """`VaultAdapter.list_tasks()`가 반환하는 Task 문서 하나의 읽기 전용
+    뷰(ADR-0043, Milestone 29-T02). `vault.task_query.TaskDocument`를
+    감싸기만 한다 — 호출자는 `vault` 내부 타입을 직접 import하지 않는다
+    (다른 `VaultAdapter` 공개 메서드와 동일한 원칙)."""
+
+    task_id: str
+    title: str
+    status: str
+    priority: str
+    milestone: str
+    owner: str
+    created: str
+    updated: str
+    archived: bool
 
 
 class VaultAdapter:
@@ -111,3 +130,24 @@ class VaultAdapter:
             milestone_updated=None,
             decision_updated=None,
         )
+
+    def list_tasks(self, *, include_archived: bool = True) -> list[TaskDocumentView]:
+        """`14 Tasks/*.md`(+ `include_archived=True`면 `Archive/`도)를
+        열거해 `TaskDocumentView` 목록으로 반환한다(ADR-0043, Milestone
+        29-T02) — Intelligence Layer가 Project 단위 Task 전체를 조회하는
+        유일한 통로다. side-effect 없음(read-only)."""
+        documents = list_task_documents(self._vault_root, include_archived=include_archived)
+        return [
+            TaskDocumentView(
+                task_id=doc.task_id,
+                title=doc.title,
+                status=doc.status,
+                priority=doc.priority,
+                milestone=doc.milestone,
+                owner=doc.owner,
+                created=doc.created,
+                updated=doc.updated,
+                archived=doc.archived,
+            )
+            for doc in documents
+        ]

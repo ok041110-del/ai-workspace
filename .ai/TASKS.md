@@ -9452,7 +9452,7 @@ Layer)**로 동작하며 기존 Core Domain 비즈니스 로직을 변경하지
 | Task | 내용 | 상태 |
 |---|---|---|
 | M29-T01 | Project Intelligence Architecture 설계 | **완료** |
-| M29-T02 | Project Snapshot Analyzer | 예정 |
+| M29-T02 | Project Snapshot Analyzer | **완료** |
 | M29-T03 | Project Health & Risk Analyzer | 예정 |
 | M29-T04 | Project Recommendation | 예정 |
 | M29-T05 | Integration & Presentation | 예정 |
@@ -9523,6 +9523,53 @@ Vault를 "Live" 상태의 실제 운영 소스로 확립해 둔 결과다.
 코드 변경 없음(설계 Task). 다음 Task: **M29-T02**(Project Snapshot
 Analyzer — `vault/task_query.py`/`VaultAdapter.list_tasks()`/
 `intelligence/` 패키지 실제 구현).
+
+### M29-T02: Project Snapshot Analyzer
+
+**목표**: T01 설계대로 Vault Task 문서를 읽어 진행률/상태별·
+Milestone별·Owner별 집계와 활성 Agent 수를 계산하는 Snapshot
+Analyzer를 구현한다.
+
+**구현 내용**
+
+- `vault/task_query.py`(신규) — `list_task_documents(vault_root,
+  include_archived=True)`가 `14 Tasks/*.md`(+ `Archive/`)를 열거해
+  frontmatter를 파싱한 `TaskDocument` 목록을 반환한다. Core Domain을
+  모른다(ADR-0035와 동일 원칙). frontmatter에 `status`가 없는 문서
+  (`14 Tasks/README.md`)는 자연스럽게 제외된다.
+- `integration/vault_adapter.py`에 `VaultAdapter.list_tasks()`(신규
+  메서드, Interface 아님) 추가 — `TaskDocumentView`(값 객체, 다른
+  공개 메서드와 동일하게 `vault` 내부 타입을 노출하지 않음)로
+  변환해 반환한다.
+- 신규 최상위 패키지 `intelligence/`(ADR-0043 §3.22) —
+  `intelligence/snapshot.py`의 `ProjectSnapshotAnalyzer`가
+  `VaultAdapter`(필수)/`AgentAdapter`(선택)만 생성자로 주입받아
+  `ProjectSnapshot`(총 개수/상태별·Milestone별·Owner별 집계/
+  progress_ratio/active_agent_count)과 집계에 쓰인 Task 목록을
+  함께 반환한다. `domain`/`interfaces`/`engines`/`vault`를 직접
+  import하지 않는다.
+- `tests/intelligence/test_intelligence_layering.py`(신규, `ast`
+  기반) — `intelligence/`가 금지된 패키지를 직접 import하지 않고
+  `integration/`의 `VaultAdapter`/`AgentAdapter`에만 의존함을
+  강제한다(§8 규칙 21 회귀 방지).
+
+**테스트**: `tests/vault/test_task_query.py`(5개), `tests/
+integration_layer/test_vault_adapter.py`에 `list_tasks()` 테스트
+3개 추가, `tests/intelligence/test_snapshot_analyzer.py`(5개),
+`tests/intelligence/test_intelligence_layering.py`(2개) — 신규
+14개. `pytest`(881개, 기존 867개 + 신규 14개), `ruff check src
+tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**: Snapshot 생성 테스트 통과(빈 Vault/상태별
+집계/Milestone·Owner 집계/Agent 미주입 시 0/Archive 포함·제외 모두
+검증). 새 Core Domain Interface 없음(27종 그대로), `domain.Project`/
+`domain.Task` 필드 추가 없음, Core Domain(`domain`/`interfaces`/
+`engines`) 코드 무변경.
+
+코드 변경: `src/ai_workspace/vault/task_query.py`(신규),
+`src/ai_workspace/integration/vault_adapter.py`(메서드 추가),
+`src/ai_workspace/intelligence/__init__.py`/`snapshot.py`(신규).
+다음 Task: **M29-T03**(Project Health & Risk Analyzer).
 
 ---
 

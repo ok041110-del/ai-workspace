@@ -109,3 +109,64 @@ def test_transition_task_without_sync_skips_related_documents(tmp_path: Path) ->
     assert outcome.new_status == "in-progress"
     assert outcome.daily_updated is None
     assert not (vault_root / "13 Daily" / "2026-07-30.md").exists()
+
+
+def test_list_tasks_returns_empty_when_no_tasks(tmp_path: Path) -> None:
+    vault_root = _make_vault(tmp_path)
+    adapter = VaultAdapter(vault_root)
+
+    assert adapter.list_tasks() == []
+
+
+def test_list_tasks_returns_created_task(tmp_path: Path) -> None:
+    vault_root = _make_vault(tmp_path)
+    adapter = VaultAdapter(vault_root)
+    adapter.create_task(
+        "T28-03",
+        "Integration Layer 구현",
+        status="todo",
+        priority="high",
+        milestone="M28",
+        owner="AI",
+        created="2026-07-30",
+        updated="2026-07-30",
+    )
+
+    tasks = adapter.list_tasks()
+
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert task.task_id == "T28-03"
+    assert task.title == "Integration Layer 구현"
+    assert task.status == "todo"
+    assert task.priority == "high"
+    assert task.milestone == "M28"
+    assert task.owner == "AI"
+    assert task.archived is False
+
+
+def test_list_tasks_reflects_transitions_and_archive(tmp_path: Path) -> None:
+    vault_root = _make_vault(tmp_path)
+    adapter = VaultAdapter(vault_root)
+    adapter.create_task(
+        "T28-03",
+        "Integration Layer 구현",
+        status="todo",
+        priority="high",
+        milestone="M28",
+        owner="AI",
+        created="2026-07-30",
+        updated="2026-07-30",
+    )
+    adapter.transition_task("T28-03", "in-progress", today="2026-07-30")
+    adapter.transition_task("T28-03", "review", today="2026-07-30")
+    adapter.transition_task("T28-03", "done", today="2026-07-30")
+    adapter.transition_task("T28-03", "archived", today="2026-07-30")
+
+    tasks = adapter.list_tasks()
+
+    assert len(tasks) == 1
+    assert tasks[0].status == "archived"
+    assert tasks[0].archived is True
+
+    assert adapter.list_tasks(include_archived=False) == []
