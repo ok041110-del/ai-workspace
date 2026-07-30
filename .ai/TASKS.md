@@ -11716,8 +11716,49 @@ test_config.py`/`test_config_loader.py`(신규 각 1개 —
 발동시키려면 사용자가 `AutomationRule`을 직접 등록해야 한다(자동
 생성되는 기본 Rule 없음 — 이번 범위에 포함되지 않음, YAGNI).
 
-**Milestone 38(AutomationScheduler 연결) 구현 완료 — 사용자 최종
-승인 대기.**
+**Milestone 38(AutomationScheduler 연결) T01(설계+MDD Review+구현)
+전체 완료.**
+
+### Milestone 38 Review
+
+**Review 결과 요약**
+
+| 항목 | 결과 |
+|---|---|
+| DoD 검증 | 10개 항목 전부 충족 |
+| Architecture Review | `web/server.py`의 `build_app()`(Composition Root)에 `VaultAdapter`/`AgentAdapter`/`RecommendationIntelligenceService`/`RecommendationExecutionService`를 최초 실배선함을 §3.31과 ADR-0052에 명시. `ExecutionGate`는 손대지 않아 `source=next_task`만 승인하는 M36 결정을 그대로 유지함을 문서에 반영 |
+| MDD Review | Scope(YAGNI: `ExecutionGate` 정책 무변경)/Reuse(기존 5개 클래스 생성자 조합만 재사용)/Interface(`ActionKind` 1개 추가 외 신규 0개)/Service(`RecommendationExecutionService` 그대로)/Adapter(신규 0개)/Layer(신규 Layer 없음) 전 항목 검토 결과가 ADR-0052/TASKS 양쪽에 기록됨 |
+| Layer Boundary Review | 코드 변경 없이 기존 경계 테스트를 그대로 실행해 위반 없음 확인 — `AutomationActionExecutor`는 여전히 Infrastructure Layer에서만 `RecommendationExecutionService`를 참조(Core Domain 무참조) |
+| Interface Review | Core Domain 27종 무변경. `ExecutionGate`/`ActionBuilder`/`TaskLifecycleTransitioner` 무변경. `ActionKind.RUN_RECOMMENDATION` 1개만 신규(추가 필드 없음) |
+| ADR Review | ADR-0052 1건만 신규, 기존 ADR(특히 ADR-0050의 `manual_trigger` 안전장치)과 충돌 없음 — Rule 생성/활성화 자체를 수동 승인으로 해석한 근거를 ADR 안에 명시 |
+| pytest/ruff/mypy | 1010 passed(기존 1005 + 신규 5), ruff clean, mypy clean(192 source files) |
+| 문서 최신화 | `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`/`.ai/TASKS.md`/Vault(ADR Index/Milestones Index/Automation Index/`15 Project Intelligence/README.md`) 전부 갱신 확인 |
+
+**개선 여지(참고용, 이번에 처리하지 않음)**: `done→archived` 자동화·
+재시도 정책·`review→done` 자동화·CLI·Hook은 명시적으로 범위 밖으로
+남겨 다음 Milestone(M39) 이후 논의 대상이다. 실제 운영 환경에서
+`AutomationScheduler.tick()`이 주기적으로 `RUN_RECOMMENDATION`을
+발동시키려면 사용자가 `AutomationRule`을 직접 등록해야 한다(자동
+생성되는 기본 Rule 없음, YAGNI).
+
+**사용자 승인(2026-07-30)**: DoD 10개 항목/Architecture/MDD/Layer/
+Interface/ADR/Tests/Documentation Review를 모두 확인해 **Milestone
+38(AutomationScheduler 연결) 공식 완료(Approved)**. "M29(Project
+Intelligence)→…→M37(Task Lifecycle)→M38(AutomationScheduler 연결)"
+로 이어지며, M21 Automation Engine과 M29~M37 Intelligence→
+Execution→Task Lifecycle 파이프라인이 처음으로 실제 서버
+Composition Root에서 연결돼 **Intelligence → Execution → Automation
+기본 폐쇄 루프**가 완성됐다. 새 정책 없이(`ExecutionGate`
+무변경) 기존 27개 Core Domain Interface를 그대로 유지했다.
+
+**사용자 제안(2026-07-30, 참고용)**: M29~M38을 "Automation Core
+v1.0"(또는 "Core Automation Platform") 단계로 묶어 아키텍처 문서에
+별도 섹션으로 정리해 두면, M39 이후 정책 확장(재시도/승인/이벤트/
+CLI 등)의 기준점으로 쓰기 좋다는 제안을 받았다 — 별도 승인 후
+착수할 예정이며, 이번 M38 완료 자체에는 반영하지 않았다.
+
+**다음은 Milestone 39** — 세부 Task는 착수 시점에 별도 제안·승인
+후 정의한다.
 
 ---
 

@@ -3249,10 +3249,10 @@
 
 ## ADR-0052: AutomationScheduler 연결 — M21~M37 Composition Root 실배선, 새 정책 없음, source=next_task만 그대로 유지 (Milestone 38)
 
-- 상태: 승인됨(범위) — 구현 완료, Milestone 완료(§1.4) 최종 승인
-  대기 (2026-07-30, 사용자가 "AutomationScheduler 연결"을 M38
-  범위로 확정하되 자동 실행 대상은 M36과 동일하게 `source=next_task`
-  만 유지할 것을 권고 — 반영)
+- 상태: 승인됨 (2026-07-30, 사용자가 "AutomationScheduler 연결"을
+  M38 범위로 확정하되 자동 실행 대상은 M36과 동일하게
+  `source=next_task`만 유지할 것을 권고 — 반영. 구현 완료 후
+  DoD 10개 항목 확인을 거쳐 Milestone 38 완료를 최종 승인)
 - 날짜: 2026-07-30
 - 배경: M37 완료 시 "다음 Milestone(M38) 이후 논의"로 미룬 6개 항목
   (`done→archived` 자동화/재시도 정책/`review→done` 자동화/
