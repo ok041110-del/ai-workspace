@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.38.0 |
+| 문서 버전 | v0.39.0 |
 | 작성일 | 2026-07-30 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. **Milestone 29(Project Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0043, `intelligence/` 신규 Layer, 결과는 Vault `15 Project Intelligence/Project Intelligence.md`에 노출, "의존성 위험" Deferred by Design). 새 Core Domain Interface 없음, 27종 유지. **Milestone 30(Context Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0044, `intelligence/context*.py`, 결과는 Vault `15 Project Intelligence/Project Context.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. 다음은 Milestone 31(Capability Intelligence)) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. **Milestone 29(Project Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0043, `intelligence/` 신규 Layer, 결과는 Vault `15 Project Intelligence/Project Intelligence.md`에 노출, "의존성 위험" Deferred by Design). 새 Core Domain Interface 없음, 27종 유지. **Milestone 30(Context Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0044, `intelligence/context*.py`, 결과는 Vault `15 Project Intelligence/Project Context.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. **Milestone 31(Capability Intelligence) T01~T05 구현 완료 — 사용자 승인 대기**(ADR-0045, `intelligence/capability*.py`, `AgentAdapter` 확장, 결과는 Vault `15 Project Intelligence/Capability Intelligence.md`에 노출). 새 Core Domain Interface 없음, 27종 유지.) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -1337,6 +1337,56 @@ Layer(§3.22)를 종합해, 지금 진행 중인 작업(Task/Milestone)과 관�
   실제 검증 중 Milestone 추출이 본문 "첫 언급"을 잘못 고르는
   버그를 발견해 "subject와 위치가 가장 가까운 언급"으로
   수정했다(`context.py`).
+
+### 3.24 Capability Intelligence (Milestone 31, ADR-0045, 설계: M31-T01)
+
+Milestone 28의 Agent Adapter(§3.19류)가 노출한 활성 Agent 정보를
+종합해, 정의된 `AgentCapability`(11종) 대비 지금 실제로 커버되는
+Capability가 무엇인지 `CapabilityIntelligenceReport`로 정리하는
+Read Only 계층. 새 데이터를 만들지 않고, LLM 추론도 하지 않는다 —
+이미 있는 `AgentAdapter`가 노출한 값만 집계·판단할 뿐이다.
+
+- **설계 결론(ADR-0045)**: `AgentManager`/`AgentRegistry`/
+  `AgentScheduler`(M28, 27종 Interface 중 3종)를 이미 감싸는 기존
+  `AgentAdapter`를 그대로 재사용한다 — 새 Adapter/Core Domain
+  Interface를 추가하지 않는다. `AgentAdapter`에 `list_active_agent_
+  capabilities()`(활성 Agent를 `AgentCapabilityView`로 열거)/
+  `known_capabilities()`(정의된 `AgentCapability` 전체를 문자열
+  카탈로그로 노출) 두 메서드만 추가했다(M30이 `VaultAdapter`에
+  `publish_project_context()`를 추가한 것과 같은 방식 — 새 Adapter가
+  아니라 기존 Adapter 확장).
+- **Coverage/Gap**(`intelligence/capability_gap.py`): Gap은 "정의된
+  Capability 중 활성 Agent가 0명인 것"으로 판정한다. Coverage
+  등급은 M29/M30의 healthy/warning/critical과 달리 중립적인
+  none/partial/full을 쓴다 — 활성 Agent 0명은 이 저장소가 아직
+  Agent 프로세스를 상시 구동하지 않는 워크숍 단계의 자연스러운
+  상태이지 시스템 이상이 아니기 때문이다(M29 `active_agent_count`도
+  항상 0으로 관찰됨, 같은 한계를 M31도 그대로 인정하고 넘어간다).
+- **경계**: `intelligence/capability*.py`는 오직 `integration/`의
+  `AgentAdapter`에만 의존한다(§8 규칙 21 그대로 적용, 새 규칙 추가
+  없음).
+- **범위**: Capability Snapshot Analyzer(M31-T02)/Coverage & Gap
+  Analyzer(M31-T03)/Integration(M31-T04, `CapabilityIntelligenceService`)/
+  Presentation(M31-T05, Vault 노출). 새 Core Domain Interface 없음,
+  `domain/` 필드 추가 없음.
+- **M31-T02 구현 완료**: `integration/agent_adapter.py`에
+  `list_active_agent_capabilities()`/`known_capabilities()` 추가 →
+  `intelligence/capability.py`의 `CapabilitySnapshotAnalyzer`가
+  활성 Agent를 Capability/Role별로 집계해 `AgentCapabilitySnapshot`
+  을 만든다.
+- **M31-T03 구현 완료**: `intelligence/capability_gap.py`의
+  `CapabilityGapAnalyzer`가 `AgentCapabilitySnapshot`만 입력으로
+  받아(Adapter 미참조) Coverage(none/partial/full)와 Gap(Capability
+  별 활성 Agent 0명 여부)을 계산한다.
+- **M31-T04 구현 완료**: `intelligence/capability_service.py`의
+  `CapabilityIntelligenceService`가 `AgentAdapter`만 생성자로 받아
+  `CapabilitySnapshotAnalyzer`→`CapabilityGapAnalyzer` 순서로 실행해
+  `CapabilityIntelligenceReport`를 만든다.
+- **M31-T05 구현 완료(Milestone 31 전체 완료)**: `capability_service.py`
+  에 `render_markdown()`/`publish()`를 추가해 `VaultAdapter.
+  publish_capability_report()`로 `15 Project Intelligence/
+  Capability Intelligence.md`에 노출한다(M29-T05/M30-T05와 동일
+  패턴, 같은 폴더 재사용).
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 

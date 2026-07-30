@@ -34,3 +34,31 @@ def test_transition_agent_delegates_to_manager() -> None:
     transitioned = adapter.transition_agent(agent, AgentStatus.RUNNING)
 
     assert transitioned.status is AgentStatus.RUNNING
+
+
+def test_list_active_agent_capabilities_returns_views() -> None:
+    adapter = _make_adapter()
+    agent = adapter.create_agent(AgentRole.CODING, frozenset({AgentCapability.CODING}))
+
+    views = adapter.list_active_agent_capabilities()
+
+    assert len(views) == 1
+    view = views[0]
+    assert view.agent_id == agent.agent_id
+    assert view.role == "coding"
+    assert view.capabilities == frozenset({"coding"})
+    assert view.status == "idle"
+
+
+def test_list_active_agent_capabilities_empty_when_no_agents() -> None:
+    adapter = _make_adapter()
+
+    assert adapter.list_active_agent_capabilities() == []
+
+
+def test_known_capabilities_returns_all_domain_values() -> None:
+    adapter = _make_adapter()
+
+    known = adapter.known_capabilities()
+
+    assert known == frozenset(capability.value for capability in AgentCapability)

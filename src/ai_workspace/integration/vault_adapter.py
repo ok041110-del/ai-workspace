@@ -12,6 +12,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from ai_workspace.vault.capability_report import write_capability_report
 from ai_workspace.vault.context_report import write_project_context_report
 from ai_workspace.vault.engine import VaultSaveEngine
 from ai_workspace.vault.intelligence_report import write_project_intelligence_report
@@ -166,3 +167,10 @@ class VaultAdapter:
         `15 Project Intelligence/Project Context.md`에 덮어쓴다
         (ADR-0044, Milestone 30-T05). 렌더링 로직은 갖지 않는다."""
         return write_project_context_report(self._vault_root, markdown)
+
+    def publish_capability_report(self, markdown: str) -> Path:
+        """`intelligence/capability_service.py`가 렌더링한 Markdown을
+        `15 Project Intelligence/Capability Intelligence.md`에
+        덮어쓴다(ADR-0045, Milestone 31-T05). 렌더링 로직은 갖지
+        않는다."""
+        return write_capability_report(self._vault_root, markdown)

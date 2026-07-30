@@ -2623,3 +2623,86 @@
   실제로 만든다. `docs/ARCHITECTURE.md` §3.23(신규) 갱신,
   `.ai/TASKS.md`에 Milestone 30 절 신규 추가. 새 Core Domain
   Interface 없음(27종 그대로), `domain/` 필드 추가 없음.
+
+## ADR-0045: Capability Intelligence 설계 — `AgentAdapter` 확장(신규 Adapter 아님), "정의된 Capability 대비 활성 Agent 커버리지"로 Gap 판정 (Milestone 31-T01~T05)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 "M31을 M29/M30과 동일하게
+  진행"이라고 지시 — Rule 기반만/LLM 추론 금지/새 Core Domain
+  Interface 금지 조건은 M29-T01/M30-T01에서 이미 확립된 원칙을
+  그대로 승계)
+- 날짜: 2026-07-30
+- 배경: M29(Project Intelligence)가 Task 데이터로 "프로젝트 상태",
+  M30(Context Intelligence)이 "지금 작업의 맥락"을 정리했다면,
+  M31(Capability Intelligence)은 "이 시스템이 실제로 수행할 수
+  있는 능력(Capability)"을 정리한다. `domain/agent.py`가 이미
+  `AgentCapability` 11종(Coordination/Planning/Coding/Review/
+  Documentation/Research/Vision/Voice/Git/MCP/Shell)을 정의하고,
+  Milestone 28의 `AgentAdapter`(`AgentManager`/`AgentRegistry`/
+  `AgentScheduler` 3종 Interface를 감쌈)가 `list_active_agents()`로
+  활성 Agent를 이미 노출하고 있어, M31의 자연스러운 데이터 소스다.
+  다만 이 값은 In-Memory Registry 특성상 실제 Agent 프로세스가
+  떠 있을 때만 채워진다(M29도 이미 겪은 한계 — 실제 커밋된 Vault
+  리포트의 `활성 Agent 수`가 항상 0으로 관찰됨). M31은 이 한계를
+  숨기지 않고 그대로 반영한다.
+- 결정:
+  1. **새 Adapter를 만들지 않는다 — 기존 `AgentAdapter`를
+     확장한다**(`integration/agent_adapter.py`). `list_active_agent_
+     capabilities() -> list[AgentCapabilityView]`(활성 Agent를
+     `domain.agent.Agent`를 노출하지 않는 Adapter 전용 DTO로 변환,
+     `VaultAdapter.TaskDocumentView`/`KnowledgeAdapter.
+     KnowledgeDocumentView`와 동일한 원칙)와 `known_capabilities()
+     -> frozenset[str]`(정의된 `AgentCapability` 전체를 문자열
+     카탈로그로 변환, 단순 나열이라 Adapter의 "비즈니스 로직 없음"
+     원칙 위반이 아님) 두 메서드만 추가한다 — M30이 `VaultAdapter`
+     에 `publish_project_context()`를 추가한 것과 같은 확장
+     방식이다. 새 Core Domain Interface가 아니다.
+  2. **집계(Snapshot)와 판단(Gap)을 분리한다**(M29/M30과 동일한
+     2단 Analyzer 구조). `intelligence/capability.py`의
+     `CapabilitySnapshotAnalyzer`는 `AgentAdapter`가 노출한 값만
+     읽어 Capability별/Role별 활성 Agent 수를 집계한다(판단 없음).
+     `intelligence/capability_gap.py`의 `CapabilityGapAnalyzer`는
+     그 Snapshot만 입력으로 받아(Adapter 재호출 없음) "정의된
+     Capability 중 활성 Agent가 0명인 것"을 Gap으로 판정한다.
+  3. **Coverage 등급은 healthy/warning/critical이 아니라
+     none/partial/full을 쓴다.** M29/M30은 "이상 상태를 알리는"
+     의미로 healthy/warning/critical을 썼지만, M31에서 활성 Agent
+     0명은 시스템 결함이 아니라 이 저장소가 아직 Agent 프로세스를
+     상시 구동하지 않는 워크숍 단계라는 사실을 반영할 뿐이다 —
+     매번 "Critical"로 표시하면 실제로 없는 문제를 있는 것처럼
+     과장하게 된다. 중립적인 이름으로 이 차이를 명시한다.
+  4. `AgentCapabilitySnapshot`/`CapabilityGap`/`CapabilityCoverage`/
+     `CapabilityGapReport`를 `intelligence/`의 새 domain 성격 값
+     객체로 둔다 — Core Domain `domain/`에는 아무것도 추가하지
+     않는다(§8 규칙 21 그대로, `intelligence/`는 `AgentAdapter`
+     에만 의존).
+  5. **결과는 같은 Vault 폴더에 새 파일로 노출한다** —
+     `vault/capability_report.py`(M29-T05/M30-T05와 동일 패턴,
+     원자적 전체 교체)가 `15 Project Intelligence/Capability
+     Intelligence.md`에 쓴다. 새 최상위 Vault 폴더를 만들지 않는다.
+- 대안:
+  - `AgentRegistry`에 Capability 집계 메서드를 추가한다(Interface
+    확장) — 기각. Core Domain Interface는 "생성/등록/조회/선택"
+    책임만 가지며, 집계·판단은 Intelligence Layer의 몫이라는 M29/
+    M30의 경계를 M31에서 뒤집을 이유가 없다.
+  - Vault Task 문서의 `owner` 필드(자유 텍스트, "담당자/담당
+    Agent")를 Capability 수요 신호로 매핑한다 — 기각. `owner`는
+    고정된 명명 규칙이 없는 자유 텍스트라(사람 이름/역할명 혼용),
+    Capability 값으로 안정적으로 매핑할 근거가 없다 — 새 명명
+    관례를 이번에 발명하는 것은 "새 지식/판단 기준을 만들지
+    않는다"는 M29/M30의 원칙과 충돌한다.
+  - Coverage 등급도 M29/M30과 같이 healthy/warning/critical을
+    쓴다 — 기각(위 결정 3 이유). 활성 Agent 0명이 상시 "Critical"로
+    보고되면 리포트의 신뢰도만 떨어진다.
+- 이유: 새 Interface/Adapter 없이 기존 `AgentAdapter`만 확장해
+  "정의된 Capability 대비 실제 커버리지"라는, 이 시점에 정직하게
+  계산 가능한 값만으로 유용한 리포트를 만들 수 있음을 확인했다 —
+  M29-T01/M30-T01이 먼저 검증했던 접근과 동일하다.
+- 결과/영향: `integration/agent_adapter.py`(확장)/
+  `intelligence/capability.py`(신규)/`intelligence/
+  capability_gap.py`(신규)/`intelligence/capability_service.py`
+  (신규)/`vault/capability_report.py`(신규)/`integration/
+  vault_adapter.py`(`publish_capability_report()` 추가) 구현
+  완료(M31-T02~T05, 신규 테스트 18개 포함 pytest 947개, ruff, mypy
+  전부 통과). `docs/ARCHITECTURE.md` §3.24(신규) 갱신, `.ai/TASKS.md`
+  에 Milestone 31 절 신규 추가. 새 Core Domain Interface 없음
+  (27종 그대로), `domain/` 필드 추가 없음.
