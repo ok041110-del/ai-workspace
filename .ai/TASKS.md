@@ -8784,7 +8784,7 @@ Task로 진행한다.
 | M28-T01 | Task Lifecycle(Status Transition, `updated` 자동 갱신, Archive 처리) | **완료** |
 | M28-T02 | Automatic Document Synchronization(Task 변경 → Daily/Decision/Roadmap/Milestone 갱신) | **완료** |
 | M28-T03 | Integration Layer(Vault Adapter/Workflow Adapter/Agent Adapter) | **완료** |
-| M28-T04 | Workflow Engine Integration | 착수 예정 |
+| M28-T04 | Workflow Engine Integration | **완료** |
 | M28-T05 | Agent Assignment | 착수 예정 |
 | M28-T06 | Conversation Layer Integration | 착수 예정 |
 
@@ -8975,6 +8975,70 @@ src/ai_workspace/vault` 클린, `pytest`(831개, 기존 818개 + 신규
 **Milestone 28-T03(Workspace Adapter Layer) 완료.** 다음 Task:
 **M28-T04**(Workflow Engine Integration — `WorkflowAdapter`를 써서
 Vault Task와 Core Domain Workflow를 실제로 연결).
+
+### M28-T04: Workflow Engine Integration
+
+**설계 승인**(2026-07-30, 사용자): "Go Ahead" — 단, 4개 원칙을
+아키텍처 규칙으로 유지할 것을 조건으로 승인: (1) Workflow↔Vault
+직접 의존 금지, (2) 모든 연결은 Integration Layer를 통해서만,
+(3) Domain 객체는 Markdown/Vault 표현으로 오염되지 않음, (4)
+Adapter는 연결·변환·위임만(비즈니스 로직 금지). 4개 전부 아래
+구현에 그대로 반영했다(상세는 `docs/ARCHITECTURE.md`의 "구현
+상태(Milestone 28-T04)" 절 참고).
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Workflow 생성(Task → Workflow) | ✅ |
+| 2 | Workflow 종료 | ✅ |
+| 3 | 상태 동기화(Workflow 상태 변경 → Task 상태 반영) | ✅ |
+| 4 | 테스트 통과 | ✅ |
+
+**구현 내용**
+
+- `integration/workflow_task_link.py`(신규)의 `WorkflowTaskLink` —
+  `VaultAdapter`(T03)와 `WorkflowAdapter`(T03)를 조합하는 4번째
+  Integration Layer 구성 요소. 세 Adapter(Vault/Workflow/Agent)는
+  여전히 서로를 참조하지 않는다는 ADR-0039 원칙은 유지하되,
+  "연결" 자체가 목적인 T04는 두 Adapter를 함께 쓰는 별도 구성
+  요소로 명시적으로 분리했다(Adapter 자체에 서로 참조를 넣지
+  않음).
+- `WorkflowLink`(값 객체) — Vault task_id(사람이 붙인 ID, 예
+  `T28-04a`)와 Core Domain `Task`(⁠`TaskEngine`이 발급하는
+  `task-N`)를 1:1로 묶는다. `domain.Task`/`domain.Workflow`에는
+  필드를 추가하지 않았다 — 대신 기존에 있던 `Task.workflow_id`
+  필드를 채워 재사용했다(Domain 오염 금지 원칙).
+- `create_workflow_from_vault_tasks()` — `(vault_task_id, title)`
+  목록을 받아 Core Domain `Task`를 각각 만들고(`WorkflowAdapter.
+  create_task()`), Vault task_id 기준으로 받은 `dependencies`를
+  Core Domain task_id로 변환해 `Workflow`를 만든다(`WorkflowAdapter.
+  create_workflow()`) — "Task → Workflow 생성".
+- `transition_and_reflect()` — Core Domain `Task`를 전이
+  (`WorkflowAdapter.transition_task()`)한 뒤, Vault Task Lifecycle
+  (Milestone 28-T01)에 대응하는 상태(TODO/IN_PROGRESS/REVIEW/DONE)
+  면 `VaultAdapter.transition_task()`로 Vault 문서에도 반영한다 —
+  "Workflow 상태 변경 → Task 상태 반영". `BLOCKED`/`CANCELLED`는
+  Vault Task Lifecycle에 대응 상태가 없어 의도적으로 Vault를
+  건드리지 않는다(억지로 끼워 맞추지 않음).
+- `is_workflow_complete()` — Workflow 자체는 상태 필드가 없으므로
+  ("종료"는 파생 값), 소속 Task 전체가 Core Domain 기준 `DONE`인지
+  로 계산한다 — "Workflow 종료".
+- `plan()`은 그대로 `WorkflowAdapter.plan()`(→`WorkflowEngine.
+  plan()`)에 위임 — 새 계획 수립 알고리즘 없음.
+
+**검증**: `tests/integration_layer/test_workflow_task_link.py`
+(신규 6개 — Workflow 생성+의존관계 변환/`plan()` 순서/상태 동기화/
+매핑 불가 상태는 Vault 미반영/Domain Lifecycle 위반 시 예외/
+Workflow 종료 판정), `tests/integration_layer/
+test_architecture_boundary.py`(기존 3개, 무변경 통과 — 새 파일도
+`integration/` 안이라 경계 위반 없음), `ruff check src tests`
+클린, `mypy src/ai_workspace/integration src/ai_workspace/vault
+src/ai_workspace/engines src/ai_workspace/domain` 클린,
+`pytest`(837개, 기존 831개 + 신규 6개) 전부 통과.
+
+**Milestone 28-T04(Workflow Engine Integration) 완료.** 다음 Task:
+**M28-T05**(Agent Assignment).
 
 ---
 

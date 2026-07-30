@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.34.0 |
+| 문서 버전 | v0.35.0 |
 | 작성일 | 2026-07-30 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). **Milestone 28(Live Task Management & Integration) 진행 중 — T01(Task Lifecycle)/T02(Automatic Document Synchronization)/T03(Workspace Adapter Layer, ADR-0039: 신규 최상위 패키지 `integration/`, Core Domain↔vault 직접 의존 금지를 §8 규칙 18 + `ast` 기반 테스트로 강제) 완료, T04(Workflow Engine Integration)부터 진행**. 새 Interface 없이 27종 유지) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). **Milestone 28(Live Task Management & Integration) 진행 중 — T01(Task Lifecycle)/T02(Automatic Document Synchronization)/T03(Workspace Adapter Layer, ADR-0039: 신규 최상위 패키지 `integration/`, Core Domain↔vault 직접 의존 금지를 §8 규칙 18 + `ast` 기반 테스트로 강제)/T04(Workflow Engine Integration, `WorkflowTaskLink`로 Vault Task↔Core Domain Workflow 연결, Domain 모델 무변경) 완료, T05(Agent Assignment)부터 진행**. 새 Interface 없이 27종 유지) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -1101,6 +1101,37 @@ GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
 - 새 Core Domain Interface 없음(27종 그대로) — Integration Layer는
   기존 Interface에 의존만 하고 새 계약을 추가하지 않는다.
 
+**구현 상태(Milestone 28-T04, Workflow Engine Integration)**:
+`integration/workflow_task_link.py`의 `WorkflowTaskLink` — Vault
+Task와 Core Domain `Workflow`/`Task`를 잇는다. 사용자가 T04 승인 시
+제시한 4개 원칙을 그대로 지켰다:
+
+1. Workflow↔Vault 직접 의존 없음 — 이 파일은 `vault`를 import하지
+   않고 `VaultAdapter`/`WorkflowAdapter`만 조합한다.
+2. 모든 연결이 Integration Layer 안에서만 이뤄진다 — `WorkflowTaskLink`
+   자체가 `integration/`에 있고, 밖의 어떤 모듈도 두 Adapter를
+   동시에 쓰지 않는다(경계 테스트가 계속 보장).
+3. Domain 객체 오염 없음 — `Task`/`Workflow`에 새 필드를 추가하지
+   않았다. 대신 Vault task_id와 Core Domain task_id(서로 다른
+   문자열 공간 — Vault는 사람이 붙인 ID, Core Domain은 `TaskEngine`
+   발급 ID)를 잇는 매핑은 이 파일의 `WorkflowLink` 값 객체가
+   별도로 든다. 기존 `Task.workflow_id` 필드(원래부터 있던 Workflow
+   소속 정보)를 그대로 채워 재사용했다.
+4. Adapter는 연결·변환·위임만 — `WorkflowTaskLink`는 ID 변환과
+   호출 순서 조합만 하고, 상태 전이 규칙은 여전히 `TaskEngine`/
+   `vault.task_lifecycle`에 위임한다. `transition_and_reflect()`는
+   Core Domain `TaskStatus`를 Vault 상태 문자열로 매핑(`BLOCKED`/
+   `CANCELLED`는 대응 상태가 없어 의도적으로 Vault에 반영하지
+   않음)하고, `is_workflow_complete()`는 Workflow 자체에 없는
+   "종료" 개념을 Task 전체가 `DONE`인지로 파생 계산한다(Domain
+   모델을 건드리지 않기 위함) — 둘 다 판단이 아니라 조회/변환이다.
+
+`create_workflow_from_vault_tasks()`가 "Task → Workflow 생성",
+`transition_and_reflect()`가 "Workflow 상태 변경 → Task 상태 반영",
+`is_workflow_complete()`가 "Workflow 종료"에 대응한다(M25 요청
+원문의 흐름 그대로). 새 Core Domain Interface 없음, `domain.Task`/
+`domain.Workflow` 필드 추가 없음.
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -1314,6 +1345,9 @@ src/ai_workspace/
 │                       #   28-T03) — vault_adapter.py/workflow_adapter.py/
 │                       #   agent_adapter.py. Core Domain↔vault 경계를
 │                       #   넘는 유일한 통로, 연결·변환·위임만 담당
+│                       #   + workflow_task_link.py(WorkflowTaskLink,
+│                       #   Milestone 28-T04) — Vault Task↔Core Domain
+│                       #   Workflow/Task 연결, 위 두 Adapter를 조합
 ├── web/               # Infrastructure 계층 — FastAPI/uvicorn을 아는 유일한 곳
 │                       #   (Milestone 20): dashboard_viewmodel.py, routes.py,
 │                       #   dashboard_broadcaster.py, app.py, server.py,
