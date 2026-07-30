@@ -15,6 +15,7 @@ from pathlib import Path
 from ai_workspace.vault.capability_report import write_capability_report
 from ai_workspace.vault.context_report import write_project_context_report
 from ai_workspace.vault.engine import VaultSaveEngine
+from ai_workspace.vault.intelligence_overview import write_intelligence_overview_report
 from ai_workspace.vault.intelligence_report import write_project_intelligence_report
 from ai_workspace.vault.models import VaultDocumentKind, VaultDocumentRequest
 from ai_workspace.vault.task_lifecycle import TaskStatus, transition_task_status
@@ -174,3 +175,9 @@ class VaultAdapter:
         덮어쓴다(ADR-0045, Milestone 31-T05). 렌더링 로직은 갖지
         않는다."""
         return write_capability_report(self._vault_root, markdown)
+
+    def publish_intelligence_overview(self, markdown: str) -> Path:
+        """`intelligence/synthesis_service.py`가 렌더링한 Markdown을
+        `15 Project Intelligence/Intelligence Overview.md`에 덮어쓴다
+        (ADR-0046, Milestone 32-T03). 렌더링 로직은 갖지 않는다."""
+        return write_intelligence_overview_report(self._vault_root, markdown)

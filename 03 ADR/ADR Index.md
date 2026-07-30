@@ -278,6 +278,12 @@ tags: [decision]
 - 결정: 새 Adapter를 만들지 않고 기존 `AgentAdapter`(M28)를 확장한다 — `list_active_agent_capabilities()`(활성 Agent를 Adapter 전용 DTO로 열거)/`known_capabilities()`(정의된 Capability 카탈로그 노출) 두 메서드만 추가(새 Core Domain Interface 아님, 27종 유지). `intelligence/capability.py`(Snapshot 집계)→`intelligence/capability_gap.py`(Coverage/Gap 판단, Snapshot만 입력)의 2단 Analyzer로 M29/M30과 동일한 구조를 따른다. Coverage 등급은 healthy/warning/critical이 아니라 none/partial/full을 쓴다 — 활성 Agent 0명은 이 저장소가 아직 Agent 프로세스를 상시 구동하지 않는 워크숍 단계의 자연스러운 상태이지 시스템 이상이 아니기 때문. Vault Task `owner`(자유 텍스트)는 Capability 수요 신호로 매핑하지 않는다(고정 명명 규칙 없음, 새 관례 발명 금지)
 - 영향: `docs/ARCHITECTURE.md` §3.24(신규) 갱신, `.ai/TASKS.md` Milestone 31 절 신규. `integration/agent_adapter.py`(확장)/`intelligence/capability*.py`(신규)/`vault/capability_report.py`(신규)/`VaultAdapter.publish_capability_report()`(신규) 구현 완료, `pytest` 947개·ruff·mypy 전부 클린. 새 Core Domain Interface 없음(27종 유지). 상세는 [[Architecture Overview]]
 
+## ADR-0046: Intelligence Synthesis 도입 — 새 Analyzer/Adapter 없이 M29~M31 Service 3개를 조합해 `IntelligenceOverview` 생성 (Milestone 32-T01~T04)
+
+- 목적: M29/M30/M31이 각각 만든 리포트를 교차로 보려면 파일 3개를 열어야 하는 문제 해결
+- 결정: 새 Adapter/Interface 없이 `intelligence/synthesis.py`(Analyzer)/`synthesis_service.py`(조합)가 기존 3개 Service의 `generate()` 결과만 합성. §8 규칙 21은 변경 없이 그대로 적용(Adapter가 아니라 같은 계층의 Service를 조합하므로 애초에 금지 대상 아님)
+- 영향: `docs/ARCHITECTURE.md` §3.25(신규) 갱신, `.ai/TASKS.md` Milestone 32 절 신규. `integration/vault_adapter.py`(확장 1건)/`intelligence/synthesis*.py`(신규)/`vault/intelligence_overview.py`(신규) 구현 완료, `pytest` 954개·ruff·mypy 전부 클린. 새 Core Domain Interface 없음(27종 유지). 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

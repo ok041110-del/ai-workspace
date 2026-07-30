@@ -58,6 +58,21 @@ Tasks/`)를 읽어 계산한다
   때문이다
 - **Gap**: 정의된 Capability 중 활성 Agent가 0명인 항목
 
+## `Intelligence Overview.md` (Milestone 32, ADR-0046)
+
+`src/ai_workspace/intelligence/synthesis_service.py`의
+`IntelligenceSynthesisService.publish()`가 위 세 리포트를 만드는
+Service(`ProjectIntelligenceService`/`ContextIntelligenceService`/
+`CapabilityIntelligenceService`)를 그대로 실행한 뒤 결과만 합성한다
+(`vault.intelligence_overview.write_intelligence_overview_report()`)
+— 새로운 데이터 소스나 판단 기준을 추가하지 않는다.
+
+- **요약**: 세 리포트의 등급(Project Health/Context Freshness/
+  Capability Coverage) + 통합 Finding 수
+- **Findings**: 위 세 리포트의 Risk/Gap을 출처(Project/Context/
+  Capability)별로 그대로 옮겨 담은 목록(target 기준 정렬, 새
+  우선순위 알고리즘 없음)
+
 ## 관련 문서
 
 - [[Milestones Index]]
@@ -68,6 +83,6 @@ Tasks/`)를 읽어 계산한다
 
 - `.ai/TASKS.md`의 "Milestone 29 — Project Intelligence"/"Milestone
   30 — Context Intelligence"/"Milestone 31 — Capability
-  Intelligence" 절
-- `.ai/DECISIONS.md`의 ADR-0043/ADR-0044/ADR-0045
+  Intelligence"/"Milestone 32 — Intelligence Synthesis" 절
+- `.ai/DECISIONS.md`의 ADR-0043/ADR-0044/ADR-0045/ADR-0046
 - `src/ai_workspace/intelligence/`

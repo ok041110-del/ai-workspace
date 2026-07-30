@@ -10312,8 +10312,201 @@ Intelligence)"로 이어지며, AI Workspace가 프로젝트 상태/현재 작�
 기반 계층을 갖췄다는 점에서 프로젝트 차원의 의미가 있음을 사용자가
 확인함.
 
-**다음은 Milestone 32** — 세부 Task는 착수 시점에 별도 제안·승인
-후 정의한다.
+## Milestone 32 — Intelligence Synthesis
+
+**목표**(2026-07-30 사용자 확정 — "M32는 기능 추가보다는 Intelligence
+Layer의 통합 계층(Integration at the Intelligence Layer)을 완성하는
+Milestone"): M29(Project Intelligence)/M30(Context Intelligence)/
+M31(Capability Intelligence)이 각각 독립적으로 계산한 리포트를
+새로운 데이터 소스나 판단 기준 없이 하나의 `IntelligenceOverview`로
+합성한다. M29~M31과 동일한 조건 — **새로운 지식을 생성하지 않는다.
+LLM 기반 추론도 하지 않는다** — 이미 완성된 세 Service를 조합하는
+Rule 기반 계층으로 유지한다.
+
+**Definition of Done**
+
+| # | 항목 |
+|---|---|
+| 1 | 기존 27개 Core Domain Interface 변경 없음 |
+| 2 | 새 Interface 0개 |
+| 3 | 새 Integration Layer Adapter 0개(`VaultAdapter` 메서드 1개만 확장) |
+| 4 | `intelligence/synthesis*.py`는 오직 `intelligence/report.py`/`context_service.py`/`capability_service.py`(기존 3개 Service)에만 의존 |
+| 5 | Rule 기반(집계·정렬만)으로 동작, LLM 호출 없음 |
+| 6 | `15 Project Intelligence/Intelligence Overview.md`에 세 리포트의 등급 + 통합 Finding 목록 노출 |
+| 7 | 기존 M29/M30/M31 pytest 회귀 없음 + 신규 테스트 통과 |
+| 8 | `pytest`/`ruff`/`mypy` 통과 |
+| 9 | Architecture/ADR/문서 최신화 |
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M32-T01 | Intelligence Synthesis 설계 | **완료** |
+| M32-T02 | Synthesis Analyzer | **완료** |
+| M32-T03 | Integration + Presentation | **완료** |
+| M32-T04 | End-to-End 검증 + 문서화 + Milestone Review | **완료** |
+
+### M32-T01: Intelligence Synthesis 설계
+
+**목표**: Synthesis의 입력·출력 계약과 §8 규칙 21과의 관계를
+결정한다.
+
+**결정(ADR-0046, 상세 근거는 `.ai/DECISIONS.md` 참고)**
+
+- 새 Adapter/Interface를 만들지 않는다 — `intelligence/synthesis.py`
+  의 `IntelligenceSynthesisAnalyzer`는 이미 생성된 세 리포트
+  (`ProjectIntelligenceReport`/`ProjectContextReport`/
+  `CapabilityIntelligenceReport`)만 입력으로 받는 순수 함수다.
+- §8 규칙 21("`intelligence/`의 Analyzer는 `integration/`의
+  Adapter에만 의존")은 변경 없이 그대로 적용된다 — Synthesis는
+  Adapter가 아니라 같은 `intelligence/` 계층의 다른 Service를
+  조합하므로 애초에 이 규칙의 금지 대상이 아니다.
+  `tests/intelligence/test_intelligence_layering.py`를 코드 변경
+  없이 그대로 실행해 위반이 없음을 확인했다(사전 조사 결과).
+- 집계(Synthesis Analyzer)와 조합(Synthesis Service)을 분리한다
+  (M29/M30/M31과 동일한 2단 구조).
+- 결과는 같은 Vault 폴더에 새 파일(`Overview.md`)로 노출한다 — 새
+  최상위 Vault 폴더를 만들지 않는다.
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| 입력/출력 계약 정의 | ✅ (세 리포트 → `IntelligenceOverview`) |
+| §8 규칙 21 위반 여부 확인 | ✅ (위반 없음, 규칙 변경 불필요) |
+| ADR 작성 | ✅ (ADR-0046) |
+
+코드 변경 없음(설계 결론만 확정). 다음 Task: **M32-T02**(Synthesis
+Analyzer).
+
+### M32-T02: Synthesis Analyzer
+
+**목표**: T01 설계대로 세 리포트를 조합해 `IntelligenceOverview`를
+만드는 `IntelligenceSynthesisAnalyzer`를 구현한다.
+
+**구현 내용**
+
+- `intelligence/synthesis.py`(신규) — `SynthesizedFinding`/
+  `IntelligenceOverview`(신규 값 객체)와 `IntelligenceSynthesisAnalyzer.
+  analyze()`가 `ProjectIntelligenceReport.health_report.risks`/
+  `ProjectContextReport.quality.gaps`/
+  `CapabilityIntelligenceReport.gap_report.gaps`를 하나의
+  `SynthesizedFinding` 목록으로 옮겨 담고(target 기준 정렬), 세
+  리포트의 등급(Health/Freshness/Coverage)을 그대로 노출한다. 새
+  우선순위 알고리즘·새 임계값을 만들지 않는다.
+
+**테스트**: `tests/intelligence/test_synthesis.py`(신규 3개 — 세
+리포트 등급 조합/Finding 병합/Critical 등급 반영). `pytest`(957개,
+기존 954개 + 신규 3개), `ruff check src tests`, `mypy` 전부 클린.
+
+**완료 조건 확인**: `IntelligenceOverview` 생성 테스트 통과. 새 Core
+Domain Interface 없음(27종 그대로), Core Domain 코드 무변경,
+`intelligence/`는 여전히 자기 자신의 다른 모듈에만 의존(§8 규칙 21
+그대로 — `synthesis.py`는 Adapter조차 직접 참조하지 않는다).
+
+다음 Task: **M32-T03**(Integration + Presentation).
+
+### M32-T03: Integration + Presentation
+
+**목표**: `ProjectIntelligenceService`/`ContextIntelligenceService`/
+`CapabilityIntelligenceService`(T02가 아니라 M29/M30/M31의 기존
+Service)와 `IntelligenceSynthesisAnalyzer`(T02)를 하나의 진입점으로
+조립하고, 실제로 Vault에 노출한다.
+
+**구현 내용**
+
+- `intelligence/synthesis_service.py`(신규)의
+  `IntelligenceSynthesisService` — 세 Service를 생성자로 주입받아
+  `generate()`가 순서대로(Project→Context→Capability) 실행한 뒤
+  `IntelligenceSynthesisAnalyzer.analyze()`에 넘긴다. `render_markdown()`
+  (순수 함수)/`publish()`가 `VaultAdapter.
+  publish_intelligence_overview()`(신규 메서드)를 통해 실제로
+  Vault에 쓴다. `vault_adapter`를 주입하지 않고 `publish()`를
+  호출하면 `ValueError`(M29-T05/M30-T05/M31-T05와 동일한 계약).
+- `vault/intelligence_overview.py`(신규) —
+  `write_intelligence_overview_report()`가 `15 Project
+  Intelligence/Overview.md`에 원자적으로 전체 교체(overwrite)한다
+  (`vault/capability_report.py`, M31-T05와 동일한 패턴).
+- `VaultAdapter.publish_intelligence_overview()`(신규 메서드) — 위
+  writer를 Integration Layer에 노출.
+
+**테스트**: `tests/intelligence/test_synthesis_service.py`(신규 5개
+— 세 Service 조합/`publish()` 예외/Vault 기록/Markdown 섹션 확인).
+`pytest`(954개 → 이 Task까지 신규 7개 누적 포함), `ruff check src
+tests`, `mypy` 전부 클린.
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| Vault를 통해 결과 확인 가능 | ✅ (`15 Project Intelligence/Intelligence Overview.md`) |
+| Architecture 문서 최신화 | ✅ (`docs/ARCHITECTURE.md` §3.25 신규) |
+| Review 완료 | Milestone Review는 M32-T04에서 진행 |
+
+새 Core Domain Interface 없음(27종 그대로), 새 Integration Layer
+Adapter 없음(`VaultAdapter` 확장 1건), Layer Boundary 변경 없음(§8
+규칙 21 그대로), Core Domain 코드 무변경.
+
+다음 Task: **M32-T04**(End-to-End 검증 + 문서화 + Milestone
+Review).
+
+### M32-T04: End-to-End 검증 + 문서화 + Milestone Review
+
+**목표**: 전체 스택(세 Service→Synthesis→Vault) 통합 검증과 문서
+갱신을 마무리하고 Milestone Review를 작성한다.
+
+**구현 내용**
+
+- 실제 저장소 Vault(`15 Project Intelligence/`)를 대상으로
+  `IntelligenceSynthesisService.publish()`를 실행해
+  `Overview.md`가 실제로 생성됨을 확인(Project Health: Healthy,
+  Context Freshness/Capability Coverage 등급과 통합 Finding 목록
+  포함).
+- `docs/ARCHITECTURE.md` §3.25(신규)/상단 상태 갱신, `.ai/
+  DECISIONS.md`(ADR-0046 신규), `.ai/TASKS.md`(본 절), Vault(ADR
+  Index/Milestones Index) 갱신.
+
+**테스트**: 전체 `pytest`/`ruff`/`mypy` 재실행으로 회귀 없음 확인.
+
+**완료 조건 확인**: DoD 9개 항목 전부 충족.
+
+**Milestone 32(Intelligence Synthesis) T01~T04 전체 완료.**
+
+### Milestone 32 Review
+
+**Review 결과 요약**
+
+| 항목 | 결과 |
+|---|---|
+| DoD 검증 | 9개 항목 전부 충족 |
+| Architecture Review | `intelligence/synthesis*.py`를 M29/M30/M31 Intelligence Layer와 같은 계층에 추가(ADR-0046), M29~M31 Service 3개를 조합하는 근거가 ADR에 명시 |
+| Layer Boundary Review | `test_intelligence_layering.py`를 코드 변경 없이 그대로 실행해 §8 규칙 21 위반 없음을 확인(신규 Adapter 참조 자체가 없음) |
+| Interface Review | Core Domain 27종 무변경. Integration Layer 신규 Adapter 없음, `VaultAdapter` 확장 1건(`publish_intelligence_overview()`) |
+| ADR Review | ADR-0046 1건만 신규, 기존 ADR과 충돌 없음(§8 규칙 21 변경 없음을 ADR 안에서도 명시) |
+| pytest/ruff/mypy | 954 passed, ruff clean, mypy clean(178 source files) |
+| 문서 최신화 | `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`/`.ai/TASKS.md`/Vault(ADR Index/Milestones Index/`15 Project Intelligence/Intelligence Overview.md`) 전부 갱신 확인 |
+
+**개선 여지(참고용, 이번에 처리하지 않음)**: M29(`active_agent_count`)/
+M31(Coverage)이 이미 겪은 "활성 Agent 0명" 한계가 Overview에도 그대로
+드러난다(Capability Finding이 항상 채워짐) — 실제 Agent 상시 구동
+체계가 생기면 Overview도 함께 재검토 대상이다. Synthesis는 이 한계를
+새로 만들지 않고 그대로 승계했을 뿐이다.
+
+**사용자 승인(2026-07-30)**: Scope 준수/Architecture 유지/Interface
+유지/Layer Boundary 유지/Rule 기반 구현/Documentation 완료/Test
+완료를 모두 만족함을 확인해 **Milestone 32(Intelligence Synthesis)
+공식 완료(Approved)**. "M29(Project Intelligence)→M30(Context
+Intelligence)→M31(Capability Intelligence)→M32(Intelligence
+Synthesis)"로 이어지며, 각 Milestone이 독립적인 책임을 가지면서도
+M32를 통해 하나의 일관된 Intelligence Layer로 통합되었다는 점에서
+프로젝트 차원의 의미가 있음을 사용자가 확인함. `15 Project
+Intelligence/Intelligence Overview.md`가 공식 결과로 확정된다.
+
+**다음 단계(사용자 코멘트)**: 이 시점부터는 Intelligence Layer를
+"구축"하는 단계보다, 이를 활용하는 상위 기능(Session Resume/
+Workflow Intelligence/Agent Orchestration/Automation 등)으로
+확장하는 것이 자연스러운 다음 단계다 — Milestone 33 세부 Task는
+착수 시점에 별도 제안·승인 후 정의한다.
 
 ---
 
