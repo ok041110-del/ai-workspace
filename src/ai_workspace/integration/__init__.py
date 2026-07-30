@@ -52,10 +52,19 @@ Connector도 새 비즈니스 로직을 만들지 않는다 — Peer Connector �
   `VaultAdapter`를 조합해 Conversation Layer 요청 전체(Task 생성→
   Workflow 생성→Agent 배정→Vault 반영, Task 상태 조회/전이)를
   처리한다.
+- **공유 값 객체**: `models.WorkflowLink`(Vault task_id↔Core Domain
+  `Task` 매핑) — Peer Connector 2개가 모두 필요로 해서, 어느 한쪽
+  파일에 두면 Peer Connector끼리 참조하게 되는 문제를 Architecture
+  Freeze에서 발견해 중립 모듈로 분리했다. 로직 없는 값 객체 모듈은
+  계층 규칙(아래) 대상이 아니다.
 
 세 Adapter는 서로를 참조하지 않고, Peer Connector끼리도 서로를
 참조하지 않는다(예: Agent 배정 책임을 `WorkflowTaskLink`에 얹지
 않고 별도 `WorkflowAgentLink`로 분리). Orchestrating Connector만
-예외적으로 여러 Peer Connector/Adapter를 조합한다(ADR-0041)."""
+예외적으로 여러 Peer Connector/Adapter를 조합한다(ADR-0041). 참조
+방향은 항상 **Orchestrating Connector → (Peer Connector | Adapter)
+→ Core**이며 반대로 거슬러 올라가지 않는다 — `tests/integration_layer/
+test_connector_layering.py`가 이를 `ast` 기반으로 강제한다
+(Milestone 28 Architecture Freeze)."""
 
 from __future__ import annotations

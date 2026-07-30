@@ -22,8 +22,8 @@ from dataclasses import dataclass
 from ai_workspace.domain.agent import Agent, AgentCapability, AgentStatus
 from ai_workspace.domain.task import TaskStatus
 from ai_workspace.integration.agent_adapter import AgentAdapter
+from ai_workspace.integration.models import WorkflowLink
 from ai_workspace.integration.workflow_adapter import WorkflowAdapter
-from ai_workspace.integration.workflow_task_link import WorkflowLink
 
 
 class NoAvailableAgentError(RuntimeError):

@@ -44,9 +44,10 @@ from dataclasses import dataclass
 from ai_workspace.domain.agent import AgentCapability
 from ai_workspace.domain.task import Task, TaskStatus
 from ai_workspace.domain.workflow import Workflow
+from ai_workspace.integration.models import WorkflowLink
 from ai_workspace.integration.vault_adapter import VaultAdapter
 from ai_workspace.integration.workflow_agent_link import AgentAssignment, WorkflowAgentLink
-from ai_workspace.integration.workflow_task_link import WorkflowLink, WorkflowTaskLink
+from ai_workspace.integration.workflow_task_link import WorkflowTaskLink
 
 
 @dataclass(frozen=True)

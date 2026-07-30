@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.37.0 |
+| 문서 버전 | v0.38.0 |
 | 작성일 | 2026-07-30 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). **Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체) — T01(Task Lifecycle)/T02(Automatic Document Synchronization)/T03(Workspace Adapter Layer, ADR-0039)/T04(Workflow Engine Integration)/T05(Agent Assignment, ADR-0040: Adapter/Peer Connector 공식 분류)/T06(Conversation Layer Integration, ADR-0041: `ConversationConnector`를 Orchestrating Connector로 도입, Peer Connector 원칙의 명시적 예외)**. 다음은 사용자 요청에 따른 **Architecture Freeze**(ADR 전체 재검토/Layer 의존성 검증/Integration Boundary 검증/Interface 목록 확정/M29 요구사항 재정의) — 별도 승인 후 진행. 새 Interface 없이 27종 유지) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). **Architecture Freeze(ADR-0042) 완료 — 사용자 승인 대기**: Layer/Integration Layer/Boundary/Domain/Public Interface/ADR 정합성 전수 검토, Peer Connector 상호 참조 위반 1건 발견·수정(`WorkflowLink`를 신규 `integration/models.py`로 이동), §8에 규칙 19/20 추가, `pytest` 851개·ruff·mypy 전부 클린. 승인 전까지 M29(Project Intelligence)는 착수하지 않는다. 새 Interface 없이 27종 유지) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -1357,6 +1357,27 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
     `interfaces`/`engines`를 동시에 import할 수 없다 —
     `tests/integration_layer/test_architecture_boundary.py`가
     `ast` 기반으로 이를 테스트 실패로 강제한다.
+19. **`integration/` 내부 참조 규칙**(ADR-0040/ADR-0041, Milestone
+    28-T05/T06 Architecture Freeze에서 §8로 명문화): Adapter
+    (`VaultAdapter`/`WorkflowAdapter`/`AgentAdapter`)는 다른
+    Adapter를 참조하지 않는다. Peer Connector(`WorkflowTaskLink`/
+    `WorkflowAgentLink`)는 Adapter만 조합하고 다른 Peer Connector를
+    참조하지 않는다. Orchestrating Connector(`ConversationConnector`)
+    만 예외적으로 Peer Connector와 Adapter를 함께 조합할 수 있다
+    (그 반대로 Peer Connector나 Adapter가 Orchestrating Connector를
+    참조하는 것은 금지). 즉 참조 방향은 항상 **Orchestrating
+    Connector → (Peer Connector | Adapter) → Core**이며 위로
+    거슬러 올라가지 않는다.
+20. **Conversation Layer는 `vault`/`WorkflowEngine`/`TaskEngine`/
+    `AgentManager`(및 그 구체 구현)를 직접 참조하지 않는다**
+    (ADR-0041, Milestone 28-T06) — 모든 요청은
+    `ConversationConnector`(Orchestrating Connector)를 통해서만
+    전달한다. `tests/integration_layer/
+    test_conversation_connector_boundary.py`가 `ConversationConnector`
+    자신의 import를 `ast` 기반으로 검증한다(Conversation Layer
+    자체는 별도 코드 패키지가 아니라 이 Connector의 호출자이므로,
+    이 규칙은 실제로는 "`ConversationConnector` 밖에 이 접근 경로를
+    또 만들지 않는다"는 의미로 강제된다 — §9 참고).
 
 ## 9. 디렉터리 구조와 컴포넌트 매핑
 

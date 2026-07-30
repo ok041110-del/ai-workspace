@@ -16,10 +16,14 @@ Vault Task 문서와 Core Domain `Workflow`/`Task`를 잇는다. Adapter(외부
    `Workflow`에 새 필드를 추가하지 않는다. Vault task_id와 Core
    Domain task_id는 서로 다른 문자열일 수 있으므로(Vault는
    `T28-04` 같은 사람이 붙인 ID, Core Domain은 `TaskEngine`이
-   발급하는 `task-N`), 그 매핑은 `Task`/`Workflow`가 아니라 이
-   파일의 `WorkflowLink` 값 객체가 별도로 들고 있는다. 기존 `Task.
-   workflow_id` 필드(도메인이 이미 갖고 있던 Workflow 소속 정보)는
-   그대로 채워 재사용한다 — 새 필드가 아니다.
+   발급하는 `task-N`), 그 매핑은 `Task`/`Workflow`가 아니라
+   `models.WorkflowLink` 값 객체가 별도로 들고 있는다(Milestone 28
+   Architecture Freeze에서 `workflow_agent_link.py`도 이 값 객체가
+   필요하다는 게 드러나, Peer Connector끼리 서로 참조하지 않기
+   위해 `workflow_task_link.py`가 아닌 중립 모듈 `models.py`로
+   옮겼다). 기존 `Task.workflow_id` 필드(도메인이 이미 갖고 있던
+   Workflow 소속 정보)는 그대로 채워 재사용한다 — 새 필드가
+   아니다.
 4. Adapter는 연결·변환·위임만 수행한다 — 아래 클래스는 ID 변환과
    호출 순서 조합만 하고, Task/Workflow 상태 전이 규칙 자체는
    여전히 `TaskEngine`(Core Domain)과 `vault.task_lifecycle`(Vault)
@@ -29,10 +33,10 @@ Vault Task 문서와 Core Domain `Workflow`/`Task`를 잇는다. Adapter(외부
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 
 from ai_workspace.domain.task import Task, TaskStatus
 from ai_workspace.domain.workflow import Workflow
+from ai_workspace.integration.models import WorkflowLink
 from ai_workspace.integration.vault_adapter import VaultAdapter
 from ai_workspace.integration.workflow_adapter import WorkflowAdapter
 
@@ -47,16 +51,6 @@ _DOMAIN_TO_VAULT_STATUS: dict[TaskStatus, str] = {
     TaskStatus.REVIEW: "review",
     TaskStatus.DONE: "done",
 }
-
-
-@dataclass(frozen=True)
-class WorkflowLink:
-    """Vault task_id 하나와 그에 대응하는 Core Domain `Task` 하나를
-    묶는 값 객체. `domain.Task`/`domain.Workflow`에는 필드를 추가하지
-    않는다(원칙 3)."""
-
-    vault_task_id: str
-    domain_task: Task
 
 
 class WorkflowTaskLink:

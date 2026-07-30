@@ -254,6 +254,12 @@ tags: [decision]
 - 결정: `ConversationConnector`(Peer Connector `WorkflowTaskLink`/`WorkflowAgentLink` + `VaultAdapter` 조합)를 **Orchestrating Connector**로 도입 — ADR-0040 "Connector끼리 참조 금지" 원칙의 명시적 예외. Conversation Layer는 Vault/Core Domain Engine/AgentManager를 직접 참조하지 않고 이 Connector만 거침(`ast` 테스트로 강제). 새 비즈니스 로직·새 Domain 필드 없음
 - 영향: `integration/conversation_workflow_link.py` 신규. **Milestone 28(Live Task Management & Integration) 전체 완료**, Architecture Freeze 예정. 상세는 [[Architecture Overview]]
 
+## ADR-0042: M28 Architecture Freeze — Baseline 선언
+
+- 목적: M28이 만든 구조(Layer/Integration Layer/Boundary/Domain/Public Interface/ADR 정합성)를 새 기능 없이 검증·확정
+- 결정: Layer 구조·Integration Layer 구성(Adapter/Peer Connector/Orchestrating Connector)을 그대로 기준선으로 확정. 검증 중 Peer Connector 상호 참조 위반 1건 발견(`WorkflowAgentLink`→`WorkflowTaskLink`) 즉시 수정 — `WorkflowLink`를 신규 중립 모듈 `integration/models.py`로 이동. `docs/ARCHITECTURE.md` §8에 규칙 19/20 추가. 개선 후보 7건은 목록만 작성, 리팩토링하지 않음
+- 영향: `tests/integration_layer/test_connector_layering.py` 신규(위반 검출 테스트), `pytest` 851개·ruff·mypy 전부 클린. **M29(Project Intelligence) 진행 가능 — 사용자 승인 대기**. 상세는 [[Architecture Overview]], 전문은 GitHub `.ai/TASKS.md`의 "Milestone 28 — Architecture Freeze" 절
+
 ## 관련 문서
 
 - [[Architecture Overview]]

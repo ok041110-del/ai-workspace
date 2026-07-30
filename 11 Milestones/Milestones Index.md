@@ -40,7 +40,7 @@ tags: [milestone]
 | M21 | Automation Engine | `AutomationRepository`(27번째 Interface) 도입, AutomationScheduler | ADR-0033 |
 | M22 | Production Platform | `ProductionConfig`/`LifecycleManager`/`HealthMonitor` 도입, 새 Interface 없음 | ADR-0034 |
 | M27 | Obsidian Workspace Templates(M25 요청) | `VaultDocumentKind.TASK` 신규(개별 Task 문서), Daily/Decision Template 확장, Project Workspace Template 정의(설계만) | ADR-0038 |
-| M28 | Live Task Management & Integration | Task Lifecycle/자동 문서 갱신(Vault 내부), 신규 `integration/` 패키지(Workspace Adapter Layer) — Vault/Workflow/Agent Adapter, Peer Connector(WorkflowTaskLink/WorkflowAgentLink), Orchestrating Connector(ConversationConnector). Core Domain↔vault 직접 의존 금지를 `ast` 테스트로 강제, Domain 모델 무변경 | ADR-0039, 0040, 0041 |
+| M28 | Live Task Management & Integration | Task Lifecycle/자동 문서 갱신(Vault 내부), 신규 `integration/` 패키지(Workspace Adapter Layer) — Vault/Workflow/Agent Adapter, Peer Connector(WorkflowTaskLink/WorkflowAgentLink), Orchestrating Connector(ConversationConnector). Core Domain↔vault 직접 의존 금지를 `ast` 테스트로 강제, Domain 모델 무변경. **Architecture Freeze 완료**(Peer Connector 상호 참조 위반 1건 발견·수정) | ADR-0039, 0040, 0041, 0042 |
 
 ## M23-Preparation
 

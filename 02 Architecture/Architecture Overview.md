@@ -127,6 +127,19 @@ Domain Engine/AgentManager를 직접 참조하지 않고 이 Connector만
 **Milestone 28(Live Task Management & Integration) 전체 완료.**
 다음은 Architecture Freeze(별도 승인 후 진행).
 
+## Architecture Freeze(ADR-0042)
+
+M28(T01~T06)이 만든 구조를 새 기능 없이 검증·확정했다. Layer
+구조/Integration Layer/Boundary/Domain/Public Interface/ADR
+정합성을 전수 검토해 그대로 기준선(Baseline)으로 확정했다.
+검증 중 `WorkflowAgentLink`가 `WorkflowTaskLink`를 직접 참조하는
+Peer Connector 상호 참조 위반 1건을 발견해 즉시 수정했다 —
+공유 값 객체 `WorkflowLink`를 신규 중립 모듈 `integration/
+models.py`로 옮겼다. 개선 후보 7건은 목록만 남기고 리팩토링하지
+않았다. `pytest` 851개·ruff·mypy 전부 클린. M29(Project
+Intelligence)는 사용자 승인 이후 착수한다. 전문은 GitHub
+`.ai/TASKS.md`의 "Milestone 28 — Architecture Freeze" 절 참고.
+
 ## 관련 문서
 
 - [[Overview]]
