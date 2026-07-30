@@ -11987,6 +11987,90 @@ ADR-0053에 따라 영속화하지 않음) 그 문서에 `tags: [memory]`를
 된다"는 목표는 설정이 아니라 §14.4 Linking Rules(Index 문서가 가장
 많이 링크됨)의 결과로 자연히 달성되도록 남겨둔다.
 
+### T02: M40 Responsibility Analysis (2026-07-30)
+
+**목표**: M40이 실제로 무엇을 하는 Milestone인지 정의한다. ADR-0053
+(M39)이 "Learning(Rule 반영)은 M40 이후로 명시적으로 이관"이라고
+남긴 대목과, 사용자가 제시한 이름 "Experience Intelligence"를
+근거로 두 가지 Responsibility 범위를 검토했다.
+
+- **(a) Read-Only Experience Reporting** — `ExecutionMemoryStore`
+  (M39)가 쌓은 기록을 집계해 "이 Task/Action의 성공률·최근 실패
+  이력" 같은 요약을 만들어 Vault에 노출한다. `RecommendationRuleAnalyzer`
+  (M35)의 판정 로직에는 관여하지 않는다.
+- **(b) Experience-Informed Recommendation** — (a)와 동일한 집계에
+  더해, 그 결과를 `RecommendationRuleAnalyzer`의 Priority Rule에
+  새 입력으로 연결해 "최근 자주 실패한 Task는 우선순위를 낮춘다"
+  같은 판단에 반영한다.
+
+**핵심 발견**: (a)와 (b) 둘 다 **부작용이 없다** — Task를 실행하거나
+상태를 바꾸지 않는다. (b)가 `RecommendationRuleAnalyzer`의 계산에
+관여하더라도, `Recommendation` 자체가 이미 Intelligence Domain
+소속(§13.3 "Recommendation은 Intelligence가 계산한 단일 결정")이므로
+(b) 역시 Read Only Intelligence 판단 로직의 확장일 뿐, Execution으로
+분류되지 않는다. 즉 (a)/(b) 선택은 **Domain을 바꾸지 않는다** — 둘
+다 Intelligence다. 정확히 어느 범위로 착수할지는 이 분석의 대상이
+아니라 실제 M40 착수 시점의 별도 Scope 제안·MDD Review(§2.1.1)
+대상이다.
+
+### T03: Existing Vocabulary Mapping (2026-07-30)
+
+§13.2(1급 Domain)/§13.3(보조 용어) 전체와 T02의 두 범위를 대조했다.
+
+| 어휘 | 정의 | M40과의 부합 여부 |
+|---|---|---|
+| **Intelligence** | Read Only로 데이터를 분석·요약·판단 | **부합** — (a)/(b) 모두 읽기만 하고 판단만 한다 |
+| **Memory** | 저장/검색만, 판단하지 않음 | 불일치 — M40은 판단(집계·분석)이 핵심이라 저장만 하는 Memory로 표현 불가. 원재료(`ExecutionMemory`, M39)는 이미 Memory Domain이 담당 중 |
+| **Execution** | 실제 부작용을 일으킴 | 불일치 — M40은 Task를 실행하거나 상태를 바꾸지 않는다 |
+| **Guardian** | 아키텍처 규칙 위반 감시(미구현) | 무관 — 전혀 다른 개념 |
+| Recommendation(보조) | Intelligence가 계산한 단일 결정 | T02(b)에서만 부분적으로 관련 — 그래도 Domain은 Intelligence로 귀속 |
+
+**결론**: 4개 Domain 중 정확히 **Intelligence**만 M40의 핵심 책임을
+정확히 표현한다.
+
+### T04: New Domain Necessity Evaluation (2026-07-30)
+
+§13.4 "새 용어 도입이 허용되는 경우"(기존 어휘 중 어느 것도 핵심
+책임을 정확히 표현할 수 없을 때만) 기준으로 판단한다.
+
+- T03에서 **Intelligence**가 M40의 핵심 책임(Read Only 판단)을
+  정확히 표현함을 확인했다 — "기존 어휘로 표현 불가능"이라는 새
+  Domain 도입 조건을 만족하지 않는다.
+- 따라서 **새 Domain 어휘를 만들지 않는다.** §2.1이 예약해 둔
+  "Learning Engine"이라는 이름도 사용하지 않는다 — Learning이라는
+  별도 Domain을 만들 필요 없이 기존 Intelligence Domain의 확장으로
+  충분하다(§13.4가 명시적으로 금지한 동의어 목록의 `Learning`과
+  정확히 일치하는 사례).
+- **결정**: M40의 Domain은 **Intelligence**(기존 어휘 재사용, 신규
+  용어 0개)로 확정한다.
+
+### T05: Final Milestone Naming (2026-07-30)
+
+**형식**: §13.4 Milestone Naming Convention에 따라 `{Responsibility}
+{Domain}` 형태(기존 예시 전부가 이 어순 — `Project Intelligence`/
+`Workflow Intelligence`/`Recommendation Execution`/`Execution
+Memory` 참고)로 짓는다. Domain은 T04에서 확정한 **Intelligence**.
+
+**Responsibility 후보 비교**
+
+| 후보 | 근거 | 평가 |
+|---|---|---|
+| `Memory` | M40이 분석하는 원재료(M39 `ExecutionMemory`)를 직접 가리킴 | 짧고 정확하지만, M1의 범용 MemoryEngine(Session/Mission Summary)까지 포함하는 것으로 오해될 위험 |
+| `Execution Memory` | M39와 완전히 동일한 이름을 그대로 사용 | 가장 정확하지만 3단어(`Execution Memory Intelligence`)로, 기존 명명 관행(전부 2단어)과 어긋남 |
+| **`Experience`**(사용자 제안) | M40이 **만들어내는 산출물**(누적된 실행 이력을 판단 가능한 통찰로 바꾼 것)을 가리킴 | `Recommendation Intelligence`(산출물 `Recommendation`을 Responsibility로 삼은 선례)와 동일한 패턴. 2단어 관행과도 일치 |
+
+**결정**: **`Experience Intelligence`**(사용자 원안)를 그대로
+확정한다. `Recommendation Intelligence`가 원재료가 아니라
+산출물(`Recommendation`)을 Responsibility로 삼은 선례와 동일한
+패턴이며, T04에서 확정한 Domain(`Intelligence`)과 결합하면
+`{Responsibility} {Domain}` 형식·2단어 관행·§1.5 Vocabulary Reuse
+First(신규 Domain 어휘 0개) 전부를 만족한다.
+
+**참고**: 이 결정은 **이름만** 확정한다. 실제 Milestone 40의
+Scope/DoD/MDD Review는 T02가 남겨둔 (a)/(b) 범위 선택을 포함해
+착수 시점에 별도로 제안·승인받는다(§1.4 Approval Required, §2.1.1
+MDD Review Gate) — 이 분석은 그 절차를 대체하지 않는다.
+
 ---
 
 ## GitHub Flow Migration
