@@ -10024,6 +10024,35 @@ tests`, `mypy src` 전부 클린.
 **Milestone 30(Context Intelligence) T01~T05 전체 완료.** Milestone
 Review는 사용자 요청에 따라 별도로 진행한다.
 
+### Milestone 30 Review
+
+**Review 결과 요약**
+
+| 항목 | 결과 |
+|---|---|
+| DoD 검증 | 11개 항목 전부 충족 |
+| Architecture Review | `intelligence/context*.py`를 M29 Intelligence Layer와 같은 계층에 추가(ADR-0044), Knowledge Layer(M16) 재사용 근거가 ADR에 명시 |
+| Layer Boundary Review | `test_intelligence_layering.py`(allowed_prefixes에 `knowledge_adapter` 추가) + `test_connector_layering.py`(`_ADAPTERS`에 `knowledge_adapter` 추가) 모두 회귀 없음 |
+| Interface Review | Core Domain 27종 무변경(`git diff --stat origin/main...` 확인). Integration Layer 신규 Adapter 1건(`KnowledgeAdapter`, 기존 `KnowledgeRepository`/`KnowledgeSearch`만 감쌈, Interface 아님), `VaultAdapter` 확장 1건(`publish_project_context()`) |
+| ADR Review | ADR-0044 1건만 신규(T02~T05는 순수 구현), 기존 ADR과 충돌 없음 |
+| pytest/ruff/mypy | 929 passed, ruff clean, mypy clean(171 source files) |
+| 문서 최신화 | `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`/`.ai/TASKS.md`/Vault(ADR Index/Milestones Index/Dashboard Index/`15 Project Intelligence/`) 전부 갱신 확인 |
+
+**실제 발견·수정한 버그**: T05 실제 검증 중, `docs/ARCHITECTURE.md`
+최상단 절처럼 본문 한 줄에 여러 Milestone 이력이 나열되면 Freshness
+가 "본문 첫 Milestone 언급"을 잘못 골라 최신 항목도 Warning으로
+오판하는 문제를 발견 — "subject와 텍스트 거리가 가장 가까운 언급"
+으로 추출 방식을 고치고 회귀 방지 테스트를 추가했다(상세는 위
+M30-T05 항목).
+
+**개선 여지(참고용, 이번에 처리하지 않음)**: (1) Milestone 추출이
+정규식 기반 근사라 특이한 표기(예: "M30~32")는 놓칠 수 있다. (2)
+`_split_sections()`가 평면 분할이라 계층적 문맥(상위 절 전체가
+관련된 경우)을 놓칠 수 있다 — 지금은 하위 제목이 대신 매칭돼
+실질적 누락은 적다. (3) Context Quality Score 산식(Gap 개수 +
+Freshness 감점)은 단순 근사이며 가중치 근거가 없다. 전부 실제
+요구사항이 생기면 별도 Milestone/ADR에서 재검토한다.
+
 ---
 
 ## GitHub Flow Migration
