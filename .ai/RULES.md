@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.8.0 |
+| 문서 버전 | v0.9.0 |
 | 작성일 | 2026-07-30 |
 | 적용 대상 | 이 저장소에서 작업하는 모든 AI 구현 엔진(Claude Code, Codex, Gemini CLI 등) 및 기여자 |
 
@@ -10,6 +10,14 @@
 아래 규칙은 사용자가 제시한 개발 철학을 프로젝트 내부 규정으로 명문화한 것이며,
 모든 Task 수행 시 최우선으로 준수해야 한다.
 
+> **v0.9.0 변경 (Vocabulary Reuse First, ADR-0054, 2026-07-30)**: 신규
+> §1.5 Vocabulary Reuse First 추가. `docs/ARCHITECTURE.md` §13(Domain
+> Vocabulary & Naming Convention)/§14(Obsidian Graph Convention)이
+> 신설되어 새 Milestone/Engine/Service 이름을 짓기 전에 기존 어휘
+> (Intelligence/Memory/Execution/Guardian 등) 재사용 여부를 먼저
+> 확인하도록 명문화했다. M40 이후 모든 Milestone 이름은 `{Domain}
+> {Responsibility}` 형식을 따른다.
+>
 > **v0.8.0 변경 (GitHub 권한 및 Merge 정책, 2026-07-30)**: 신규 §8.6
 > GitHub 권한 및 Merge 정책 추가. 사용자가 Milestone을 최종 승인한
 > 뒤에는 PR 생성→Merge 가능 여부 확인→Merge→문서 갱신(TASKS.md/
@@ -127,6 +135,22 @@
 - 무엇을 변경/추가하려 하는지
 - 왜 필요한지 (이유)
 - 대안은 무엇이 있었는지, 왜 이 방법을 선택했는지 (장단점 포함)
+
+### 1.5 Vocabulary Reuse First (도메인 용어 재사용 우선, ADR-0054, 2026-07-30)
+- 새 Milestone 이름·새 Engine·새 Service·새 아키텍처 개념을 도입하기
+  전에, 그 개념이 `docs/ARCHITECTURE.md` §13(Domain Vocabulary & Naming
+  Convention)의 기존 용어로 이미 표현 가능한지 먼저 확인한다.
+- Milestone 이름은 `{Domain} {Responsibility}` 형식을 따른다.
+  `{Domain}`은 §13.2(Intelligence/Memory/Execution/Guardian)와
+  §13.3(Engine/Lifecycle/Resume/Scheduler/Recommendation/Automation)의
+  기존 어휘 중 하나여야 한다.
+- `Knowledge`/`Insight`/`Learning`/`Analyzer`/`Manager`처럼 기존
+  어휘와 뜻이 겹치거나 구현 세부사항(클래스 이름 접미사)에 불과한
+  단어를 Milestone/Domain 이름으로 새로 쓰지 않는다(§13.4).
+- 기존 어휘 중 어느 것도 그 개념의 핵심 책임을 정확히 표현할 수 없을
+  때만 새 Domain 용어를 만든다 — 이 경우에도 §1.4 Approval Required에
+  따라 사용자 승인이 필요하며, 승인된 새 용어는 즉시 §13.2에 추가해
+  다음 Milestone부터 재사용 가능하게 한다.
 
 ---
 

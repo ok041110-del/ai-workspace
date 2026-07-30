@@ -3440,3 +3440,74 @@
   `ActionBuilder`/`TaskLifecycleTransitioner`/`MemoryEngine`
   interface 무변경. 영속화·Learning(Rule 반영)·REST 엔드포인트는
   계속 범위 밖(YAGNI, M40 이후 논의).
+
+## ADR-0054: Domain Vocabulary & Naming Convention 확립 — Milestone 이름은 "{Domain} {Responsibility}", 신규 용어보다 재사용 우선 (Pre-M40)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 M40 착수 전 "프로젝트 전체 명명
+  규칙과 Obsidian Graph 규칙을 먼저 확립하라"고 명시적으로 요청.
+  문서화 전용 작업으로 범위를 한정(코드/클래스/파일명/기존 Milestone
+  이름 변경 없음), 5개 목표(Domain Vocabulary/Milestone Naming
+  Convention/Obsidian Graph Convention/Linking Rules/Future Rule)를
+  전부 반영해 승인)
+- 날짜: 2026-07-30
+- 배경: M1~M39를 거치며 Intelligence(M29~M35)/Memory(M1, M39)/Engine
+  (M1)/Guardian(§2.1 예약)/Resume(M33)/Lifecycle(M37) 등의 용어가
+  각 시점의 필요에 따라 독립적으로 도입되어 어휘가 발산하기
+  시작했다. M39 완료 직후 사용자가 "M40(Experience Intelligence)"라는
+  새 이름을 제시하면서, 기존에 §2.1이 예고했던 "Learning Engine"과
+  이 이름의 관계가 불명확해진 것이 계기가 됐다 — Milestone을
+  더 만들기 전에 이름을 짓는 규칙 자체를 먼저 세워야 한다는 판단.
+- 결정:
+  1. **`docs/ARCHITECTURE.md` 신규 §13(Domain Vocabulary & Naming
+     Convention)** — Intelligence/Memory/Execution/Guardian 4개를
+     1급 Domain 어휘로 정의(정의/책임/범위/대표 산출물/대표 소비자
+     5개 항목씩). Engine/Lifecycle/Resume/Scheduler/Recommendation/
+     Automation 6개를 이미 확립된 보조 용어로 별도 표에 정리.
+  2. **Milestone Naming Convention**: Milestone 이름은 `{Domain}
+     {Responsibility}` 형식을 따른다(`{Domain}`은 §13.2/§13.3의
+     기존 어휘). `Knowledge`(이미 M16에 확립)/`Insight`/`Learning`/
+     `Analyzer`/`Manager`처럼 기존 어휘와 겹치거나 구현 세부사항에
+     불과한 단어는 Milestone/Domain 이름으로 쓰지 않는다.
+  3. **신규 용어 도입 절차**: 기존 어휘 중 어느 것도 핵심 책임을
+     정확히 표현할 수 없을 때만 새 Domain 용어를 만들며, 이 경우도
+     §1.4 Approval Required 대상이다. 승인된 새 용어는 즉시 §13.2에
+     추가해 재사용 가능하게 한다.
+  4. **`docs/ARCHITECTURE.md` 신규 §14(Obsidian Graph Convention)** —
+     Graph Cluster를 폴더가 아니라 §13 Domain 기준으로 정의(🔵
+     Intelligence/🟢 Execution/🟡 Memory/🟣 Architecture/🔴 Domain/🟠
+     Documentation). 현재 Vault 문서를 Cluster에 매핑한 참고 표와
+     Linking Rules(의미 있는 관계만 링크/불필요한 Cross-Cluster 링크
+     회피/계층적 링크 우선/완전 연결 그래프 방지)를 포함.
+  5. **`.ai/RULES.md` 신규 §1.5(Vocabulary Reuse First)** — 새
+     Milestone/Engine/Service/아키텍처 개념 도입 전 §13 어휘 재사용
+     여부를 먼저 확인하도록 영구 규칙으로 명문화.
+  6. **이번 작업의 범위는 문서화로 한정한다.** 기존 Milestone 이름/
+     클래스명/파일명은 변경하지 않는다. Vault 문서에 Domain Cluster
+     Tag(예: `#cluster/intelligence`)를 일괄 추가하는 작업과
+     `.obsidian/graph.json`의 실제 Group/Color 설정은 별도 후속
+     작업으로 남긴다(§14.5) — 수십 개 문서의 Frontmatter를 한 번에
+     바꾸는 것은 리팩토링에 해당해 별도 제안·승인이 필요하다.
+- 대안:
+  - **용어집을 만들지 않고 각 Milestone에서 그때그때 판단한다** —
+    기각. M39 이후 "Memory Engine"(M39, 이후 "Execution Memory"로
+    개칭)과 "Learning Engine"(§2.1 예약)/"Experience Intelligence"
+    (사용자가 M40 착수 시 제시한 이름) 사이의 관계가 이미 한 번
+    혼란을 일으켰다 — 사전 정의된 어휘 없이는 이런 혼란이 Milestone
+    마다 반복된다.
+  - **Obsidian Graph를 폴더 기준으로 유지한다** — 기각(사용자 요청).
+    같은 폴더(`15 Project Intelligence/`)에 Intelligence(Read Only)와
+    Execution(부작용 발생) 문서가 섞여 있어, 폴더 기준 Graph는
+    아키텍처 경계를 시각적으로 드러내지 못한다.
+  - **지금 바로 모든 Vault 문서에 Cluster Tag를 추가하고
+    `.obsidian/graph.json`을 설정한다** — 기각(이번 범위에서는).
+    사용자가 "문서화 전용, 기존 이름/클래스 변경 없음"으로 범위를
+    명시했고, 수십 개 문서 Frontmatter 일괄 변경은 별도 승인이
+    필요한 작업이라 §14.5에 "적용 계획"으로만 남겼다.
+- 이유: Milestone이 거듭될수록 이름이 발산하는 것을 막고, 이름만
+  보고도 그 컴포넌트의 아키텍처적 책임(Read Only/저장/실행/감시)을
+  알 수 있게 한다 — MDD Review Gate(§2.1.1)가 "코드"에 대해 하는
+  Reuse First 검증을 "이름"에도 동일하게 적용한 것이다.
+- 결과/영향: `docs/ARCHITECTURE.md` §13(신규)/§14(신규) 추가,
+  `.ai/RULES.md` §1.5(신규) 추가(v0.9.0). 코드 변경 없음 — `pytest`/
+  `ruff`/`mypy`는 기존 상태(1021 passed) 그대로 유지. 다음
+  Milestone(M40)의 이름은 이 규칙에 따라 재검토된다.

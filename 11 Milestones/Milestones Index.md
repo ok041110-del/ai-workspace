@@ -53,6 +53,16 @@ tags: [milestone]
 | M38 | AutomationScheduler 연결 | M21 `AutomationScheduler`와 M35~M37 Recommendation Execution 파이프라인을 `web/server.py`의 `build_app()`(Composition Root)에서 실제로 연결. `VaultAdapter`/`AgentAdapter`/`RecommendationIntelligenceService`/`RecommendationExecutionService`가 `tests/`에서만 조립되던 "워크숍 단계" 한계를 해소해 최초로 실배선. 새 `ActionKind.RUN_RECOMMENDATION`(추가 필드 없음)이 `AutomationActionExecutor`를 거쳐 `RecommendationExecutionService.publish(manual_trigger=True)`를 호출 — `ExecutionGate`는 M36과 동일하게 `source=next_task`만 승인(새 정책 없음). `done→archived` 자동화·재시도 정책·`review→done` 자동화·CLI·Hook은 범위 밖(YAGNI). 새 Core Domain Interface/Adapter 없음(27종 유지). **Milestone Review 완료 — 사용자 승인(2026-07-30)** | ADR-0052 |
 | M39 | Execution Memory | M38 Review가 M39 이후로 미룬 세 Engine(Memory Engine/Architecture Guardian/Learning Engine) 중 Memory Engine 착수. Execution 결과를 새 Interface 없이 기존 `MemoryEngine`(M1)에 자동 저장하고 `ExecutionMemoryStore`(신규 Service)로 조회만 제공 — `ExecutionMemory`(task_id/action/result/timestamp/reason)에 embedding/score/vector/confidence 없음. `RecommendationExecutionService`에 선택적 의존성으로 주입(미주입 시 M38 이전과 동일). 영속화(Vault 파일)는 `MemoryEngine`(M1 기초 계약)이 `vault/`(M28+ Layer)에 하향 결합되는 문제로 범위 제외, Learning(Rule 반영)은 M40 이후로 이관(사용자 조건부 승인). 새 Core Domain Interface/Adapter 없음(27종 유지). **Milestone Review 완료 — 사용자 승인(2026-07-30)** | ADR-0053 |
 
+## Pre-M40: Domain Vocabulary & Naming Convention
+
+**프로젝트 전체 명명 규칙 및 Obsidian Graph 규칙 확립**(ADR-0054).
+Milestone 번호가 아닌 M40 착수 전 준비 단계. Intelligence/Memory/
+Execution/Guardian을 1급 Domain 어휘로 정의하고, Milestone 이름은
+`{Domain} {Responsibility}` 형식만 쓰도록 명문화했다. Obsidian Graph
+Cluster도 폴더가 아니라 Domain 기준으로 재정의(`docs/ARCHITECTURE.md`
+§13/§14). 문서화 전용 작업 — 기존 Milestone/클래스/파일명 변경 없음.
+상세는 GitHub `.ai/DECISIONS.md`의 "ADR-0054" 절 참고.
+
 ## M23-Preparation
 
 **Obsidian Knowledge Base 구축**(이 Vault 자체). Milestone 번호가
