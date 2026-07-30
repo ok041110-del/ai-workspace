@@ -91,6 +91,55 @@ Core Domain·`web/` 양쪽 모두 모르는 독립 계층 `vault/`가 GitHub
 Owner/Checklist/Notes/Related Documents/Decision을 담은 문서를
 Obsidian 안에서 직접 관리할 수 있다. [[Template - Task]] 참고.
 
+## Workspace Adapter Layer(Milestone 28-T03, ADR-0039)
+
+Core Domain과 `vault/`는 여전히 서로를 모른다(ADR-0035 유지) —
+그 경계를 넘는 유일한 통로가 새 최상위 패키지 `integration/`이다.
+"Adapter 3개"가 아니라, 외부 관심사마다 하나씩 늘어나는 확장
+가능한 계층(Vault/Workflow/Agent, 향후 Runtime/Service/
+Notification/Sync 등)으로 정의했다. 각 Adapter는 연결·변환·위임만
+하고 비즈니스 로직을 갖지 않는다. `ast` 기반 테스트가 이 경계를
+자동으로 강제한다.
+
+## Adapter vs Connector(Milestone 28-T05, ADR-0040)
+
+Integration Layer 안에서 두 종류를 구분한다: **Adapter**(외부
+시스템 하나와의 연결만, `VaultAdapter`/`WorkflowAdapter`/
+`AgentAdapter`)와 **Connector**(여러 Adapter를 조합해 유스케이스
+하나를 오케스트레이션, `WorkflowTaskLink`/`WorkflowAgentLink`).
+Connector도 자체 비즈니스 로직은 갖지 않고 항상 Adapter가 감싼
+Core Domain Engine에 위임한다. **Peer Connector**끼리도 서로
+참조하지 않는다 — Agent 배정은 `WorkflowTaskLink`가 아니라 별도
+`WorkflowAgentLink`가 담당한다.
+
+## Conversation Layer 연동 — Orchestrating Connector(Milestone 28-T06, ADR-0041)
+
+M28의 마지막 Task. `ConversationConnector`(신규)는 Peer Connector
+2개(`WorkflowTaskLink`/`WorkflowAgentLink`) + `VaultAdapter`를
+조합해 Conversation Layer 요청("Task 생성→Workflow 생성→Agent
+배정→Vault 반영" 등)을 처리하는 **Orchestrating Connector**다 —
+"Connector끼리 서로 참조하지 않는다"는 원칙의 명시적 예외로,
+여러 유스케이스를 조합하는 것 자체가 존재 이유다. Conversation
+Layer(사용자 입력 해석/요청 라우팅/결과 조합만 담당)는 Vault/Core
+Domain Engine/AgentManager를 직접 참조하지 않고 이 Connector만
+거친다(`ast` 테스트로 강제). 새 비즈니스 로직·새 Domain 필드 없음.
+
+**Milestone 28(Live Task Management & Integration) 전체 완료.**
+다음은 Architecture Freeze(별도 승인 후 진행).
+
+## Architecture Freeze(ADR-0042)
+
+M28(T01~T06)이 만든 구조를 새 기능 없이 검증·확정했다. Layer
+구조/Integration Layer/Boundary/Domain/Public Interface/ADR
+정합성을 전수 검토해 그대로 기준선(Baseline)으로 확정했다.
+검증 중 `WorkflowAgentLink`가 `WorkflowTaskLink`를 직접 참조하는
+Peer Connector 상호 참조 위반 1건을 발견해 즉시 수정했다 —
+공유 값 객체 `WorkflowLink`를 신규 중립 모듈 `integration/
+models.py`로 옮겼다. 개선 후보 7건은 목록만 남기고 리팩토링하지
+않았다. `pytest` 851개·ruff·mypy 전부 클린. M29(Project
+Intelligence)는 사용자 승인 이후 착수한다. 전문은 GitHub
+`.ai/TASKS.md`의 "Milestone 28 — Architecture Freeze" 절 참고.
+
 ## 관련 문서
 
 - [[Overview]]

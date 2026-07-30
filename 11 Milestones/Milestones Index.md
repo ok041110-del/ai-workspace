@@ -8,6 +8,13 @@ tags: [milestone]
 > `.ai/TASKS.md` 원문 참고. [[ADR Index]]와 교차 참고하면 각 결정의
 > 배경을 알 수 있다.
 
+> **Task 변경 로그(Milestone 28-T02)**: 이 문서에 "## Task 변경
+> 로그" 절이 보인다면 `vault/task_sync.py`가 Task 상태 변경 때마다
+> 자동으로 추가한 것이다 — `docs/ROADMAP.md`는 GitHub 원문이라
+> Vault가 직접 쓰지 않으므로, 그 대신 이 Vault 쪽 대응 문서에
+> Task와 Milestone을 잇는 연결 로그를 남긴다(각 줄이 해당 Task
+> 문서로의 Wikilink다).
+
 | Milestone | 이름 | 핵심 결과 | 관련 ADR |
 |---|---|---|---|
 | M1 | 기반 구축(Foundation) | 27종 중 다수 Interface 최초 정의, 도메인 모델 확립, Multi-Agent First 구조 확정 | ADR-0006, 0010~0013 |
@@ -33,6 +40,7 @@ tags: [milestone]
 | M21 | Automation Engine | `AutomationRepository`(27번째 Interface) 도입, AutomationScheduler | ADR-0033 |
 | M22 | Production Platform | `ProductionConfig`/`LifecycleManager`/`HealthMonitor` 도입, 새 Interface 없음 | ADR-0034 |
 | M27 | Obsidian Workspace Templates(M25 요청) | `VaultDocumentKind.TASK` 신규(개별 Task 문서), Daily/Decision Template 확장, Project Workspace Template 정의(설계만) | ADR-0038 |
+| M28 | Live Task Management & Integration | Task Lifecycle/자동 문서 갱신(Vault 내부), 신규 `integration/` 패키지(Workspace Adapter Layer) — Vault/Workflow/Agent Adapter, Peer Connector(WorkflowTaskLink/WorkflowAgentLink), Orchestrating Connector(ConversationConnector). Core Domain↔vault 직접 의존 금지를 `ast` 테스트로 강제, Domain 모델 무변경. **Architecture Freeze 완료**(Peer Connector 상호 참조 위반 1건 발견·수정) | ADR-0039, 0040, 0041, 0042 |
 
 ## M23-Preparation
 

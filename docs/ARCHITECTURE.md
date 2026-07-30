@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.33.0 |
-| 작성일 | 2026-07-27 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). **Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — ADR-0038: `VaultDocumentKind.TASK` 신규(개별 Task 문서), Daily/Decision Template 확장, Project Workspace Template 정의(설계만)**. 새 Interface 없이 27종 유지) |
+| 문서 버전 | v0.38.0 |
+| 작성일 | 2026-07-30 |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). **Architecture Freeze(ADR-0042) 완료 — 사용자 승인 대기**: Layer/Integration Layer/Boundary/Domain/Public Interface/ADR 정합성 전수 검토, Peer Connector 상호 참조 위반 1건 발견·수정(`WorkflowLink`를 신규 `integration/models.py`로 이동), §8에 규칙 19/20 추가, `pytest` 851개·ruff·mypy 전부 클린. 승인 전까지 M29(Project Intelligence)는 착수하지 않는다. 새 Interface 없이 27종 유지) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -1029,6 +1029,183 @@ GitHub 원문(.ai/TASKS.md, .ai/DECISIONS.md, .ai/MEMORY.md,
 
 **Milestone 27(Obsidian Workspace Templates) 완료.**
 
+- **구현 상태(Milestone 28-T01, Task Lifecycle)**: `vault/
+  task_lifecycle.py`(신규) — `TaskStatus`(Todo/In Progress/Review/
+  Done/Archived) + `transition_task_status()`가 Task 문서의 상태
+  전이·`updated` 자동 갱신·Archive 이동(`14 Tasks/Archive/
+  {task_id}.md`)을 처리한다. `sync.py`(Rename/Delete)와 같은 "문서
+  생성 이후 관리" 계층으로 배치했고, Task 생성 자체(Router→
+  Generator→Writer→Engine)는 그대로다. Core Domain 참조 없음, 새
+  Interface 없음 — Milestone 28의 나머지 Task(자동 문서 갱신/
+  Integration Layer/Workflow·Agent 연동/Conversation Layer)는
+  진행 중이며 각 Task 완료마다 이 절에 추가한다.
+
+- **구현 상태(Milestone 28-T02, Automatic Document
+  Synchronization)**: `vault/task_sync.py`(신규) — `sync_task_change()`
+  가 Task 상태 변경을 Daily Note("오늘 작업"/"진행중"/"완료" 섹션에
+  Backlink 줄 추가, 없으면 생성)/`11 Milestones/Milestones
+  Index.md`("## Task 변경 로그" — `docs/ROADMAP.md`는 GitHub 원문
+  이라 Vault가 직접 못 쓰므로 이 Vault 대응 문서로 대신함)/`12
+  Decisions/Decisions Index.md`("## Task 연결", Task의 `## Decision`
+  절에 실제 Wikilink가 있을 때만)에 반영한다. 신규 헬퍼
+  `_upsert_bullet_section()`은 `writer.upsert_section()`(섹션
+  전체 치환)과 달리 누적 로그용으로 "중복 없는 줄 추가"를
+  구현한다(서로 다른 저장 전략을 하나로 억지로 합치지 않음).
+  `transition_and_sync()`가 `task_lifecycle.transition_task_status()`
+  + `sync_task_change()`를 잇는 단일 진입점. 모든 신규 링크는
+  파일명/기존 문서 제목만 가리켜 Wiki Link/Backlink가 깨지지
+  않는다(`find_broken_backlinks()` 통합 테스트로 확인). Core Domain
+  참조 없음, 새 Interface 없음.
+
+### Workspace Adapter Layer(Milestone 28-T03, ADR-0039)
+
+`vault/`(§3.21)와 Core Domain(§3.4~3.21의 `domain`/`interfaces`/
+`engines`)은 서로 직접 참조하지 않는다(ADR-0035) — 이 절은 그
+경계를 넘는 유일한 통로인 신규 최상위 패키지 `integration/`을
+설명한다.
+
+- **Workspace Adapter Layer**: `integration/`이 구현하는 계층
+  이름(ADR-0039). "Adapter 3개"가 아니라, 외부 관심사(Vault,
+  Workflow, Agent, 그리고 향후 Runtime/Service/Notification/Sync
+  등)마다 하나씩 늘어나는 확장 가능한 계층으로 정의한다. 각
+  Adapter는 **연결·변환·위임만** 담당하고 비즈니스 로직이나
+  Workspace Intelligence(자연어 해석, 계획 수립 등)를 갖지 않는다.
+- **구성원(Milestone 28-T03)**:
+  - `vault_adapter.VaultAdapter` — `vault/`를 아는 유일한 Integration
+    Layer 구성원. `create_task()`/`transition_task()`가 `vault.
+    engine`/`vault.task_lifecycle`/`vault.task_sync`를 그대로
+    호출한다. vault 내부 타입(`TaskStatus` 등)은 바깥에 노출하지
+    않고 문자열로만 주고받는다.
+  - `workflow_adapter.WorkflowAdapter` — `WorkflowEngine`/`TaskEngine`
+    **Interface**에만 의존(Interface First, 구체 구현은 생성자로
+    주입). `plan()`/`transition_task()`는 각각 Core Domain Engine을
+    그대로 호출한다.
+  - `agent_adapter.AgentAdapter` — `AgentManager`/`AgentRegistry`/
+    `AgentScheduler` Interface에만 의존. `create_agent()`가
+    `AgentManager.create()` + `AgentRegistry.register()`를 잇는다.
+  - 세 Adapter는 서로를 참조하지 않는다 — Task↔Workflow 연결
+    (M28-T04)/Workflow↔Agent 연결(M28-T05)은 이들을 조합해 쓰는
+    상위 호출자(Conversation Layer, M28-T06)의 책임으로 남겨뒀다.
+- **공유 기반 클래스를 두지 않은 이유**: 세 Adapter의 메서드
+  시그니처가 서로 다른 관심사를 다뤄 억지로 공통 Interface를 뽑으면
+  Speculative Generality가 된다(ADR-0039 결정 3). "Layer"는
+  패키지 경계 + `XxxAdapter` 이름 규칙 + 이 문서로 정의하고,
+  실제로 여러 Adapter가 공유해야 하는 필요가 생기면 그때 Interface를
+  뽑는다.
+- **경계 강제**: `tests/integration_layer/test_architecture_boundary.py`
+  가 `ast` 모듈로 `src/ai_workspace/` 전체 import 문을 파싱해
+  (a) Core Domain이 `vault`를 import하지 않는지, (b) `vault`가
+  Core Domain을 import하지 않는지, (c) `integration/` 밖의 어떤
+  파일도 둘을 동시에 import하지 않는지 확인한다 — §8 규칙 18을
+  코드로 강제한다.
+- 새 Core Domain Interface 없음(27종 그대로) — Integration Layer는
+  기존 Interface에 의존만 하고 새 계약을 추가하지 않는다.
+
+**구현 상태(Milestone 28-T04, Workflow Engine Integration)**:
+`integration/workflow_task_link.py`의 `WorkflowTaskLink` — Vault
+Task와 Core Domain `Workflow`/`Task`를 잇는다. 사용자가 T04 승인 시
+제시한 4개 원칙을 그대로 지켰다:
+
+1. Workflow↔Vault 직접 의존 없음 — 이 파일은 `vault`를 import하지
+   않고 `VaultAdapter`/`WorkflowAdapter`만 조합한다.
+2. 모든 연결이 Integration Layer 안에서만 이뤄진다 — `WorkflowTaskLink`
+   자체가 `integration/`에 있고, 밖의 어떤 모듈도 두 Adapter를
+   동시에 쓰지 않는다(경계 테스트가 계속 보장).
+3. Domain 객체 오염 없음 — `Task`/`Workflow`에 새 필드를 추가하지
+   않았다. 대신 Vault task_id와 Core Domain task_id(서로 다른
+   문자열 공간 — Vault는 사람이 붙인 ID, Core Domain은 `TaskEngine`
+   발급 ID)를 잇는 매핑은 이 파일의 `WorkflowLink` 값 객체가
+   별도로 든다. 기존 `Task.workflow_id` 필드(원래부터 있던 Workflow
+   소속 정보)를 그대로 채워 재사용했다.
+4. Adapter는 연결·변환·위임만 — `WorkflowTaskLink`는 ID 변환과
+   호출 순서 조합만 하고, 상태 전이 규칙은 여전히 `TaskEngine`/
+   `vault.task_lifecycle`에 위임한다. `transition_and_reflect()`는
+   Core Domain `TaskStatus`를 Vault 상태 문자열로 매핑(`BLOCKED`/
+   `CANCELLED`는 대응 상태가 없어 의도적으로 Vault에 반영하지
+   않음)하고, `is_workflow_complete()`는 Workflow 자체에 없는
+   "종료" 개념을 Task 전체가 `DONE`인지로 파생 계산한다(Domain
+   모델을 건드리지 않기 위함) — 둘 다 판단이 아니라 조회/변환이다.
+
+`create_workflow_from_vault_tasks()`가 "Task → Workflow 생성",
+`transition_and_reflect()`가 "Workflow 상태 변경 → Task 상태 반영",
+`is_workflow_complete()`가 "Workflow 종료"에 대응한다(M25 요청
+원문의 흐름 그대로). 새 Core Domain Interface 없음, `domain.Task`/
+`domain.Workflow` 필드 추가 없음.
+
+**Adapter vs Connector(Milestone 28-T05, ADR-0040)**: T04에서
+`VaultAdapter`/`WorkflowAdapter`(외부 시스템 하나만 연결)와
+`WorkflowTaskLink`(둘을 조합)가 서로 다른 책임임이 드러나, T05
+(Agent Assignment) 착수 시 이를 공식 분류로 확정했다.
+
+- **Adapter** — 외부 시스템 하나와의 연결만. 다른 Adapter를
+  참조하지 않는다(ADR-0039 유지).
+- **Connector** — 여러 Adapter를 조합해 유스케이스 하나를
+  오케스트레이션한다. 자체 비즈니스 로직은 갖지 않고 Adapter가
+  감싼 Core Domain Engine에 위임만 한다. **Connector도 유스케이스
+  하나만 책임진다** — Connector끼리 서로 참조하지 않는다.
+
+`integration/workflow_agent_link.py`의 `WorkflowAgentLink`(신규
+Connector)가 이 원칙에 따라 Agent 배정 책임을 `WorkflowTaskLink`에
+얹지 않고 분리됐다:
+
+- `AgentAssignment`(값 객체) — `WorkflowLink` + `Agent`. `domain.
+  Task`/`domain.Agent` 어느 쪽에도 필드를 추가하지 않는다(Domain
+  오염 금지, T04와 동일 원칙) — 배정 관계는 `WorkflowAgentLink`가
+  내부 상태로만 든다.
+- `assign_agent()` — `AgentAdapter.select_agent()`(→
+  `AgentScheduler`)로 고른 Agent를 Task에 배정한다("Agent
+  Assignment"). 후보가 없으면 `NoAvailableAgentError`.
+- `transition_agent_status()` — 배정된 Agent의 상태를 `AgentAdapter.
+  transition_agent()`(→ `AgentManager`)에 위임해 전이한다("Agent
+  Status" 추적). 배정 전이면 `AgentNotAssignedError`.
+- `agent_progress()` — 해당 Agent에게 배정된 Task 중 Core Domain
+  기준 `DONE` 비율("Agent Progress"). `Agent`에 진행률 필드가
+  없으므로 배정 목록에서 매번 파생 계산한다.
+- `AgentAdapter`(T03)를 그대로 재사용하므로 "Agent Registry 연동"/
+  "Agent Manager 연동"은 추가 코드 없이 이미 충족된다(위임 자체가
+  그 연동이다).
+
+**Conversation Layer 연동 — Orchestrating Connector(Milestone
+28-T06, ADR-0041)**: M28의 마지막 Task. Conversation Layer(사용자
+입력 해석/요청 라우팅/결과 조합만 담당 — 자연어 해석 자체는
+코드가 아니라 AI의 역할, M23-T06과 같은 전제)가 Task/Workflow/
+Agent 요청을 처리하는 유일한 진입점으로
+`integration/conversation_workflow_link.py`의
+`ConversationConnector`를 도입했다.
+
+- **Peer Connector vs Orchestrating Connector**(ADR-0040 확장):
+  `WorkflowTaskLink`/`WorkflowAgentLink`는 유스케이스 하나만
+  책임지고 서로 참조하지 않는 **Peer Connector**다.
+  `ConversationConnector`는 여러 Peer Connector/Adapter를 조합해
+  더 상위 유스케이스를 라우팅·조합하는 것 자체가 존재 이유인
+  **Orchestrating Connector**로, ADR-0040 "Connector끼리 서로
+  참조하지 않는다" 원칙의 명시적 예외다.
+- `handle_task_request()` — "Task 생성 → Workflow 생성 → Agent
+  Assignment → Vault 반영"(M25 요청 예시 흐름)을 `VaultAdapter.
+  create_task()` → `WorkflowTaskLink.create_workflow_from_vault_tasks()`
+  → `WorkflowAgentLink.assign_agent()` 순서로 그대로 호출한다.
+- `advance_task()` — `WorkflowTaskLink.transition_and_reflect()`에
+  그대로 위임(요청 라우팅).
+- `report_status()` — `WorkflowTaskLink.get_task_status()`(신규,
+  `WorkflowAdapter.get_task()` 위임)/`is_workflow_complete()`
+  결과를 묶기만 한다("결과 조합").
+- **Boundary**: Conversation Layer(호출자)와 `ConversationConnector`
+  자신 둘 다 `vault`/`WorkflowEngine`/`TaskEngine`/`AgentManager`
+  (및 구체 구현)를 직접 import하지 않는다 — `VaultAdapter`/
+  `WorkflowTaskLink`/`WorkflowAgentLink`만 통해서 접근한다.
+  `tests/integration_layer/test_conversation_connector_boundary.py`
+  가 `ast`로 이를 강제한다. Domain 값 타입(`Task`/`Workflow`/
+  `Agent`/`TaskStatus`/`AgentCapability`)은 메서드 시그니처에
+  그대로 쓴다 — T03부터 Adapter가 이미 노출해 온 값이라 새로운
+  경계 위반이 아니다.
+- 새 비즈니스 로직 없음, 새 Core Domain Interface 없음, `domain.
+  Task`/`domain.Workflow`/`domain.Agent` 필드 추가 없음.
+
+**Milestone 28(Live Task Management & Integration) 전체 완료
+(T01~T06).** 다음은 사용자가 요청한 Architecture Freeze(ADR 전체
+재검토/Layer 의존성 검증/Integration Boundary 검증/Interface 목록
+확정/M29 요구사항 재정의) — 별도 승인 후 진행한다.
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -1171,6 +1348,36 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
     22) — 조립은 항상 `web/server.py`의 `build_app()`이 전담하고,
     `LifecycleManager`는 이미 조립된 컴포넌트의 Startup/Shutdown
     순서만 조율한다.
+18. **Core Domain(`domain`/`interfaces`/`engines`)과 `vault/`는
+    서로 직접 참조하지 않는다**(ADR-0035, Milestone 28-T03로
+    ADR-0039에서 강제 방식 추가). 이 경계를 넘는 통신은 반드시
+    `integration/`의 Workspace Adapter Layer(`VaultAdapter`/
+    `WorkflowAdapter`/`AgentAdapter`)를 통해서만 이뤄진다.
+    `integration/`을 제외한 어떤 모듈도 `vault`와 `domain`/
+    `interfaces`/`engines`를 동시에 import할 수 없다 —
+    `tests/integration_layer/test_architecture_boundary.py`가
+    `ast` 기반으로 이를 테스트 실패로 강제한다.
+19. **`integration/` 내부 참조 규칙**(ADR-0040/ADR-0041, Milestone
+    28-T05/T06 Architecture Freeze에서 §8로 명문화): Adapter
+    (`VaultAdapter`/`WorkflowAdapter`/`AgentAdapter`)는 다른
+    Adapter를 참조하지 않는다. Peer Connector(`WorkflowTaskLink`/
+    `WorkflowAgentLink`)는 Adapter만 조합하고 다른 Peer Connector를
+    참조하지 않는다. Orchestrating Connector(`ConversationConnector`)
+    만 예외적으로 Peer Connector와 Adapter를 함께 조합할 수 있다
+    (그 반대로 Peer Connector나 Adapter가 Orchestrating Connector를
+    참조하는 것은 금지). 즉 참조 방향은 항상 **Orchestrating
+    Connector → (Peer Connector | Adapter) → Core**이며 위로
+    거슬러 올라가지 않는다.
+20. **Conversation Layer는 `vault`/`WorkflowEngine`/`TaskEngine`/
+    `AgentManager`(및 그 구체 구현)를 직접 참조하지 않는다**
+    (ADR-0041, Milestone 28-T06) — 모든 요청은
+    `ConversationConnector`(Orchestrating Connector)를 통해서만
+    전달한다. `tests/integration_layer/
+    test_conversation_connector_boundary.py`가 `ConversationConnector`
+    자신의 import를 `ast` 기반으로 검증한다(Conversation Layer
+    자체는 별도 코드 패키지가 아니라 이 Connector의 호출자이므로,
+    이 규칙은 실제로는 "`ConversationConnector` 밖에 이 접근 경로를
+    또 만들지 않는다"는 의미로 강제된다 — §9 참고).
 
 ## 9. 디렉터리 구조와 컴포넌트 매핑
 
@@ -1224,8 +1431,27 @@ src/ai_workspace/
 │                       #   sync.py(Rename/Delete/Conflict, M23-T05)
 │                       #   + connection.py/filesystem.py/atomic.py
 │                       #   (Real Vault Connection/Adapter/Atomic
-│                       #   Write, M24, ADR-0036)
+│                       #   Write, M24, ADR-0036) + task_lifecycle.py
+│                       #   (Status Transition/Archive, Milestone 28-T01)
+│                       #   + task_sync.py(Automatic Document
+│                       #   Synchronization, Milestone 28-T02)
 │                       #   — Core Domain·web/을 모두 모름, Milestone 23~24
+├── integration/       # Workspace Adapter Layer(ADR-0039, Milestone
+│                       #   28-T03) — vault_adapter.py/workflow_adapter.py/
+│                       #   agent_adapter.py(Adapter: 외부 시스템 1개만
+│                       #   연결). Core Domain↔vault 경계를 넘는 유일한
+│                       #   통로, 연결·변환·위임만 담당
+│                       #   + workflow_task_link.py(WorkflowTaskLink,
+│                       #   Milestone 28-T04)/workflow_agent_link.py
+│                       #   (WorkflowAgentLink, Milestone 28-T05,
+│                       #   ADR-0040) — Peer Connector: 유스케이스
+│                       #   하나씩 오케스트레이션, 서로 참조하지 않음
+│                       #   + conversation_workflow_link.py
+│                       #   (ConversationConnector, Milestone 28-T06,
+│                       #   ADR-0041) — Orchestrating Connector: 위
+│                       #   Peer Connector 2개 + VaultAdapter를 조합해
+│                       #   Conversation Layer 요청을 처리(예외적으로
+│                       #   Connector를 참조하는 유일한 구성원)
 ├── web/               # Infrastructure 계층 — FastAPI/uvicorn을 아는 유일한 곳
 │                       #   (Milestone 20): dashboard_viewmodel.py, routes.py,
 │                       #   dashboard_broadcaster.py, app.py, server.py,

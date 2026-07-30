@@ -236,6 +236,30 @@ tags: [decision]
 - 결정: `VaultDocumentKind.TASK` 신규(개별 Task 문서, `14 Tasks/{task_id}.md`), `render_task_file()`(Status/Priority/Milestone/Owner/Checklist/Notes/Related Documents/Decision + frontmatter), `render_daily_file()`에 진행중/완료 구분 추가, `AI_RULES` Tag/Frontmatter Rule 확장, Project Workspace Template은 설계만(단일 Project 유지, YAGNI)
 - 영향: [[Template - Task]]/[[Template - Project Workspace]] 신규, [[Template - Daily]]/[[Template - Decision]] 갱신. 상세는 [[Vault Integration Architecture]]
 
+## ADR-0039: Workspace Adapter Layer 도입 (Milestone 28-T03)
+
+- 목적: Core Domain↔vault 직접 의존 없이 Task Lifecycle을 Workflow/Agent와 연결할 통로 마련
+- 결정: 신규 최상위 패키지 `integration/`(Vault/Workflow/Agent Adapter 3종)을 "Adapter 3개"가 아니라 향후 Runtime/Service/Notification/Sync까지 확장 가능한 Workspace Adapter Layer로 정의. 공유 기반 클래스는 두지 않음(Speculative Generality 회피). Core Domain↔vault 직접 import 금지를 `ast` 기반 테스트로 강제
+- 영향: `docs/ARCHITECTURE.md` §8 규칙 18 신설, §3 Workspace Adapter Layer 절 추가. 상세는 [[Architecture Overview]]
+
+## ADR-0040: Integration Layer 내부 분류 — Adapter vs Connector (Milestone 28-T05)
+
+- 목적: Integration Layer 안에서 "외부 시스템 연결"과 "여러 Adapter를 조합하는 오케스트레이션"을 명확히 구분
+- 결정: Adapter(Vault/Workflow/Agent, 외부 시스템 1개만 연결) vs Connector(WorkflowTaskLink/WorkflowAgentLink, 여러 Adapter 조합, 유스케이스 1개만 책임). Connector끼리도 서로 참조하지 않음 — Agent 배정을 WorkflowTaskLink에 얹지 않고 별도 WorkflowAgentLink로 분리
+- 영향: `integration/__init__.py`에 분류 명시, `docs/ARCHITECTURE.md` §3에 반영. 상세는 [[Architecture Overview]]
+
+## ADR-0041: Conversation Layer 연동 — Conversation Connector 도입, Orchestrating Connector 개념 추가 (Milestone 28-T06)
+
+- 목적: Conversation Layer가 Task/Workflow/Agent 요청을 처리할 유일한 진입점 마련, M28 마지막 Task
+- 결정: `ConversationConnector`(Peer Connector `WorkflowTaskLink`/`WorkflowAgentLink` + `VaultAdapter` 조합)를 **Orchestrating Connector**로 도입 — ADR-0040 "Connector끼리 참조 금지" 원칙의 명시적 예외. Conversation Layer는 Vault/Core Domain Engine/AgentManager를 직접 참조하지 않고 이 Connector만 거침(`ast` 테스트로 강제). 새 비즈니스 로직·새 Domain 필드 없음
+- 영향: `integration/conversation_workflow_link.py` 신규. **Milestone 28(Live Task Management & Integration) 전체 완료**, Architecture Freeze 예정. 상세는 [[Architecture Overview]]
+
+## ADR-0042: M28 Architecture Freeze — Baseline 선언
+
+- 목적: M28이 만든 구조(Layer/Integration Layer/Boundary/Domain/Public Interface/ADR 정합성)를 새 기능 없이 검증·확정
+- 결정: Layer 구조·Integration Layer 구성(Adapter/Peer Connector/Orchestrating Connector)을 그대로 기준선으로 확정. 검증 중 Peer Connector 상호 참조 위반 1건 발견(`WorkflowAgentLink`→`WorkflowTaskLink`) 즉시 수정 — `WorkflowLink`를 신규 중립 모듈 `integration/models.py`로 이동. `docs/ARCHITECTURE.md` §8에 규칙 19/20 추가. 개선 후보 7건은 목록만 작성, 리팩토링하지 않음
+- 영향: `tests/integration_layer/test_connector_layering.py` 신규(위반 검출 테스트), `pytest` 851개·ruff·mypy 전부 클린. **M29(Project Intelligence) 진행 가능 — 사용자 승인 대기**. 상세는 [[Architecture Overview]], 전문은 GitHub `.ai/TASKS.md`의 "Milestone 28 — Architecture Freeze" 절
+
 ## 관련 문서
 
 - [[Architecture Overview]]

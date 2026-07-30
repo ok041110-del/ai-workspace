@@ -8,6 +8,12 @@ tags: [decision]
 > 아니지만 반복해서 물어보게 되는 질문들을 정리한다. Status가 "확정"
 > 이 아닌 항목은 아직 결론이 나지 않은 질문이다.
 
+> **Task 연결(Milestone 28-T02)**: "## Task 연결" 절이 보인다면
+> `vault/task_sync.py`가 자동으로 추가한 것이다 — Task 문서의
+> `## Decision` 절에 이 Index의 항목을 가리키는 Wikilink가 있으면,
+> 그 Task 상태가 바뀔 때마다 해당 Task→Decision Wikilink 쌍이
+> 자동 기록된다.
+
 ## 왜 CQRS인가
 
 - Status: 확정
