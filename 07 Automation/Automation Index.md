@@ -14,6 +14,13 @@ tags: [automation]
 > 새로 구현한다. 두 개념 모두 그대로 유지된다. ([[ADR Index]]
 > ADR-0033)
 
+> **Platform 계층(2026-07-30, 사용자 확정)**: M21(이 Milestone)은
+> M36~M38과 함께 **Execution Platform**(실행·상태 전이·스케줄링)에
+> 속한다 — M29~M35 **Intelligence Platform**(관찰·분석·추천,
+> Read Only)과 책임이 다르다. "Automation Core"라는 이름은 Memory
+> Engine/Architecture Guardian/Learning Engine이 갖춰진 뒤로
+> 보류됐다. 상세는 `docs/ARCHITECTURE.md` §2.1 참고.
+
 ## Rule
 
 `AutomationRule`은 `last_executed_at`/`next_execution_at`을 포함하는

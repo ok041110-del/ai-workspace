@@ -12,6 +12,17 @@ tags: [system]
 `14 Tasks/*.md`와 달리 `VaultDocumentKind` 체계(Index append/
 Backlink 검증)를 쓰지 않는다 — 원자적 전체 교체(overwrite)만 한다.
 
+> **Platform 계층(2026-07-30, 사용자 확정)**: 이 폴더의 M29~M35
+> 문서(`Project Intelligence`/`Project Context`/`Capability
+> Intelligence`/`Intelligence Overview`/`Session Resume`/`Workflow
+> Intelligence`/`Recommendation Intelligence`)는 **Intelligence
+> Platform**(관찰·분석·추천, Read Only)에 속한다. `Recommendation
+> Execution`(M36~M38)부터는 **Execution Platform**(실행·상태
+> 전이·스케줄링, 실제 부작용 발생)으로 책임이 다르다. "Automation
+> Core"라는 이름은 Memory Engine/Architecture Guardian/Learning
+> Engine이 갖춰진 뒤로 보류됐다 — 상세는 `docs/ARCHITECTURE.md`
+> §2.1.
+
 ## `Project Intelligence.md` (Milestone 29, ADR-0043)
 
 `src/ai_workspace/intelligence/report.py`의
