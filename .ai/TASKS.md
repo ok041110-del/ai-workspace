@@ -11121,10 +11121,16 @@ Review).
 Task 우선순위 재계산·AI 추론·Automation·CLI·Hook은 명시적으로 범위
 밖으로 남겨 다음 Milestone(M36) 이후 논의 대상이다.
 
-**사용자 승인 대기**: DoD 10개 항목/Architecture/MDD/Layer/
-Interface/Adapter/ADR/Tests/Documentation Review 결과를 위와 같이
-정리했다. 사용자 최종 확인 후 Milestone 35(Recommendation
-Intelligence) 공식 완료(Approved)로 확정한다.
+**사용자 승인(2026-07-30)**: DoD 10개 항목/Architecture/MDD/Layer/
+Interface/Adapter/ADR/Tests/Documentation Review를 모두 확인해
+**Milestone 35(Recommendation Intelligence) 공식 완료(Approved)**.
+"M29(Project Intelligence)→M30(Context Intelligence)→M31(Capability
+Intelligence)→M32(Intelligence Synthesis)→M33(Session Resume)→
+M34(Workflow Intelligence)→M35(Recommendation Intelligence)"로
+이어지며, 5단계 Priority Rule 1개로 새로운 Intelligence 계산 없이
+Execution Layer 이전의 마지막 Decision Layer를 완성했다. `15
+Project Intelligence/Recommendation Intelligence.md`가 공식 결과로
+확정된다.
 
 **다음은 Milestone 36** — 세부 Task는 착수 시점에 별도 제안·승인
 후 정의한다.
