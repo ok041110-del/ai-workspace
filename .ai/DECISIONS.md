@@ -2438,3 +2438,106 @@
   `pytest`/`ruff`/`mypy` 전부 클린 확인(Freeze Report 참고). 새
   Interface 없음(27종 그대로), Domain 필드 추가 없음, `pyproject.toml`
   버전 무변경.
+
+## ADR-0043: Intelligence Layer 도입 — `intelligence/` 신규 최상위 패키지, Vault Task 문서를 Project 단위 조회의 단일 데이터 소스로 채택 (Milestone 29-T01)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 M29 목표/DoD/Task 분해를 직접
+  제시하고 승인 — "Query Layer Only/Read Only/Interface 변경
+  금지(필요 시 사용자 승인)" 조건 포함)
+- 날짜: 2026-07-30
+- 배경: M28 Architecture Freeze(ADR-0042)로 27종 Core Domain
+  Interface와 Integration Layer(Adapter/Peer Connector/
+  Orchestrating Connector) 구조가 기준선으로 확정된 뒤, M29
+  (Project Intelligence)는 Project/Workflow/Task/Agent/Event/Vault
+  데이터를 종합해 Project Snapshot/Health/Risk/Recommendation을
+  만드는 Read Only Query Layer를 요구받았다. 착수 전 데이터 접근
+  경로를 조사한 결과 다음 두 가지 구조적 공백을 발견했다.
+  1. `TaskEngine`(Core Domain)은 `get_task(task_id)` 단건 조회만
+     제공하고 project 단위 전체 목록 조회(`list_tasks`)가 없다.
+     `domain.Project`에도 소속 task_id 목록 필드가 없다.
+  2. `WorkflowEngine`/`WorkflowTaskLink`/`WorkflowAgentLink`도
+     "특정 Link/Agent 하나"에 대한 조회만 제공하고, project 전체의
+     Workflow 목록이나 Agent 배정 전체 목록을 얻는 API가 없다.
+  즉 Core Domain Interface 27종만으로는 "Project 전체 상태"를 만들
+  수 없다 — 새 Interface(`list_tasks()` 등)를 추가하지 않는 한
+  Snapshot 자체가 불가능하다. 반면 `vault/`의 `14 Tasks/*.md`
+  문서(M27 Task 템플릿, M28 Live Task Management)는 파일 시스템
+  열거만으로 project 소속 Task 전체(frontmatter: task_id/status/
+  priority/milestone/owner/created/updated)를 이미 얻을 수 있다 —
+  M28이 Vault를 "Live" 상태의 실제 운영 소스로 확립해 둔 결과다.
+- 결정:
+  1. **M29은 신규 Core Domain Interface를 추가하지 않는다.**
+     Project 단위 열거가 필요한 Snapshot/Health/Risk/Recommendation은
+     **Vault Task 문서(`14 Tasks/*.md`)를 단일 데이터 소스**로
+     삼는다. `vault/task_query.py`(신규, Core Domain을 모르는 순수
+     읽기 함수 — `vault/task_lifecycle.py`와 같은 성격)가 `14 Tasks/`
+     디렉터리를 열거해 frontmatter를 파싱한 `TaskDocument` 목록을
+     반환하고, `VaultAdapter.list_tasks()`(신규 메서드, Interface
+     아님 — 기존 Adapter 클래스에 메서드 추가)가 이를 Integration
+     Layer에 노출한다. `VaultAdapter`는 이미 "vault를 아는 유일한
+     Integration 구성원"이라 이 확장은 기존 경계를 그대로 따른다
+     (ADR-0039).
+  2. **Agent 데이터는 `AgentAdapter.list_active_agents()`(기존
+     메서드, M28-T03)를 그대로 재사용한다.** 신규 메서드 없음. 단,
+     이 목록은 프로세스 내 `AgentRegistry`의 런타임 등록 상태이므로
+     Vault 기반 운영(장기 실행 Agent Runtime 프로세스가 없는 일반
+     사용 패턴)에서는 빈 목록일 수 있다는 한계를 그대로 문서화한다
+     (해결은 M29 범위 밖).
+  3. **Event(EventStore)는 M29 데이터 소스에서 제외한다.**
+     `integration/`에 Event Adapter가 아직 없고, Vault frontmatter의
+     `updated` 필드만으로 Risk Analyzer가 요구하는 "정체(Stagnant)"
+     판단이 충분히 가능하다고 판단했다(YAGNI — 새 Adapter를 M29에서
+     만들지 않는다).
+  4. **Workflow 단위 집계는 Vault Task의 `milestone` 필드로
+     근사한다.** Vault에는 Workflow 전용 문서 종류가 없다(M27
+     `VaultDocumentKind`에 WORKFLOW 없음) — Task 그룹핑의 실질적
+     상위 단위는 현재 `milestone` 뿐이다. 정확한 `Workflow`
+     Interface 기반 집계가 필요해지면 그때 `list_tasks`류 신규
+     Interface를 별도 ADR로 재논의한다(지금은 추가하지 않는다).
+  5. **"Blocked Task"는 Vault frontmatter에 없는 개념이다** —
+     `vault.task_lifecycle.TaskStatus`는 `{todo, in-progress, review,
+     done, archived}` 5종뿐이고 `domain.task.TaskStatus`의
+     `BLOCKED`/`CANCELLED`에 대응하는 값이 없다(두 enum은 ADR-0035에
+     따라 원래 독립적이다). M29은 이 간극을 새 Interface나 새
+     frontmatter 필드로 메우지 않고, **"정체(Stagnant) = IN_PROGRESS/
+     REVIEW 상태이면서 `updated`가 임계일(기본값, 설정 가능) 이상
+     지난 Task"** 규칙으로 "Blocked/장기 미진행"을 하나의 Risk
+     신호로 근사한다(M29-T03에서 상세 규칙 정의, Rule 값은 T03
+     구현 시 확정).
+  6. **새 최상위 패키지 `intelligence/`를 만든다**(`integration/`과
+     같은 층위, 그 위에 얹힌 신규 Layer). Analyzer(Snapshot/Health/
+     Risk/Recommendation, T02~T04)는 오직 `integration/`의
+     `VaultAdapter`/`AgentAdapter`에만 의존하고, `domain`/
+     `interfaces`/`engines`/`vault`를 직접 import하지 않는다 —
+     §8 규칙 18(Core Domain↔vault 직접 참조 금지)과 같은 성격의
+     경계를 `intelligence/`에도 적용한다(§8 신규 규칙 21,
+     `tests/intelligence/test_intelligence_layering.py`로 `ast`
+     기반 강제 예정, M29-T02에서 작성).
+- 대안:
+  - `TaskEngine`에 `list_tasks(project_id)`를 추가해 Core Domain을
+    단일 진실 공급원으로 삼는다 — 기각(사용자 조건: Interface 변경
+    금지, 필요 시 승인). 또한 Vault가 이미 M28부터 "Live" 데이터의
+    실질 운영 소스이므로 Core Domain 목록과 Vault 목록이 항상
+    동기화된다는 보장이 없어(현재는 `WorkflowTaskLink`가 명시적으로
+    연결한 Task만 양쪽에 존재), Core Domain을 소스로 삼으면 Vault에만
+    있는 Task를 누락하는 문제가 오히려 생긴다.
+  - Vault와 Core Domain 두 소스를 모두 조회해 병합한다 — 기각(YAGNI,
+    복잡도 증가). "M29은 추론 엔진을 과도하게 키우지 않는다"는
+    사용자 지침과 충돌 — 지금은 단일 소스로 충분히 DoD를 만족한다.
+  - `Blocked` 판정을 위해 Vault frontmatter에 `blocked: bool` 필드를
+    신규 추가한다 — 기각(지금 범위 밖, 문서 스키마 변경은 별도
+    승인 필요). `updated` 기반 정체 규칙만으로 M29 DoD("Blocked Task"
+    포함)를 충분히 만족할 수 있다고 판단했다.
+- 이유: "Query Layer Only/Read Only/기존 Engine 활용/Core Domain
+  수정 금지/Interface 변경 금지"라는 사용자 원칙을 문자 그대로
+  지키면서, 실제로 열거 가능한 유일한 데이터 소스(Vault)만으로
+  DoD 4가지 산출물(Snapshot/Health/Risk/Recommendation)을 전부
+  만들 수 있음을 확인했다 — 새 Interface 없이도 M29 목표를 달성할
+  수 있다는 것 자체가 이번 설계 검토의 핵심 결론이다.
+- 결과/영향: 코드 변경 없음(설계 Task) — 다음 Task(M29-T02)에서
+  `vault/task_query.py`/`VaultAdapter.list_tasks()`/`intelligence/`
+  패키지를 실제로 만든다. `docs/ARCHITECTURE.md` §3.22(신규)/§8
+  규칙 21(신규) 갱신, `.ai/TASKS.md`에 Milestone 29 절 신규 추가.
+  새 Core Domain Interface 없음(27종 그대로), `domain.Project`/
+  `domain.Task` 필드 추가 없음, `vault.models.VaultDocumentKind`
+  변경 없음.
