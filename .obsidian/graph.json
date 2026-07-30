@@ -1,0 +1,65 @@
+{
+  "collapse-filter": true,
+  "search": "",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:\"99 Templates\" OR path:\"01 Overview\" OR path:\"00 System\" OR path:\"13 Daily\" OR tag:#ios OR tag:#android OR tag:#system OR file:\"README\"",
+      "color": {
+        "a": 1,
+        "rgb": 16485376
+      }
+    },
+    {
+      "query": "-path:\"99 Templates\" -path:\"01 Overview\" -path:\"00 System\" -path:\"13 Daily\" tag:#task",
+      "color": {
+        "a": 1,
+        "rgb": 15022389
+      }
+    },
+    {
+      "query": "-path:\"99 Templates\" -path:\"01 Overview\" -path:\"00 System\" -path:\"13 Daily\" (tag:#architecture OR tag:#decision OR tag:#milestone OR tag:#backend OR tag:#api OR tag:#production)",
+      "color": {
+        "a": 1,
+        "rgb": 9323693
+      }
+    },
+    {
+      "query": "-path:\"99 Templates\" -path:\"01 Overview\" -path:\"00 System\" -path:\"13 Daily\" tag:#memory",
+      "color": {
+        "a": 1,
+        "rgb": 16635957
+      }
+    },
+    {
+      "query": "-path:\"99 Templates\" -path:\"01 Overview\" -path:\"00 System\" -path:\"13 Daily\" (tag:#recommendation-execution OR tag:#automation OR tag:#dashboard)",
+      "color": {
+        "a": 1,
+        "rgb": 4431943
+      }
+    },
+    {
+      "query": "-path:\"99 Templates\" -path:\"01 Overview\" -path:\"00 System\" -path:\"13 Daily\" (tag:#project-intelligence OR tag:#project-context OR tag:#capability-intelligence OR tag:#workflow-intelligence OR tag:#recommendation-intelligence OR tag:#intelligence-overview OR tag:#session-resume)",
+      "color": {
+        "a": 1,
+        "rgb": 4886745
+      }
+    }
+  ],
+  "collapse-display": true,
+  "showArrow": false,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.5,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 1,
+  "close": false
+}

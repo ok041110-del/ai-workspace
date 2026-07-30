@@ -3511,3 +3511,11 @@
   `.ai/RULES.md` §1.5(신규) 추가(v0.9.0). 코드 변경 없음 — `pytest`/
   `ruff`/`mypy`는 기존 상태(1021 passed) 그대로 유지. 다음
   Milestone(M40)의 이름은 이 규칙에 따라 재검토된다.
+- **T01 적용 완료(2026-07-30, `.ai/TASKS.md`의 "Pre-M40 T01" 절
+  참고)**: §14.5가 후속 작업으로 미룬 `.obsidian/graph.json` 실제
+  설정을 적용했다. 새 Frontmatter Tag를 추가하지 않고 이미 존재하는
+  Tag/경로 구조만으로 6개 Cluster를 상호 배타적으로 분류(41개 문서
+  전수 시뮬레이션 검증) — MDD 우선순위(①기존 메타데이터 ②기존 Tag
+  ③기존 폴더 구조)가 ④(신규 Frontmatter 제안) 없이 전부 해결됨을
+  실증했다. Memory Cluster는 아직 매칭 문서가 없다(Execution Memory
+  가 Vault에 노출되지 않음, ADR-0053).
