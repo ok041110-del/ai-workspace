@@ -9812,7 +9812,7 @@ Rule 기반 계층으로 유지한다.
 | M30-T01 | Context Intelligence Architecture 설계 | **완료** |
 | M30-T02 | Context Analyzer | **완료** |
 | M30-T03 | Freshness & Gap Analyzer | **완료** |
-| M30-T04 | Integration | 예정 |
+| M30-T04 | Integration | **완료** |
 | M30-T05 | Presentation | 예정 |
 
 ### M30-T01: Context Intelligence Architecture
@@ -9933,6 +9933,32 @@ Interface 없음(27종 그대로), Core Domain 코드 무변경,
 21 유지 — `context_quality.py`는 Adapter조차 직접 참조하지 않음).
 
 다음 Task: **M30-T04**(Integration).
+
+### M30-T04: Integration
+
+**목표**: `KnowledgeAdapter`(T02)/`ContextAnalyzer`(T02)/
+`ContextFreshnessGapAnalyzer`(T03)를 하나의 진입점으로 조립한다.
+
+**구현 내용**
+
+- `intelligence/context_service.py`(신규)의
+  `ContextIntelligenceService` — `KnowledgeAdapter`만 생성자로
+  주입받아 `generate(subject, current_milestone=None)`이
+  Context→Freshness/Gap 순서로 두 Analyzer를 실행해
+  `ProjectContextReport`(Context+Quality)를 만든다. 새 판단 기준을
+  만들지 않고 이미 만든 두 Analyzer를 조합만 한다(M29 `report.py`
+  의 조합 방식과 동일).
+
+**테스트**: `tests/intelligence/test_context_service.py`(신규 3개
+— Context/Quality 결합 확인, subject 미언급 시 Gap 3종 전부, 인접
+Milestone Healthy). `pytest`(922개, 기존 919개 + 신규 3개), `ruff
+check src tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**: `KnowledgeAdapter` 연결 확인, Service 구성
+테스트 통과. 새 Core Domain Interface 없음(27종 그대로), Core
+Domain 코드 무변경, §8 규칙 21 유지.
+
+다음 Task: **M30-T05**(Presentation).
 
 ---
 
