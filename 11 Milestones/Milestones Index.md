@@ -41,6 +41,7 @@ tags: [milestone]
 | M22 | Production Platform | `ProductionConfig`/`LifecycleManager`/`HealthMonitor` 도입, 새 Interface 없음 | ADR-0034 |
 | M27 | Obsidian Workspace Templates(M25 요청) | `VaultDocumentKind.TASK` 신규(개별 Task 문서), Daily/Decision Template 확장, Project Workspace Template 정의(설계만) | ADR-0038 |
 | M28 | Live Task Management & Integration | Task Lifecycle/자동 문서 갱신(Vault 내부), 신규 `integration/` 패키지(Workspace Adapter Layer) — Vault/Workflow/Agent Adapter, Peer Connector(WorkflowTaskLink/WorkflowAgentLink), Orchestrating Connector(ConversationConnector). Core Domain↔vault 직접 의존 금지를 `ast` 테스트로 강제, Domain 모델 무변경. **Architecture Freeze 완료**(Peer Connector 상호 참조 위반 1건 발견·수정) | ADR-0039, 0040, 0041, 0042 |
+| M29 | Project Intelligence(진행 중) | Project/Workflow/Task/Agent/Event/Vault 데이터로 Project Snapshot/Health/Risk/Recommendation을 만드는 Read Only Intelligence Layer(`intelligence/`, 신규). T01(설계) 완료 — Vault Task 문서를 단일 데이터 소스로 채택, 새 Core Domain Interface 없음(27종 유지) | ADR-0043 |
 
 ## M23-Preparation
 

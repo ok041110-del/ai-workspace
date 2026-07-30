@@ -9412,7 +9412,117 @@ test_connector_layering.py`(신규).
 상태이며, `.ai/RULES.md` §2.2(One Task At A Time)에 따라 사용자
 승인 전에는 M29(Project Intelligence)를 시작하지 않는다.
 
-**Milestone 28 Architecture Freeze 완료 — 사용자 승인 대기.**
+**Milestone 28 Architecture Freeze 완료 — 사용자 승인 완료
+(2026-07-30).**
+
+---
+
+## Milestone 29 — Project Intelligence
+
+**목표**(2026-07-30 사용자 확정, ChatGPT와 사전 합의한 M29~M40
+로드맵 기준): Project/Workflow/Task/Agent/Event/Vault 데이터를
+종합하여 프로젝트의 현재 상태를 분석하고, **Project Snapshot/
+Health/Risk/Recommendation**을 생성하는 **Project Intelligence
+Foundation**을 구축한다. Project Intelligence는 **Read Only(Query
+Layer)**로 동작하며 기존 Core Domain 비즈니스 로직을 변경하지
+않는다. 모든 데이터 접근은 기존 Engine/Adapter/Connector를 통해
+수행하며 Architecture Freeze(M28, ADR-0042)의 Layer Boundary를
+유지한다. 이후 M30(Context Intelligence)~M33(Planning Intelligence)
+로드맵이 활용할 기반까지만 담당하고, 추론 엔진을 과도하게 키우지
+않는다 — Rule 기반만 구현하고 AI 추론/LLM 호출은 M33 이후로 미룬다.
+
+**Definition of Done**
+
+| # | 항목 |
+|---|---|
+| 1 | 기존 27개 Core Domain Interface 변경 없음 |
+| 2 | Domain/Interfaces/Engine의 책임 변경 없음 |
+| 3 | Project Snapshot 생성 가능 |
+| 4 | Project Health 계산 가능 |
+| 5 | Project Risk 분석 가능 |
+| 6 | Project Recommendation 생성 가능 |
+| 7 | Dashboard 또는 Vault를 통해 실제 결과 노출 |
+| 8 | Integration Layer를 통한 접근만 허용(§8 규칙 21 신설) |
+| 9 | Layer Boundary 테스트 통과 |
+| 10 | `pytest`/`ruff`/`mypy` 모두 통과 |
+| 11 | Architecture 및 ADR 문서 최신화 |
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M29-T01 | Project Intelligence Architecture 설계 | **완료** |
+| M29-T02 | Project Snapshot Analyzer | 예정 |
+| M29-T03 | Project Health & Risk Analyzer | 예정 |
+| M29-T04 | Project Recommendation | 예정 |
+| M29-T05 | Integration & Presentation | 예정 |
+
+### M29-T01: Project Intelligence Architecture
+
+**목표**: Project Intelligence의 역할/책임을 정의하고, 데이터
+소스·Output·신규 Interface 필요 여부를 결정한다.
+
+**조사 결과(구조적 공백 2건 발견)**
+
+1. `TaskEngine`은 `get_task(task_id)` 단건 조회만 제공 —
+   project 단위 전체 목록 조회가 없다. `domain.Project`에도
+   소속 task_id 목록 필드가 없다.
+2. `WorkflowEngine`/`WorkflowTaskLink`/`WorkflowAgentLink`도
+   "Link/Agent 하나" 단위 조회만 제공 — project 전체 Workflow
+   목록/Agent 배정 전체 목록을 얻는 API가 없다.
+
+Core Domain 27종 Interface만으로는 Snapshot 자체가 불가능하다는
+뜻이다. 반면 `vault/`의 `14 Tasks/*.md` 문서(M27/M28)는 파일
+열거만으로 project 소속 Task 전체(frontmatter: task_id/status/
+priority/milestone/owner/created/updated)를 이미 제공한다 — M28이
+Vault를 "Live" 상태의 실제 운영 소스로 확립해 둔 결과다.
+
+**결정(ADR-0043, 상세 근거는 `.ai/DECISIONS.md` 참고)**
+
+- 신규 Core Domain Interface를 추가하지 않는다(27종 유지). Project
+  단위 열거가 필요한 데이터는 **Vault Task 문서를 단일 데이터
+  소스**로 삼는다.
+- 데이터 접근 경로: `vault/task_query.py`(신규, Core Domain을
+  모르는 순수 읽기 함수) → `VaultAdapter.list_tasks()`(신규 메서드,
+  기존 Adapter 클래스 확장 — Interface 아님) → `intelligence/`
+  Analyzer. Agent 데이터는 `AgentAdapter.list_active_agents()`
+  (기존, M28-T03)를 그대로 재사용, 신규 메서드 없음.
+- Event(EventStore)는 M29 데이터 소스에서 제외(Adapter 미존재,
+  YAGNI — Vault `updated` 필드로 정체 판단 충분). Workflow 단위
+  집계는 Vault Task의 `milestone` 필드로 근사(Vault에 Workflow
+  전용 문서 종류 없음).
+- "Blocked Task"는 Vault `TaskStatus`(todo/in-progress/review/
+  done/archived)에 대응 값이 없음(Core Domain `TaskStatus.BLOCKED`
+  와 별개 enum, ADR-0035) — "정체(Stagnant) = IN_PROGRESS/REVIEW
+  상태이면서 `updated`가 임계일 이상 지난 Task" 규칙으로 근사한다
+  (임계값은 M29-T03에서 확정).
+- 새 최상위 패키지 `intelligence/`를 만든다(`integration/`과 같은
+  층위, 그 위에 얹힘). Analyzer는 오직 `integration/`의
+  `VaultAdapter`/`AgentAdapter`에만 의존하고 `domain`/`interfaces`/
+  `engines`/`vault`를 직접 import하지 않는다(§8 규칙 21 신설,
+  `tests/intelligence/test_intelligence_layering.py`로 M29-T02에서
+  `ast` 기반 강제 예정).
+
+**Intelligence Output 정의(설계, 구현은 T02~T04)**
+
+| Output | 핵심 필드(초안) |
+|---|---|
+| `ProjectSnapshot` | project_id, total/done/in_progress/review/todo/archived 개수, milestone별/owner별 집계, progress_ratio, active_agent_count |
+| `ProjectHealth` | level(Healthy/Warning/Critical), reasons |
+| `ProjectRisk` | kind(Stagnant Task/Agent 과부하/Workflow 정체/의존성 위험), 대상 id, severity |
+| `ProjectRecommendation` | action, target, reason, priority(Rule 기반, LLM 호출 없음) |
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| 설계 문서 완료 | ✅ (`docs/ARCHITECTURE.md` §3.22, `.ai/DECISIONS.md` ADR-0043) |
+| Architecture 검토 완료 | ✅ (Core Domain Interface 조회 공백 2건 확인, 대안 3건 검토·기각 근거 ADR-0043) |
+| 신규 Interface 필요 여부 결정 | ✅ (불필요 — Vault 단일 소스로 DoD 4대 산출물 모두 달성 가능) |
+
+코드 변경 없음(설계 Task). 다음 Task: **M29-T02**(Project Snapshot
+Analyzer — `vault/task_query.py`/`VaultAdapter.list_tasks()`/
+`intelligence/` 패키지 실제 구현).
 
 ---
 

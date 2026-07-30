@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.38.0 |
 | 작성일 | 2026-07-30 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). **Architecture Freeze(ADR-0042) 완료 — 사용자 승인 대기**: Layer/Integration Layer/Boundary/Domain/Public Interface/ADR 정합성 전수 검토, Peer Connector 상호 참조 위반 1건 발견·수정(`WorkflowLink`를 신규 `integration/models.py`로 이동), §8에 규칙 19/20 추가, `pytest` 851개·ruff·mypy 전부 클린. 승인 전까지 M29(Project Intelligence)는 착수하지 않는다. 새 Interface 없이 27종 유지) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. **Milestone 29(Project Intelligence) 진행 중 — M29-T01(Architecture 설계) 완료(ADR-0043, `intelligence/` 신규 Layer 결정, Vault Task 문서를 Project 단위 조회의 단일 데이터 소스로 채택, 새 Interface 없음), M29-T02부터 구현 착수**. 새 Interface 없이 27종 유지) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -1202,9 +1202,56 @@ Agent 요청을 처리하는 유일한 진입점으로
   Task`/`domain.Workflow`/`domain.Agent` 필드 추가 없음.
 
 **Milestone 28(Live Task Management & Integration) 전체 완료
-(T01~T06).** 다음은 사용자가 요청한 Architecture Freeze(ADR 전체
-재검토/Layer 의존성 검증/Integration Boundary 검증/Interface 목록
-확정/M29 요구사항 재정의) — 별도 승인 후 진행한다.
+(T01~T06).** Architecture Freeze(ADR-0042) 사용자 승인 완료. 다음은
+Milestone 29(Project Intelligence).
+
+### 3.22 Intelligence Layer (Milestone 29, ADR-0043, 설계: M29-T01)
+
+Project/Workflow/Task/Agent 데이터를 종합해 **Project Snapshot/
+Health/Risk/Recommendation**을 산출하는 **Read Only Query Layer**.
+`integration/`(Integration Layer)과 같은 층위에서 그 위에 얹히는
+신규 최상위 패키지 `intelligence/`로 만든다 — Integration Layer가
+Core Domain↔Vault 경계를 잇는 것과 달리, Intelligence Layer는 아무
+경계도 잇지 않고 Integration Layer가 이미 노출한 값만 읽어 **집계·
+판단**한다(쓰기 없음, 새 비즈니스 로직 없음).
+
+- **설계 결론(ADR-0043)**: Core Domain 27종 Interface에는 project
+  단위 전체 목록 조회(`TaskEngine.list_tasks()` 등)가 없어 새
+  Interface 없이는 Snapshot 자체가 불가능하다. 대신 `vault/`의
+  `14 Tasks/*.md` 문서(M27/M28)가 파일 열거만으로 project 소속
+  Task 전체를 이미 제공하므로, **Vault Task 문서를 M29의 단일
+  데이터 소스로 채택**했다 — 새 Core Domain Interface를 추가하지
+  않는다(27종 그대로).
+- **데이터 접근 경로**(모두 기존 또는 소규모 확장, Interface
+  아님):
+  - `vault/task_query.py`(신규) — `14 Tasks/*.md`를 열거해
+    frontmatter를 파싱한 `TaskDocument` 목록 반환. `vault/`
+    안이라 Core Domain을 모른다(ADR-0035와 동일 원칙).
+  - `VaultAdapter.list_tasks()`(신규 메서드, 기존 Adapter 클래스
+    확장 — Interface 변경 아님) — 위 함수를 Integration Layer에
+    노출.
+  - `AgentAdapter.list_active_agents()`(기존, M28-T03) — Agent
+    데이터는 신규 메서드 없이 그대로 재사용.
+  - Event(EventStore)는 M29에서 데이터 소스로 쓰지 않는다(Adapter
+    미존재, YAGNI — Vault `updated` 필드만으로 정체 판단이
+    충분하다고 판단).
+  - Workflow 단위 집계는 Vault Task의 `milestone` 필드로 근사한다
+    (Vault에 Workflow 전용 문서 종류가 없음).
+- **Blocked Task 근사**: Vault `TaskStatus`(todo/in-progress/
+  review/done/archived)에는 Core Domain `TaskStatus.BLOCKED`에
+  대응하는 값이 없다(두 enum은 ADR-0035에 따라 원래 독립). M29은
+  "정체(Stagnant) = IN_PROGRESS/REVIEW 상태이면서 `updated`가
+  임계일 이상 지난 Task"라는 Risk 규칙으로 "Blocked/장기 미진행"을
+  근사한다(임계값은 M29-T03에서 확정).
+- **경계 규칙(§8 규칙 21)**: `intelligence/`의 Analyzer는 오직
+  `integration/`의 `VaultAdapter`/`AgentAdapter`에만 의존하고,
+  `domain`/`interfaces`/`engines`/`vault`를 직접 import하지 않는다
+  — `tests/intelligence/test_intelligence_layering.py`(M29-T02
+  작성 예정)가 `ast` 기반으로 강제한다.
+- **범위**: Snapshot(M29-T02)/Health·Risk(M29-T03)/Recommendation
+  (M29-T04, Rule 기반, LLM 호출 없음)/Dashboard 또는 Vault 노출
+  (M29-T05). 새 Core Domain Interface 없음, `domain.Project`/
+  `domain.Task` 필드 추가 없음.
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
@@ -1378,6 +1425,13 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
     자체는 별도 코드 패키지가 아니라 이 Connector의 호출자이므로,
     이 규칙은 실제로는 "`ConversationConnector` 밖에 이 접근 경로를
     또 만들지 않는다"는 의미로 강제된다 — §9 참고).
+21. **`intelligence/`(Intelligence Layer, ADR-0043, Milestone 29)는
+    `integration/`의 `VaultAdapter`/`AgentAdapter`에만 의존한다** —
+    `domain`/`interfaces`/`engines`/`vault`를 직접 참조하지 않는다.
+    Intelligence Layer는 쓰기를 하지 않는 Read Only Query Layer이며,
+    Integration Layer가 이미 노출한 값을 읽어 집계·판단만 한다(새
+    비즈니스 로직 없음). `tests/intelligence/
+    test_intelligence_layering.py`가 `ast` 기반으로 이를 강제한다.
 
 ## 9. 디렉터리 구조와 컴포넌트 매핑
 

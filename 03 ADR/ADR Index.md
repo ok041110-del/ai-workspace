@@ -258,7 +258,13 @@ tags: [decision]
 
 - 목적: M28이 만든 구조(Layer/Integration Layer/Boundary/Domain/Public Interface/ADR 정합성)를 새 기능 없이 검증·확정
 - 결정: Layer 구조·Integration Layer 구성(Adapter/Peer Connector/Orchestrating Connector)을 그대로 기준선으로 확정. 검증 중 Peer Connector 상호 참조 위반 1건 발견(`WorkflowAgentLink`→`WorkflowTaskLink`) 즉시 수정 — `WorkflowLink`를 신규 중립 모듈 `integration/models.py`로 이동. `docs/ARCHITECTURE.md` §8에 규칙 19/20 추가. 개선 후보 7건은 목록만 작성, 리팩토링하지 않음
-- 영향: `tests/integration_layer/test_connector_layering.py` 신규(위반 검출 테스트), `pytest` 851개·ruff·mypy 전부 클린. **M29(Project Intelligence) 진행 가능 — 사용자 승인 대기**. 상세는 [[Architecture Overview]], 전문은 GitHub `.ai/TASKS.md`의 "Milestone 28 — Architecture Freeze" 절
+- 영향: `tests/integration_layer/test_connector_layering.py` 신규(위반 검출 테스트), `pytest` 851개·ruff·mypy 전부 클린. **M29(Project Intelligence) 진행 가능 — 사용자 승인 완료(2026-07-30)**. 상세는 [[Architecture Overview]], 전문은 GitHub `.ai/TASKS.md`의 "Milestone 28 — Architecture Freeze" 절
+
+## ADR-0043: Intelligence Layer 도입 — `intelligence/` 신규 최상위 패키지, Vault Task 문서를 Project 단위 조회의 단일 데이터 소스로 채택 (Milestone 29-T01)
+
+- 목적: Project Snapshot/Health/Risk/Recommendation을 만들 Read Only Query Layer의 데이터 소스와 위치를 결정, 신규 Interface 필요 여부 판단
+- 결정: Core Domain 27종 Interface에는 project 단위 전체 목록 조회가 없어 새 Interface 없이는 Snapshot이 불가능함을 확인. 대신 **Vault Task 문서(`14 Tasks/*.md`)를 단일 데이터 소스**로 채택(새 Interface 미추가, 27종 유지) — `vault/task_query.py`(신규)→`VaultAdapter.list_tasks()`(신규 메서드)로 노출. Agent 데이터는 기존 `AgentAdapter.list_active_agents()` 재사용. Event는 제외(YAGNI). "Blocked Task"는 Vault에 대응 상태가 없어 "IN_PROGRESS/REVIEW + `updated` 임계일 초과" Rule로 근사. 신규 최상위 패키지 `intelligence/`를 만들고 `integration/`의 Adapter에만 의존하게 제한(§8 규칙 21 신설)
+- 영향: `docs/ARCHITECTURE.md` §3.22(신규)/§8 규칙 21 추가, `.ai/TASKS.md` Milestone 29 절 신규. 코드 변경 없음(설계 Task, 구현은 M29-T02부터). 상세는 [[Architecture Overview]]
 
 ## 관련 문서
 
