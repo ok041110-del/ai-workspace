@@ -38,12 +38,14 @@ class Trigger:
 
 
 class ActionKind(Enum):
-    """Automation Rule이 발동됐을 때 수행할 동작의 종류(M21)."""
+    """Automation Rule이 발동됐을 때 수행할 동작의 종류(M21, M38에서
+    `RUN_RECOMMENDATION` 추가)."""
 
     RUN_TASK = "run_task"
     RUN_WORKFLOW = "run_workflow"
     DASHBOARD_REFRESH = "dashboard_refresh"
     NOTIFICATION = "notification"
+    RUN_RECOMMENDATION = "run_recommendation"
 
 
 @dataclass(frozen=True)
@@ -57,7 +59,14 @@ class Action:
     - DASHBOARD_REFRESH: 추가 필드 없음 — `ExecutionDispatcher`를
       거치지 않는다(Task를 실행하지 않으므로).
     - NOTIFICATION: `notification_message`(필수) — 실제 알림 전송은
-      Out of Scope, 요청 의도만 표현한다."""
+      Out of Scope, 요청 의도만 표현한다.
+    - RUN_RECOMMENDATION: 추가 필드 없음(M38) — M35
+      `RecommendationIntelligenceService`가 매번 새로 계산하는
+      `source=next_task` 추천을 그대로 실행한다. 새 정책을 만들지
+      않는다 — `RecommendationExecutionService.publish()`를
+      `manual_trigger=True`로 호출만 한다(ADR-0050의
+      `ExecutionGate`는 M36과 동일하게 `source=next_task` 외에는
+      그대로 Not Supported로 남는다)."""
 
     kind: ActionKind
     project_id: str | None = None

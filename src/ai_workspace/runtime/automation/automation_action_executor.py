@@ -7,11 +7,16 @@ from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_registry import EngineRegistry
 from ai_workspace.interfaces.engine_selection_policy import EngineSelectionPolicy
 from ai_workspace.runtime.execution.execution_dispatcher import ExecutionDispatcher
+from ai_workspace.runtime.execution.recommendation_execution_service import (
+    RecommendationExecutionService,
+)
 
 
 class AutomationActionNotSupportedError(Exception):
     """아직 실제로 실행할 수 없는 Action Kind에 대해 발생한다(예:
-    RUN_WORKFLOW — M21은 Task 단위 실행만 다룬다)."""
+    RUN_WORKFLOW — M21은 Task 단위 실행만 다룬다. RUN_RECOMMENDATION은
+    `recommendation_execution_service`가 주입되지 않은 경우에도
+    발생한다 — M38)."""
 
 
 class AutomationActionExecutor:
@@ -40,10 +45,12 @@ class AutomationActionExecutor:
         engine_registry: EngineRegistry,
         engine_selection_policy: EngineSelectionPolicy,
         execution_dispatcher: ExecutionDispatcher,
+        recommendation_execution_service: RecommendationExecutionService | None = None,
     ) -> None:
         self._engine_registry = engine_registry
         self._engine_selection_policy = engine_selection_policy
         self._execution_dispatcher = execution_dispatcher
+        self._recommendation_execution_service = recommendation_execution_service
 
     def __call__(self, rule: AutomationRule) -> None:
         action = rule.action
@@ -51,6 +58,8 @@ class AutomationActionExecutor:
             self._run_task(action)
         elif action.kind is ActionKind.RUN_WORKFLOW:
             raise AutomationActionNotSupportedError(action.kind.value)
+        elif action.kind is ActionKind.RUN_RECOMMENDATION:
+            self._run_recommendation(action)
         elif action.kind in (ActionKind.DASHBOARD_REFRESH, ActionKind.NOTIFICATION):
             return
 
@@ -64,3 +73,15 @@ class AutomationActionExecutor:
         candidates = self._engine_registry.list_candidates(task)
         decision = self._engine_selection_policy.select(task, candidates)
         self._execution_dispatcher.dispatch(decision, task)
+
+    def _run_recommendation(self, action: Action) -> None:
+        """M35 `RecommendationIntelligenceService`가 계산한
+        `source=next_task` 추천을 `RecommendationExecutionService`
+        (M36/M37, 새 정책 없이 그대로 재사용)로 실행한다.
+        `manual_trigger=True`를 고정으로 전달한다 — Rule 자체를
+        사용자가 명시적으로 만들고 활성화했다는 점에서
+        `ExecutionGate`가 막으려는 "실수로 자동 승인되는 경우"에
+        해당하지 않는다(M38)."""
+        if self._recommendation_execution_service is None:
+            raise AutomationActionNotSupportedError(action.kind.value)
+        self._recommendation_execution_service.publish(manual_trigger=True)

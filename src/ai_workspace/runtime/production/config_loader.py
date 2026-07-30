@@ -67,5 +67,7 @@ def load_production_config(
         )
     if (value := env.get(f"{_ENV_PREFIX}AUTOMATION_TICK_SECONDS")) is not None:
         values["automation_tick_seconds"] = float(value)
+    if (value := env.get(f"{_ENV_PREFIX}VAULT_ROOT")) is not None:
+        values["vault_root"] = value
 
     return ProductionConfig(**values)

@@ -3246,3 +3246,87 @@
   Core Domain Interface/Adapter 없음(27종 그대로, `VaultAdapter`
   확장 없음), `vault/task_lifecycle.py`의 `_ALLOWED_TRANSITIONS`
   무변경.
+
+## ADR-0052: AutomationScheduler 연결 — M21~M37 Composition Root 실배선, 새 정책 없음, source=next_task만 그대로 유지 (Milestone 38)
+
+- 상태: 승인됨(범위) — 구현 완료, Milestone 완료(§1.4) 최종 승인
+  대기 (2026-07-30, 사용자가 "AutomationScheduler 연결"을 M38
+  범위로 확정하되 자동 실행 대상은 M36과 동일하게 `source=next_task`
+  만 유지할 것을 권고 — 반영)
+- 날짜: 2026-07-30
+- 배경: M37 완료 시 "다음 Milestone(M38) 이후 논의"로 미룬 6개 항목
+  (`done→archived` 자동화/재시도 정책/`review→done` 자동화/
+  `AutomationScheduler` 연결/CLI/Hook) 중 `AutomationScheduler`
+  연결을 M38 범위로 착수했다. 착수 과정에서 `VaultAdapter`/
+  `AgentAdapter`가 `tests/`에서만 생성되고 `web/server.py`의
+  `build_app()`(Composition Root)이나 CLI 어디에도 실제로 조립된
+  적이 없다는 사실을 발견했다 — M29~M37 전체가 단위 테스트로만
+  검증된 "워크숍 단계"였다는 뜻이다. 이 사실을 사용자에게 보고하고,
+  "AutomationScheduler 연결"을 실질적으로 완성하려면 이 배선
+  자체를 M38 범위에 포함해야 한다는 데 사용자 승인을 받았다.
+- 결정:
+  1. **새 정책을 만들지 않는다.** `ExecutionGate`(M36, ADR-0050)는
+     전혀 손대지 않는다 — 여전히 `source=next_task`만 승인하고
+     `current_work`/`blocked_task`/`capability_gap`/
+     `project_recommendation`은 계속 Not Supported다. M38은 "기존
+     정책을 주기적으로 호출"만 하는 Milestone이다(사용자 권고,
+     MDD/YAGNI/Reuse First와 가장 잘 맞음).
+  2. **`domain.automation.ActionKind`에 `RUN_RECOMMENDATION`
+     1개만 추가**(추가 필드 없음). `AutomationActionExecutor`가
+     선택적 `recommendation_execution_service:
+     RecommendationExecutionService | None = None` 의존성을 받아,
+     발동 시 주입돼 있으면 `RecommendationExecutionService.
+     publish(manual_trigger=True)`를 호출하고, 없으면 기존
+     `RUN_WORKFLOW`와 동일하게 `AutomationActionNotSupportedError`
+     를 던진다.
+  3. **`manual_trigger=True`를 고정으로 전달한다.** `ExecutionGate`
+     가 `manual_trigger`에 기본값을 두지 않은 이유(ADR-0050)는
+     "사람이 개입하지 않은 자동/주기적 트리거가 실수로 승인되는
+     것"을 막기 위함이었다. `AutomationRule`은 사용자가
+     `AutomationService`(M21 CRUD 진입점)로 명시적으로 만들고
+     활성화한 것이므로, Rule 생성/활성화 자체가 이미 사람의 승인
+     행위다 — `ExecutionGate` 판정 로직 자체는 바꾸지 않는다.
+  4. **`web/server.py`의 `build_app()`에서 Composition Root
+     배선을 최초로 완성한다.** `VaultAdapter(Path(config.
+     vault_root))` + `AgentAdapter(InMemoryAgentManager(),
+     InMemoryAgentRegistry(), InMemoryAgentScheduler())` +
+     `RecommendationIntelligenceService` + `RecommendationExecutionService`
+     를 `tests/runtime/execution/test_recommendation_execution_service.py`
+     와 동일한 생성자 조합으로 조립해 `AutomationActionExecutor`에
+     주입한다. `EngineRegistry`/`EngineSelectionPolicy`/
+     `ExecutionDispatcher`는 기존 RUN_TASK 배선과 동일 인스턴스를
+     공유한다(중복 생성 없음).
+  5. **`ProductionConfig.vault_root: str = "."`(신규 필드) +
+     `AI_WORKSPACE_VAULT_ROOT` Env Var.** ADR-0037 "Vault ==
+     Repository Root"를 그대로 반영한 기본값이다 — 서버가 저장소
+     루트에서 기동된다는 기존 전제를 설정값으로 명시했을 뿐, 새로운
+     배포 모델을 만들지 않는다.
+- 대안:
+  - Composition Root 배선 없이 InMemory Fake로 연결 경로만
+    증명한다 — 기각. "AutomationScheduler 연결"이라는 목표 자체가
+    실제 운영 가능한 상태를 요구하며, Fake로는 M37 완료 노트가
+    지적한 "워크숍 단계" 한계를 해소하지 못한다(사용자 최종 결정).
+  - `RUN_RECOMMENDATION`이 발동될 때마다 `source=next_task` 외
+    나머지 4개도 실행 가능하도록 `ExecutionGate`를 확장한다 —
+    기각. 사용자가 명시적으로 "새 정책을 만드는 Milestone이 아니다"
+    라고 범위를 좁혔다 — M36 결정을 그대로 유지한다.
+  - Rule 생성 시 `manual_trigger` 여부를 판단하는 새 필드를
+    `AutomationRule`에 추가한다 — 기각. Rule 자체의 존재/활성화가
+    이미 수동 승인을 의미하므로 새 필드 없이 `AutomationActionExecutor`
+    가 호출 시점에 고정값을 넘기는 것으로 충분하다(YAGNI).
+- 이유: M21(Automation Engine)과 M35~M37(Recommendation→Execution→
+  Task Lifecycle)이 각각 독립적으로 완성됐지만 실제로 이어진 적이
+  없었다는 배선 공백을 새 정책 없이, 기존 27종 Interface를 그대로
+  유지한 채 메운다 — Composition Root 조립만으로 "조건/일정에 따라
+  Task를 자동 실행한다"([[Automation Index]]의 M21 목표 정의)는
+  약속을 처음으로 next_task 추천까지 완성한다.
+- 결과/영향: `domain/automation.py`(확장 1건)/`runtime/automation/
+  automation_action_executor.py`(확장 1건)/`runtime/production/
+  config.py`·`config_loader.py`(확장 1건)/`web/server.py`
+  (Composition Root 배선) 구현 완료, 신규 테스트 5개 포함 pytest
+  1010개, ruff, mypy 전부 통과. `docs/ARCHITECTURE.md` §3.31(신규)
+  갱신, `.ai/TASKS.md`에 Milestone 38 절 신규 추가. 새 Core Domain
+  Interface/Adapter 없음(27종 그대로), `ExecutionGate`/
+  `ActionBuilder`/`TaskLifecycleTransitioner` 무변경. `done→archived`
+  자동화·재시도 정책·`review→done` 자동화·CLI·Hook은 계속 범위 밖
+  (YAGNI, 다음 Milestone 이후 논의).

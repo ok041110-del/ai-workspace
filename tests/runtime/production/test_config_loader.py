@@ -62,6 +62,12 @@ def test_env_vars_without_file() -> None:
     assert config.automation_tick_seconds == 45.0
 
 
+def test_vault_root_env_var() -> None:
+    config = load_production_config(env={"AI_WORKSPACE_VAULT_ROOT": "/srv/vault"})
+
+    assert config.vault_root == "/srv/vault"
+
+
 def test_invalid_bool_env_var_raises() -> None:
     with pytest.raises(InvalidConfigFileError):
         load_production_config(env={"AI_WORKSPACE_DASHBOARD_ENABLED": "maybe"})

@@ -13,6 +13,7 @@ def test_default_values() -> None:
     assert config.automation_enabled is True
     assert config.automation_tick_seconds == 30.0
     assert config.engine_settings == {}
+    assert config.vault_root == "."
 
 
 def test_config_is_immutable() -> None:
@@ -41,3 +42,9 @@ def test_engine_settings_accepts_custom_mapping() -> None:
     config = ProductionConfig(engine_settings={"claude_code": "enabled"})
 
     assert config.engine_settings == {"claude_code": "enabled"}
+
+
+def test_vault_root_accepts_custom_path() -> None:
+    config = ProductionConfig(vault_root="/tmp/vault")
+
+    assert config.vault_root == "/tmp/vault"

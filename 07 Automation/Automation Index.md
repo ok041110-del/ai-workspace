@@ -49,6 +49,14 @@ AutomationRule → AutomationRepository → AutomationService(CRUD)
 에 그대로 실어 실행한다 — 새 실행 경로를 만들지 않는다. RUN_WORKFLOW는
 아직 미지원(`AutomationActionNotSupportedError`).
 
+**RUN_RECOMMENDATION(Milestone 38, ADR-0052)**: `RecommendationExecutionService`
+(M36/M37)를 `manual_trigger=True`로 호출해 M35 `source=next_task`
+추천을 그대로 실행한다 — `ExecutionGate`는 손대지 않는다(여전히
+`source=next_task`만 승인). `web/server.py`의 `build_app()`이
+`VaultAdapter`/`AgentAdapter`/Recommendation 파이프라인 전체를
+최초로 실배선해, `AutomationScheduler`의 TIME/INTERVAL Trigger로
+실제 자동 실행이 가능해졌다.
+
 ## 관련 GitHub 문서
 
 - `docs/ARCHITECTURE.md` §3.19
