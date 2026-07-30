@@ -9743,6 +9743,41 @@ intelligence/test_report.py`(신규 4개). `pytest`(904개, 기존
 **Milestone 29(Project Intelligence) T01~T05 전체 완료.** Milestone
 Review는 사용자 요청에 따라 별도로 진행한다.
 
+### Milestone 29 Review 및 완료 승인(2026-07-30)
+
+**Review 결과 요약**(전문은 세션 기록 참고, 핵심만 기록):
+
+| 항목 | 결과 |
+|---|---|
+| DoD 검증 | 11개 중 10개 완전 충족, "의존성 위험" 1건은 구조적 불가 확인 후 Deferred by Design |
+| Architecture Review | `intelligence/`를 `integration/` 위 신규 Layer로 확정(ADR-0043), 데이터 소스 선택 근거가 ADR에 명시 |
+| Layer Boundary Review | `test_intelligence_layering.py` 신규 + 기존 경계 테스트 회귀 없음. `vault/mapping.py` 회귀 1건 발견 즉시 수정(`15 Project Intelligence` 누락) |
+| Interface Review | Core Domain 27종 무변경. Integration Layer 공개 API 확장 2건(`VaultAdapter.list_tasks()`/`publish_intelligence_report()`, Interface 아님) |
+| ADR Review | ADR-0043 1건만 신규(T02~T05는 순수 구현이라 추가 ADR 없음), 기존 ADR과 충돌 없음 |
+| pytest/ruff/mypy | 904 passed, ruff clean, mypy clean(166 source files) |
+| 문서 최신화 | `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`/`.ai/TASKS.md`/Vault(ADR Index/Milestones Index/Dashboard Index/`15 Project Intelligence/`) 전부 갱신 확인 |
+
+**사용자 승인(2026-07-30)**: 아래를 명시적으로 승인함.
+
+- M28 이후 Core Domain(27개 Interface 포함) 무변경
+- Intelligence Layer를 별도 계층으로 추가해 Layer Boundary 유지
+- Snapshot/Health/Risk/Recommendation을 Rule 기반으로 구현(AI 추론/LLM 호출 없음)
+- Integration Layer를 통해서만 접근하도록 구성
+- Architecture/ADR/문서와 테스트가 함께 갱신됨
+- "의존성 위험" 미구현을 **Deferred by Design**으로 승인(Architecture Freeze를 깨거나 Interface를 추가할 필요 없음)
+- 리팩터링 제안(문자열 상수/임계값/Risk 상세 링크)은 개선 아이디어로만 유지, 이번 Milestone에서 반영하지 않음 — 실제 요구사항 발생 시 별도 Milestone/ADR에서 검토
+
+**Milestone 29(Project Intelligence) 공식 완료(Approved).** 다음은
+Milestone 30(Context Intelligence) — 세부 Task는 착수 시점에 별도
+제안·승인 후 정의한다.
+
+**향후 개발 프로세스(2026-07-30 사용자 확정)**: Task 단위 중간
+리뷰는 원칙적으로 생략하고, Milestone 구현 완료 후 한 번의
+Milestone Review를 수행한다. 단, Core Domain 변경/Interface
+추가·변경/Layer Boundary 변경/Public API 변경/ADR 수정이 필요한
+경우에만 구현을 중단하고 중간 승인을 요청한다(M29부터 적용, 계속
+유지).
+
 ---
 
 ## GitHub Flow Migration
