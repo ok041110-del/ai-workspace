@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.38.0 |
 | 작성일 | 2026-07-30 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. **Milestone 29(Project Intelligence) 진행 중 — M29-T01(Architecture 설계, ADR-0043)/M29-T02(Project Snapshot Analyzer)/M29-T03(Project Health & Risk Analyzer) 완료, M29-T04부터 구현 계속**. 새 Core Domain Interface 없음, 27종 유지) |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. **Milestone 29(Project Intelligence) 진행 중 — M29-T01(Architecture 설계, ADR-0043)/M29-T02(Project Snapshot Analyzer)/M29-T03(Project Health & Risk Analyzer)/M29-T04(Project Recommendation) 완료, M29-T05부터 구현 계속**. 새 Core Domain Interface 없음, 27종 유지) |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -1266,6 +1266,11 @@ Core Domain↔Vault 경계를 잇는 것과 달리, Intelligence Layer는 아무
   Rule 기반)를 계산한다. "의존성 위험"은 Vault에 의존관계 필드가
   없고 필요한 Workflow 전체 열거 Interface도 없어(T01에서 확인한
   공백) M29 범위 밖으로 명시적으로 남긴다.
+- **M29-T04 구현 완료**: `intelligence/recommendation.py`의
+  `ProjectRecommendationEngine`이 Snapshot/Health/Risk만 입력으로
+  받아(Adapter 미참조) Risk 하나당 추천 하나를 1:1로 매핑하고,
+  전체 진행률이 낮을 때 project 단위 추천을 더한다. AI 추론/LLM
+  호출 없음(M33 이후로 미룸).
 
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 

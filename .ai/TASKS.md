@@ -9454,7 +9454,7 @@ Layer)**로 동작하며 기존 Core Domain 비즈니스 로직을 변경하지
 | M29-T01 | Project Intelligence Architecture 설계 | **완료** |
 | M29-T02 | Project Snapshot Analyzer | **완료** |
 | M29-T03 | Project Health & Risk Analyzer | **완료** |
-| M29-T04 | Project Recommendation | 예정 |
+| M29-T04 | Project Recommendation | **완료** |
 | M29-T05 | Integration & Presentation | 예정 |
 
 ### M29-T01: Project Intelligence Architecture
@@ -9618,6 +9618,44 @@ Adapter 또는 자기 자신의 다른 모듈(`snapshot`)에만 의존(§8 규�
 21 유지, `test_intelligence_layering.py` 회귀 없음 확인).
 
 다음 Task: **M29-T04**(Project Recommendation).
+
+### M29-T04: Project Recommendation
+
+**목표**: T02/T03 산출물(Snapshot/Health/Risk)을 입력으로 다음
+행동을 Rule 기반으로 추천한다. AI 추론/LLM 호출 없음.
+
+**구현 내용**
+
+- `intelligence/recommendation.py`(신규)의
+  `ProjectRecommendationEngine.recommend(snapshot_result,
+  health_report)` — Adapter를 직접 호출하지 않고 T02/T03 산출물만
+  입력으로 받는다(새로운 데이터 접근 경로 없음). Risk 하나당
+  추천 하나를 1:1로 매핑한다(새 판단 기준을 추가하지 않음).
+  - `stagnant_task`(critical) → `unblock_task`("Blocked 해소
+    필요", priority=high)
+  - `stagnant_task`(warning) → `prioritize_task`("우선 처리해야
+    할 Task", priority=medium)
+  - `owner_overload` → `reassign_owner`("Agent/담당자 재배정
+    추천", severity에 따라 priority high/medium)
+  - `milestone_stall` → `advance_milestone`("Workflow 진행
+    추천", priority=medium)
+  - 전체 진행률이 임계값(기본 30%) 미만이고 Task가 1건 이상이면
+    `improve_progress`("진행률 개선 제안", target="project")를
+    별도로 추가한다.
+
+**테스트**: `tests/intelligence/test_recommendation.py`(신규 8개
+— Risk 없음/critical·warning stagnant/owner overload/milestone
+stall/낮은 진행률 추가·Task 0건일 때 생략/Risk와 진행률 추천
+동시 발생). `pytest`(897개, 기존 889개 + 신규 8개), `ruff check
+src tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**: Recommendation 테스트 통과. Rule 기반만
+구현했고 AI 추론/LLM 호출 없음. 새 Core Domain Interface
+없음(27종 그대로), Core Domain 코드 무변경, `intelligence/`는
+여전히 자기 자신의 다른 모듈에만 의존(§8 규칙 21 유지 —
+`recommendation.py`는 Adapter조차 직접 참조하지 않음).
+
+다음 Task: **M29-T05**(Integration & Presentation).
 
 ---
 

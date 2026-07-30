@@ -30,6 +30,11 @@ Vault Task 문서(`VaultAdapter.list_tasks()`)를 단일 데이터 소스로
   의존관계 정보가 필요하나 project 전체 열거 Interface가 없음,
   ADR-0043에서 이미 예견된 한계) M29 범위에서 판정하지 않는다 —
   필요해지면 별도 ADR/Interface 검토 대상이다.
+- `recommendation.ProjectRecommendationEngine`(Milestone 29-T04) —
+  Snapshot/Health/Risk를 입력으로 다음 행동(우선 처리 Task/Blocked
+  해소/담당자 재배정/Milestone 진행/진행률 개선)을 Rule 기반으로
+  추천한다. Risk 하나당 추천 하나를 1:1로 매핑할 뿐 새 판단 기준을
+  만들지 않는다. AI 추론/LLM 호출 없음(M33 이후로 미룸).
 """
 
 from __future__ import annotations
