@@ -40,6 +40,16 @@ DTO를 만든다(Engine 이름만 예외로 영어 유지). `DashboardBroadcaste
 push한다(Polling 없음). 자세한 REST/WebSocket 목록은
 [[API Catalog]] 참고.
 
+## Project Intelligence(Milestone 29)
+
+`DashboardRepository`(§Health/Execution)와는 별도로, Milestone
+29(Project Intelligence)가 Vault Task 문서를 집계한 Snapshot/
+Health/Risk/Recommendation 리포트를 [[Project Intelligence]]에
+노출한다(ADR-0043) — `intelligence.report.ProjectIntelligenceService
+.publish()`가 실행될 때마다 문서 전체를 덮어쓴다. 이 Dashboard
+Read Model(Event 기반 실시간)과 달리 호출 시점에 Vault를 다시
+읽어 계산하는 On-demand 리포트다.
+
 ## 관련 ADR
 
 - [[ADR Index]] — ADR-0032(Real-time Dashboard Platform 도입)

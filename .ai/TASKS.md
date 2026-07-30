@@ -9455,7 +9455,7 @@ Layer)**로 동작하며 기존 Core Domain 비즈니스 로직을 변경하지
 | M29-T02 | Project Snapshot Analyzer | **완료** |
 | M29-T03 | Project Health & Risk Analyzer | **완료** |
 | M29-T04 | Project Recommendation | **완료** |
-| M29-T05 | Integration & Presentation | 예정 |
+| M29-T05 | Integration & Presentation | **완료** |
 
 ### M29-T01: Project Intelligence Architecture
 
@@ -9656,6 +9656,92 @@ src tests`, `mypy src` 전부 클린.
 `recommendation.py`는 Adapter조차 직접 참조하지 않음).
 
 다음 Task: **M29-T05**(Integration & Presentation).
+
+### M29-T05: Integration & Presentation
+
+**목표**: T02~T04(Snapshot/Health·Risk/Recommendation)를 하나로
+묶어 실제로 노출한다.
+
+**구현 내용**
+
+- `intelligence/report.py`(신규)의 `ProjectIntelligenceService` —
+  세 Analyzer를 Snapshot→Health/Risk→Recommendation 순서로 실행해
+  `ProjectIntelligenceReport`를 만든다(`generate()`). 새 판단 기준을
+  만들지 않고 이미 만든 Analyzer를 순서대로 배열·결과를 묶기만
+  한다는 점에서 ADR-0041 Orchestrating Connector와 같은 성격의
+  조합 책임이다 — 다만 `integration/` 패키지 자체에 넣지 않고
+  Intelligence Layer 안에 둔다(ADR-0043이 이미 `intelligence/`를
+  `integration/`과 별개 층위로 정의했으므로, Integration Layer의
+  Adapter/Connector 분류 체계를 그대로 확장하지 않는다 — 대신 §8
+  규칙 21의 "Adapter에만 의존" 제약을 그대로 지킨다. 이는 Layer
+  Boundary 변경이 아니라 이미 승인된 경계 안에서의 조합이다).
+  `render_markdown()`(순수 함수)이 리포트를 Markdown으로 렌더링하고,
+  `publish()`가 `VaultAdapter.publish_intelligence_report()`를
+  통해 실제로 Vault에 쓴다.
+- `vault/intelligence_report.py`(신규) —
+  `write_project_intelligence_report()`가 `15 Project Intelligence/
+  Project Intelligence.md`에 원자적으로 전체 교체(overwrite)한다.
+  기존 `VaultDocumentKind` 체계(Index append/Backlink 검증)를 쓰지
+  않는다 — 이 문서는 매번 다시 계산해 덮어쓰는 **생성된 리포트**라
+  다른 kind의 관례가 맞지 않는다(YAGNI로 판단, 새 `VaultDocumentKind`
+  를 추가하지 않았다).
+- `VaultAdapter.publish_intelligence_report()`(신규 메서드) — 위
+  writer를 Integration Layer에 노출.
+- **Dashboard 대신 Vault를 선택했다**(DoD는 "Dashboard 또는
+  Vault" 중 하나). FastAPI Dashboard(`web/`/`runtime/dashboard/`)
+  연동은 서버 기동·라우트·ViewModel까지 손대야 하는 별도 범위라,
+  "M29은 추론 엔진을 과도하게 키우지 않는다"는 지시에 맞춰 이미
+  이 프로젝트의 실제 운영 방식(M28 Live Task Management)과 같은
+  Vault 노출을 택했다. `06 Dashboard/Dashboard Index.md`에
+  [[Project Intelligence]]로의 연결 절을 추가해 Dashboard 문서
+  체계와도 연결해 두었다. 향후 실제 Dashboard 연동이 필요해지면
+  `ProjectIntelligenceService.generate()`(순수 조회)를 그대로
+  재사용할 수 있다.
+- Vault 문서: `15 Project Intelligence/README.md`(신규, 사용법),
+  `15 Project Intelligence/Project Intelligence.md`(신규, 실제
+  생성된 리포트 — 현재 Vault에 Task가 없어 Healthy/Risk 없음 상태로
+  커밋됨), `06 Dashboard/Dashboard Index.md` 절 추가, [[Milestones
+  Index]] M29 행 갱신.
+- **회귀 발견 및 수정**: `vault/mapping.py`의
+  `VAULT_CONTENT_DIRECTORIES`(Backlink Validation이 스캔하는 16개
+  Vault 디렉터리 목록)에 `15 Project Intelligence`가 빠져 있어
+  `06 Dashboard/Dashboard Index.md`의 `[[Project Intelligence]]`가
+  "존재하지 않는 문서"로 오탐되는 것을 `tests/integration/
+  test_m23_vault_environment_integration.py::
+  test_real_vault_has_no_unexpected_broken_backlinks`(M23-Final
+  회귀 방지 테스트)가 실제로 잡아냈다. `VAULT_CONTENT_DIRECTORIES`
+  에 `15 Project Intelligence`를 추가해 해결(M27이 `14 Tasks`를
+  추가했을 때와 같은 패턴).
+
+**실제 결과 확인**: 임시 Vault 사본에 정체 Task 1건을 만들어
+`publish()`를 실행 — Snapshot(전체 1/진행률 0%)·Health
+(Critical)·Risk(`stagnant_task`+`milestone_stall`)·Recommendation
+(`unblock_task`+`advance_milestone`+`improve_progress`)이 기대대로
+Markdown에 렌더링됨을 확인했다. 이후 이 저장소의 실제 `vault_root`
+(현재 `14 Tasks/`에 실 Task 문서 없음)에도 `publish()`를 실행해
+`15 Project Intelligence/Project Intelligence.md`를 실제로
+커밋했다(Healthy/Risk 없음 — 실제 현재 상태를 정직하게 반영).
+
+**테스트**: `tests/vault/test_intelligence_report.py`(신규 2개),
+`tests/integration_layer/test_vault_adapter.py`에
+`publish_intelligence_report()` 테스트 1개 추가, `tests/
+intelligence/test_report.py`(신규 4개). `pytest`(904개, 기존
+897개 + 신규 7개), `ruff check src tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| 실제 Dashboard 또는 Vault에서 결과 확인 | ✅ (Vault, `15 Project Intelligence/Project Intelligence.md`) |
+| Architecture 문서 최신화 | ✅ (`docs/ARCHITECTURE.md` §3.22 갱신) |
+| Review 완료 | Milestone Review는 M29 전체 완료 후 별도 요청 예정(사용자 지시) |
+
+새 Core Domain Interface 없음(27종 그대로), Layer Boundary
+변경 없음(§8 규칙 21 그대로, `test_intelligence_layering.py` 회귀
+없음), Core Domain 코드 무변경.
+
+**Milestone 29(Project Intelligence) T01~T05 전체 완료.** Milestone
+Review는 사용자 요청에 따라 별도로 진행한다.
 
 ---
 

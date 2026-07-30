@@ -35,6 +35,13 @@ Vault Task 문서(`VaultAdapter.list_tasks()`)를 단일 데이터 소스로
   해소/담당자 재배정/Milestone 진행/진행률 개선)을 Rule 기반으로
   추천한다. Risk 하나당 추천 하나를 1:1로 매핑할 뿐 새 판단 기준을
   만들지 않는다. AI 추론/LLM 호출 없음(M33 이후로 미룸).
+- `report.ProjectIntelligenceService`(Milestone 29-T05) — 위 세
+  Analyzer를 순서대로(Snapshot→Health/Risk→Recommendation) 실행해
+  `ProjectIntelligenceReport`를 만들고, `render_markdown()`으로
+  Markdown 문자열로 렌더링한 뒤 `VaultAdapter.
+  publish_intelligence_report()`로 `15 Project Intelligence/
+  Project Intelligence.md`에 노출한다(`publish()`). 새 판단 기준
+  없이 이미 만든 세 Analyzer를 조합만 한다.
 """
 
 from __future__ import annotations

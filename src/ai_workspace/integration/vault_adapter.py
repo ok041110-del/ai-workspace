@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ai_workspace.vault.engine import VaultSaveEngine
+from ai_workspace.vault.intelligence_report import write_project_intelligence_report
 from ai_workspace.vault.models import VaultDocumentKind, VaultDocumentRequest
 from ai_workspace.vault.task_lifecycle import TaskStatus, transition_task_status
 from ai_workspace.vault.task_query import list_task_documents
@@ -151,3 +152,10 @@ class VaultAdapter:
             )
             for doc in documents
         ]
+
+    def publish_intelligence_report(self, markdown: str) -> Path:
+        """`intelligence/report.py`가 렌더링한 Markdown을 `15 Project
+        Intelligence/Project Intelligence.md`에 덮어쓴다(ADR-0043,
+        Milestone 29-T05). 렌더링 로직은 갖지 않는다 — 이미 만들어진
+        문자열을 그대로 받아 쓰기만 한다(연결·위임만, ADR-0039)."""
+        return write_project_intelligence_report(self._vault_root, markdown)

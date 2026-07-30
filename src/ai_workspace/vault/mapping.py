@@ -27,6 +27,7 @@ VAULT_CONTENT_DIRECTORIES: tuple[str, ...] = (
     "12 Decisions",
     "13 Daily",
     "14 Tasks",
+    "15 Project Intelligence",
     "99 Templates",
 )
 

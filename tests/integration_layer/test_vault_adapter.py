@@ -170,3 +170,13 @@ def test_list_tasks_reflects_transitions_and_archive(tmp_path: Path) -> None:
     assert tasks[0].archived is True
 
     assert adapter.list_tasks(include_archived=False) == []
+
+
+def test_publish_intelligence_report_writes_markdown(tmp_path: Path) -> None:
+    vault_root = _make_vault(tmp_path)
+    adapter = VaultAdapter(vault_root)
+
+    path = adapter.publish_intelligence_report("# Project Intelligence\n\ncontent\n")
+
+    assert path == vault_root / "15 Project Intelligence" / "Project Intelligence.md"
+    assert path.read_text(encoding="utf-8") == "# Project Intelligence\n\ncontent\n"
