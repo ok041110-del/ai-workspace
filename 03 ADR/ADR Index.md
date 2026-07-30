@@ -326,6 +326,12 @@ tags: [decision]
 - 결정: 새 Interface 없이 기존 `MemoryEngine`(M1, remember/recall/search)을 그대로 재사용. `ExecutionMemory`(신규 dataclass — task_id/action/result/timestamp/reason 5개만, embedding·score·vector·confidence 금지)를 `ExecutionMemoryStore`(신규, `MemoryEngine`을 감싸는 얇은 Service)가 JSON 직렬화해 저장/조회. `RecommendationExecutionService`에 `execution_memory_store` 선택적 의존성을 추가해 실행 결과를 자동 기록(미주입 시 M38 이전과 동일). 영속화(Vault 파일 등)는 `MemoryEngine`(M1 기초 계약) 구현체가 `vault/`(M28+ Layer)에 하향 결합되는 문제를 발견해 범위에서 제외 — `InMemoryMemoryEngine`만 사용. `RecommendationRuleAnalyzer` 반영(Learning)은 M40 이후로 명시적으로 이관(사용자 조건부 승인)
 - 영향: `docs/ARCHITECTURE.md` §3.8/§8 규칙 22(신규)/§2.1 갱신, `.ai/TASKS.md` Milestone 39 절 신규. `domain/execution_memory.py`(신규)/`memory/execution_memory_store.py`(신규)/`runtime/execution/recommendation_execution_service.py`(확장)/`web/server.py`·`web/app.py`(Composition Root 배선) 구현 완료, `pytest` 1021개·ruff·mypy(194 source files) 전부 클린. 새 Core Domain Interface/Adapter 없음(27종 유지), `MemoryEngine`/`ExecutionGate`/`ActionBuilder`/`TaskLifecycleTransitioner` 무변경. 영속화·Learning·REST 엔드포인트는 계속 범위 밖(YAGNI, M40 이후 논의). 상세는 [[Architecture Overview]]
 
+## ADR-0054: Domain Vocabulary & Naming Convention 확립 — Milestone 이름은 "{Domain} {Responsibility}", 신규 용어보다 재사용 우선 (Pre-M40)
+
+- 목적: M1~M39를 거치며 Intelligence/Memory/Engine/Guardian/Resume/Lifecycle 등의 용어가 각 시점 필요에 따라 독립적으로 도입돼 어휘가 발산. M40 착수 전 이름을 짓는 규칙 자체를 먼저 확립
+- 결정: `docs/ARCHITECTURE.md` 신규 §13에서 Intelligence/Memory/Execution/Guardian을 1급 Domain 어휘로, Engine/Lifecycle/Resume/Scheduler/Recommendation/Automation을 보조 어휘로 정의. Milestone 이름은 `{Domain} {Responsibility}` 형식만 사용(예: Project Intelligence, Execution Memory). `Knowledge`/`Insight`/`Learning`/`Analyzer`/`Manager` 등 기존 어휘와 겹치는 동의어 신설 금지. 신규 §14에서 Obsidian Graph Cluster를 폴더가 아니라 Domain 기준(🔵Intelligence/🟢Execution/🟡Memory/🟣Architecture/🔴Domain/🟠Documentation)으로 재정의하고 Linking Rules 명문화. `.ai/RULES.md` 신규 §1.5(Vocabulary Reuse First)로 영구 규칙화. 이번 작업은 문서화 전용 — 기존 Milestone/클래스/파일명 변경 없음, Vault Tag 일괄 추가·`.obsidian/graph.json` 설정은 별도 후속 작업으로 이관
+- 영향: `docs/ARCHITECTURE.md` §13/§14(신규) 추가, `.ai/RULES.md` §1.5(신규, v0.9.0) 추가. 코드 변경 없음(`pytest` 1021개 그대로 유지). 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

@@ -2169,3 +2169,181 @@ src/ai_workspace/
 | **Event Store를 독립 Subscriber로** | 전달 비간섭, 장애 격리, 확장 용이 | 기록 누락 방지 설계 필요 | **채택** |
 | 조정 역할을 암묵적으로 처리 | 별도 정의 불필요 | 조정 책임이 흐릿함 | 기각 |
 | **Coordination Capability 명시** | 조정 역할이 선택/추적 가능 | Capability 하나 추가 | **채택** |
+
+## 13. Domain Vocabulary & Naming Convention (ADR-0054, 2026-07-30)
+
+### 13.1 배경 및 목적
+
+M1~M39를 거치며 Milestone 이름과 컴포넌트 이름이 각 시점의 필요에 따라
+독립적으로 만들어졌다 — Intelligence(M29~M35)/Memory(M1, M39)/Engine
+(M1의 Core Engines)/Guardian(§2.1에서 예약만 됨)/Resume(M33)/Lifecycle
+(M37) 등이 서로 다른 시점에 서로 다른 맥락에서 도입됐다. 프로젝트가
+커질수록 이 용어들이 같은 뜻인지 다른 뜻인지 매 Milestone마다 다시
+판단해야 하는 비용이 커진다.
+
+이 절은 **M40 이후의 모든 Milestone/Engine/Service 이름이 재사용해야
+할 단일 어휘(Vocabulary)**를 정의한다. 새 코드를 만들기 전에
+Reuse First를 검증하는 MDD Review Gate(§2.1.1, `.ai/RULES.md`)와
+같은 정신을 **이름**에도 적용한 것이다 — "이 개념을 표현할 기존
+용어가 있는가?"를 먼저 확인하고, 없을 때만 새 용어를 만든다.
+
+### 13.2 Domain Vocabulary — 핵심 4개 용어
+
+아래 4개는 이후 Milestone이 이름을 지을 때 최우선으로 재사용해야 할
+1급 어휘다. 각 용어는 **Read/Write 여부와 소비 대상이 명확히 다른
+서로 배타적인 책임**을 가리킨다.
+
+| 용어 | 정의 | 책임(Responsibility) | 범위(Scope) | 대표 산출물(Typical Outputs) | 대표 소비자(Typical Consumers) |
+|---|---|---|---|---|---|
+| **Intelligence** | 여러 데이터 소스를 읽어 "지금 상황이 어떤가"를 분석·요약·판단하는 **Read Only** 계층(ADR-0043) | 관찰·집계·판단만 한다. 절대 쓰지 않고, 절대 실행하지 않는다(side-effect 없음) | `intelligence/` 패키지. `VaultAdapter`/`AgentAdapter`(Integration Layer)만 읽기 의존, `domain`/`interfaces`/`engines`/`vault`는 직접 참조하지 않는다(§8 규칙 21) | Vault Markdown 리포트(`15 Project Intelligence/*.md`), 값 객체(`ProjectSnapshot`/`NextAction` 등) | 사람(Vault 열람), Execution(M36 이후, `NextAction`만 예외적으로 소비) |
+| **Memory** | 시스템이 무언가를 **저장하고 다시 꺼내 쓸 수 있게** 하는 계층. 판단(Learning)은 하지 않는다 | key-value 저장/검색만 담당(`MemoryEngine.remember`/`recall`/`search`, M1). 무엇을 저장할지는 호출자가 결정 | `memory/` 패키지. `MemoryEngine` interface(M1)와 그 재사용 계층(`ContextManager`/`ExecutionMemoryStore`) | 저장된 key-value 레코드(Session/Mission Snapshot, `ExecutionMemory`) | Context Manager(Snapshot), Execution Platform(자기 실행 결과 기록, M39) |
+| **Execution** | 실제 부작용(Task 실행, 상태 변경)을 일으키는 계층. 이 저장소에서 "생각(Intelligence)"과 "행동(Execution)"을 가르는 경계선이다 | `EngineAdapter`를 통한 실제 실행, Task 상태 전이. 유일한 실행 진입점은 `ExecutionDispatcher`(M18) | `runtime/execution/`, `runtime/automation/` | `EngineExecutionResult`, Task 상태 전이, Vault 실행 리포트(`Recommendation Execution.md`) | 사람(Vault 열람), Memory(M39, 실행 결과를 `ExecutionMemory`로 기록) |
+| **Guardian** | (M39 이후 예약, 아직 미구현) 아키텍처 규칙 위반을 감시·차단하는 계층을 가리키는 이름 | 미정 — 착수 시점에 별도 제안·승인(§1.4 Approval Required) | 미정 | 미정 | 미정 |
+
+### 13.3 이미 확립된 보조 용어
+
+아래 용어들은 4개 핵심 어휘만큼 범용적이지는 않지만, 이미 특정
+의미로 정착되어 있으므로 **다른 뜻으로 재사용하지 않는다**. 새
+Milestone에서 비슷한 개념이 필요하면 새 단어를 만들기 전에 먼저 이
+표를 확인한다.
+
+| 용어 | 확립된 의미 | 근거 |
+|---|---|---|
+| **Engine** | Core Domain의 상태 없는(또는 최소 상태) 서비스 계층(Task/Workflow/Approval/Automation/Memory Engine 등). "생각하는 상위 개념"이 아니라 Agent가 사용하는 하위 서비스를 가리킨다 | ADR-0012, §3.7 |
+| **Lifecycle** | 상태 기계(State Machine)를 통한 전이 관리. `TaskLifecycleTransitioner`(M37)처럼 "허용된 상태→상태 전이만 수행"하는 컴포넌트에만 쓴다 | ADR-0051, §3.30 |
+| **Resume** | 세션/작업 재개 — "지금 무엇을 하고 있었는가"를 자동 복원하는 것(M33)에만 쓴다. Memory의 저장/검색과는 다른, Intelligence의 판단(어떤 것이 "현재 작업"인지 규칙으로 고르는 것) | ADR-0047 |
+| **Scheduler** | 주기/조건 Trigger로 무언가를 반복 발동시키는 컴포넌트(`AgentScheduler`, `AutomationScheduler`)에만 쓴다 | ADR-0033 |
+| **Recommendation** | Intelligence가 계산한 "다음에 무엇을 해야 하는가"라는 단일 결정(`NextAction`, M35)에만 쓴다. Recommendation 자체는 Intelligence(Read Only)지만, `Recommendation Execution`(M36)처럼 뒤에 Execution이 붙으면 그 결정을 실행하는 별도 컴포넌트를 가리킨다 | ADR-0049, ADR-0050 |
+| **Automation** | 조건/일정 Trigger로 Action을 자동 발동시키는 계층(`AutomationEngine`/`AutomationScheduler`)에만 쓴다. Automation은 스스로 "무엇을 할지" 판단하지 않는다 — 그 판단은 Intelligence/Recommendation의 책임이다 | ADR-0033 |
+
+### 13.4 Milestone Naming Convention — "Domain + Responsibility"
+
+**규칙**: Milestone 이름은 항상 `{Domain} {Responsibility}` 형태를
+따른다. `{Domain}`은 §13.2/§13.3의 기존 용어 중 하나여야 하고,
+`{Responsibility}`는 그 Domain이 무엇에 대해 작동하는지를 명사로
+표현한다.
+
+**예시**(기존 Milestone 이름 재확인)
+
+| Milestone 이름 | Domain | Responsibility |
+|---|---|---|
+| Project Intelligence(M29) | Intelligence | Project(상태 관찰 대상) |
+| Workflow Intelligence(M34) | Intelligence | Workflow(상태 관찰 대상) |
+| Recommendation Execution(M36) | Execution | Recommendation(실행 대상) |
+| Execution Memory(M39) | Memory | Execution(저장 대상) |
+| Architecture Guardian(예정) | Guardian | Architecture(감시 대상) |
+
+**이 규칙이 존재하는 이유**: `{Domain}`을 고정하면 이름만 보고도 그
+컴포넌트가 Read Only인지(Intelligence) side-effect를 일으키는지
+(Execution) 저장만 하는지(Memory)를 즉시 알 수 있다 — §8 의존성
+규칙과 1:1로 대응하는 이름 체계다. `{Responsibility}`가 자유롭게
+바뀌어도 `{Domain}`이 그대로면 그 컴포넌트가 지켜야 할 아키텍처
+제약(예: Intelligence는 절대 쓰지 않는다)이 이름만으로 드러난다.
+
+**새 용어 도입이 허용되는 경우**: §13.2/§13.3의 어떤 용어로도 그
+개념의 핵심 책임(Read Only 판단 / 저장 / 실행 / 감시 등)을 정확히
+표현할 수 없을 때만 새 Domain 용어를 만든다. 이 경우에도 §1.4
+Approval Required에 따라 사용자 승인을 받아야 하며, 승인 시 그
+새 용어를 본 절(§13.2)에 즉시 추가해 다음 Milestone부터 재사용
+가능하게 한다.
+
+**기존 어휘를 재사용해야 하는 경우**: 다음처럼 이미 존재하는 개념과
+본질적으로 같다면 새 단어를 만들지 않는다.
+
+- `Knowledge` — 이미 Project Knowledge System(M16, `KnowledgeSearch`/
+  `KnowledgeProvider`)이라는 확립된 의미가 있다. "정보를 찾아 준다"는
+  개념이 필요하면 Knowledge를 재사용하거나 Intelligence로 표현한다.
+- `Insight`/`Learning` — Intelligence(관찰·판단, Read Only)와
+  경계가 흐릿한 동의어다. "판단한다"는 Intelligence, "과거 기록으로
+  판단 기준 자체를 바꾼다"는 아직 이름이 정해지지 않은 별도
+  개념이며(ADR-0053이 M40 이후로 명시적으로 미룸), 임의로
+  Insight/Learning이라는 새 이름을 붙이지 않고 착수 시점에 §13.2에
+  정식으로 추가한다.
+- `Analyzer`/`Manager` — 이미 내부 클래스 이름 접미사로 널리 쓰인다
+  (`RecommendationRuleAnalyzer`, `ContextManager`). Milestone/Domain
+  이름(위 Naming Convention의 `{Domain}`)으로는 쓰지 않는다 — 이들은
+  "무엇을 하는 클래스인지"를 나타내는 구현 세부사항이지, 이
+  저장소의 아키텍처 층위를 가리키는 Domain 어휘가 아니다.
+
+### 13.5 신규 용어 도입 전 확인 절차 (영구 규칙)
+
+다음을 새로 도입하기 전에는 **반드시** 먼저 이 개념이 §13.2/§13.3의
+기존 어휘로 표현 가능한지 확인한다.
+
+- 새 Milestone 이름
+- 새 Engine
+- 새 Service
+- 새 아키텍처 개념(Layer/Adapter/Runtime 등)
+
+기존 어휘로 정확히 표현할 수 없는 경우에만 새 어휘를 만든다(§13.4
+"새 용어 도입이 허용되는 경우" 참고). 이 규칙은 `.ai/RULES.md`
+§1.5(Vocabulary Reuse First)에도 동일하게 반영되어 있다.
+
+## 14. Obsidian Graph Convention (ADR-0054, 2026-07-30)
+
+### 14.1 목적
+
+Obsidian Graph View가 폴더 구조(`00 System`~`15 Project
+Intelligence`)를 그대로 반영하는 무의미한 그물망이 되지 않고, **§13의
+아키텍처 어휘(Domain)를 시각적으로 드러내는 지도**가 되도록 한다.
+폴더는 "문서가 어디 저장돼 있는가"만 나타내지만, 이 절이 정의하는
+Cluster는 "이 문서가 아키텍처적으로 무엇인가"를 나타낸다 — 같은
+폴더(`15 Project Intelligence/`) 안에 있어도 `Recommendation
+Execution.md`는 Intelligence가 아니라 Execution Cluster에 속한다.
+
+### 14.2 Graph Cluster 정의
+
+| Cluster | 색상(제안) | 포함 대상(§13 Domain 기준) |
+|---|---|---|
+| 🔵 Intelligence | Blue | Project Intelligence, Context Intelligence, Capability Intelligence, Workflow Intelligence, Recommendation Intelligence, Intelligence Overview, Session Resume |
+| 🟢 Execution | Green | Recommendation Execution, Task Status 이력(Task Lifecycle), AutomationScheduler 관련 문서 |
+| 🟡 Memory | Yellow | Execution Memory 관련 문서(향후 Vault 노출 시), Session/Mission Summary(장기 Memory) |
+| 🟣 Architecture | Purple | ADR Index 및 개별 ADR, Architecture Overview, (향후) Architecture Guardian |
+| 🔴 Domain | Red | Agent, Task, Workflow, Project를 다루는 개별 문서(예: `14 Tasks/*.md`) |
+| 🟠 Documentation | Orange | README, ROADMAP, PRD, Overview, Templates |
+
+이 매핑은 §13.2/§13.3의 Domain 어휘와 1:1로 대응한다 — 새 Cluster를
+만들기 전에 먼저 새 Domain 어휘가 §13에 추가되어 있는지 확인한다
+(Cluster는 Vocabulary의 파생물이지 독립적인 분류 체계가 아니다).
+
+### 14.3 현재 Vault 문서 → Cluster 매핑 (참고)
+
+| Vault 위치 | Cluster |
+|---|---|
+| `15 Project Intelligence/Project Intelligence.md`, `Project Context.md`, `Capability Intelligence.md`, `Workflow Intelligence.md`, `Recommendation Intelligence.md`, `Intelligence Overview.md`, `Session Resume.md` | 🔵 Intelligence |
+| `15 Project Intelligence/Recommendation Execution.md`("Task Status 이력" 섹션 포함) | 🟢 Execution |
+| `03 ADR/ADR Index.md` 및 `12 Decisions/` | 🟣 Architecture |
+| `11 Milestones/Milestones Index.md` | 🟣 Architecture(Milestone은 아키텍처 결정의 진행 기록이므로 ADR과 같은 Cluster) |
+| `14 Tasks/*.md` | 🔴 Domain |
+| `01 Overview/`, `99 Templates/`, 저장소 루트 `README.md` | 🟠 Documentation |
+| `13 Daily/` | 🟠 Documentation(운영 기록, 특정 Domain에 속하지 않음) |
+| `04 Backend/`, `05 API/`, `06 Dashboard/`, `07 Automation/`, `08 Production/`, `09 iOS/`, `10 Android/` | 해당 문서가 다루는 Domain에 따라 개별 판단(예: `07 Automation/Automation Index.md`는 🟢 Execution) — 폴더 자체가 Cluster를 결정하지 않는다(§14.1) |
+
+### 14.4 Linking Rules
+
+- **의미 있는 아키텍처 관계만 링크한다.** "같은 Milestone에서 만들어졌다"는
+  이유만으로 링크하지 않는다 — 실제 의존 관계(§8 Dependency Rules)나
+  같은 Cluster 내 참조 관계일 때만 링크한다.
+- **불필요한 Cross-Cluster 링크를 피한다.** Intelligence 문서가
+  Execution 문서를 링크하는 것은 실제 소비 관계(§13.2의 "대표
+  소비자")가 있을 때만 허용한다 — 예: `Recommendation
+  Intelligence.md` → `Recommendation Execution.md`(M35 Recommendation을
+  M36이 실행)는 허용, 무관한 Intelligence 문서 간 임의 링크는
+  지양한다.
+- **계층적 링크를 우선한다.** Index 문서(`ADR Index`, `Milestones
+  Index`)가 개별 문서를 링크하는 방향을 기본으로 하고, 개별 문서끼리
+  직접 링크하는 것은 실제 참조가 있을 때만 추가한다.
+- **완전 연결 그래프(Mesh)를 막는다.** 한 문서가 같은 Cluster 안의
+  모든 문서를 링크할 필요는 없다 — Index를 거쳐 탐색 가능하면
+  충분하다. Graph View에서 한 문서의 링크 수가 비정상적으로 많다면
+  (예: 10개 초과) 그 문서가 실제로는 Index 역할을 하고 있는 것은
+  아닌지 재검토한다.
+
+### 14.5 적용 계획
+
+이번 문서화에서는 §14.2~14.4의 **규칙만 정의**한다. 기존 Vault
+문서에 Domain Cluster를 나타내는 새 Tag(예: `#cluster/intelligence`)를
+일괄 추가하는 작업과 `.obsidian/graph.json`의 실제 Group/Color 설정은
+**별도 후속 작업**으로 남긴다 — 수십 개 문서의 Frontmatter를 한 번에
+바꾸는 것은 "문서화만" 범위를 벗어나는 별도 변경이며, §1.4 Approval
+Required(리팩토링/새 기능 해당)에 따라 별도 제안·승인이 필요하다.

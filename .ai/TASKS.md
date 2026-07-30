@@ -11883,6 +11883,65 @@ Tests/Documentation을 확인해 **Milestone 39(Execution Memory) 공식
 
 ---
 
+## Pre-M40: Domain Vocabulary & Naming Convention
+
+**목표**(2026-07-30 사용자 요청): M40 착수 전 프로젝트 전체 명명
+규칙과 Obsidian Graph 규칙을 먼저 확립한다(ADR-0054). M39 완료 직후
+사용자가 "M40 Experience Intelligence"라는 새 이름을 제시하면서, M38
+Review가 예고했던 "Learning Engine"과의 관계가 불명확해진 것이
+계기다 — Milestone을 더 만들기 전에 이름을 짓는 규칙 자체를
+세운다. **문서화 전용 작업**(사용자 명시) — 코드/클래스명/파일명,
+기존 Milestone 이름은 변경하지 않는다.
+
+**반영 내용**
+
+1. `docs/ARCHITECTURE.md` 신규 §13(Domain Vocabulary & Naming
+   Convention) — Intelligence/Memory/Execution/Guardian을 1급 Domain
+   어휘로 정의(정의/책임/범위/대표 산출물/대표 소비자). Engine/
+   Lifecycle/Resume/Scheduler/Recommendation/Automation을 이미
+   확립된 보조 용어로 정리. Milestone 이름은 `{Domain}
+   {Responsibility}` 형식(예: Project Intelligence, Execution
+   Memory)만 쓰고, `Knowledge`/`Insight`/`Learning`/`Analyzer`/
+   `Manager` 같은 동의어 신설을 금지.
+2. `docs/ARCHITECTURE.md` 신규 §14(Obsidian Graph Convention) —
+   Graph Cluster를 폴더가 아니라 §13 Domain 기준(🔵Intelligence/🟢
+   Execution/🟡Memory/🟣Architecture/🔴Domain/🟠Documentation)으로
+   재정의. 현재 Vault 문서 → Cluster 매핑 참고표, Linking Rules
+   (의미 있는 관계만 링크/Cross-Cluster 링크 최소화/계층적 링크
+   우선/완전 연결 그래프 방지) 포함.
+3. `.ai/RULES.md` 신규 §1.5(Vocabulary Reuse First, v0.9.0) — 새
+   Milestone/Engine/Service/아키텍처 개념 도입 전 §13 어휘 재사용
+   여부를 먼저 확인하는 영구 규칙.
+
+**적용 계획(후속 작업으로 이관)**: Vault 문서에 Domain Cluster
+Tag(예: `#cluster/intelligence`)를 일괄 추가하는 작업과
+`.obsidian/graph.json`의 실제 Group/Color 설정은 이번 범위에
+포함하지 않는다 — 수십 개 문서 Frontmatter 일괄 변경은 리팩토링에
+해당해 별도 제안·승인이 필요하다(§14.5).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Domain Vocabulary 4개 용어(Intelligence/Memory/Execution/Guardian) 정의 | ✅ |
+| 2 | 보조 용어 6개(Engine/Lifecycle/Resume/Scheduler/Recommendation/Automation) 정리 | ✅ |
+| 3 | Milestone Naming Convention("{Domain} {Responsibility}") 명문화 | ✅ |
+| 4 | 신규 용어 도입 절차(기존 어휘 우선 확인) 명문화 | ✅ |
+| 5 | Obsidian Graph Cluster를 Domain 기준으로 재정의 | ✅ |
+| 6 | Linking Rules 4개 항목 명문화 | ✅ |
+| 7 | `.ai/RULES.md` §1.5 신규 추가 | ✅ |
+| 8 | 코드/클래스명/파일명/기존 Milestone 이름 무변경 | ✅ |
+| 9 | `pytest`/`ruff`/`mypy` 기존 상태(1021 passed) 유지 확인 | ✅ |
+| 10 | ADR-0054/TASKS/Vault(ADR Index/Milestones Index) 최신화 | ✅ |
+
+**사용자 승인(2026-07-30)**: 위 10개 항목을 확인해 **Pre-M40 Domain
+Vocabulary & Naming Convention 공식 완료(Approved)**. M40의 실제
+이름은 이 규칙("Experience Intelligence"가 §13.2/§13.3 어휘로
+표현 가능한지, 또는 새 Domain 용어가 필요한지)에 따라 착수 시점에
+다시 확정한다.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
