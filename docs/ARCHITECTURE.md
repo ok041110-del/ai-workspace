@@ -168,6 +168,54 @@ Event Bus를 통한 수평 결합이며, Event Store는 Bus의 독립 구독자�
                                           └──────────────────────────────────┘
 ```
 
+### 2.1 Intelligence Platform / Execution Platform 계층 구조 (2026-07-30 사용자 확정)
+
+M29~M38(§3.22~§3.31)은 위 §2 다이어그램의 `Core Engines`(Task·
+Workflow·Approval·Automation) 축 위에 얹힌 별도 계층이며, 책임에
+따라 두 그룹으로 재해석한다 — **새 컴포넌트나 코드 변경 없이 기존
+10개 Milestone을 문서상으로 재구성**한 것뿐이다(M38 완료 논의 중
+사용자 제안, ADR 없음 — 코드/Interface/의존성 규칙에 영향을 주지
+않는 순수 문서 재구성이라 별도 ADR을 만들지 않는다).
+
+```
+Intelligence Platform (M29~M35) — 관찰·분석·추천
+├── M29 Project Intelligence         (ADR-0043)
+├── M30 Context Intelligence         (ADR-0044)
+├── M31 Capability Intelligence      (ADR-0045)
+├── M32 Intelligence Synthesis       (ADR-0046)
+├── M33 Session Resume               (ADR-0047)
+├── M34 Workflow Intelligence        (ADR-0048)
+└── M35 Recommendation Intelligence  (ADR-0049)
+
+Execution Platform (M36~M38) — 실행·상태 전이·스케줄링
+├── M36 Execution                    (ADR-0050)
+├── M37 Task Lifecycle               (ADR-0051)
+└── M38 AutomationScheduler 연결      (ADR-0052)
+```
+
+- **Intelligence Platform(M29~M35)**: `VaultAdapter`/`AgentAdapter`를
+  읽기만 해서(Read Only) Project/Context/Capability/Synthesis/Session
+  Resume/Workflow 상태를 계산하고, M35 `RecommendationRuleAnalyzer`가
+  이를 입력으로 단일 `NextAction`을 고른다. side-effect가 없다 — 추천만
+  하고 Task를 실행하거나 상태를 바꾸지 않는다.
+- **Execution Platform(M36~M38)**: `ExecutionGate`/`ActionBuilder`
+  (M36)가 `source=next_task`만 승인해 기존 `ExecutionDispatcher`
+  (M18)로 실제 실행하고, `TaskLifecycleTransitioner`(M37)가 그
+  결과를 기존 Task 상태 전이 기계(M28)에 연결하며,
+  `AutomationScheduler`(M21) 연결(M38)로 이 전체를 주기적 Trigger
+  에서도 실행 가능하게 만든다 — **처음으로 실제 부작용(AI Engine
+  실행, Task 상태 변경)을 일으키는 계층**이다.
+- **"Automation Core" 명명 보류(사용자 판단, 2026-07-30)**: M36~M38은
+  "생각하고 실행"할 수 있을 뿐, 아직 스스로 기억하고(Memory Engine)
+  설계를 감시하고(Architecture Guardian) 학습하는(Learning Engine)
+  단계가 아니다 — 그래서 지금은 "Automation Core v1.0"이라는 이름을
+  붙이지 않는다. 이 세 Engine이 실제로 설계·구현·승인된 뒤(M39 이후,
+  각각 별도 제안·승인 대상)에야 M29~그 시점까지의 전체를 묶어
+  "Automation Core"로 명명하는 것이 아키텍처적으로 더 일관된다. 이
+  문단은 향후 방향에 대한 사용자 의견 기록일 뿐, 세 Engine 자체를
+  설계하거나 구현을 확정하는 것이 아니다(§1.4 Approval Required —
+  각 Engine은 별도 승인 절차를 거친다).
+
 ## 3. 핵심 컴포넌트
 
 ### 3.1 UI Surfaces

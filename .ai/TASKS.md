@@ -11751,11 +11751,26 @@ Composition Root에서 연결돼 **Intelligence → Execution → Automation
 기본 폐쇄 루프**가 완성됐다. 새 정책 없이(`ExecutionGate`
 무변경) 기존 27개 Core Domain Interface를 그대로 유지했다.
 
-**사용자 제안(2026-07-30, 참고용)**: M29~M38을 "Automation Core
-v1.0"(또는 "Core Automation Platform") 단계로 묶어 아키텍처 문서에
-별도 섹션으로 정리해 두면, M39 이후 정책 확장(재시도/승인/이벤트/
-CLI 등)의 기준점으로 쓰기 좋다는 제안을 받았다 — 별도 승인 후
-착수할 예정이며, 이번 M38 완료 자체에는 반영하지 않았다.
+**문서 재구성 — Intelligence Platform / Execution Platform 계층
+정의(2026-07-30 사용자 확정)**: 처음 제안됐던 "Intelligence
+Core(M29~M34) / Automation Core v1.0(M35~M38)" 구분을 사용자가
+재검토해 **Intelligence Platform(M29~M35, 관찰·분석·추천)**과
+**Execution Platform(M36~M38, 실행·상태 전이·스케줄링)**으로
+다시 정의했다 — M35(Recommendation Intelligence)는 아직 추천만
+하고 실행하지 않아(Read Only) Intelligence 쪽 책임에 더 가깝고,
+M36부터 실제 부작용(AI Engine 실행, Task 상태 변경)이 시작된다는
+근거다. **새 컴포넌트/코드 변경 없는 순수 문서 재구성**이라 별도
+ADR을 만들지 않는다(`docs/ARCHITECTURE.md` §2.1 신설/재정의).
+
+**"Automation Core" 명명 보류(사용자 판단)**: M36~M38(Execution
+Platform)은 "생각하고 실행"할 수 있을 뿐, 아직 스스로 기억하고
+(Memory Engine) 설계를 감시하고(Architecture Guardian) 학습하는
+(Learning Engine) 단계가 아니다. 이 세 Engine이 실제로 설계·구현·
+승인된 뒤에야(M39 이후, 각각 별도 제안·승인 대상) 그 시점까지의
+전체를 묶어 "Automation Core"로 명명하는 것이 더 일관된다는 것이
+사용자 의견이다 — 지금은 이름을 붙이지 않는다. 이 세 Engine의
+구체 설계·구현은 이번 결정에 포함되지 않는다(각각 별도 §1.4
+Approval Required 대상).
 
 **다음은 Milestone 39** — 세부 Task는 착수 시점에 별도 제안·승인
 후 정의한다.
