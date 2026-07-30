@@ -10887,10 +10887,16 @@ Task 문서를 쓰지 않아 실제 Vault에서의 Workflow Intelligence는
 CLI 노출·자동 트리거·M35(Recommendation)/M36(Automation) 연동은
 명시적으로 범위 밖으로 남겨 다음 Milestone 이후 논의 대상이다.
 
-**사용자 승인 대기**: DoD 10개 항목/Architecture/MDD/Layer/
-Interface/Adapter/ADR/Tests/Documentation Review 결과를 위와 같이
-정리했다. 사용자 최종 확인 후 Milestone 34(Workflow Intelligence)
-공식 완료(Approved)로 확정한다.
+**사용자 승인(2026-07-30)**: DoD 10개 항목/Architecture/MDD/Layer/
+Interface/Adapter/ADR/Tests/Documentation Review를 모두 확인해
+**Milestone 34(Workflow Intelligence) 공식 완료(Approved)**.
+"M29(Project Intelligence)→M30(Context Intelligence)→M31(Capability
+Intelligence)→M32(Intelligence Synthesis)→M33(Session Resume)→
+M34(Workflow Intelligence)"로 이어지며, "Workflow"를
+`domain.Workflow`가 아니라 Milestone Task 실행 흐름으로 재정의하고
+Blocked/Next Rule 1개 + `WorkflowFlowAnalyzer` 캡슐화로 M29~M33
+설계 철학을 그대로 유지했다. `15 Project Intelligence/Workflow
+Intelligence.md`가 공식 결과로 확정된다.
 
 **다음은 Milestone 35** — 세부 Task는 착수 시점에 별도 제안·승인
 후 정의한다.
