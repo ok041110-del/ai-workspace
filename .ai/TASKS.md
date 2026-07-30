@@ -8786,7 +8786,7 @@ Task로 진행한다.
 | M28-T03 | Integration Layer(Vault Adapter/Workflow Adapter/Agent Adapter) | **완료** |
 | M28-T04 | Workflow Engine Integration | **완료** |
 | M28-T05 | Agent Assignment | **완료** |
-| M28-T06 | Conversation Layer Integration | 착수 예정 |
+| M28-T06 | Conversation Layer Integration | **완료** |
 
 ### M28-T01: Task Lifecycle
 
@@ -9100,6 +9100,82 @@ src/ai_workspace/runtime/agent` 클린, `pytest`(843개, 기존 837개 +
 완료 후 사용자가 요청한 Architecture Freeze(ADR 전체 재검토/Layer
 의존성 검증/Integration Boundary 검증/Interface 목록 확정/M29
 요구사항 재정의)를 진행한다.
+
+### M28-T06: Conversation Layer Integration
+
+**설계 승인**(2026-07-30, 사용자): 요구사항/Boundary/금지 목록을
+상세히 명시한 지시로 승인. 핵심 조건: (1) 새 비즈니스 로직 절대
+추가 금지, (2) `integration/conversation_workflow_link.py`(또는
+적절한 이름)의 Conversation Connector로 기존 Adapter/Connector를
+조합, (3) Conversation Layer는 Domain/Vault/AgentManager를 직접
+참조하지 않고 모든 요청은 Integration Layer를 통해 전달, (4)
+Conversation Layer 책임은 사용자 입력 해석/요청 라우팅/결과 조합
+및 응답 반환으로 한정(Planning/Workflow 생성/Agent 선택/Task
+Lifecycle 등은 그대로 Core에 남김), (5) T06 완료 후 M29 시작하지
+않고 종료(Architecture Freeze 대기).
+
+**DoD**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Conversation Connector 구현(`integration/conversation_workflow_link.py`) | ✅ |
+| 2 | 기존 Adapter/Connector 조합으로 요청 처리, 새 비즈니스 로직 없음 | ✅ |
+| 3 | Conversation Layer가 Domain/Vault/AgentManager 직접 참조 금지 | ✅ |
+| 4 | ADR-0041 작성(역할/Boundary/책임/Integration Layer와의 관계) | ✅ |
+| 5 | `docs/ARCHITECTURE.md` 갱신 | ✅ |
+| 6 | 단위 테스트 추가 + 기존 Architecture Boundary 테스트 통과 | ✅ |
+| 7 | 전체 테스트/ruff/mypy 통과 | ✅ |
+
+**구현 내용**
+
+- `integration/conversation_workflow_link.py`(신규)의
+  `ConversationConnector` — 생성자로 `VaultAdapter`/
+  `WorkflowTaskLink`/`WorkflowAgentLink`를 주입받아 조합만 한다.
+  - `handle_task_request()` — "Task 생성→Workflow 생성→Agent
+    Assignment→Vault 업데이트"(M25 요청 예시 흐름)를 세 컴포넌트
+    호출 순서 배열만으로 구현.
+  - `advance_task()` — `WorkflowTaskLink.transition_and_reflect()`
+    그대로 위임.
+  - `report_status()` — `WorkflowTaskLink.get_task_status()`(신규
+    조회 전용 메서드, `WorkflowAdapter.get_task()` 위임)/
+    `is_workflow_complete()` 결과를 dataclass로 묶기만("결과
+    조합").
+  - 요청/결과는 이 파일 안에서만 정의한 dataclass
+    (`ConversationTaskRequest`/`ConversationTaskResult`/
+    `ConversationStatusReport`)로 주고받는다 — `domain.Task`/
+    `domain.Agent`에 필드를 추가하지 않는다.
+- **ADR-0041(Orchestrating Connector 도입)**: ADR-0040("Connector
+  끼리 서로 참조하지 않는다")을 Peer Connector(`WorkflowTaskLink`/
+  `WorkflowAgentLink`, 유스케이스 하나만 책임)로 좁히고,
+  `ConversationConnector`를 그 원칙의 명시적 예외인
+  **Orchestrating Connector**(여러 Peer Connector/Adapter를
+  조합해 상위 유스케이스를 라우팅·조합)로 정의. `integration/
+  __init__.py` 갱신.
+- **Boundary 강제**: `tests/integration_layer/
+  test_conversation_connector_boundary.py`(신규)가 `ast`로
+  `conversation_workflow_link.py`가 `ai_workspace.vault`/
+  `ai_workspace.interfaces.{workflow_engine,task_engine,
+  agent_manager,agent_registry,agent_scheduler}`/`ai_workspace.
+  engines.{workflow_engine,task_engine}`/`ai_workspace.runtime.agent`
+  를 import하지 않고, `ai_workspace.*` import가 전부
+  `integration.*`/`domain.*`인지 확인한다.
+
+**검증**: `tests/integration_layer/test_conversation_connector.py`
+(신규 3개 — Task 요청 처리/상태 전이+Vault 반영/상태 조회 조합),
+`test_conversation_connector_boundary.py`(신규 2개),
+`test_architecture_boundary.py`(기존 3개, 무변경 통과), `ruff check
+src tests` 클린, `mypy src/ai_workspace/integration
+src/ai_workspace/vault src/ai_workspace/engines src/ai_workspace/domain
+src/ai_workspace/runtime/agent` 클린, `pytest`(848개, 기존 843개 +
+신규 5개) 전부 통과.
+
+**Milestone 28-T06(Conversation Layer Integration) 완료.**
+
+**Milestone 28(Live Task Management & Integration) 전체 완료
+(T01~T06).** `.ai/RULES.md` §2.2(One Task At A Time)에 따라 M29는
+시작하지 않는다 — 사용자가 요청한 Architecture Freeze(ADR 전체
+재검토/Layer 의존성 검증/Integration Boundary 검증/Interface 목록
+확정/M29 요구사항 재정의)의 승인을 기다린다.
 
 ---
 

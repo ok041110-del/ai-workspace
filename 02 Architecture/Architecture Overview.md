@@ -108,9 +108,24 @@ Integration Layer 안에서 두 종류를 구분한다: **Adapter**(외부
 `AgentAdapter`)와 **Connector**(여러 Adapter를 조합해 유스케이스
 하나를 오케스트레이션, `WorkflowTaskLink`/`WorkflowAgentLink`).
 Connector도 자체 비즈니스 로직은 갖지 않고 항상 Adapter가 감싼
-Core Domain Engine에 위임한다. Connector끼리도 서로 참조하지
-않는다 — Agent 배정은 `WorkflowTaskLink`가 아니라 별도
+Core Domain Engine에 위임한다. **Peer Connector**끼리도 서로
+참조하지 않는다 — Agent 배정은 `WorkflowTaskLink`가 아니라 별도
 `WorkflowAgentLink`가 담당한다.
+
+## Conversation Layer 연동 — Orchestrating Connector(Milestone 28-T06, ADR-0041)
+
+M28의 마지막 Task. `ConversationConnector`(신규)는 Peer Connector
+2개(`WorkflowTaskLink`/`WorkflowAgentLink`) + `VaultAdapter`를
+조합해 Conversation Layer 요청("Task 생성→Workflow 생성→Agent
+배정→Vault 반영" 등)을 처리하는 **Orchestrating Connector**다 —
+"Connector끼리 서로 참조하지 않는다"는 원칙의 명시적 예외로,
+여러 유스케이스를 조합하는 것 자체가 존재 이유다. Conversation
+Layer(사용자 입력 해석/요청 라우팅/결과 조합만 담당)는 Vault/Core
+Domain Engine/AgentManager를 직접 참조하지 않고 이 Connector만
+거친다(`ast` 테스트로 강제). 새 비즈니스 로직·새 Domain 필드 없음.
+
+**Milestone 28(Live Task Management & Integration) 전체 완료.**
+다음은 Architecture Freeze(별도 승인 후 진행).
 
 ## 관련 문서
 

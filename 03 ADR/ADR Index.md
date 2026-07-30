@@ -248,6 +248,12 @@ tags: [decision]
 - 결정: Adapter(Vault/Workflow/Agent, 외부 시스템 1개만 연결) vs Connector(WorkflowTaskLink/WorkflowAgentLink, 여러 Adapter 조합, 유스케이스 1개만 책임). Connector끼리도 서로 참조하지 않음 — Agent 배정을 WorkflowTaskLink에 얹지 않고 별도 WorkflowAgentLink로 분리
 - 영향: `integration/__init__.py`에 분류 명시, `docs/ARCHITECTURE.md` §3에 반영. 상세는 [[Architecture Overview]]
 
+## ADR-0041: Conversation Layer 연동 — Conversation Connector 도입, Orchestrating Connector 개념 추가 (Milestone 28-T06)
+
+- 목적: Conversation Layer가 Task/Workflow/Agent 요청을 처리할 유일한 진입점 마련, M28 마지막 Task
+- 결정: `ConversationConnector`(Peer Connector `WorkflowTaskLink`/`WorkflowAgentLink` + `VaultAdapter` 조합)를 **Orchestrating Connector**로 도입 — ADR-0040 "Connector끼리 참조 금지" 원칙의 명시적 예외. Conversation Layer는 Vault/Core Domain Engine/AgentManager를 직접 참조하지 않고 이 Connector만 거침(`ast` 테스트로 강제). 새 비즈니스 로직·새 Domain 필드 없음
+- 영향: `integration/conversation_workflow_link.py` 신규. **Milestone 28(Live Task Management & Integration) 전체 완료**, Architecture Freeze 예정. 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

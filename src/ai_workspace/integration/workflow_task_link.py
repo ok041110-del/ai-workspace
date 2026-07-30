@@ -122,3 +122,10 @@ class WorkflowTaskLink:
             self._workflow.get_task(link.domain_task.task_id).status is TaskStatus.DONE
             for link in links
         )
+
+    def get_task_status(self, link: WorkflowLink) -> TaskStatus:
+        """`link`가 가리키는 Core Domain `Task`의 현재 상태를 조회한다
+        (Milestone 28-T06) — `WorkflowAdapter.get_task()`에 그대로
+        위임하는 조회 전용 메서드. `ConversationConnector`가 `WorkflowAdapter`
+        를 직접 참조하지 않고도 Task별 상태를 모을 수 있게 한다."""
+        return self._workflow.get_task(link.domain_task.task_id).status

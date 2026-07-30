@@ -22,7 +22,19 @@ Domain을 모른다.** 이 경계를 넘는 통신은 반드시 이 패키지를
   Task에 Agent 배정하기"). Connector도 자체 비즈니스 로직(상태 전이
   규칙, 선택 알고리즘 등)은 만들지 않는다 — 항상 Adapter가 감싼
   Core Domain Engine에 위임하고, Connector 자신은 조합·ID 변환·
-  파생 값 계산만 한다.
+  파생 값 계산만 한다. **Peer Connector**(`WorkflowTaskLink`/
+  `WorkflowAgentLink`)는 서로 참조하지 않는다 — 각자 유스케이스
+  하나만 책임진다.
+
+**Orchestrating Connector**(Milestone 28-T06, ADR-0041): Peer
+Connector와 달리, 여러 Connector/Adapter를 함께 조합해 더 상위
+유스케이스(사용자 요청 전체)를 라우팅·조합하는 것 자체가 존재
+이유인 Connector. `conversation_workflow_link.ConversationConnector`
+가 유일한 예 — Conversation Layer(사용자 입력 해석/요청 라우팅/
+결과 조합만 담당, 자연어 해석 자체는 코드가 아니라 AI의 역할)가
+Task/Workflow/Agent 요청을 처리하는 유일한 진입점이다. Orchestrating
+Connector도 새 비즈니스 로직을 만들지 않는다 — Peer Connector 호출
+순서를 배열하고 결과를 묶을 뿐이다.
 
 현재 구성원:
 
@@ -31,16 +43,19 @@ Domain을 모른다.** 이 경계를 넘는 통신은 반드시 이 패키지를
   (`WorkflowEngine`/`TaskEngine` Interface에만 의존),
   `agent_adapter.AgentAdapter`(`AgentManager`/`AgentRegistry`/
   `AgentScheduler` Interface에만 의존).
-- **Connector**: `workflow_task_link.WorkflowTaskLink`(Milestone
-  28-T04, Vault Task↔Core Domain Workflow/Task 연결),
+- **Peer Connector**: `workflow_task_link.WorkflowTaskLink`
+  (Milestone 28-T04, Vault Task↔Core Domain Workflow/Task 연결),
   `workflow_agent_link.WorkflowAgentLink`(Milestone 28-T05, Task↔
   Agent 배정/추적).
+- **Orchestrating Connector**: `conversation_workflow_link.
+  ConversationConnector`(Milestone 28-T06) — 위 두 Peer Connector와
+  `VaultAdapter`를 조합해 Conversation Layer 요청 전체(Task 생성→
+  Workflow 생성→Agent 배정→Vault 반영, Task 상태 조회/전이)를
+  처리한다.
 
-세 Adapter는 서로를 참조하지 않고, Connector끼리도 서로를
-참조하지 않는다 — 각 Connector는 자기 유스케이스 하나만 책임진다
-(Agent 배정 책임을 `WorkflowTaskLink`에 얹지 않고 별도
-`WorkflowAgentLink`로 분리한 것이 그 예). 여러 Connector를 다시
-조합하는 것은 더 상위 호출자(Conversation Layer, Milestone
-28-T06)의 책임이다."""
+세 Adapter는 서로를 참조하지 않고, Peer Connector끼리도 서로를
+참조하지 않는다(예: Agent 배정 책임을 `WorkflowTaskLink`에 얹지
+않고 별도 `WorkflowAgentLink`로 분리). Orchestrating Connector만
+예외적으로 여러 Peer Connector/Adapter를 조합한다(ADR-0041)."""
 
 from __future__ import annotations
