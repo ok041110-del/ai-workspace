@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.7.0 |
+| 문서 버전 | v0.8.0 |
 | 작성일 | 2026-07-30 |
 | 적용 대상 | 이 저장소에서 작업하는 모든 AI 구현 엔진(Claude Code, Codex, Gemini CLI 등) 및 기여자 |
 
@@ -10,6 +10,18 @@
 아래 규칙은 사용자가 제시한 개발 철학을 프로젝트 내부 규정으로 명문화한 것이며,
 모든 Task 수행 시 최우선으로 준수해야 한다.
 
+> **v0.8.0 변경 (GitHub 권한 및 Merge 정책, 2026-07-30)**: 신규 §8.6
+> GitHub 권한 및 Merge 정책 추가. 사용자가 Milestone을 최종 승인한
+> 뒤에는 PR 생성→Merge 가능 여부 확인→Merge→문서 갱신(TASKS.md/
+> ARCHITECTURE.md/Milestones Index)까지를 **하나의 연속된 작업**으로
+> 간주해 추가 확인 없이 자동으로 진행한다("PR을 생성할까요?"/
+> "Merge할까요?" 같은 재확인을 하지 않는다). §1.4 Approval Required의
+> "Milestone 완료" 승인 지점은 그대로 유지된다 — 이 변경은 그
+> 승인 **이후**의 GitHub 절차(5~9단계)에만 적용된다. Force Push/
+> Rebase로 Commit History 변경/Branch 삭제/Release Tag 생성/Breaking
+> Change/대규모 리팩토링/프로젝트 구조 변경/ADR 추가가 아닌 Architecture
+> 재구성은 여전히 사용자 확인이 필요한 예외로 남는다(§8.6 참고).
+>
 > **v0.7.0 변경 (MDD Review Gate 도입, M34~)**: 신규 §2.1.1 MDD Review Gate
 > 추가 및 `.ai/skills/MDD-Review.md` 신설. M34부터는 Milestone 계획 승인과
 > T01~T0n 구현 착수 사이에 "새 코드가 정말 필요한가"를 검증하는 MDD
@@ -475,6 +487,63 @@ Recommendation 구조와 추천 알고리즘은 그대로 이어진다.
   CI/CD를 신설하는 것은 과한 대응이다.
 - 자동 삭제로 정리되지 않은 브랜치가 남아 있다면 삭제 여부와 방법을
   사용자에게 확인한 뒤 진행한다(GitHub 웹 UI 수동 삭제 등).
+
+### 8.6 GitHub 권한 및 Merge 정책 (2026-07-30)
+
+**목적**: 개발 흐름을 중단하지 않기 위해, Milestone 승인 이후의 GitHub
+작업은 기본적으로 자동 진행한다.
+
+**기본 Workflow**: 모든 Milestone은 다음 순서를 따른다.
+
+1. 구현 완료
+2. MDD Review
+3. Milestone Review
+4. 사용자 최종 승인
+5. Pull Request 생성
+6. `main` 브랜치 Merge
+7. `.ai/TASKS.md` 갱신
+8. `docs/ARCHITECTURE.md` 갱신
+9. Milestones Index(Vault) 갱신
+
+사용자가 명시적으로 중단을 요청하지 않는 한 5~9단계는 하나의 연속된
+작업으로 수행한다.
+
+**Pull Request 정책**: 사용자가 Milestone을 승인하면(§1.4 Approval
+Required의 "Milestone 완료" 승인) Claude Code는 별도 요청을 기다리지
+않고 Pull Request 생성 → Merge 가능 여부 확인 → Merge 수행 → 문서
+업데이트까지 진행한다. "PR을 생성할까요?"/"Merge할까요?"와 같은 추가
+확인은 하지 않는다.
+
+**권한 요청 정책**: GitHub 또는 Connector가 권한을 요구하는 경우
+사용자에게 필요한 권한만 요청한다(예: GitHub Write, Merge, Send
+Later, Scheduler 등). 권한이 승인되면 중단된 작업부터 자동으로 이어서
+수행한다.
+
+**Merge 조건**: 다음을 모두 만족해야 Merge한다.
+
+- Milestone Review 승인 완료
+- 사용자 최종 승인 완료
+- `pytest` 통과
+- `ruff` 통과
+- `mypy` 통과
+- Architecture Rule 위반 없음
+- MDD Review 완료
+
+**Merge 후 작업**: Merge 완료 후 자동으로 `.ai/TASKS.md` 승인 기록,
+`docs/ARCHITECTURE.md` 상태 갱신, Milestones Index(Vault) 갱신을
+수행한다.
+
+**예외(반드시 사용자 확인)**: 다음 경우에는 §8.6의 자동 진행 원칙에도
+불구하고 반드시 사용자 확인을 받는다.
+
+- Force Push
+- Rebase로 Commit History 변경
+- Branch 삭제
+- Release Tag 생성
+- Breaking Change
+- 대규모 리팩토링
+- 프로젝트 구조 변경
+- ADR 추가가 아닌 Architecture 재구성
 
 ## 9. Obsidian Workspace Templates (Milestone 27, ADR-0038, 2026-07-27)
 
