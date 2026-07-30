@@ -42,7 +42,9 @@ Connector도 새 비즈니스 로직을 만들지 않는다 — Peer Connector �
   (`vault/`를 아는 유일한 구성원), `workflow_adapter.WorkflowAdapter`
   (`WorkflowEngine`/`TaskEngine` Interface에만 의존),
   `agent_adapter.AgentAdapter`(`AgentManager`/`AgentRegistry`/
-  `AgentScheduler` Interface에만 의존), `knowledge_adapter.
+  `AgentScheduler` Interface에만 의존; Milestone 31-T02(ADR-0045)에서
+  `list_active_agent_capabilities()`/`known_capabilities()`를 추가해
+  Intelligence Layer의 Capability Analyzer가 쓴다), `knowledge_adapter.
   KnowledgeAdapter`(Milestone 30-T02, ADR-0044 — `KnowledgeRepository`
   /`KnowledgeSearch` Interface에만 의존, Intelligence Layer의
   Context Analyzer가 사용한다).

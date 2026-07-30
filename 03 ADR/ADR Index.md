@@ -272,6 +272,12 @@ tags: [decision]
 - 결정: `KnowledgeRepository`/`KnowledgeSearch`(M16, 기존 27종 Interface 중 2종)만 재사용하고 새 Interface는 추가하지 않는다. 신규 Integration Layer Adapter `KnowledgeAdapter`가 이 두 Interface만 감싸고, `intelligence/context.py`의 `ContextAnalyzer`가 반환된 문서 텍스트를 Markdown 제목 단위로 쪼개 subject(Task/Milestone 식별자)가 언급된 항목만 채택한다(이 저장소의 실제 제목 작성 관례 활용, 새 지식 생성 없음). Freshness는 파일 mtime/git log 대신 제목에서 추출한 Milestone 번호 거리로 판단(mtime은 fresh clone 환경이라 무의미, git log는 Adapter "외부 시스템 하나만" 원칙과 충돌). Gap은 ADR/TASK/ARCHITECTURE 3종에서 subject 언급 0건일 때만 판정
 - 영향: `docs/ARCHITECTURE.md` §3.23(신규) 갱신, `.ai/TASKS.md` Milestone 30 절 신규. 코드 변경 없음(설계 Task, 구현은 M30-T02부터). 상세는 [[Architecture Overview]]
 
+## ADR-0045: Capability Intelligence 설계 — `AgentAdapter` 확장(신규 Adapter 아님), "정의된 Capability 대비 활성 Agent 커버리지"로 Gap 판정 (Milestone 31-T01~T05)
+
+- 목적: 정의된 `AgentCapability`(11종) 대비 실제 활성 Agent가 커버하는 Capability를 정리할 방법과 위치를 결정, 신규 Adapter/Interface 필요 여부 판단
+- 결정: 새 Adapter를 만들지 않고 기존 `AgentAdapter`(M28)를 확장한다 — `list_active_agent_capabilities()`(활성 Agent를 Adapter 전용 DTO로 열거)/`known_capabilities()`(정의된 Capability 카탈로그 노출) 두 메서드만 추가(새 Core Domain Interface 아님, 27종 유지). `intelligence/capability.py`(Snapshot 집계)→`intelligence/capability_gap.py`(Coverage/Gap 판단, Snapshot만 입력)의 2단 Analyzer로 M29/M30과 동일한 구조를 따른다. Coverage 등급은 healthy/warning/critical이 아니라 none/partial/full을 쓴다 — 활성 Agent 0명은 이 저장소가 아직 Agent 프로세스를 상시 구동하지 않는 워크숍 단계의 자연스러운 상태이지 시스템 이상이 아니기 때문. Vault Task `owner`(자유 텍스트)는 Capability 수요 신호로 매핑하지 않는다(고정 명명 규칙 없음, 새 관례 발명 금지)
+- 영향: `docs/ARCHITECTURE.md` §3.24(신규) 갱신, `.ai/TASKS.md` Milestone 31 절 신규. `integration/agent_adapter.py`(확장)/`intelligence/capability*.py`(신규)/`vault/capability_report.py`(신규)/`VaultAdapter.publish_capability_report()`(신규) 구현 완료, `pytest` 947개·ruff·mypy 전부 클린. 새 Core Domain Interface 없음(27종 유지). 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

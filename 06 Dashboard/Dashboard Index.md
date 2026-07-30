@@ -55,10 +55,17 @@ Milestone 30(Context Intelligence)도 같은 방식으로
 `.ai/`/`docs/` 문서)에서 지금 작업과 관련된 ADR/Task/Architecture/
 Rules/Roadmap·PRD, Freshness, Gap을 정리한다
 (`intelligence.context_service.ContextIntelligenceService
-.publish()`). 두 리포트 모두 FastAPI Dashboard(`web/`) 연동 대신
-Vault 노출을 택했다(범위 확장 방지, YAGNI) — 필요해지면
-`generate()`(순수 조회)를 그대로 재사용해 Dashboard에 연결할 수
-있다.
+.publish()`).
+
+Milestone 31(Capability Intelligence)도 같은 방식으로
+[[Capability Intelligence]]에 노출한다(ADR-0045) — 기존
+`AgentAdapter`(M28)가 노출한 활성 Agent 정보로 정의된
+`AgentCapability`(11종) 대비 실제 커버리지(Coverage)와 Gap을
+정리한다(`intelligence.capability_service
+.CapabilityIntelligenceService.publish()`). 세 리포트 모두 FastAPI
+Dashboard(`web/`) 연동 대신 Vault 노출을 택했다(범위 확장 방지,
+YAGNI) — 필요해지면 `generate()`(순수 조회)를 그대로 재사용해
+Dashboard에 연결할 수 있다.
 
 ## 관련 ADR
 

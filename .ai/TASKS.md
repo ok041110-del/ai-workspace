@@ -10068,6 +10068,255 @@ Freshness 감점)은 단순 근사이며 가중치 근거가 없다. 전부 실�
 
 ---
 
+## Milestone 31 — Capability Intelligence
+
+**목표**(2026-07-30 사용자 확정 — "M31을 M29/M30과 동일하게 진행"):
+이 시스템이 정의한 `AgentCapability`(11종) 대비, 실제로 활성 Agent가
+커버하는 Capability가 무엇인지 정리하는 Read Only Capability
+Intelligence를 구현한다. M29/M30과 동일한 조건 — **새로운 지식을
+생성하지 않는다. LLM 기반 추론도 하지 않는다** — 기존 데이터를
+수집·분석·정리하는 Rule 기반 계층으로 유지한다.
+
+**Definition of Done**
+
+| # | 항목 |
+|---|---|
+| 1 | 기존 27개 Core Domain Interface 변경 없음 |
+| 2 | 기존 Agent Layer Interface(`AgentManager`/`AgentRegistry`/`AgentScheduler`)만 재사용 |
+| 3 | 활성 Agent를 Capability/Role별로 집계 가능 |
+| 4 | 정의된 Capability 대비 커버리지(Coverage)를 Rule 기반으로 판단 가능 |
+| 5 | Capability Gap(활성 Agent가 0명인 Capability) 탐지 가능 |
+| 6 | Vault를 통해 결과 확인 가능 |
+| 7 | Integration Layer를 통해서만 접근 가능 |
+| 8 | Layer Boundary 테스트 통과 |
+| 9 | `pytest`/`ruff`/`mypy` 통과 |
+| 10 | Architecture/ADR/문서 최신화 |
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M31-T01 | Capability Intelligence Architecture 설계 | **완료** |
+| M31-T02 | Capability Snapshot Analyzer | **완료** |
+| M31-T03 | Coverage & Gap Analyzer | **완료** |
+| M31-T04 | Integration | **완료** |
+| M31-T05 | Presentation | **완료** |
+
+### M31-T01: Capability Intelligence Architecture
+
+**목표**: Capability Intelligence의 데이터 소스, 모델, 신규
+Adapter/Interface 필요 여부를 결정한다.
+
+**결정(ADR-0045, 상세 근거는 `.ai/DECISIONS.md` 참고)**
+
+- 새 Adapter를 만들지 않는다 — 기존 `AgentAdapter`(M28,
+  `AgentManager`/`AgentRegistry`/`AgentScheduler` 3종 Interface를
+  이미 감쌈)를 확장한다. `list_active_agent_capabilities()`(활성
+  Agent를 Adapter 전용 DTO `AgentCapabilityView`로 열거)와
+  `known_capabilities()`(정의된 `AgentCapability` 11종을 문자열
+  카탈로그로 노출) 두 메서드만 추가한다(M30이 `VaultAdapter`에
+  `publish_project_context()`를 추가한 것과 같은 확장 방식).
+- 집계(Snapshot)와 판단(Gap)을 분리한다(M29/M30과 동일한 2단
+  Analyzer 구조) — Snapshot Analyzer는 Adapter 값만 읽어 집계,
+  Gap Analyzer는 Snapshot만 입력으로 받아 판단한다.
+- Coverage 등급은 healthy/warning/critical이 아니라
+  none/partial/full을 쓴다 — 활성 Agent 0명은 이 저장소가 아직
+  Agent 프로세스를 상시 구동하지 않는 워크숍 단계의 자연스러운
+  상태이지 시스템 이상이 아니기 때문이다(M29 `active_agent_count`
+  도 항상 0으로 관찰됨, 매번 "Critical"로 표시하면 리포트 신뢰도만
+  떨어진다).
+- Vault Task 문서의 `owner` 필드(자유 텍스트)는 Capability 수요
+  신호로 쓰지 않는다 — 고정된 명명 규칙이 없어 안정적으로 매핑할
+  근거가 없고, 새 명명 관례를 이번에 발명하는 것은 "새 지식/판단
+  기준을 만들지 않는다"는 원칙과 충돌한다.
+- `AgentCapabilitySnapshot`/`CapabilityGap`/`CapabilityCoverage`/
+  `CapabilityGapReport`는 `intelligence/`의 값 객체로 두고
+  `domain/`에는 아무것도 추가하지 않는다.
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| 데이터 소스 정의 | ✅ (기존 `AgentAdapter`, ADR-0045) |
+| Capability 모델 정의 | ✅ (`AgentCapabilitySnapshot`/`CapabilityGap`/`CapabilityCoverage` 등) |
+| Adapter 필요 여부 판단 | ✅ (신규 Adapter 없음, 기존 `AgentAdapter` 확장만) |
+| ADR 작성 | ✅ (ADR-0045) |
+
+코드 변경 없음(설계 결론만 확정). 다음 Task: **M31-T02**(Capability
+Snapshot Analyzer).
+
+### M31-T02: Capability Snapshot Analyzer
+
+**목표**: T01 설계대로 `AgentAdapter`를 확장하고, 활성 Agent를
+Capability/Role별로 집계하는 `CapabilitySnapshotAnalyzer`를
+구현한다.
+
+**구현 내용**
+
+- `integration/agent_adapter.py`(확장) — `AgentCapabilityView`
+  (신규 dataclass, `agent_id`/`role`/`capabilities`/`status`를
+  모두 문자열/frozenset[str]로만 노출, `domain.agent.Agent`를
+  직접 반환하지 않음)와 `list_active_agent_capabilities()`/
+  `known_capabilities()` 두 메서드를 추가했다. `known_capabilities()`
+  는 `AgentCapability` enum 값을 문자열로 나열만 할 뿐 집계·판단은
+  하지 않는다(Adapter는 비즈니스 로직을 갖지 않는다, ADR-0039
+  원칙 유지).
+- `intelligence/capability.py`(신규) — `CapabilitySnapshotAnalyzer.
+  analyze()`가 `AgentAdapter.list_active_agent_capabilities()`/
+  `known_capabilities()`만 읽어 `AgentCapabilitySnapshot`(활성
+  Agent 수 + Capability별/Role별 집계 + 정의된 Capability 카탈로그)
+  을 만든다. `intelligence/`는 여전히 `integration/`의 Adapter에만
+  의존한다(§8 규칙 21 유지 — `agent_adapter`는 이미
+  `test_intelligence_layering.py`의 `allowed_prefixes`에 M29부터
+  등록돼 있어 추가 변경 불필요).
+
+**테스트**: `tests/integration_layer/test_agent_adapter.py`에 신규
+메서드 테스트 3개 추가, `tests/intelligence/test_capability_analyzer.py`
+(신규 3개). `pytest`(935개, 기존 929개 + 신규 6개), `ruff check src
+tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**: 데이터 소스 정의대로 `AgentAdapter` 확장 동작
+확인, `AgentCapabilitySnapshot` 생성 테스트 통과(Capability/Role
+집계/카탈로그 전체 포함/활성 Agent 없을 때 전부 0). 새 Core Domain
+Interface 없음(27종 그대로), Core Domain 코드 무변경.
+
+다음 Task: **M31-T03**(Coverage & Gap Analyzer).
+
+### M31-T03: Coverage & Gap Analyzer
+
+**목표**: T02의 `AgentCapabilitySnapshot`을 입력으로 Coverage
+(none/partial/full)와 Gap(활성 Agent가 0명인 Capability)을 Rule
+기반으로 판단한다.
+
+**구현 내용**
+
+- `intelligence/capability_gap.py`(신규)의 `CapabilityGapAnalyzer`
+  — Adapter를 새로 호출하지 않고 `AgentCapabilitySnapshot`만
+  입력으로 받는다(새로운 데이터 접근 경로 없음, `health_risk.py`/
+  `context_quality.py`와 동일한 설계 원칙).
+  - **Gap**: `by_capability`에서 집계 0인 Capability마다
+    `CapabilityGap` 1건(Capability 이름 오름차순 정렬).
+  - **Coverage**: `(정의된 Capability 수 − Gap 수) / 정의된
+    Capability 수`를 비율로 계산해 0이면 none, 1이면 full, 그
+    사이면 partial.
+
+**테스트**: `tests/intelligence/test_capability_gap.py`(신규 4개
+— 전체 Coverage/부분 Coverage+Gap 목록/활성 Agent 0명일 때 전부
+Gap/Gap 정렬 확인). `pytest`(939개, 기존 935개 + 신규 4개), `ruff
+check src tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**: Coverage/Gap 테스트 통과. 새 Core Domain
+Interface 없음(27종 그대로), Core Domain 코드 무변경,
+`intelligence/`는 여전히 자기 자신의 다른 모듈에만 의존(§8 규칙
+21 유지 — `capability_gap.py`는 Adapter조차 직접 참조하지 않음).
+
+다음 Task: **M31-T04**(Integration).
+
+### M31-T04: Integration
+
+**목표**: `AgentAdapter`(T02)/`CapabilitySnapshotAnalyzer`(T02)/
+`CapabilityGapAnalyzer`(T03)를 하나의 진입점으로 조립한다.
+
+**구현 내용**
+
+- `intelligence/capability_service.py`(신규)의
+  `CapabilityIntelligenceService` — `AgentAdapter`만 생성자로
+  주입받아 `generate()`가 Snapshot→Coverage/Gap 순서로 두 Analyzer
+  를 실행해 `CapabilityIntelligenceReport`(Snapshot+GapReport)를
+  만든다. 새 판단 기준을 만들지 않고 이미 만든 두 Analyzer를
+  조합만 한다(M29 `report.py`/M30 `context_service.py`의 조합
+  방식과 동일).
+
+**테스트**: `tests/intelligence/test_capability_service.py`에
+`generate()` 조합 테스트 2개 추가. `pytest`(941개, 기존 939개 +
+신규 2개), `ruff check src tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**: `AgentAdapter` 연결 확인, Service 구성 테스트
+통과. 새 Core Domain Interface 없음(27종 그대로), Core Domain 코드
+무변경, §8 규칙 21 유지.
+
+다음 Task: **M31-T05**(Presentation).
+
+### M31-T05: Presentation
+
+**목표**: T04의 `CapabilityIntelligenceService`를 실제로 Vault에
+노출한다.
+
+**구현 내용**
+
+- `intelligence/capability_service.py`(T04에서 확장) —
+  `render_markdown()`(순수 함수)이 `CapabilityIntelligenceReport`
+  를 Markdown으로 렌더링하고, `publish()`가 `VaultAdapter.
+  publish_capability_report()`(신규 메서드)를 통해 실제로 Vault에
+  쓴다. `vault_adapter`를 주입하지 않고 `publish()`를 호출하면
+  `ValueError`(M29-T05/M30-T05와 동일한 계약).
+- `vault/capability_report.py`(신규) — `write_capability_report()`
+  가 `15 Project Intelligence/Capability Intelligence.md`에
+  원자적으로 전체 교체(overwrite)한다(`vault/context_report.py`,
+  M30-T05와 동일한 패턴, 같은 폴더를 재사용해 새 최상위 폴더를
+  만들지 않았다).
+- `VaultAdapter.publish_capability_report()`(신규 메서드) — 위
+  writer를 Integration Layer에 노출.
+
+**테스트**: `tests/vault/test_capability_report.py`(신규 2개),
+`tests/integration_layer/test_vault_adapter.py`에
+`publish_capability_report()` 테스트 1개 추가, `tests/intelligence/
+test_capability_service.py`에 `publish()`/`render_markdown()` 테스트
+3개 추가. `pytest`(947개, 기존 941개 + 신규 6개), `ruff check src
+tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| Vault를 통해 결과 확인 가능 | ✅ (`15 Project Intelligence/Capability Intelligence.md`) |
+| Architecture 문서 최신화 | ✅ (`docs/ARCHITECTURE.md` §3.24 신규) |
+| Review 완료 | Milestone Review는 M31 전체 완료 후 별도 요청 예정(M29/M30과 동일한 프로세스) |
+
+새 Core Domain Interface 없음(27종 그대로), Layer Boundary 변경
+없음(§8 규칙 21 그대로), Core Domain 코드 무변경.
+
+**Milestone 31(Capability Intelligence) T01~T05 전체 완료.**
+Milestone Review는 사용자 요청에 따라 별도로 진행한다.
+
+### Milestone 31 Review
+
+**Review 결과 요약**
+
+| 항목 | 결과 |
+|---|---|
+| DoD 검증 | 10개 항목 전부 충족 |
+| Architecture Review | `intelligence/capability*.py`를 M29/M30 Intelligence Layer와 같은 계층에 추가(ADR-0045), Agent Layer(M28) 재사용 근거가 ADR에 명시 |
+| Layer Boundary Review | `test_intelligence_layering.py`(신규 파일이 `agent_adapter`만 참조, M29부터 이미 허용됨 — 변경 불필요) 회귀 없음 |
+| Interface Review | Core Domain 27종 무변경. Integration Layer 신규 Adapter 없음, `AgentAdapter` 확장 1건(`list_active_agent_capabilities()`/`known_capabilities()`), `VaultAdapter` 확장 1건(`publish_capability_report()`) |
+| ADR Review | ADR-0045 1건만 신규, 기존 ADR과 충돌 없음 |
+| pytest/ruff/mypy | 947 passed, ruff clean, mypy clean(175 source files) |
+| 문서 최신화 | `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`/`.ai/TASKS.md`/Vault(ADR Index/Milestones Index/Dashboard Index/`15 Project Intelligence/`) 전부 갱신 확인 |
+
+**개선 여지(참고용, 이번에 처리하지 않음)**: (1) `AgentRegistry`가
+In-Memory 전용이라 실제 Agent 프로세스가 떠 있지 않으면
+`활성 Agent 수`가 항상 0으로 관찰된다(M29 `active_agent_count`와
+동일한 이미 알려진 한계) — Coverage가 항상 none으로 보고될 수
+있다는 뜻이며, 실제 Agent 상시 구동 체계가 생기면 재검토 대상이다.
+(2) Vault Task `owner` 필드를 Capability 수요 신호로 쓰지 않기로
+했으므로, "필요한데 없는 Capability"(수요 대비 공급 Gap)가 아니라
+"정의됐는데 활성 Agent가 없는 Capability"(공급 자체의 Gap)만
+판정한다 — 수요 신호가 필요해지면 별도 ADR 대상이다.
+
+**사용자 승인(2026-07-30)**: Scope 준수/Architecture 유지/Interface
+유지/Rule 기반 구현/Documentation 완료/Test 통과를 모두 만족함을
+확인해 **Milestone 31(Capability Intelligence) 공식 완료(Approved)**.
+"M29(Project Intelligence)→M30(Context Intelligence)→M31(Capability
+Intelligence)"로 이어지며, AI Workspace가 프로젝트 상태/현재 작업
+맥락에 이어 "이 시스템이 실제로 수행할 수 있는 능력"까지 이해하는
+기반 계층을 갖췄다는 점에서 프로젝트 차원의 의미가 있음을 사용자가
+확인함.
+
+**다음은 Milestone 32** — 세부 Task는 착수 시점에 별도 제안·승인
+후 정의한다.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

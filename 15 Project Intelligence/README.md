@@ -5,7 +5,7 @@ tags: [system]
 # Project Intelligence 사용법
 
 이 폴더는 Intelligence Layer(`intelligence/`)가 만드는 **생성된
-리포트** 전용이다. 두 파일 모두 사람이나 AI가 직접 편집하는 원본이
+리포트** 전용이다. 세 파일 모두 사람이나 AI가 직접 편집하는 원본이
 아니라, 매번 처음부터 다시 계산해 덮어쓰는 파일이다 — 직접 수정해도
 다음 실행 때 사라진다.
 
@@ -42,6 +42,22 @@ Tasks/`)를 읽어 계산한다
   Roadmap·PRD는 범용 문서라 Gap 판정 대상 아님)
 - **Context Quality Score**: Gap/Freshness를 조합한 0~100% 점수
 
+## `Capability Intelligence.md` (Milestone 31, ADR-0045)
+
+`src/ai_workspace/intelligence/capability_service.py`의
+`CapabilityIntelligenceService.publish()`가 기존 `AgentAdapter`
+(M28)가 노출한 활성 Agent 정보를 읽어, 정의된 `AgentCapability`
+(11종) 대비 실제 커버리지를 정리한다
+(`vault.capability_report.write_capability_report()`).
+
+- **Snapshot**: 활성 Agent 수, Role별/Capability별 집계
+- **Coverage**: none/partial/full(정의된 Capability 대비 커버 비율).
+  M29/M30의 healthy/warning/critical과 달리 중립적인 이름을 쓴다 —
+  활성 Agent 0명은 시스템 이상이 아니라 이 저장소가 아직 Agent
+  프로세스를 상시 구동하지 않는 워크숍 단계의 자연스러운 상태이기
+  때문이다
+- **Gap**: 정의된 Capability 중 활성 Agent가 0명인 항목
+
 ## 관련 문서
 
 - [[Milestones Index]]
@@ -51,6 +67,7 @@ Tasks/`)를 읽어 계산한다
 ## 원문
 
 - `.ai/TASKS.md`의 "Milestone 29 — Project Intelligence"/"Milestone
-  30 — Context Intelligence" 절
-- `.ai/DECISIONS.md`의 ADR-0043/ADR-0044
+  30 — Context Intelligence"/"Milestone 31 — Capability
+  Intelligence" 절
+- `.ai/DECISIONS.md`의 ADR-0043/ADR-0044/ADR-0045
 - `src/ai_workspace/intelligence/`

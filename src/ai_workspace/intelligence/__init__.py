@@ -59,6 +59,25 @@ Vault Task 문서(`VaultAdapter.list_tasks()`)를 단일 데이터 소스로
   publish_project_context()`로 `15 Project Intelligence/Project
   Context.md`에 노출한다(`publish()`). `KnowledgeAdapter`(필수)/
   `VaultAdapter`(선택)만 생성자로 주입받는다.
+- `capability.CapabilitySnapshotAnalyzer`(Milestone 31-T02,
+  ADR-0045) — `AgentAdapter.list_active_agent_capabilities()`/
+  `known_capabilities()`가 이미 노출한 값만 읽어 활성 Agent를
+  Capability/Role별로 집계한다. 새 비즈니스 로직·쓰기 없음.
+- `capability_gap.CapabilityGapAnalyzer`(Milestone 31-T03) —
+  `AgentCapabilitySnapshot`을 입력으로 Coverage(none/partial/full)와
+  Gap(정의된 Capability 중 활성 Agent가 0명인 것)을 Rule 기반으로
+  판단한다. Adapter를 직접 호출하지 않고 Snapshot 산출물만
+  재사용한다. M29/M30의 healthy/warning/critical과 달리 중립적인
+  이름을 쓴다 — 활성 Agent 0명은 이 저장소가 아직 Agent 프로세스를
+  상시 구동하지 않는 워크숍 단계의 자연스러운 상태이지 시스템
+  이상이 아니기 때문이다.
+- `capability_service.CapabilityIntelligenceService`(Milestone
+  31-T04/T05) — 위 두 Analyzer를 Snapshot→Coverage/Gap 순서로
+  실행해 `CapabilityIntelligenceReport`를 만들고(`generate()`),
+  `render_markdown()`으로 Markdown 문자열로 렌더링한 뒤
+  `VaultAdapter.publish_capability_report()`로 `15 Project
+  Intelligence/Capability Intelligence.md`에 노출한다(`publish()`).
+  `AgentAdapter`(필수)/`VaultAdapter`(선택)만 생성자로 주입받는다.
 """
 
 from __future__ import annotations
