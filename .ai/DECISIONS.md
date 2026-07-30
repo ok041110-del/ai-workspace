@@ -3051,3 +3051,114 @@
   Milestone 35 절 신규 추가. 새 Core Domain Interface 없음(27종
   그대로), 새 Integration Layer Adapter 없음(`VaultAdapter` 확장
   1건), `domain/` 필드 추가 없음.
+
+## ADR-0050: Execution 도입 — next_task Recommendation만, 수동 트리거로만, 새 실행 경로 없이 기존 ExecutionDispatcher/EngineRegistry/EngineSelectionPolicy 재사용 (Milestone 36-T01~T04)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 M36 Milestone 계획을 조건부
+  승인 — ① DoD의 "거부"를 "지원하지 않음(Not Supported)"으로 표현
+  변경 ② `ExecutionGate`(source/manual_trigger/next_task 확인)와
+  `ActionBuilder`(NextAction→Action 변환)의 책임을 분리해 설계에
+  명시 — 두 가지 수정 권고를 반영하는 조건으로 확정. "Execution은
+  이미 존재한다. 우리는 연결만 한다"는 관점을 명시적으로 승인)
+- 날짜: 2026-07-30
+- 배경: M35 `RecommendationIntelligenceService`는 `NextAction`(추천만,
+  실행 없음)을 만든다. 반면 이 저장소의 "실행" 인프라는 이미 완성돼
+  있다 — `ExecutionDispatcher`(M18, `runtime/execution/
+  execution_dispatcher.py`, 유일한 실행 진입점)와
+  `AutomationActionExecutor`(M21,
+  `runtime/automation/automation_action_executor.py`)가
+  `Action(kind=RUN_TASK, project_id, task_title)` → 새 `Task` 생성 →
+  `EngineRegistry.list_candidates()` → `EngineSelectionPolicy.
+  select()` → `ExecutionDispatcher.dispatch()`로 실제 AI Engine이
+  Task를 수행하는 파이프라인을 이미 갖추고 있다. M36은 M29~M35와
+  달리 **Read Only가 아니라 실제 부작용(AI Engine 실행)을 일으키는
+  첫 Milestone**이다.
+- 결정:
+  1. **`NextAction`의 5가지 source 중 `next_task`만 실행 대상으로
+     삼는다.** `current_work`(이미 진행 중 — 새로 실행할 것이 없음),
+     `blocked_task`/`capability_gap`(사람의 판단이 필요한 문제
+     해결형 추천), `project_recommendation`(재할당/우선순위 조정 등
+     실행 대상이 모호)은 이번 범위에서 **지원하지 않음(Not
+     Supported)**으로 명시적으로 표현한다 — 오류가 아니라 "이번
+     Milestone의 Scope 밖"이라는 뜻이다(`AutomationActionExecutor`가
+     `RUN_WORKFLOW`를 `AutomationActionNotSupportedError`로 이미
+     표현해 온 것과 같은 관례).
+  2. **자동/주기적 트리거를 만들지 않는다.** `AutomationScheduler`
+     (M21)에 연결하지 않고, 명시적 수동 호출(`manual_trigger=True`를
+     호출자가 직접 전달)로만 실행한다 — 사람 개입 없는 완전 자동화는
+     다음 Milestone 이후로 미룬다(YAGNI, 위험 최소화).
+  3. **책임을 `ExecutionGate`와 `ActionBuilder`로 분리한다**(사용자
+     권고): `runtime/execution/recommendation_execution_gate.py`의
+     `ExecutionGate.check(next_action, *, manual_trigger)`는 source/
+     manual_trigger/next_task 여부만 확인해 `GateDecision(approved,
+     reason)`을 반환한다 — 실행 여부 "판정"만 한다. `runtime/
+     execution/recommendation_action_builder.py`의
+     `ActionBuilder.build(next_action, workflow_report)`는 승인된
+     `NextAction`을 `domain.automation.Action(kind=RUN_TASK, ...)`로
+     "변환"만 한다. 두 책임을 분리해 두면 다음 Milestone에서
+     `blocked_task`용 새 Gate Rule을 추가하기 쉬워진다(사용자 근거
+     그대로 채택).
+  4. **`AutomationActionExecutor`를 감싸지 않고, 그 내부와 동일한
+     3단계(`EngineRegistry.list_candidates()` →
+     `EngineSelectionPolicy.select()` → `ExecutionDispatcher.
+     dispatch()`)를 `RecommendationExecutionService`
+     (`runtime/execution/recommendation_execution_service.py`)가
+     직접 재사용한다.** `AutomationActionExecutor.__call__()`은
+     `EngineExecutionResult`를 버리는 fire-and-forget 계약
+     (`Callable[[AutomationRule], None]`, `AutomationScheduler`가
+     의존하는 기존 계약)이라, "실행 결과(성공/실패)를 Vault에
+     노출"해야 하는 M36 요구를 만족하지 못한다. 그 계약을 바꾸면
+     M21 `AutomationScheduler`와의 기존 계약을 깨뜨리므로 손대지
+     않는다 — 새 실행 경로를 만드는 대신, `AutomationActionExecutor`
+     가 이미 쓰는 것과 완전히 같은 3개 기존 컴포넌트를 그대로
+     재사용해 반환값만 다르게 소비한다(새 Interface/Engine/Dispatcher
+     없음).
+  5. **Task 상태 자동 전이는 이번 범위에서 하지 않는다.** 실행 성공
+     시 Vault Task를 자동으로 `done`으로 전이하는 것은 별도 판단
+     기준이 필요해(실패 시 롤백 여부 등) Scope를 키운다 —
+     `VaultAdapter.transition_task()`(기존)로 이미 가능한 능력이므로
+     필요성이 확인되면 다음 Milestone에서 추가한다. M36은 실행
+     결과를 새 Vault 문서(`15 Project Intelligence/Recommendation
+     Execution.md`)에 보고만 한다(M29~M35와 같은 "보고서 작성"
+     패턴 — 유일한 차이는 보고 전에 실제 실행이 일어난다는 것뿐).
+  6. **새 Adapter/Interface를 만들지 않는다.** `VaultAdapter`에
+     `publish_recommendation_execution()` 메서드 1개만 추가한다.
+- 대안:
+  - `AutomationRule`을 즉석에서 만들어 `AutomationActionExecutor`를
+    그대로 호출한다 — 기각. `Trigger`가 이 실행 시나리오에 의미가
+    없는데도 채워 넣어야 하고, 반환값(`EngineExecutionResult`)을
+    버리는 계약이라 실행 결과를 Vault에 남길 수 없다(결정 4 참고).
+  - `AutomationScheduler`에 `event_bus` 기반 자동 트리거로 연결한다
+    — 기각. 사람 개입 없는 완전 자동화는 이번 Milestone에서 다루기엔
+    위험이 크고(어떤 `NextAction`이 실제로 자동 실행돼도 안전한지
+    검증되지 않음), 사용자가 명시적으로 "수동 트리거만" 범위로
+    승인했다.
+  - `NextAction`의 5가지 source 전부를 실행 대상에 포함한다 — 기각.
+    `current_work`/`blocked_task`/`capability_gap`/
+    `project_recommendation`은 실행 대상(구체적인 "무엇을 실행할
+    지")이 불명확하거나 사람의 판단이 전제인 추천이라, 억지로
+    실행하려면 각각 새로운 변환 규칙을 만들어야 해 Scope가 크게
+    커진다.
+  - Task 상태를 실행 성공 시 자동으로 `done` 전이한다 — 기각(결정
+    5 참고). 실패 처리 정책(재시도? todo로 유지? 별도 상태?)까지
+    함께 설계해야 해 이번 Milestone 범위를 벗어난다.
+- 이유: 새 실행 시스템을 만드는 대신 `NextAction → Action →
+  dispatch()`라는 얇은 연결부만 추가하고, 실행 가능성이 명확한
+  `next_task` 1개 source·수동 트리거 1개 경로로만 좁혀 M36을 "이미
+  존재하는 Execution을 연결하는 Milestone"으로 완성했다 — MDD
+  원칙(YAGNI/Reuse First)과 첫 side-effecting Milestone이라는 위험
+  요인을 함께 반영한 결정이다.
+- 결과/영향: `runtime/execution/recommendation_execution_gate.py`
+  (신규)/`recommendation_action_builder.py`(신규)/
+  `recommendation_execution_service.py`(신규)/`vault/
+  recommendation_execution.py`(신규)/`integration/vault_adapter.py`
+  (`publish_recommendation_execution()` 추가) 구현 완료
+  (M36-T02~T04, 신규 테스트 10개 포함 pytest 998개, ruff, mypy 전부
+  통과). `docs/ARCHITECTURE.md` §3.29(신규) 갱신, `.ai/TASKS.md`에
+  Milestone 36 절 신규 추가. 새 Core Domain Interface 없음(27종
+  그대로), 새 Integration Layer Adapter 없음(`VaultAdapter` 확장
+  1건), `AutomationActionExecutor`/`AutomationScheduler`/
+  `ExecutionDispatcher` 무변경(그대로 재사용). `tests/
+  integration_layer/test_architecture_boundary.py`/`tests/
+  intelligence/test_intelligence_layering.py` 회귀 없음(§8 규칙
+  18/21 위반 없음을 실제 pytest로 확인).
