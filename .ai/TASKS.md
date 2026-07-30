@@ -11940,6 +11940,53 @@ Vocabulary & Naming Convention 공식 완료(Approved)**. M40의 실제
 표현 가능한지, 또는 새 Domain 용어가 필요한지)에 따라 착수 시점에
 다시 확정한다.
 
+### T01: Obsidian Graph Convention 실제 적용 (2026-07-30)
+
+**목표**(사용자 요청): §14.5가 후속 작업으로 미룬 "`.obsidian/
+graph.json`의 실제 Group/Color 설정"을 적용한다. MDD 원칙에 따라
+새 Frontmatter Tag를 일괄 추가하지 않고, **이미 존재하는 Tag/
+경로(Path) 구조만으로** 6개 Cluster를 분류한다(우선순위: ①기존
+메타데이터 ②기존 Tag ③기존 폴더 구조 ④필요시 최소 Frontmatter
+제안 — 이번 작업은 ①~③만으로 전부 해결돼 ④는 불필요했다).
+
+**구현**: `.obsidian/graph.json`(신규) — `colorGroups` 6개, 각각
+`{Domain}` 소비 Query + 고유 색상.
+
+| Cluster | 색상 | Query 근거 |
+|---|---|---|
+| 🟠 Documentation | `#FB8C00` | `path:"99 Templates"`/`"01 Overview"`/`"00 System"`/`"13 Daily"` + `tag:#system`/`#ios`/`#android` + `file:"README"` |
+| 🔴 Domain | `#E53935` | `tag:#task`(Documentation 경로 제외) |
+| 🟣 Architecture | `#8E44AD` | `tag:#architecture`/`#decision`/`#milestone`/`#backend`/`#api`/`#production`(Documentation 경로 제외) |
+| 🟡 Memory | `#FDD835` | `tag:#memory` — 현재 일치 문서 없음(M39 Execution Memory가 Vault에 아직 노출되지 않음, ADR-0053 결정) |
+| 🟢 Execution | `#43A047` | `tag:#recommendation-execution`/`#automation`/`#dashboard`(Documentation 경로 제외) |
+| 🔵 Intelligence | `#4A90D9` | `tag:#project-intelligence`/`#project-context`/`#capability-intelligence`/`#workflow-intelligence`/`#recommendation-intelligence`/`#intelligence-overview`/`#session-resume`(Documentation 경로 제외) |
+
+`99 Templates/`/`01 Overview/`/`00 System/`/`13 Daily/`를 다른 5개
+Query에서 명시적으로 제외한 이유: 이 4개 경로 안의 문서는 개별 Tag가
+무엇이든(예: `Template - Milestone.md`가 `tag:#milestone`) §14.3
+매핑표상 항상 Documentation Cluster에 속해야 하기 때문이다 — Tag만
+보면 다른 Cluster와 겹치는 41개 문서 전수를 시뮬레이션 검증해 이
+설계로 전부 상호 배타적임(각 문서가 정확히 1개 Cluster에만 속함)을
+확인했다.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `.obsidian/graph.json` 생성(기존 설정 없었음 — 새 파일) | ✅ |
+| 2 | 6개 Graph Group 생성, 각각 고유 색상 지정 | ✅ |
+| 3 | 기존 Tag/경로만으로 문서 분류(새 Frontmatter 추가 없음) | ✅ |
+| 4 | 현재 Vault 41개 문서 전수 시뮬레이션 — 상호 배타적 분류 확인 | ✅ |
+| 5 | Milestone 이름/ADR/코드/클래스명/파일명/폴더 구조 무변경 | ✅ |
+
+**개선 여지(참고용)**: 🟡 Memory Cluster는 현재 매칭 문서가 없다 —
+Execution Memory(M39)를 Vault에 노출하기로 결정하면(현재는
+ADR-0053에 따라 영속화하지 않음) 그 문서에 `tags: [memory]`를
+붙이는 것만으로 자동 편입된다. Obsidian은 그래프 물리(중심/반발력)
+를 Cluster별로 따로 지정하는 기능이 없어 "Architecture가 중심이
+된다"는 목표는 설정이 아니라 §14.4 Linking Rules(Index 문서가 가장
+많이 링크됨)의 결과로 자연히 달성되도록 남겨둔다.
+
 ---
 
 ## GitHub Flow Migration

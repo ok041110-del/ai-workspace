@@ -330,7 +330,7 @@ tags: [decision]
 
 - 목적: M1~M39를 거치며 Intelligence/Memory/Engine/Guardian/Resume/Lifecycle 등의 용어가 각 시점 필요에 따라 독립적으로 도입돼 어휘가 발산. M40 착수 전 이름을 짓는 규칙 자체를 먼저 확립
 - 결정: `docs/ARCHITECTURE.md` 신규 §13에서 Intelligence/Memory/Execution/Guardian을 1급 Domain 어휘로, Engine/Lifecycle/Resume/Scheduler/Recommendation/Automation을 보조 어휘로 정의. Milestone 이름은 `{Domain} {Responsibility}` 형식만 사용(예: Project Intelligence, Execution Memory). `Knowledge`/`Insight`/`Learning`/`Analyzer`/`Manager` 등 기존 어휘와 겹치는 동의어 신설 금지. 신규 §14에서 Obsidian Graph Cluster를 폴더가 아니라 Domain 기준(🔵Intelligence/🟢Execution/🟡Memory/🟣Architecture/🔴Domain/🟠Documentation)으로 재정의하고 Linking Rules 명문화. `.ai/RULES.md` 신규 §1.5(Vocabulary Reuse First)로 영구 규칙화. 이번 작업은 문서화 전용 — 기존 Milestone/클래스/파일명 변경 없음, Vault Tag 일괄 추가·`.obsidian/graph.json` 설정은 별도 후속 작업으로 이관
-- 영향: `docs/ARCHITECTURE.md` §13/§14(신규) 추가, `.ai/RULES.md` §1.5(신규, v0.9.0) 추가. 코드 변경 없음(`pytest` 1021개 그대로 유지). 상세는 [[Architecture Overview]]
+- 영향: `docs/ARCHITECTURE.md` §13/§14(신규) 추가, `.ai/RULES.md` §1.5(신규, v0.9.0) 추가. 코드 변경 없음(`pytest` 1021개 그대로 유지). **T01 적용 완료**(2026-07-30): `.obsidian/graph.json` 신규 — 새 Frontmatter Tag 없이 기존 Tag/경로만으로 6개 Cluster를 상호 배타적으로 분류(41개 문서 시뮬레이션 검증). 상세는 [[Architecture Overview]]
 
 ## 관련 문서
 
