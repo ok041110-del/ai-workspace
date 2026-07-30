@@ -9780,6 +9780,294 @@ Milestone Review를 수행한다. 단, Core Domain 변경/Interface
 
 ---
 
+## Milestone 30 — Context Intelligence
+
+**목표**(2026-07-30 사용자 확정): 프로젝트의 현재 작업(Task/
+Milestone)에 필요한 맥락(Context)을 기존 Knowledge Layer(M16)와
+Intelligence Layer(M29) 정보를 기반으로 수집·정리하는 Read Only
+Context Intelligence를 구현한다. **새로운 지식을 생성하지 않는다.
+LLM 기반 추론도 하지 않는다** — 기존 데이터를 수집·분석·정리하는
+Rule 기반 계층으로 유지한다.
+
+**Definition of Done**
+
+| # | 항목 |
+|---|---|
+| 1 | 기존 27개 Core Domain Interface 변경 없음 |
+| 2 | 기존 Knowledge Layer Interface(`KnowledgeRepository`/`KnowledgeSearch`/`KnowledgeProvider`)만 재사용 |
+| 3 | Task 또는 Milestone 기준 `ProjectContext` 생성 가능 |
+| 4 | 관련 ADR/RULES/Architecture/Decision/Task/Roadmap/PRD를 연결 가능 |
+| 5 | Context Freshness를 Rule 기반으로 판단 가능 |
+| 6 | Context Gap(필요 문서 없음, 연결 누락 등) 탐지 가능 |
+| 7 | Vault를 통해 결과 확인 가능 |
+| 8 | Integration Layer를 통해서만 접근 가능 |
+| 9 | Layer Boundary 테스트 통과 |
+| 10 | `pytest`/`ruff`/`mypy` 통과 |
+| 11 | Architecture/ADR/문서 최신화 |
+
+**Task List**
+
+| Task | 내용 | 상태 |
+|---|---|---|
+| M30-T01 | Context Intelligence Architecture 설계 | **완료** |
+| M30-T02 | Context Analyzer | **완료** |
+| M30-T03 | Freshness & Gap Analyzer | **완료** |
+| M30-T04 | Integration | **완료** |
+| M30-T05 | Presentation | **완료** |
+
+### M30-T01: Context Intelligence Architecture
+
+**목표**: Context Intelligence의 데이터 소스, `ProjectContext` 모델,
+신규 Adapter 필요 여부를 결정한다.
+
+**결정(ADR-0044, 상세 근거는 `.ai/DECISIONS.md` 참고)**
+
+- 신규 Integration Layer Adapter `KnowledgeAdapter`를 추가한다 —
+  기존 `KnowledgeRepository`/`KnowledgeSearch` Interface만 감싼다
+  (새 Core Domain Interface 아님, 기존 Adapter 3종과 동일한 패턴).
+- `FileKnowledgeRepository`는 파일 하나를 문서 하나로 통째로
+  노출한다(M16 결정 그대로 유지, Interface 변경 없음). M30은 이미
+  반환된 문서 텍스트를 Markdown 제목(`#`/`##`/`###`) 단위로 쪼개
+  `subject`(Task/Milestone 식별자)가 언급된 항목만 추리는 방식으로
+  세부 참조(예: "ADR-0043")를 얻는다 — 이 저장소가 실제로 제목에
+  Milestone/Task 번호를 담는 관례를 그대로 활용, 새 지식을 만들지
+  않는다.
+- Freshness는 파일 mtime/git log 대신, 제목에서 추출한 Milestone
+  번호와 현재 Milestone 번호의 거리로 판단한다(fresh clone 환경이라
+  mtime이 무의미하고, git log는 Adapter가 "외부 시스템 하나만"
+  다뤄야 한다는 ADR-0039 원칙과 충돌).
+- Gap은 ADR/TASK/ARCHITECTURE 3종 Knowledge에서 subject 언급이
+  0건일 때만 판정한다(RULE/PROJECT는 특정 Task마다 언급되는 것이
+  자연스럽지 않은 범용 문서라 제외).
+- `ProjectContext`/`ContextEntry`/`ContextQuality`/
+  `ContextFreshness`/`ContextGap`은 `intelligence/`의 값 객체로
+  두고 `domain/`에는 아무것도 추가하지 않는다.
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| 데이터 소스 정의 | ✅ (Knowledge Layer 6개 문서, ADR-0044) |
+| Context 모델 정의 | ✅ (`ProjectContext`/`ContextEntry`/`ContextQuality` 등) |
+| Adapter 필요 여부 판단 | ✅ (`KnowledgeAdapter` 신규, 기존 Interface만 감쌈) |
+| ADR 작성 | ✅ (ADR-0044) |
+
+코드 변경 없음(설계 Task). 다음 Task: **M30-T02**(Context Analyzer).
+
+### M30-T02: Context Analyzer
+
+**목표**: T01 설계대로 `KnowledgeAdapter`를 만들고, Knowledge 문서를
+Markdown 제목 단위로 쪼개 subject가 언급된 항목을 `ProjectContext`
+로 모으는 `ContextAnalyzer`를 구현한다.
+
+**구현 내용**
+
+- `integration/knowledge_adapter.py`(신규) — `KnowledgeAdapter`가
+  `KnowledgeRepository`(필수)/`KnowledgeSearch`(선택)만 생성자로
+  주입받아 `KnowledgeDocumentView`로 변환해 노출한다. Knowledge
+  조회/검색 로직은 새로 만들지 않고 전부 위임한다. `integration/
+  __init__.py`/`tests/integration_layer/test_connector_layering.py`
+  의 `_ADAPTERS`에 등록(§8 규칙 19 대상에 신규 Adapter 편입).
+- `intelligence/context.py`(신규) — `ContextAnalyzer.analyze(subject)`
+  가 `KnowledgeAdapter.list_all()`이 반환한 문서를 Markdown 제목
+  (`#`/`##`/`###`) 단위로 평면 분할한 뒤, subject가 언급된 (제목,
+  본문) 구간만 `ContextEntry`로 채택해 `ProjectContext`를 만든다.
+  **실제 구현 중 발견한 표기 불일치**: 이 저장소는 Task 문서
+  제목엔 "M29-T01:", ADR 제목엔 "(Milestone 29-T01)"처럼 같은
+  식별자를 문서 종류마다 다르게 표기한다 — `subject`가 "M30-T01"
+  하나만 들어와도 두 표기를 모두 만들어 대조하는
+  `_subject_variants()`를 추가해 실제로 놓치지 않도록 했다(설계
+  단계에서 예상 못 한 디테일, 표준 Interface나 데이터 변경 없이
+  Analyzer 내부 Rule로 흡수).
+  `_split_sections()`는 평면 분할이라 상위 제목(`## Milestone 30`)
+  본문에 하위 제목(`### M30-T01`) 텍스트가 섞이지 않는다는 한계를
+  docstring에 명시했다 — 실질적으로는 하위 제목 자체가 별도 항목
+  으로 매칭되어 누락은 없다.
+  `intelligence/`는 여전히 `integration/`의 Adapter에만 의존한다
+  (§8 규칙 21 유지, `test_intelligence_layering.py`의
+  `allowed_prefixes`에 `knowledge_adapter` 추가).
+
+**테스트**: `tests/integration_layer/test_knowledge_adapter.py`(신규
+3개), `tests/intelligence/test_context_analyzer.py`(신규 5개).
+`pytest`(912개, 기존 904개 + 신규 8개), `ruff check src tests`,
+`mypy src` 전부 클린.
+
+**완료 조건 확인**: 데이터 소스 정의대로 `KnowledgeAdapter` 동작
+확인, `ProjectContext` 생성 테스트 통과(언급된 항목 채택/무관 항목
+제외/Milestone 추출/언급 없을 때 빈 결과/`by_kind()` 필터). 새 Core
+Domain Interface 없음(27종 그대로), Core Domain 코드 무변경.
+
+다음 Task: **M30-T03**(Freshness & Gap Analyzer).
+
+### M30-T03: Freshness & Gap Analyzer
+
+**목표**: T02의 `ProjectContext`를 입력으로 Freshness(Healthy/
+Warning)와 Gap(필요 문서 없음)을 Rule 기반으로 판단한다.
+
+**구현 내용**
+
+- `intelligence/context_quality.py`(신규)의
+  `ContextFreshnessGapAnalyzer` — Adapter를 새로 호출하지 않고
+  `ProjectContext`만 입력으로 받는다(새로운 데이터 접근 경로 없음,
+  T03 health_risk.py와 동일한 설계 원칙).
+  - **Gap**: ADR/TASK/ARCHITECTURE 3종 중 subject 언급이 0건인
+    kind마다 `ContextGap` 1건. RULE/PROJECT는 범용 문서라 Gap
+    판정에서 제외(ADR-0044 결정 그대로).
+  - **Freshness**: `current_milestone`(선택 인자)이 주어지면, 매칭된
+    항목의 Milestone 번호와의 거리가 임계값(기본 3) 초과일 때
+    Warning. `current_milestone`을 생략하면 항상 Healthy(비교
+    기준이 없으므로 판단하지 않음, 억지 판정 금지).
+  - **score**: Gap 개수 기반 기본 점수(0.0~1.0)에서 Freshness가
+    Warning이면 0.2 감점한다 — 새 판단 기준을 늘리지 않고 이미
+    계산한 Gap/Freshness만 조합.
+
+**테스트**: `tests/intelligence/test_context_quality.py`(신규 7개
+— 전체 Gap/Gap 없음/rule·project 제외 확인/current_milestone 없을
+때 Healthy/먼 Milestone Warning/가까운 Milestone Healthy/score
+감점). `pytest`(919개, 기존 912개 + 신규 7개), `ruff check src
+tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**: Health/Gap 테스트 통과. 새 Core Domain
+Interface 없음(27종 그대로), Core Domain 코드 무변경,
+`intelligence/`는 여전히 자기 자신의 다른 모듈에만 의존(§8 규칙
+21 유지 — `context_quality.py`는 Adapter조차 직접 참조하지 않음).
+
+다음 Task: **M30-T04**(Integration).
+
+### M30-T04: Integration
+
+**목표**: `KnowledgeAdapter`(T02)/`ContextAnalyzer`(T02)/
+`ContextFreshnessGapAnalyzer`(T03)를 하나의 진입점으로 조립한다.
+
+**구현 내용**
+
+- `intelligence/context_service.py`(신규)의
+  `ContextIntelligenceService` — `KnowledgeAdapter`만 생성자로
+  주입받아 `generate(subject, current_milestone=None)`이
+  Context→Freshness/Gap 순서로 두 Analyzer를 실행해
+  `ProjectContextReport`(Context+Quality)를 만든다. 새 판단 기준을
+  만들지 않고 이미 만든 두 Analyzer를 조합만 한다(M29 `report.py`
+  의 조합 방식과 동일).
+
+**테스트**: `tests/intelligence/test_context_service.py`(신규 3개
+— Context/Quality 결합 확인, subject 미언급 시 Gap 3종 전부, 인접
+Milestone Healthy). `pytest`(922개, 기존 919개 + 신규 3개), `ruff
+check src tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**: `KnowledgeAdapter` 연결 확인, Service 구성
+테스트 통과. 새 Core Domain Interface 없음(27종 그대로), Core
+Domain 코드 무변경, §8 규칙 21 유지.
+
+다음 Task: **M30-T05**(Presentation).
+
+### M30-T05: Presentation
+
+**목표**: T04의 `ContextIntelligenceService`를 실제로 Vault에
+노출한다.
+
+**구현 내용**
+
+- `intelligence/context_service.py`(T04에서 확장) — `render_markdown()`
+  (순수 함수)이 `ProjectContextReport`를 Markdown으로 렌더링하고,
+  `publish()`가 `VaultAdapter.publish_project_context()`(신규
+  메서드)를 통해 실제로 Vault에 쓴다. `vault_adapter`를 주입하지
+  않고 `publish()`를 호출하면 `ValueError`.
+- `vault/context_report.py`(신규) — `write_project_context_report()`
+  가 `15 Project Intelligence/Project Context.md`에 원자적으로
+  전체 교체(overwrite)한다(`vault/intelligence_report.py`, M29-T05
+  와 동일한 패턴, 같은 폴더를 재사용해 새 최상위 폴더를 만들지
+  않았다).
+- `VaultAdapter.publish_project_context()`(신규 메서드) — 위 writer
+  를 Integration Layer에 노출.
+- **Dashboard 대신 Vault를 선택**(M29-T05와 동일한 이유 — DoD는
+  "Vault를 통해 결과 확인"만 요구, FastAPI 연동은 범위 확장이라
+  보류). `06 Dashboard/Dashboard Index.md`에 [[Project Context]]
+  연결 절을 추가했다.
+- Vault 문서: `15 Project Intelligence/README.md`(두 리포트 설명
+  으로 갱신), `15 Project Intelligence/Project Context.md`(신규,
+  실제 생성된 리포트), `06 Dashboard/Dashboard Index.md`,
+  [[Milestones Index]] M30 행 갱신.
+
+**실제 결과 확인 및 버그 발견·수정**: 이 저장소의 실제 vault_root에
+`ContextIntelligenceService.publish("M30-T05", current_milestone=30)`
+를 실행해 검증하던 중, `docs/ARCHITECTURE.md` 최상단 `# ARCHITECTURE
+— AI Workspace` 절처럼 본문 한 줄에 여러 Milestone 이력이 나열된
+경우 Freshness가 실제로는 최근(M30)인데도 본문 "첫 Milestone 언급"
+(예: "Milestone 1~22")을 잘못 골라 Warning으로 오판하는 버그를
+발견했다. `intelligence/context.py`의 Milestone 추출을 "본문 전체
+첫 언급"에서 "subject 언급 위치와 텍스트 거리가 가장 가까운 언급"
+으로 고쳐 해결(`_extract_milestone_near_subject()`,
+`_all_milestone_matches()` 신규) — 회귀 방지 테스트
+(`test_analyze_ignores_unrelated_milestone_mentions_before_subject`)
+를 추가했다. 수정 후 실제 리포트가 Freshness Healthy로 정정됨을
+확인하고 Vault에 커밋했다.
+
+**테스트**: `tests/vault/test_context_report.py`(신규 2개), `tests/
+integration_layer/test_vault_adapter.py`에 `publish_project_context()`
+테스트 1개 추가, `tests/intelligence/test_context_service.py`에
+`render_markdown()`/`publish()` 테스트 3개 추가, `tests/intelligence/
+test_context_analyzer.py`에 Milestone 오판 회귀 방지 테스트 1개
+추가. `pytest`(929개, 기존 922개 + 신규 7개), `ruff check src
+tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**
+
+| 항목 | 결과 |
+|---|---|
+| Vault를 통해 결과 확인 가능 | ✅ (`15 Project Intelligence/Project Context.md`) |
+| Architecture 문서 최신화 | ✅ (`docs/ARCHITECTURE.md` §3.23 갱신) |
+| Review 완료 | Milestone Review는 M30 전체 완료 후 별도 요청 예정(M29와 동일한 프로세스) |
+
+새 Core Domain Interface 없음(27종 그대로), Layer Boundary 변경
+없음(§8 규칙 21 그대로), Core Domain 코드 무변경.
+
+**Milestone 30(Context Intelligence) T01~T05 전체 완료.** Milestone
+Review는 사용자 요청에 따라 별도로 진행한다.
+
+### Milestone 30 Review
+
+**Review 결과 요약**
+
+| 항목 | 결과 |
+|---|---|
+| DoD 검증 | 11개 항목 전부 충족 |
+| Architecture Review | `intelligence/context*.py`를 M29 Intelligence Layer와 같은 계층에 추가(ADR-0044), Knowledge Layer(M16) 재사용 근거가 ADR에 명시 |
+| Layer Boundary Review | `test_intelligence_layering.py`(allowed_prefixes에 `knowledge_adapter` 추가) + `test_connector_layering.py`(`_ADAPTERS`에 `knowledge_adapter` 추가) 모두 회귀 없음 |
+| Interface Review | Core Domain 27종 무변경(`git diff --stat origin/main...` 확인). Integration Layer 신규 Adapter 1건(`KnowledgeAdapter`, 기존 `KnowledgeRepository`/`KnowledgeSearch`만 감쌈, Interface 아님), `VaultAdapter` 확장 1건(`publish_project_context()`) |
+| ADR Review | ADR-0044 1건만 신규(T02~T05는 순수 구현), 기존 ADR과 충돌 없음 |
+| pytest/ruff/mypy | 929 passed, ruff clean, mypy clean(171 source files) |
+| 문서 최신화 | `docs/ARCHITECTURE.md`/`.ai/DECISIONS.md`/`.ai/TASKS.md`/Vault(ADR Index/Milestones Index/Dashboard Index/`15 Project Intelligence/`) 전부 갱신 확인 |
+
+**실제 발견·수정한 버그**: T05 실제 검증 중, `docs/ARCHITECTURE.md`
+최상단 절처럼 본문 한 줄에 여러 Milestone 이력이 나열되면 Freshness
+가 "본문 첫 Milestone 언급"을 잘못 골라 최신 항목도 Warning으로
+오판하는 문제를 발견 — "subject와 텍스트 거리가 가장 가까운 언급"
+으로 추출 방식을 고치고 회귀 방지 테스트를 추가했다(상세는 위
+M30-T05 항목).
+
+**개선 여지(참고용, 이번에 처리하지 않음)**: (1) Milestone 추출이
+정규식 기반 근사라 특이한 표기(예: "M30~32")는 놓칠 수 있다. (2)
+`_split_sections()`가 평면 분할이라 계층적 문맥(상위 절 전체가
+관련된 경우)을 놓칠 수 있다 — 지금은 하위 제목이 대신 매칭돼
+실질적 누락은 적다. (3) Context Quality Score 산식(Gap 개수 +
+Freshness 감점)은 단순 근사이며 가중치 근거가 없다. 전부 실제
+요구사항이 생기면 별도 Milestone/ADR에서 재검토한다.
+
+**사용자 승인(2026-07-30)**: Scope 준수/Architecture 유지/Interface
+유지/Rule 기반 구현/Documentation 완료/Test 통과를 모두 만족함을
+확인해 **Milestone 30(Context Intelligence) 공식 완료(Approved)**.
+"M28(Live Task Management & Integration)→M29(Project Intelligence)
+→M30(Context Intelligence)"로 이어지며, AI Workspace가 단순 작업
+관리 도구를 넘어 프로젝트 상태를 이해하고 현재 작업에 필요한 맥락
+까지 제공하는 기반 계층을 갖췄다는 점에서 프로젝트 차원의 의미가
+있음을 사용자가 확인함 — 이후 Session Resume/AI Agent 협업/장기
+메모리 활용 등 상위 기능의 토대가 된다.
+
+**다음은 Milestone 31(Capability Intelligence)** — 세부 Task는
+착수 시점에 별도 제안·승인 후 정의한다.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

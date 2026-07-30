@@ -50,6 +50,16 @@ Health/Risk/Recommendation 리포트를 [[Project Intelligence]]에
 Read Model(Event 기반 실시간)과 달리 호출 시점에 Vault를 다시
 읽어 계산하는 On-demand 리포트다.
 
+Milestone 30(Context Intelligence)도 같은 방식으로
+[[Project Context]]에 노출한다(ADR-0044) — Knowledge Layer(M16,
+`.ai/`/`docs/` 문서)에서 지금 작업과 관련된 ADR/Task/Architecture/
+Rules/Roadmap·PRD, Freshness, Gap을 정리한다
+(`intelligence.context_service.ContextIntelligenceService
+.publish()`). 두 리포트 모두 FastAPI Dashboard(`web/`) 연동 대신
+Vault 노출을 택했다(범위 확장 방지, YAGNI) — 필요해지면
+`generate()`(순수 조회)를 그대로 재사용해 Dashboard에 연결할 수
+있다.
+
 ## 관련 ADR
 
 - [[ADR Index]] — ADR-0032(Real-time Dashboard Platform 도입)

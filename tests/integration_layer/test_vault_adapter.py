@@ -180,3 +180,13 @@ def test_publish_intelligence_report_writes_markdown(tmp_path: Path) -> None:
 
     assert path == vault_root / "15 Project Intelligence" / "Project Intelligence.md"
     assert path.read_text(encoding="utf-8") == "# Project Intelligence\n\ncontent\n"
+
+
+def test_publish_project_context_writes_markdown(tmp_path: Path) -> None:
+    vault_root = _make_vault(tmp_path)
+    adapter = VaultAdapter(vault_root)
+
+    path = adapter.publish_project_context("# Project Context\n\ncontent\n")
+
+    assert path == vault_root / "15 Project Intelligence" / "Project Context.md"
+    assert path.read_text(encoding="utf-8") == "# Project Context\n\ncontent\n"

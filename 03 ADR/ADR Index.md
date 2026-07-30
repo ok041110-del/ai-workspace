@@ -266,6 +266,12 @@ tags: [decision]
 - 결정: Core Domain 27종 Interface에는 project 단위 전체 목록 조회가 없어 새 Interface 없이는 Snapshot이 불가능함을 확인. 대신 **Vault Task 문서(`14 Tasks/*.md`)를 단일 데이터 소스**로 채택(새 Interface 미추가, 27종 유지) — `vault/task_query.py`(신규)→`VaultAdapter.list_tasks()`(신규 메서드)로 노출. Agent 데이터는 기존 `AgentAdapter.list_active_agents()` 재사용. Event는 제외(YAGNI). "Blocked Task"는 Vault에 대응 상태가 없어 "IN_PROGRESS/REVIEW + `updated` 임계일 초과" Rule로 근사. 신규 최상위 패키지 `intelligence/`를 만들고 `integration/`의 Adapter에만 의존하게 제한(§8 규칙 21 신설)
 - 영향: `docs/ARCHITECTURE.md` §3.22(신규)/§8 규칙 21 추가, `.ai/TASKS.md` Milestone 29 절 신규. 코드 변경 없음(설계 Task, 구현은 M29-T02부터). 상세는 [[Architecture Overview]]
 
+## ADR-0044: Context Intelligence 설계 — `KnowledgeAdapter` 신규(Integration Layer), Markdown 제목 단위 파싱으로 `ProjectContext` 구성 (Milestone 30-T01)
+
+- 목적: 지금 하는 작업(Task/Milestone)과 관련된 맥락을 기존 Knowledge Layer(M16)/Intelligence Layer(M29) 정보로 모아 정리할 방법과 위치를 결정, 신규 Interface 필요 여부 판단
+- 결정: `KnowledgeRepository`/`KnowledgeSearch`(M16, 기존 27종 Interface 중 2종)만 재사용하고 새 Interface는 추가하지 않는다. 신규 Integration Layer Adapter `KnowledgeAdapter`가 이 두 Interface만 감싸고, `intelligence/context.py`의 `ContextAnalyzer`가 반환된 문서 텍스트를 Markdown 제목 단위로 쪼개 subject(Task/Milestone 식별자)가 언급된 항목만 채택한다(이 저장소의 실제 제목 작성 관례 활용, 새 지식 생성 없음). Freshness는 파일 mtime/git log 대신 제목에서 추출한 Milestone 번호 거리로 판단(mtime은 fresh clone 환경이라 무의미, git log는 Adapter "외부 시스템 하나만" 원칙과 충돌). Gap은 ADR/TASK/ARCHITECTURE 3종에서 subject 언급 0건일 때만 판정
+- 영향: `docs/ARCHITECTURE.md` §3.23(신규) 갱신, `.ai/TASKS.md` Milestone 30 절 신규. 코드 변경 없음(설계 Task, 구현은 M30-T02부터). 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

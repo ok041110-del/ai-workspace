@@ -41,6 +41,7 @@ def test_intelligence_only_depends_on_integration_adapters() -> None:
     allowed_prefixes = (
         "ai_workspace.integration.vault_adapter",
         "ai_workspace.integration.agent_adapter",
+        "ai_workspace.integration.knowledge_adapter",
     )
     offenders: list[str] = []
     for path in _INTELLIGENCE_DIR.rglob("*.py"):

@@ -15,7 +15,7 @@ from pathlib import Path
 
 _INTEGRATION_DIR = Path(__file__).resolve().parents[2] / "src" / "ai_workspace" / "integration"
 
-_ADAPTERS = {"vault_adapter", "workflow_adapter", "agent_adapter"}
+_ADAPTERS = {"vault_adapter", "workflow_adapter", "agent_adapter", "knowledge_adapter"}
 _PEER_CONNECTORS = {"workflow_task_link", "workflow_agent_link"}
 _ORCHESTRATING_CONNECTORS = {"conversation_workflow_link"}
 #: 어떤 Adapter/Connector 계층에서나 참조할 수 있는 순수 값 객체 모듈.
