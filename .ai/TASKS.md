@@ -11987,6 +11987,74 @@ ADR-0053에 따라 영속화하지 않음) 그 문서에 `tags: [memory]`를
 된다"는 목표는 설정이 아니라 §14.4 Linking Rules(Index 문서가 가장
 많이 링크됨)의 결과로 자연히 달성되도록 남겨둔다.
 
+#### T01-Fix: Graph Group이 실제 Obsidian에서 적용되지 않는 문제 수정 (2026-07-30)
+
+**증상**(사용자 보고): T01에서 만든 `.obsidian/graph.json`을 Python
+시뮬레이션으로는 검증했지만, 실제 Obsidian Graph View를 열면 모든
+노드가 기본 회색으로 남아 Color Group이 전혀 적용되지 않았다.
+
+**Root Cause 분석**
+
+1. **가장 유력한 원인 — 설정 재로딩 문제**: Obsidian은 `.obsidian/
+   graph.json`을 Vault 로딩 시점에 메모리로 읽어들이고, 그 이후에는
+   앱을 통해서만(설정 UI 변경 또는 종료 시 flush) 파일에 다시
+   쓴다. Obsidian이 이미 실행 중인 상태에서 git이 파일을 외부에서
+   직접 덮어쓰면, 실행 중인 Obsidian은 그 변경을 감지하지 못하고
+   기존 메모리 상태(Color Group 없음)를 계속 쓰다가, 이후 아무
+   설정이나 변경되는 순간 그 "빈 상태"를 다시 파일에 덮어써 우리가
+   git으로 반영한 내용을 지울 수도 있다. **6개 Group이 하나도 남김
+   없이 전부 회색이라는 증상은 "쿼리 일부가 잘못됨"보다 "파일이
+   아예 다시 로딩되지 않음"에 훨씬 더 부합한다** — 쿼리 문법
+   오류라면 보통 일부 Group만 실패하고 나머지는 성공하는 부분적
+   실패가 나타나기 때문이다.
+   → **조치**: 병합 후 Obsidian을 완전히 종료했다가 다시 열거나
+   (또는 Vault를 다시 불러오거나) Graph View를 새로 열어야 한다.
+2. **쿼리 문법 위험 요소(2차 원인 가능성)**: 기존 쿼리는 `-path:"A"
+   -path:"B" -path:"C" -path:"D" (tag:#x OR tag:#y OR ...)`처럼
+   **여러 개의 부정(-) 항과 괄호로 묶인 OR 그룹을 한 줄에 혼합**
+   했다. Obsidian 공식 문서가 명시적으로 예시로 드는 조합(`tag:#a
+   OR tag:#b`, `-tag:#a`, `(tag:#a OR tag:#b) path:"x"`)과 달리, "4개
+   부정항 + 괄호 OR 그룹"처럼 복잡하게 중첩된 조합은 공식 예시에
+   없어 실제 파서가 의도대로 파싱한다는 보장이 약하다.
+   → **조치**: 부정(`-`)과 괄호를 모두 제거하고, **경로(`path:`)
+   문자열의 단순 OR 나열만** 쓰도록 전면 재작성했다(아래 참고).
+3. **Tag 매칭 의존성 제거**: 기존 쿼리는 YAML Frontmatter
+   `tags: [architecture]` 같은 리스트가 Obsidian 내부에서 `#architecture`
+   태그로 정확히 색인되는지에 의존했다. 이 자체는 표준 동작이지만,
+   경로 기반 매칭보다 검증 표면이 하나 더 있다 — 새 쿼리는 태그에
+   전혀 의존하지 않고 폴더/파일 경로만 사용해 검증 표면을
+   최소화했다.
+
+**수정된 쿼리**(전부 `path:"..."` 단순 OR 나열, 부정·괄호·태그 없음)
+
+| Cluster | 새 Query |
+|---|---|
+| 🟠 Documentation | `path:"99 Templates" OR path:"01 Overview" OR path:"00 System" OR path:"13 Daily" OR path:"09 iOS" OR path:"10 Android" OR path:"15 Project Intelligence/README"` |
+| 🔴 Domain | `path:"14 Tasks"` |
+| 🟣 Architecture | `path:"02 Architecture" OR path:"03 ADR" OR path:"11 Milestones" OR path:"12 Decisions" OR path:"04 Backend" OR path:"05 API" OR path:"08 Production"` |
+| 🟡 Memory | `path:"Execution Memory"`(현재 매칭 문서 없음, 의도된 상태) |
+| 🟢 Execution | `path:"Recommendation Execution.md" OR path:"07 Automation" OR path:"06 Dashboard"` |
+| 🔵 Intelligence | `path:"Project Intelligence.md" OR path:"Project Context.md" OR path:"Capability Intelligence.md" OR path:"Workflow Intelligence.md" OR path:"Recommendation Intelligence.md" OR path:"Intelligence Overview.md" OR path:"Session Resume.md"` |
+
+**검증(Python 시뮬레이션, `path:` substring 매칭 재현)**: 실제 Vault
+44개 `.md` 파일 전수 재검증 — 43개가 정확히 1개 Cluster에만
+매칭(상호 배타), 루트 `README.md` 1개만 어느 Query와도 겹치지 않는
+substring이라 미분류(회색)로 남는다(낮은 우선순위 — 필요하면 별도
+Query로 추가 가능, 이번 수정 범위 밖).
+
+**중요한 한계(정직하게 기록)**: 이 세션은 GUI/Obsidian이 설치되지
+않은 headless 컨테이너다 — 실제 Obsidian 앱을 실행해 화면으로
+색상을 확인하는 것은 이 세션에서 불가능하다. 위 검증은 (1)JSON
+유효성 (2)공식 문서에 명시된 단순 연산자(`path:`, `OR`)만 사용
+(3)Python으로 재현한 매칭 로직 3가지로 최대한 뒷받침했지만, **최종
+확인은 사용자가 실제 Obsidian에서 Graph View를 열어(완전 재시작
+후) 직접 봐야 한다** — 이는 대체할 수 없는 검증 단계다.
+
+**Regression 확인**: `docs/ARCHITECTURE.md`/`.ai/TASKS.md`의 Milestone
+서술/ADR 본문/코드/클래스명/파일명은 변경하지 않았다 —
+`.obsidian/graph.json` 1개 파일만 수정했다. `pytest`/`ruff`/`mypy`는
+애초에 이 변경과 무관(Python 코드 없음).
+
 ### T02: M40 Responsibility Analysis (2026-07-30)
 
 **목표**: M40이 실제로 무엇을 하는 Milestone인지 정의한다. ADR-0053

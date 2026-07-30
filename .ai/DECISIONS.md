@@ -3519,6 +3519,20 @@
   ③기존 폴더 구조)가 ④(신규 Frontmatter 제안) 없이 전부 해결됨을
   실증했다. Memory Cluster는 아직 매칭 문서가 없다(Execution Memory
   가 Vault에 노출되지 않음, ADR-0053).
+- **T01-Fix(2026-07-30, `.ai/TASKS.md`의 "Pre-M40 T01-Fix" 절
+  참고)**: 사용자가 실제 Obsidian Graph View에서 모든 노드가 회색
+  임을 보고 — T01의 Query가 실제로 적용되지 않았다. 가장 유력한
+  원인은 Obsidian이 이미 실행 중인 상태에서 `.obsidian/graph.json`
+  을 git으로 외부 수정해 재로딩되지 않은 것(6개 Group이 예외 없이
+  전부 실패한 증상이 부분적 문법 오류보다 이쪽에 부합)이며, 2차
+  위험 요소로 "여러 부정(-)항 + 괄호 OR 그룹" 조합이 공식 문서
+  예시에 없어 파싱 보장이 약했다. Tag 기반 매칭을 전부 폐기하고
+  부정·괄호 없는 **`path:"..."` 단순 OR 나열만**으로 전면
+  재작성했다 — Vault 44개 `.md` 파일 재검증 결과 43개가 상호
+  배타적으로 분류(루트 `README.md` 1개만 미분류, 낮은 우선순위).
+  headless 세션이라 실제 Obsidian 화면 확인은 이 세션에서 할 수
+  없다는 한계를 명시적으로 기록한다 — 사용자의 실제 앱 확인이
+  필요하다.
 - **T02~T05 M40 명명 분석 완료(2026-07-30, `.ai/TASKS.md`의
   "Pre-M40 T02~T05" 절 참고)**: M40의 Responsibility를 (a)Read-Only
   Experience Reporting과 (b)Experience-Informed Recommendation 두

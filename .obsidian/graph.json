@@ -8,42 +8,42 @@
   "collapse-color-groups": false,
   "colorGroups": [
     {
-      "query": "path:\"99 Templates\" OR path:\"01 Overview\" OR path:\"00 System\" OR path:\"13 Daily\" OR tag:#ios OR tag:#android OR tag:#system OR file:\"README\"",
+      "query": "path:\"99 Templates\" OR path:\"01 Overview\" OR path:\"00 System\" OR path:\"13 Daily\" OR path:\"09 iOS\" OR path:\"10 Android\" OR path:\"15 Project Intelligence/README\"",
       "color": {
         "a": 1,
         "rgb": 16485376
       }
     },
     {
-      "query": "-path:\"99 Templates\" -path:\"01 Overview\" -path:\"00 System\" -path:\"13 Daily\" tag:#task",
+      "query": "path:\"14 Tasks\"",
       "color": {
         "a": 1,
         "rgb": 15022389
       }
     },
     {
-      "query": "-path:\"99 Templates\" -path:\"01 Overview\" -path:\"00 System\" -path:\"13 Daily\" (tag:#architecture OR tag:#decision OR tag:#milestone OR tag:#backend OR tag:#api OR tag:#production)",
+      "query": "path:\"02 Architecture\" OR path:\"03 ADR\" OR path:\"11 Milestones\" OR path:\"12 Decisions\" OR path:\"04 Backend\" OR path:\"05 API\" OR path:\"08 Production\"",
       "color": {
         "a": 1,
         "rgb": 9323693
       }
     },
     {
-      "query": "-path:\"99 Templates\" -path:\"01 Overview\" -path:\"00 System\" -path:\"13 Daily\" tag:#memory",
+      "query": "path:\"Execution Memory\"",
       "color": {
         "a": 1,
         "rgb": 16635957
       }
     },
     {
-      "query": "-path:\"99 Templates\" -path:\"01 Overview\" -path:\"00 System\" -path:\"13 Daily\" (tag:#recommendation-execution OR tag:#automation OR tag:#dashboard)",
+      "query": "path:\"Recommendation Execution.md\" OR path:\"07 Automation\" OR path:\"06 Dashboard\"",
       "color": {
         "a": 1,
         "rgb": 4431943
       }
     },
     {
-      "query": "-path:\"99 Templates\" -path:\"01 Overview\" -path:\"00 System\" -path:\"13 Daily\" (tag:#project-intelligence OR tag:#project-context OR tag:#capability-intelligence OR tag:#workflow-intelligence OR tag:#recommendation-intelligence OR tag:#intelligence-overview OR tag:#session-resume)",
+      "query": "path:\"Project Intelligence.md\" OR path:\"Project Context.md\" OR path:\"Capability Intelligence.md\" OR path:\"Workflow Intelligence.md\" OR path:\"Recommendation Intelligence.md\" OR path:\"Intelligence Overview.md\" OR path:\"Session Resume.md\"",
       "color": {
         "a": 1,
         "rgb": 4886745
