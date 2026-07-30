@@ -21,6 +21,15 @@ Vault Task 문서(`VaultAdapter.list_tasks()`)를 단일 데이터 소스로
 
 - `snapshot.ProjectSnapshotAnalyzer`(Milestone 29-T02) — Task
   상태/Milestone/Owner 집계와 진행률을 계산한다.
+- `health_risk.ProjectHealthRiskAnalyzer`(Milestone 29-T03) —
+  `ProjectSnapshotWithTasks`를 입력으로 Health(Healthy/Warning/
+  Critical)와 Risk(정체 Task/Owner 과부하/Milestone 정체)를 Rule
+  기반으로 판단한다. Adapter를 직접 호출하지 않고 Snapshot 산출물만
+  재사용한다(새 데이터 접근 경로 없음). **"의존성 위험"은 Vault
+  Task 문서에 의존관계 필드가 없어(Core Domain `WorkflowEngine`의
+  의존관계 정보가 필요하나 project 전체 열거 Interface가 없음,
+  ADR-0043에서 이미 예견된 한계) M29 범위에서 판정하지 않는다 —
+  필요해지면 별도 ADR/Interface 검토 대상이다.
 """
 
 from __future__ import annotations

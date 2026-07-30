@@ -9453,7 +9453,7 @@ Layer)**로 동작하며 기존 Core Domain 비즈니스 로직을 변경하지
 |---|---|---|
 | M29-T01 | Project Intelligence Architecture 설계 | **완료** |
 | M29-T02 | Project Snapshot Analyzer | **완료** |
-| M29-T03 | Project Health & Risk Analyzer | 예정 |
+| M29-T03 | Project Health & Risk Analyzer | **완료** |
 | M29-T04 | Project Recommendation | 예정 |
 | M29-T05 | Integration & Presentation | 예정 |
 
@@ -9570,6 +9570,54 @@ tests`, `mypy src` 전부 클린.
 `src/ai_workspace/integration/vault_adapter.py`(메서드 추가),
 `src/ai_workspace/intelligence/__init__.py`/`snapshot.py`(신규).
 다음 Task: **M29-T03**(Project Health & Risk Analyzer).
+
+### M29-T03: Project Health & Risk Analyzer
+
+**목표**: T02의 `ProjectSnapshotWithTasks`를 입력으로 Health
+(Healthy/Warning/Critical)와 Risk를 Rule 기반으로 판단한다.
+
+**구현 내용**
+
+- `intelligence/health_risk.py`(신규)의 `ProjectHealthRiskAnalyzer`
+  — Adapter를 직접 호출하지 않고 Snapshot 산출물(`ProjectSnapshotWithTasks`)
+  만 입력으로 받는다(새로운 데이터 접근 경로 없음, T02가 이미 읽은
+  값을 재사용). 세 가지 Risk를 계산한다.
+  1. `stagnant_task` — IN_PROGRESS/REVIEW 상태이면서 `updated`가
+     임계일(기본 7일, 생성자 파라미터로 조정 가능) 이상 지난 Task.
+     ADR-0043에서 결정한 "Blocked/장기 미진행" 근사 규칙을 그대로
+     구현했다. 임계일의 2배 이상 지나면 `critical`, 아니면 `warning`.
+  2. `owner_overload` — 진행 중(in-progress/review) Task가 같은
+     `owner`에게 임계 건수(기본 3건) 이상 배정된 경우. Core Domain
+     `AgentRegistry`에는 Agent별 배정 목록 조회가 없어(T01에서
+     확인한 공백), Vault Task의 `owner` 필드를 Agent/담당자 부하의
+     근사치로 썼다.
+  3. `milestone_stall` — 어떤 Milestone에 done/archived Task가
+     하나도 없고, 그 Milestone 소속 Task 중 가장 최근 `updated`도
+     임계일 이상 지난 경우(Workflow 정체 근사, ADR-0043 결정 4 —
+     Vault에 Workflow 전용 문서가 없어 milestone으로 근사).
+  - **"의존성 위험"은 이번 Task에서 구현하지 않았다** — Vault Task
+    문서에 의존관계 필드가 없고, Core Domain `WorkflowEngine`의
+    실제 의존관계는 project 전체 열거 Interface가 없어(T01에서
+    이미 확인한 공백) 접근할 수 없다. 새 Interface 추가 없이는
+    풀 수 없는 범위라 ADR-0043에서 예견한 대로 M29 범위 밖으로
+    남긴다(필요해지면 별도 승인 대상 — Interface 변경에 해당하므로
+    사용자 지시에 따라 이번엔 만들지 않는다).
+  - Health 판정: Risk 중 `critical` severity가 하나라도 있으면
+    `critical`, Risk가 있지만 전부 `warning`이면 `warning`, Risk가
+    없으면 `healthy`(단순 Rule, 사용자 지시대로 LLM 호출 없음).
+
+**테스트**: `tests/intelligence/test_health_risk_analyzer.py`(신규
+8개 — 빈 Snapshot/정체 감지·미감지/완료 Task 제외/critical 승격/
+Owner 과부하/Milestone 정체 감지·미감지). `pytest`(889개, 기존
+881개 + 신규 8개), `ruff check src tests`, `mypy src` 전부 클린.
+
+**완료 조건 확인**: Health/Risk 테스트 통과. 새 Core Domain
+Interface 없음(27종 그대로), Core Domain(`domain`/`interfaces`/
+`engines`) 코드 무변경, `intelligence/`는 여전히 `integration/`의
+Adapter 또는 자기 자신의 다른 모듈(`snapshot`)에만 의존(§8 규칙
+21 유지, `test_intelligence_layering.py` 회귀 없음 확인).
+
+다음 Task: **M29-T04**(Project Recommendation).
 
 ---
 
