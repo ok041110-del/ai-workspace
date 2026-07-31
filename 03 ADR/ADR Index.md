@@ -348,7 +348,7 @@ tags: [decision]
 
 - 목적: M39~M41 실제 코드를 전수 조사(300개 클래스, 160여 개 모듈)한 "Repository Naming Consistency Review"를 일회성으로 끝내지 않고 ADR로 공식화 — 새 규칙 발명이 아니라 이미 지켜지던 관행의 문서화
 - 결정: `docs/ARCHITECTURE.md` 신규 §13.6에 클래스 접미사 12종(`*Analyzer`/`*Service`/`*Store`/`*Repository`/`*Adapter`/`*View`/`*Record`/`*Report`/`*Result`/`*Rule`/`*Manager`/`*Engine`)의 역할을 표로 고정. `*Engine`은 Core Engine(§3.7)/구현 엔진 실행 관리(§3.9) 두 의미로만 한정. 파일명↔클래스명 대응(`{name}_service.py`→`{Name}Service`), 디렉터리명↔Domain 대응 원칙 명문화. `domain/` 패키지와 ADR-0054 "Domain Vocabulary"가 동음이의어임을 최초로 명시. `.ai/RULES.md` 신규 §1.6(v0.10.0)으로 영구 규칙화. 발견된 위반 사례(`ProjectRecommendationEngine` 등) 4건은 이번에 실행하지 않고 "개선 여지"로만 기록
-- 영향: `docs/ARCHITECTURE.md` §13.6(신규), `.ai/RULES.md` §1.6(신규, v0.10.0) 추가. 코드 변경 없음(`pytest` 1051개 그대로 유지). 상세는 [[Architecture Overview]]
+- 영향: `docs/ARCHITECTURE.md` §13.6(신규), `.ai/RULES.md` §1.6(신규, v0.10.0) 추가. 코드 변경 없음(`pytest` 1051개 그대로 유지). **Boy Scout Rule 채택**(2026-07-30, `.ai/RULES.md` v0.10.1): 4건의 Rename Candidate를 한꺼번에 처리하는 대규모 PR은 만들지 않는다 — 기존 코드는 기능 개발로 수정할 때 함께 Rename, 신규 코드는 §13.6을 예외 없이 100% 적용. 상세는 [[Architecture Overview]]
 
 ## 관련 문서
 
