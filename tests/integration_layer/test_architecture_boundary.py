@@ -1,10 +1,21 @@
 """M28-T03 DoD: Core Domain <-> vault 직접 의존성이 없는지, Integration
-Layer만 양쪽을 참조하는지 소스 트리에서 직접 확인한다(ADR-0035/ADR-0039)."""
+Layer만 양쪽을 참조하는지 소스 트리에서 직접 확인한다(ADR-0035/ADR-0039).
+
+처음 두 검사(Core Domain↔vault 개별 금지)는 Milestone 41(Architecture
+Guardian, ADR-0056)에서 `guardian/rules.py`의 `GUARDIAN_RULES`로
+이전됐다 — 여기서는 그 결과를 `assert`만 한다(평가 로직은 `guardian/
+checker.py`). 세 번째 검사("Integration Layer만 양쪽을 동시에
+참조할 수 있다")는 Guardian의 3개 Rule 형태로 자연스럽게 표현되지
+않아(무리한 일반화를 피하기 위해, 사용자 조건) 이전하지 않고 기존
+방식 그대로 유지한다."""
 
 from __future__ import annotations
 
 import ast
 from pathlib import Path
+
+from ai_workspace.guardian.checker import evaluate
+from ai_workspace.guardian.rules import GUARDIAN_RULES
 
 _SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "ai_workspace"
 _CORE_DOMAIN_PACKAGES = ("domain", "interfaces", "engines")
@@ -22,27 +33,17 @@ def _imported_modules(path: Path) -> set[str]:
 
 
 def test_core_domain_does_not_import_vault() -> None:
-    offenders = []
-    for package in _CORE_DOMAIN_PACKAGES:
-        for path in (_SRC_ROOT / package).rglob("*.py"):
-            modules = _imported_modules(path)
-            if any(module == "ai_workspace.vault" or module.startswith("ai_workspace.vault.")
-                   for module in modules):
-                offenders.append(path)
-    assert offenders == []
+    rules = [rule for rule in GUARDIAN_RULES if rule.name == "core_domain_does_not_import_vault"]
+    report = evaluate(rules, _SRC_ROOT)
+    result = report.results[0]
+    assert result.passed, result.violations
 
 
 def test_vault_does_not_import_core_domain() -> None:
-    offenders = []
-    for path in (_SRC_ROOT / "vault").rglob("*.py"):
-        modules = _imported_modules(path)
-        if any(
-            module == f"ai_workspace.{package}" or module.startswith(f"ai_workspace.{package}.")
-            for module in modules
-            for package in _CORE_DOMAIN_PACKAGES
-        ):
-            offenders.append(path)
-    assert offenders == []
+    rules = [rule for rule in GUARDIAN_RULES if rule.name == "vault_does_not_import_core_domain"]
+    report = evaluate(rules, _SRC_ROOT)
+    result = report.results[0]
+    assert result.passed, result.violations
 
 
 def test_only_integration_layer_imports_both_sides() -> None:
