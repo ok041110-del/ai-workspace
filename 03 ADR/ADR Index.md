@@ -344,6 +344,12 @@ tags: [decision]
 - 결정: 역할 정의를 §13.2에 그대로 반영("Guardian owns the executable representation of architectural rules... Architecture documentation defines the rules; Guardian encodes them, evaluates conformance, and publishes architectural health"). `guardian/rules.py`의 `ArchitectureRule`은 ABC가 아니라 `ForbiddenPackageImportRule`/`AllowedImportPrefixRule`/`ServiceRoleGatedImportRule` 3개 메서드 없는 `frozen dataclass`의 Union — `GUARDIAN_RULES: Final[tuple[...]]`로 불변 Registry 고정. `guardian/checker.py`는 `pytest`/`assert`를 전혀 쓰지 않는 순수 평가기. `ArchitectureGuardianService.publish()`가 핵심 진입점(Vault `15 Project Intelligence/Architecture Guardian.md`). 3개 Rule 형태에 자연스럽게 맞는 5개 규칙(Core Domain↔vault 개별 금지 2개 + Intelligence 금지 패키지/Adapter 화이트리스트/Role 기반 Memory 접근 3개)만 이전, Connector 그룹 규칙 2개는 억지로 일반화하지 않고 범위 제외(사용자 조건)
 - 영향: `docs/ARCHITECTURE.md` §3.33(신규)/§13.2 Guardian 행(내용 확정) 갱신, `.ai/TASKS.md` Milestone 41 절 신규. `guardian/models.py`/`rules.py`/`checker.py`/`service.py`(전부 신규)/`vault/architecture_guardian.py`(신규)/`integration/vault_adapter.py`(확장)/기존 boundary 테스트 2개 파일(내부만 Guardian 경유하도록 재작성, 위반 판정 결과 100% 동일) 구현 완료, `pytest` 1051개·ruff·mypy(203 source files) 전부 클린. 새 Core Domain Interface/Adapter 없음(27종 유지), 새 Layer 1개(`guardian/`, §13.2가 이미 예약). CI 강제 게이트·Connector 그룹 규칙 편입은 범위 밖(YAGNI, M42 이후 논의). 상세는 [[Architecture Overview]]
 
+## ADR-0057: Repository Naming Standard — 실측 조사로 확인된 클래스/파일/디렉터리 명명 관행을 공식 문서로 승격 (Post-M41, 문서화 전용)
+
+- 목적: M39~M41 실제 코드를 전수 조사(300개 클래스, 160여 개 모듈)한 "Repository Naming Consistency Review"를 일회성으로 끝내지 않고 ADR로 공식화 — 새 규칙 발명이 아니라 이미 지켜지던 관행의 문서화
+- 결정: `docs/ARCHITECTURE.md` 신규 §13.6에 클래스 접미사 12종(`*Analyzer`/`*Service`/`*Store`/`*Repository`/`*Adapter`/`*View`/`*Record`/`*Report`/`*Result`/`*Rule`/`*Manager`/`*Engine`)의 역할을 표로 고정. `*Engine`은 Core Engine(§3.7)/구현 엔진 실행 관리(§3.9) 두 의미로만 한정. 파일명↔클래스명 대응(`{name}_service.py`→`{Name}Service`), 디렉터리명↔Domain 대응 원칙 명문화. `domain/` 패키지와 ADR-0054 "Domain Vocabulary"가 동음이의어임을 최초로 명시. `.ai/RULES.md` 신규 §1.6(v0.10.0)으로 영구 규칙화. 발견된 위반 사례(`ProjectRecommendationEngine` 등) 4건은 이번에 실행하지 않고 "개선 여지"로만 기록
+- 영향: `docs/ARCHITECTURE.md` §13.6(신규), `.ai/RULES.md` §1.6(신규, v0.10.0) 추가. 코드 변경 없음(`pytest` 1051개 그대로 유지). 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
