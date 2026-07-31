@@ -51,22 +51,91 @@ class PipelineStageState:
 
 @dataclass(frozen=True)
 class WorkspaceInfo:
-    """Vault/저장소 자체에서 읽은 Workspace 식별 정보. `current_workflow`
-    는 Phase 1 범위 밖(§13.2 Workflow와 혼동 방지를 위해 근거 없는
-    추정을 하지 않음) — 항상 `None`이다."""
+    """Vault/저장소 자체에서 읽은 Workspace 식별 정보. `current_workflow`/
+    `current_task`는 Phase 1 범위 밖 — 이 저장소의 Recommendation 계열
+    코드는 상시 실행되는 프로세스가 아니라 요청-응답형 함수 호출이라,
+    별도 프로세스인 StatusLine이 "지금 실행 중인 Workflow/Task"를
+    알려면 기존 Domain 코드에 상태 기록을 추가해야 한다 — Domain
+    책임 변경 금지 원칙과 충돌해 항상 `None`(ADR-0063 Phase 2 후보)."""
 
     project_name: str
     milestone: str
     current_workflow: str | None = None
+    current_task: str | None = None
+
+
+@dataclass(frozen=True)
+class GitRuntimeInfo:
+    """`git` 하위 명령(읽기 전용)만으로 채운다. `ahead`/`behind`는
+    `git fetch`를 하지 않으므로 마지막으로 로컬에 캐시된 원격 추적
+    브랜치 기준 — 최신 원격 상태를 보장하지 않는다(ADR-0063)."""
+
+    current_branch: str | None
+    working_tree_dirty: bool | None
+    ahead: int | None
+    behind: int | None
+    last_commit_summary: str | None
+
+
+@dataclass(frozen=True)
+class GuardianRuntimeInfo:
+    """`guardian.checker.evaluate()`(M41)만 재사용해 `guardian_all_passed`
+    를 채운다. `pytest_failed_count`는 `.pytest_cache`의 마지막 로컬
+    실행 결과(재실행 아님)다. `ruff_status`/`mypy_status`/
+    `coverage_percentage`는 이 저장소에 캐시된 pass/fail 요약이 없고
+    매 갱신마다 재실행하면 지연 위험이 커 Phase 1은 항상 `None`
+    (Not Available, ADR-0063)."""
+
+    guardian_all_passed: bool | None
+    pytest_failed_count: int | None
+    ruff_status: str | None
+    mypy_status: str | None
+    coverage_percentage: float | None
+
+
+@dataclass(frozen=True)
+class VaultRuntimeInfo:
+    """`VaultAdapter.report_last_modified()`(M45)만 재사용한다.
+    `current_pr`은 GitHub API 조회(네트워크 호출 + 인증)가 필요해
+    Phase 1은 항상 `None`(Not Available) — 로컬에서 확인 가능한 대안은
+    `GitRuntimeInfo.current_branch`."""
+
+    vault_connected: bool
+    current_milestone: str
+    current_adr: str
+    current_pr: str | None
+    last_modified_epoch: float | None
+
+
+@dataclass(frozen=True)
+class McpRuntimeInfo:
+    """`.mcp.json`(공식 문서화된 설정 파일)과 `claude mcp list`(공식
+    CLI, 문서화된 상태 기호만 매칭)로만 채운다. `active_server`/
+    `available_tools`/`last_mcp_call`/`last_mcp_error`는 정적 조회로
+    확인할 공식 경로가 없어 Phase 1은 항상 `None`(Not Available,
+    ADR-0063 Phase 2 후보 — Hook 기반 기록은 새 메커니즘 추가라 별도
+    승인 필요)."""
+
+    mcp_enabled: bool
+    configured_servers: tuple[str, ...]
+    connected_servers: tuple[str, ...] | None
+    active_server: str | None
+    available_tools: int | None
+    last_mcp_call: str | None
+    last_mcp_error: str | None
 
 
 @dataclass(frozen=True)
 class WorkspaceRuntimeSnapshot:
     """StatusLine(및 향후 Dashboard/CLI/Web UI 재사용 후보)이 표시만
-    하는 단일 읽기 전용 Runtime 모델(ADR-0062). 이 객체 자체는 아무
-    것도 계산하지 않는다 — `RuntimeSnapshotService`가 이미 계산한
-    값을 조립해서 넘겨줄 뿐이다."""
+    하는 단일 읽기 전용 Runtime 모델(ADR-0062/ADR-0063). 이 객체
+    자체는 아무 것도 계산하지 않는다 — `RuntimeSnapshotService`가
+    이미 계산한 값을 조립해서 넘겨줄 뿐이다."""
 
     workspace: WorkspaceInfo
     claude_runtime: ClaudeRuntimeInfo
     pipeline: tuple[PipelineStageState, ...]
+    git_runtime: GitRuntimeInfo
+    guardian_runtime: GuardianRuntimeInfo
+    vault_runtime: VaultRuntimeInfo
+    mcp_runtime: McpRuntimeInfo

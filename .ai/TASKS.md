@@ -12850,6 +12850,89 @@ Memory(M39)는 `InMemoryMemoryEngine` 기반이라 프로세스 재시작 시
 **사용자 승인(2026-07-31)**: 위 9개 항목을 확인해 **Milestone 45
 Workspace Observability(Phase 1) 공식 완료(Approved)**.
 
+### Milestone 45 확장 — Execution Environment Observability
+
+**목표**(2026-07-31 사용자 요청, ADR-0063): M45(Claude Runtime +
+Pipeline Observability)를 "AI Workspace Runtime"뿐 아니라 "Execution
+Environment"(Git/Guardian/Vault/MCP, 특히 Obsidian MCP)까지
+관찰하도록 확장. 구현 전에 Claude Code/MCP에서 실제로 관측 가능한
+필드를 공식 문서로 먼저 조사하고, 추정값 없이 사용 가능한 항목만
+구현하며 관측 불가 항목은 이유와 함께 Not Available로 처리하도록
+사용자가 조건을 명시.
+
+**T01 — Domain Analysis(완료)**: 새 Domain도 새 Behavioral Concept도
+아니다 — ADR-0062가 §13.3에 이미 등재한 `Observability`를 그대로
+확장(관찰 대상만 늘어남, 책임의 성격 동일: 이미 있는 상태를 읽기만
+함). §13.3에 새 행을 추가하지 않는다.
+
+**T02 — Architecture Review(완료, 공식 문서 조사 결과)**: StatusLine
+stdin JSON에는 MCP 필드가 전혀 없음(공식 문서 확인). `claude mcp
+list`(공식 CLI)가 서버별 연결 상태를 문서화된 기호(`✔`/`✘`/`!`/`⏸`)
+로 출력(JSON 옵션 없음), `.mcp.json`(공식 문서화된 스키마)이 설정된
+서버 목록을 알려줌. Hook payload는 `tool_name`(`mcp__<server>__
+<tool>`)만 MCP 식별에 쓸 수 있고 별도 에러/연결 상태 필드는 없음.
+`pytest`/`ruff`/`mypy`/Coverage 전체 재실행은 StatusLine 갱신마다
+하기엔 너무 느림 — `guardian.checker.evaluate()`만 AST 기반 저비용
+평가라 재사용 가능. `observability/` 패키지(M45)를 그대로 확장,
+새 패키지 분리 불필요.
+
+**T03 — Detailed Design(완료, 관측 가능/불가능 확정)**: 관측 가능 —
+Git(`current_branch`/`working_tree_dirty`/`ahead`/`behind`/
+`last_commit_summary`, `git` 하위 명령만, `fetch` 없음), Guardian
+(`guardian_all_passed` 재평가, `pytest_failed_count`는 `.pytest_cache`
+마지막 로컬 결과만), Vault(`vault_connected`/`current_milestone`(M45
+재사용)/`current_adr`/`last_modified_epoch`, `VaultAdapter.
+report_last_modified()`만), MCP(`mcp_enabled`/`configured_servers`
+는 `.mcp.json`만, `connected_servers`는 `claude mcp list` 문서화된
+기호만 매칭). 관측 불가(Not Available) — `ruff_status`/`mypy_status`/
+`coverage_percentage`(재실행 비용), MCP `active_server`/
+`available_tools`/`last_mcp_call`/`last_mcp_error`(공식 경로 없음,
+Hook 신규 도입은 별도 승인 필요), Vault `current_pr`(GitHub API
+네트워크+인증 필요), Workspace `current_task`(계측 불가).
+
+**T04 — Implementation Plan + 구현(완료)**:
+- `observability/git_runtime_analyzer.py`(신규) — `GitRuntimeAnalyzer`:
+  `git` 하위 명령만 읽기 전용 호출, 1.5초 타임아웃.
+- `observability/guardian_runtime_analyzer.py`(신규) —
+  `GuardianRuntimeAnalyzer`: `guardian.checker.evaluate()` 재사용 +
+  `.pytest_cache/v/cache/lastfailed` 읽기.
+- `observability/vault_runtime_analyzer.py`(신규) —
+  `VaultRuntimeAnalyzer`: `VaultAdapter.report_last_modified()` +
+  `WorkspaceInfoAnalyzer` 재사용.
+- `observability/mcp_runtime_analyzer.py`(신규) — `McpRuntimeAnalyzer`:
+  `.mcp.json` 읽기 + `claude mcp list` 2초 타임아웃 파싱(문서화된
+  기호만 매칭).
+- `observability/snapshot.py`(확장) — `GitRuntimeInfo`/
+  `GuardianRuntimeInfo`/`VaultRuntimeInfo`/`McpRuntimeInfo` 추가,
+  `WorkspaceInfo.current_task` 필드 추가(항상 `None`).
+- `observability/runtime_snapshot_service.py`/`statusline_renderer.py`
+  (확장) — 4개 Analyzer 조합 + StatusLine에 Git/Guardian/Vault/MCP
+  줄 추가 렌더링.
+- `docs/ARCHITECTURE.md` §3.38(신규)/헤더 상태 갱신.
+- 테스트: `tests/observability/`에 4개 파일(18건) 추가. 전체 `pytest`
+  1108개(18개 신규) 통과, `ruff`/`mypy` 통과, `guardian.checker.
+  evaluate()` all_passed 유지, `build_app()` 스모크 테스트 통과.
+  `statusline_main.py` 실제 stdin JSON으로 수동 실행해 Git/Guardian/
+  Vault/MCP 줄이 실제 저장소 상태(현재 브랜치, dirty 여부, Guardian
+  OK, 최신 Milestone/ADR, MCP 미설정 등)를 정확히 반영하는 것을 확인.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 이번 확장이 새 Domain/새 Behavioral Concept가 아니라 기존 Observability 확장임을 Domain Analysis로 확인 | ✅ |
+| 2 | Claude Code/MCP 공식 문서로 관측 가능 여부를 먼저 조사(추측 금지) | ✅ |
+| 3 | 관측 불가 항목(ruff/mypy/Coverage/MCP 상세/Current PR/Current Task)을 이유와 함께 Not Available로 표시 | ✅ |
+| 4 | 새 Core Domain Interface/Adapter 0개(27종 유지) | ✅ |
+| 5 | `ruff`/`mypy`/Coverage 실시간 재실행 없음(StatusLine 지연 방지) | ✅ |
+| 6 | `git fetch`/GitHub API 등 네트워크 호출 없음(로컬 캐시 기준만 사용) | ✅ |
+| 7 | MCP 관측은 `.mcp.json`/`claude mcp list`(공식 경로)만 사용, 새 Hook 도입 없음 | ✅ |
+| 8 | `pytest`/`ruff`/`mypy`/Guardian 통과, `build_app()` 스모크 테스트 통과 | ✅ |
+| 9 | `statusline_main.py` 실제 stdin 입력으로 Git/Guardian/Vault/MCP 줄 수동 검증 | ✅ |
+
+**사용자 승인(2026-07-31)**: 위 9개 항목을 확인해 **Milestone 45
+확장(Execution Environment Observability) 공식 완료(Approved)**.
+
 ---
 
 ## GitHub Flow Migration

@@ -4244,3 +4244,109 @@ recommendation, not a mandatory decision.* — 이 한 문장이 M35
   Interface/Adapter 없음(27종 유지). `pytest` 1090개(17개 신규)
   통과, `ruff`/`mypy` 통과, `guardian.checker.evaluate()` all_passed
   유지, `build_app()` 실제 조립 스모크 테스트 통과.
+
+## ADR-0063: Workspace Observability 확장 — Execution Environment(Git/Guardian/Vault/MCP) 관찰(Milestone 45 확장)
+
+- 상태: 승인됨 (2026-07-31, 사용자가 M45(Claude Runtime + Pipeline
+  Observability)를 "AI Workspace Runtime"뿐 아니라 "Execution
+  Environment"까지 확장하도록 요청 — 관측 가능한 필드를 먼저 조사한
+  뒤 추정값 없이 사용 가능한 항목만 구현하도록 명시적으로 조건을
+  제시하고 T01~T04 프로세스로 진행 요청)
+- 날짜: 2026-07-31
+- 배경: ADR-0062(M45)는 Claude Runtime(Model/Effort/Context)과
+  Recommendation 파이프라인 7단계만 관찰했다. 실제로 이 파이프라인이
+  "어떤 환경에서" 실행되는지(Git 브랜치/Working Tree 상태, Guardian
+  아키텍처 준수, Vault 문서 상태, MCP 연결 상태 — 특히 Obsidian MCP)
+  는 아직 보이지 않았다. 구현 전에 Claude Code/MCP가 실제로 무엇을
+  공식 제공하는지부터 조사(공식 문서 확인)하고, 확인되지 않은 것은
+  추정하지 말고 Not Available로 남기는 것을 전제 조건으로 진행했다.
+- 결정:
+  1. **Domain Analysis(T01)**: 이 확장은 새 Domain도, 새 Behavioral
+     Concept도 아니다 — ADR-0062가 이미 §13.3에 등재한 `Observability`
+     를 그대로 확장한 것(관찰 대상이 늘었을 뿐 책임의 성격은 동일:
+     이미 있는 상태를 읽기만 하고 새 판단을 하지 않음). §13.3에 새
+     행을 추가하지 않는다.
+  2. **Architecture Review(T02) — 조사 결과(공식 문서 확인)**:
+     - StatusLine stdin JSON에는 MCP 관련 필드가 전혀 없음(공식
+       문서 확인) — MCP는 별도 경로가 필요.
+     - `claude mcp list`(공식 CLI)가 서버별 연결 상태를 사람이 읽는
+       텍스트로 출력(`✔`=Connected/`✘`=Failed·Connection error/
+       `!`=Needs auth/`⏸`=Pending approval, JSON 옵션 없음, 공식
+       문서 확인). `.mcp.json`(프로젝트 범위 설정 파일, 공식 문서화된
+       스키마)이 "설정된 서버 목록"을 알려준다.
+     - Hook(`PostToolUse`) payload는 `tool_name`이 `mcp__<server>__
+       <tool>` 형식으로 MCP 서버/도구를 식별할 수 있지만, 별도 에러
+       필드나 "지금 연결 중인 서버" 상태는 제공하지 않음(공식 문서
+       확인) — Last MCP Call/Last Error를 안전하게 관측할 공식 경로
+       없음.
+     - `pytest`/`ruff`/`mypy`/Coverage 전체 재실행은 수 초 이상
+       걸려 StatusLine 갱신(세션 이벤트마다)마다 다시 실행하면
+       지연·타임아웃 위험이 큼 — `guardian.checker.evaluate()`만
+       AST 기반 순수 평가라 저비용으로 재사용 가능, 나머지는 재실행
+       금지.
+     - 새 Core Domain Interface/Adapter 없음(27종 유지). `observability/`
+       패키지(M45)를 그대로 확장 — 새 패키지 분리 불필요.
+  3. **Detailed Design(T03) — 관측 가능/불가능 항목 확정**:
+     - **관측 가능(구현)**: Git(`current_branch`/`working_tree_dirty`/
+       `ahead`/`behind`/`last_commit_summary`, `git` 하위 명령만),
+       Guardian(`guardian_all_passed`, 재평가 / `pytest_failed_count`,
+       `.pytest_cache/v/cache/lastfailed` 마지막 로컬 실행 결과만),
+       Vault(`vault_connected`/`current_milestone`(M45 재사용)/
+       `current_adr`/`last_modified_epoch`, `VaultAdapter.
+       report_last_modified()`만), MCP(`mcp_enabled`/`configured_servers`,
+       `.mcp.json`만 / `connected_servers`, `claude mcp list` 문서화된
+       기호만 매칭, 형식 불일치 시 `None`).
+     - **관측 불가(Not Available, 이유 명시)**: `ruff_status`/
+       `mypy_status`/`coverage_percentage`(재실행 비용), MCP
+       `active_server`(정적 조회로 "지금 이 순간" 알 수 없음)/
+       `available_tools`(공식 출력에 보장된 형식 없음)/`last_mcp_call`/
+       `last_mcp_error`(공식 로그 미문서화, Hook 신규 도입은 별도
+       승인 필요), Vault `current_pr`(GitHub API 네트워크+인증
+       필요), Workspace `current_task`(상시 실행 프로세스가 아니라
+       계측 불가, Domain 책임 변경 금지와 충돌).
+     - `ahead`/`behind`는 `git fetch`를 하지 않음(네트워크 호출 없음
+       원칙) — 마지막으로 로컬에 캐시된 원격 추적 브랜치 기준.
+  4. **Implementation Plan(T04)**: `observability/git_runtime_analyzer.py`/
+     `guardian_runtime_analyzer.py`/`vault_runtime_analyzer.py`/
+     `mcp_runtime_analyzer.py`(신규 4개 Analyzer) + `snapshot.py`
+     확장(`GitRuntimeInfo`/`GuardianRuntimeInfo`/`VaultRuntimeInfo`/
+     `McpRuntimeInfo`, `WorkspaceInfo.current_task` 필드 추가) +
+     `RuntimeSnapshotService`/`StatusLineRenderer` 확장(4개 Analyzer
+     조합 + 4개 줄 렌더링).
+- 대안:
+  - **MCP 연결 상태를 `~/.cache/claude-cli-nodejs/.../mcp-logs-*`
+    같은 비공식 로그 디렉터리에서 읽는다** — 기각. 실제로 관찰되긴
+    하지만 공식 문서에 없는 내부 구현 세부사항이라 버전이 바뀌면
+    깨질 수 있고, 이번 세션(Claude Code on the web) 환경 한정일
+    수 있어 "추정하지 않는다"는 원칙과 맞지 않는다. 문서화된
+    `.mcp.json`/`claude mcp list`만 사용한다.
+  - **PostToolUse Hook을 새로 추가해 MCP 호출/에러 이력을 로컬
+    파일에 기록한다** — 기각(Phase 2 후보로만 문서화). 이미 있는
+    상태를 읽는 것이 아니라 새로운 기록 메커니즘을 도입하는
+    것이라 "새로운 자동화/계측 추가 없음" 원칙과 이번 승인 범위를
+    벗어난다 — 필요하면 별도 제안·승인을 받는다.
+  - **`ruff`/`mypy`를 매 StatusLine 갱신마다 실행한다** — 기각.
+    수백 밀리초~수 초가 걸려 StatusLine이 매 세션 이벤트마다
+    호출된다는 점(공식 문서 확인)과 충돌 — 응답 지연/타임아웃
+    위험이 실사용성을 해친다.
+  - **Git `ahead`/`behind`를 위해 `git fetch`를 먼저 실행한다** —
+    기각. 네트워크 호출이 되어 Observability의 "네트워크 호출
+    없음" 원칙(§3.37/ADR-0062)과 충돌하고, StatusLine 응답이
+    네트워크 상태에 좌우된다.
+- 이유: 확장 대상(Git/Guardian/Vault/MCP) 모두 공식 문서 또는 이미
+  존재하는 Vault/Adapter 경로로 안전하게 읽을 수 있는 부분과, 공식
+  경로가 없어 정직하게 Not Available로 남겨야 하는 부분을 명확히
+  구분했다 — 추정값을 배제하면서도 실제로 유용한 관찰(Git 상태/
+  Guardian 준수/Vault 최신성/MCP 설정)을 추가할 수 있다.
+- 결과/영향: `observability/`(4개 파일 추가: `git_runtime_analyzer.py`/
+  `guardian_runtime_analyzer.py`/`vault_runtime_analyzer.py`/
+  `mcp_runtime_analyzer.py`), `observability/snapshot.py`(`GitRuntimeInfo`/
+  `GuardianRuntimeInfo`/`VaultRuntimeInfo`/`McpRuntimeInfo` 추가,
+  `WorkspaceInfo.current_task` 필드 추가), `observability/
+  runtime_snapshot_service.py`/`statusline_renderer.py`(확장),
+  `docs/ARCHITECTURE.md` §3.38(신규)/헤더 상태 갱신. 새 Core Domain
+  Interface/Adapter 없음(27종 유지, `VaultAdapter`/`guardian.checker`
+  기존 계약 재사용만). Vault 신규 발행 없음(StatusLine 전용 유지).
+  `pytest` 1108개(18개 신규) 통과, `ruff`/`mypy` 통과,
+  `guardian.checker.evaluate()` all_passed 유지, `build_app()` 실제
+  조립 스모크 테스트 통과.
