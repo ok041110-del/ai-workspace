@@ -3841,3 +3841,70 @@
   "상태" 칸에 해결 일자와 처리한 PR/커밋을 남긴다 — 표 자체가
   변경 이력이 되어 대규모 Rename PR 없이도 저장소가 지속적으로
   표준에 수렴했음을 추적할 수 있다.
+
+## ADR-0058: Recommendation Adaptation — 과거 실행 경험으로 Recommendation을 사후 조정(Milestone 42)
+
+- 상태: 승인됨 (2026-07-31, T02 Domain Analysis → T03 MDD Review →
+  T04 Milestone Proposal 순서로 진행, 최종 승인 시 아래 5개 조건을
+  반영하는 것을 전제로 승인)
+- 날짜: 2026-07-31
+- 배경: M35(Recommendation Intelligence)~M41(Architecture Guardian)로
+  Intelligence→Execution→Memory→Experience→Guardian까지 "관찰(Observe)"
+  축이 완성됐다. ADR-0053(M39)이 "Learning/영속화/Rule 반영은 범위
+  밖"이라고 명시적으로 미뤄뒀던 지점 — "과거 실행 결과로 판단 기준
+  자체를 조정한다"는 책임을 이번에 처음 다룬다. §13.4가 이미
+  `Insight`/`Learning`을 Intelligence와 경계가 흐린 동의어로 배제해둔
+  상태였으므로, 새 용어 도입 전 Domain Analysis(T02)를 먼저 수행했다.
+- 결정:
+  1. **Responsibility는 "생성이 아니라 조정(Adjustment)"** — M35
+     `RecommendationRuleAnalyzer`의 5단계 Priority Rule이 이미 고른
+     단일 `NextAction`을 그대로 받아, 반복 실패한 대상만 보류하고
+     그 밖에는 통과시킨다. 새 Recommendation을 만들지 않는다(사용자
+     조건 1).
+  2. **`RecommendationAdjustmentAnalyzer`(`intelligence/
+     recommendation_adjustment.py`, 신규)의 입력을 Raw `NextAction`
+     + `ExperienceReport` 두 값으로 단순화**(사용자 조건 2) — 후보
+     목록 재순위화 로직 없음. Deterministic + Immutable Input(M40과
+     동일 조건).
+  3. **`ExperienceReport` 생성은 M40의 책임(Non-goal)**(사용자 조건
+     3) — 이 Milestone은 `ExperienceReport`를 소비만 한다.
+  4. **§13.3에 `Adaptation`을 Behavioral Concept로 정의**(사용자 조건
+     4) — 5번째 1급 Domain(§13.2) 승격은 보류. Workflow/Agent/
+     Capability Adaptation 등으로 개념이 반복 재사용되는 시점에
+     별도 ADR로 승격을 재검토한다.
+  5. **`experience_report=None`이면 M35와 100% 동일 동작을 DoD로
+     명시**(사용자 조건 5) — `RecommendationIntelligenceService.
+     generate()/publish()`에 `experience_report: ExperienceReport |
+     None = None` 선택적 인자 추가, 미주입 시 기존 동작 완전 보존
+     (하위 호환).
+- 대안:
+  - **`Learning`을 그대로 사용한다** — 기각. §13.4가 이미 Intelligence
+    와 구분이 흐리다는 이유로 명시적으로 배제해둔 용어(ADR-0053
+    Non-goal 근거).
+  - **`Adaptation`을 즉시 5번째 1급 Domain으로 승격한다** — 기각
+    (사용자 결정, 보류). 재사용 사례가 이번 1건뿐이라 지금 승격하면
+    Domain Vocabulary가 성급하게 확장된다 — §1.5 Vocabulary Reuse
+    First의 정신과 어긋난다.
+  - **`RecommendationRuleAnalyzer`(M35)를 직접 수정해 Adaptation
+    로직을 내장한다** — 기각. M35 Analyzer는 이미 `pytest`로 검증된
+    5단계 Priority Rule의 유일한 소유자다 — 새 책임을 감싸는(wrap)
+    별도 Analyzer로 분리하는 것이 M39→M40의 "기존 Analyzer 불변,
+    새 계층이 감싼다" 선례와 일치하고 회귀 위험도 없다.
+  - **`web/server.py`/`RecommendationExecutionService`에 즉시
+    배선한다** — 기각(Non-goal). Automation 자동 실행 경로 연결은
+    범위를 벗어난다 — Vault 리포트 노출 가능한 능력을 갖추는 것까지가
+    이번 Milestone의 범위.
+- 이유: M39(Execution Memory)가 명시적으로 미뤄뒀던 "판단 기준 조정"
+  책임을 Vocabulary Reuse First 원칙을 지키며(Learning 재사용 대신
+  Domain Analysis로 새 용어 검증) 최소 변경으로 구현한다 — 기존
+  Analyzer/Report/Service를 그대로 재사용하고 신규 Interface/Adapter
+  없이 선택적 인자 1개로 하위 호환을 보존했다.
+- 결과/영향: `intelligence/recommendation_adjustment.py`(신규,
+  `RecommendationAdjustment`/`RecommendationAdjustmentAnalyzer`),
+  `intelligence/recommendation_service.py`(experience_report 선택적
+  인자, `adjusted`/`adjustment_reason` 필드 추가, Vault "Adaptation"
+  섹션), `docs/ARCHITECTURE.md` §13.3(Adaptation 추가)/§13.4(예시
+  행 추가)/§3.34(신규). 새 Core Domain Interface/Adapter 없음(27종
+  유지). `pytest` 1060개 통과(9개 신규), `ruff`/`mypy` 통과,
+  `guardian.checker.evaluate()` all_passed 유지. `web/server.py`
+  배선 없음(Non-goal, 향후 별도 승인 시 진행).

@@ -14,6 +14,10 @@ type: recommendation-intelligence
 - 대상: coding
 - 이유: 'coding' Capability를 제공하는 활성 Agent 없음
 
+## Adaptation(Milestone 42)
+
+- 조정 없음(과거 실행 경험 기준 통과 또는 경험 데이터 없음)
+
 ## 근거 — 현재 작업
 
 - 현재 진행 중인 Task 없음

@@ -15,7 +15,11 @@ from pathlib import Path
 from ai_workspace.integration.vault_adapter import VaultAdapter
 from ai_workspace.intelligence.capability_gap import CapabilityGapReport
 from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
+from ai_workspace.intelligence.experience_rules import ExperienceReport
 from ai_workspace.intelligence.recommendation import ProjectRecommendation
+from ai_workspace.intelligence.recommendation_adjustment import (
+    RecommendationAdjustmentAnalyzer,
+)
 from ai_workspace.intelligence.recommendation_rules import NextAction, RecommendationRuleAnalyzer
 from ai_workspace.intelligence.report import ProjectIntelligenceService
 from ai_workspace.intelligence.session_resume import CurrentWork, CurrentWorkSelector
@@ -41,6 +45,10 @@ class RecommendationIntelligenceReport:
     workflow_report: WorkflowFlowReport
     capability_gap_report: CapabilityGapReport
     project_recommendations: list[ProjectRecommendation]
+    #: Milestone 42(Recommendation Adaptation) — `experience_report`가
+    #: 주어지지 않으면 항상 False/None(M35와 100% 동일 동작).
+    adjusted: bool = False
+    adjustment_reason: str | None = None
 
 
 class RecommendationIntelligenceService:
@@ -61,18 +69,27 @@ class RecommendationIntelligenceService:
         self._current_work_selector = CurrentWorkSelector()
         self._workflow_analyzer = WorkflowFlowAnalyzer()
         self._rule_analyzer = RecommendationRuleAnalyzer()
+        self._adjustment_analyzer = RecommendationAdjustmentAnalyzer()
 
     def generate(
-        self, *, include_archived: bool = True, today: str | None = None
+        self,
+        *,
+        include_archived: bool = True,
+        today: str | None = None,
+        experience_report: ExperienceReport | None = None,
     ) -> RecommendationIntelligenceReport:
         """
-        입력: include_archived(기본 True), today(고정 날짜 주입용)
+        입력: include_archived(기본 True), today(고정 날짜 주입용),
+              experience_report(Milestone 42, M40 `ExperienceReport`,
+              기본 `None`)
         출력: `RecommendationIntelligenceReport`(단일 `NextAction`
-              + 근거가 된 하위 리포트 전체)
+              + 근거가 된 하위 리포트 전체 + Adjustment 결과)
         예외: 없음 — 5단계 Priority 모두 해당 없으면
               `next_action=None`으로 방어적으로 반환한다.
         보장: side-effect 없음(read-only) — Vault에 쓰지 않는다.
-              쓰기가 필요하면 `publish()`를 쓴다.
+              쓰기가 필요하면 `publish()`를 쓴다. `experience_report`가
+              `None`이면 M35와 100% 동일하게 동작한다(Adjustment
+              미개입, Milestone 42 DoD).
         """
         tasks = self._vault_adapter.list_tasks(include_archived=include_archived)
         current_work = self._current_work_selector.select(tasks)
@@ -90,16 +107,24 @@ class RecommendationIntelligenceService:
             project_recommendations=project_report.recommendations,
         )
 
+        adjustment = self._adjustment_analyzer.analyze(next_action, experience_report)
+
         return RecommendationIntelligenceReport(
-            next_action=next_action,
+            next_action=adjustment.next_action,
             current_work=current_work,
             workflow_report=workflow_report,
             capability_gap_report=capability_report.gap_report,
             project_recommendations=project_report.recommendations,
+            adjusted=adjustment.adjusted,
+            adjustment_reason=adjustment.reason,
         )
 
     def publish(
-        self, *, include_archived: bool = True, today: str | None = None
+        self,
+        *,
+        include_archived: bool = True,
+        today: str | None = None,
+        experience_report: ExperienceReport | None = None,
     ) -> tuple[RecommendationIntelligenceReport, Path]:
         """`generate()` 결과를 Markdown으로 렌더링해 Vault에 쓴다
         (`VaultAdapter.publish_recommendation_intelligence()`에 위임).
@@ -107,7 +132,9 @@ class RecommendationIntelligenceService:
         보장: `15 Project Intelligence/Recommendation Intelligence.md`
               가 이번 결과로 완전히 덮어써진다(누적 append 아님).
         """
-        report = self.generate(include_archived=include_archived, today=today)
+        report = self.generate(
+            include_archived=include_archived, today=today, experience_report=experience_report
+        )
         markdown = render_markdown(report)
         path = self._vault_adapter.publish_recommendation_intelligence(markdown)
         return report, path
@@ -144,6 +171,12 @@ def render_markdown(report: RecommendationIntelligenceReport) -> str:
         )
     else:
         lines.append("- 추천할 다음 행동 없음")
+
+    lines.extend(["", "## Adaptation(Milestone 42)", ""])
+    if report.adjusted:
+        lines.append(f"- 조정됨: {report.adjustment_reason}")
+    else:
+        lines.append("- 조정 없음(과거 실행 경험 기준 통과 또는 경험 데이터 없음)")
 
     lines.extend(["", "## 근거 — 현재 작업", ""])
     if report.current_work is not None:

@@ -350,6 +350,12 @@ tags: [decision]
 - 결정: `docs/ARCHITECTURE.md` 신규 §13.6에 클래스 접미사 12종(`*Analyzer`/`*Service`/`*Store`/`*Repository`/`*Adapter`/`*View`/`*Record`/`*Report`/`*Result`/`*Rule`/`*Manager`/`*Engine`)의 역할을 표로 고정. `*Engine`은 Core Engine(§3.7)/구현 엔진 실행 관리(§3.9) 두 의미로만 한정. 파일명↔클래스명 대응(`{name}_service.py`→`{Name}Service`), 디렉터리명↔Domain 대응 원칙 명문화. `domain/` 패키지와 ADR-0054 "Domain Vocabulary"가 동음이의어임을 최초로 명시. `.ai/RULES.md` 신규 §1.6(v0.10.0)으로 영구 규칙화. 발견된 위반 사례(`ProjectRecommendationEngine` 등) 4건은 이번에 실행하지 않고 "개선 여지"로만 기록
 - 영향: `docs/ARCHITECTURE.md` §13.6(신규), `.ai/RULES.md` §1.6(신규, v0.10.0) 추가. 코드 변경 없음(`pytest` 1051개 그대로 유지). **Boy Scout Rule 채택**(2026-07-30, `.ai/RULES.md` v0.10.1): 4건의 Rename Candidate를 한꺼번에 처리하는 대규모 PR은 만들지 않는다 — 기존 코드는 기능 개발로 수정할 때 함께 Rename, 신규 코드는 §13.6을 예외 없이 100% 적용. **Naming Technical Debt Ledger 채택**(2026-07-30, `.ai/RULES.md` v0.10.2): Rename Candidate 표를 공식 기술 부채 목록으로 유지 — 해결 시 행을 지우지 않고 취소선 + 해결 일자/PR·커밋을 남겨 표 자체가 변경 이력이 되게 한다. 상세는 [[Architecture Overview]]
 
+## ADR-0058: Recommendation Adaptation — 과거 실행 경험으로 Recommendation을 사후 조정 (Milestone 42)
+
+- 목적: M39(Execution Memory)가 명시적으로 범위 밖(Non-goal)으로 미뤄뒀던 "과거 실행 결과로 판단 기준을 조정한다"는 책임을 처음 다룸. §13.4가 이미 배제해둔 `Learning`/`Insight` 대신 Domain Analysis(T02)로 새 용어를 검증
+- 결정: `RecommendationRuleAnalyzer`(M35)가 고른 `NextAction`을 새로 생성하지 않고 사후 조정(Adjustment)만 하는 `RecommendationAdjustmentAnalyzer`(`intelligence/recommendation_adjustment.py`, 신규) 도입 — 입력은 Raw `NextAction` + M40 `ExperienceReport` 두 값으로 단순화, 대상의 과거 실행이 전부 실패일 때만 추천 보류. `ExperienceReport` 생성은 M40 책임(Non-goal). `Adaptation`은 §13.3 Behavioral Concept로 정의(1급 Domain 승격은 재사용 사례 축적 시 별도 ADR로 보류). `RecommendationIntelligenceService.generate()/publish()`에 `experience_report` 선택적 인자 추가, `None`이면 M35와 100% 동일 동작(사용자 조건 5개 전부 반영)
+- 영향: `intelligence/recommendation_adjustment.py`(신규), `intelligence/recommendation_service.py`(확장), `docs/ARCHITECTURE.md` §13.3/§13.4/§3.34(신규) 갱신. 새 Core Domain Interface/Adapter 없음(27종 유지). `pytest` 1060개(9건 신규)·ruff·mypy 전부 클린, Guardian all_passed 유지. `web/server.py` 자동 배선 없음(Non-goal). 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

@@ -3,6 +3,7 @@ from pathlib import Path
 from ai_workspace.integration.agent_adapter import AgentAdapter
 from ai_workspace.integration.vault_adapter import VaultAdapter
 from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
+from ai_workspace.intelligence.experience_rules import ExperienceReport, ExperienceStat
 from ai_workspace.intelligence.recommendation_rules import (
     ACTION_CONTINUE_CURRENT_WORK,
     ACTION_IMPROVE_CAPABILITY,
@@ -147,3 +148,54 @@ def test_publish_writes_recommendation_intelligence_file(tmp_path: Path) -> None
     assert path.exists()
     assert report.next_action is not None
     assert "Recommendation Intelligence" in path.read_text(encoding="utf-8")
+
+
+def test_generate_is_identical_to_m35_when_experience_report_is_none(tmp_path: Path) -> None:
+    # Milestone 42 DoD(사용자 조건): experience_report=None이면 M35와
+    # 100% 동일 동작 — Adjustment가 전혀 개입하지 않는다.
+    service = _make_service(tmp_path)
+
+    without_param = service.generate(today="2026-07-30")
+    with_none = service.generate(today="2026-07-30", experience_report=None)
+
+    assert without_param == with_none
+    assert without_param.adjusted is False
+    assert without_param.adjustment_reason is None
+
+
+def test_generate_withholds_next_action_when_experience_shows_only_failures(
+    tmp_path: Path,
+) -> None:
+    service = _make_service(tmp_path)
+    baseline = service.generate(today="2026-07-30")
+    assert baseline.next_action is not None
+    target = baseline.next_action.target
+
+    experience_report = ExperienceReport(
+        stats=[
+            ExperienceStat(
+                task_id=target,
+                total=1,
+                success_count=0,
+                failure_count=1,
+                last_result="failure",
+                last_timestamp="2026-07-30T00:00:00",
+            )
+        ]
+    )
+
+    report = service.generate(today="2026-07-30", experience_report=experience_report)
+
+    assert report.next_action is None
+    assert report.adjusted is True
+    assert report.adjustment_reason is not None
+    assert target in report.adjustment_reason
+
+
+def test_render_markdown_shows_adaptation_section(tmp_path: Path) -> None:
+    service = _make_service(tmp_path)
+
+    markdown = render_markdown(service.generate(today="2026-07-30"))
+
+    assert "## Adaptation(Milestone 42)" in markdown
+    assert "조정 없음" in markdown
