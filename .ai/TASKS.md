@@ -12504,6 +12504,70 @@ Rename Candidate 표를 Cleanup Sprint 없이 유지되는 공식 기술 부채
 
 ---
 
+## Milestone 42 — Recommendation Adaptation
+
+**목표**(2026-07-31 사용자 요청, ADR-0058): M35(Recommendation
+Intelligence)의 `NextAction`을 M40(Experience Intelligence)의
+`ExperienceReport`로 사후 조정(Adjustment)한다 — ADR-0053(M39)이
+"Learning/영속화/Rule 반영은 범위 밖"으로 명시적으로 미뤄뒀던 지점을
+처음 다루는 Milestone.
+
+**T02 — Domain Analysis(완료, 사용자 승인)**: Responsibility("과거
+실행 결과로 판단 기준을 조정")를 §13.2/§13.3 기존 어휘로 표현
+불가능함을 확인(§13.4가 이미 Learning/Insight를 배제해둔 상태).
+`Adaptation` 용어 채택(Optimization/Evolution/Refinement 대비 책임을
+가장 정확히 표현). Milestone 명명 `Recommendation Adaptation`
+(`{Domain} {Responsibility}`).
+
+**T03 — MDD Review(완료, 사용자 승인)**: 신규 Interface/Adapter 없음,
+`ExperienceReport`/`NextAction` 그대로 재사용, `intelligence/` 안에
+1개 파일(`recommendation_adjustment.py`)로 구현 가능함을 확인. §8/
+ADR-0054/ADR-0057 위반 없음.
+
+**T04 — Milestone Proposal(조건부 승인 → 최종 승인, 2026-07-31)**:
+아래 5개 조건을 반영하는 것을 전제로 승인됨.
+
+1. Recommendation 생성이 아니라 Adjustment임을 명확히 할 것
+2. 입력을 Raw `NextAction` + `ExperienceReport` 중심으로 단순화할 것
+3. `ExperienceReport` 생성은 M40 책임임을 Non-goal에 명시할 것
+4. §13.3에서 `Adaptation`을 Behavioral Concept로 정의할 것(1급 Domain
+   승격 보류)
+5. `experience_report=None`일 때 M35와 100% 동일 동작을 DoD에
+   명시할 것
+
+**T05 — Implementation(완료)**:
+- `intelligence/recommendation_adjustment.py`(신규) —
+  `RecommendationAdjustment`/`RecommendationAdjustmentAnalyzer`.
+  대상의 과거 실행이 전부 실패(성공 0건)일 때만 추천 보류, 그 밖의
+  모든 경우 통과. Deterministic + Immutable Input.
+- `intelligence/recommendation_service.py` — `generate()`/`publish()`
+  에 `experience_report` 선택적 인자 추가, `RecommendationIntelligenceReport`
+  에 `adjusted`/`adjustment_reason` 필드(기본값 `False`/`None`) 추가,
+  Vault 문서에 "Adaptation(Milestone 42)" 섹션 추가.
+- `docs/ARCHITECTURE.md` §13.3(Adaptation 추가)/§13.4(예시 행 추가)/
+  §3.34(신규 서브섹션)/헤더 상태 갱신.
+- 테스트 9건 신규(`test_recommendation_adjustment.py` 6건 +
+  `test_recommendation_service.py` 3건) — 전체 `pytest` 1060개 통과,
+  `ruff`/`mypy` 통과, `guardian.checker.evaluate()` all_passed 유지.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Recommendation 생성이 아닌 Adjustment로 책임 한정 | ✅ |
+| 2 | 입력을 Raw `NextAction` + `ExperienceReport`로 단순화 | ✅ |
+| 3 | `ExperienceReport` 생성이 M40 책임임을 Non-goal에 명시 | ✅ |
+| 4 | `Adaptation`을 §13.3 Behavioral Concept로 정의(1급 Domain 승격 보류) | ✅ |
+| 5 | `experience_report=None`일 때 M35와 100% 동일 동작 DoD 충족 | ✅ |
+| 6 | 신규 Core Domain Interface/Adapter 0개(27종 유지) | ✅ |
+| 7 | `pytest`/`ruff`/`mypy`/Guardian 통과, 회귀 없음 | ✅ |
+| 8 | `web/server.py`/`RecommendationExecutionService` 자동 배선 없음(Non-goal) | ✅ |
+
+**사용자 승인(2026-07-31)**: 위 5개 조건 반영을 확인해 **Milestone 42
+Recommendation Adaptation 공식 완료(Approved)**.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
