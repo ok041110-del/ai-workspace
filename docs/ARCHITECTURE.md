@@ -2463,29 +2463,35 @@ M42 이후에도 계속 지켜야 할 기준선이다.
   사람은 어느 쪽 "Domain"인지 문맥으로 구분해야 한다(동음이의어,
   이번 리뷰에서 처음 명시적으로 기록됨).
 
-**개선 여지(즉시 실행하지 않음 — Boy Scout Rule 적용, 2026-07-30
-사용자 결정)**
+**Naming Technical Debt Ledger(공식 기술 부채 목록, 2026-07-30
+사용자 결정)** — 아래 표는 §13.6 위반이 발견될 때마다 항목을
+추가하는 이 프로젝트의 **공식** 기술 부채 목록이다. 즉시 실행하지
+않는다(Boy Scout Rule, 아래 참고).
 
-| 현재 | 제안 | 사유 |
-|---|---|---|
-| `ProjectRecommendationEngine` | `ProjectRecommendationAnalyzer` | 위 Engine 표의 두 의미 어디에도 속하지 않음 |
-| `intelligence/recommendation.py` | `intelligence/project_recommendation.py` | `recommendation_rules.py`/`recommendation_service.py`(M35, 더 넓은 의미)와 구별 |
-| `tests/integration_layer/` | (이름 유지) §9에 "`tests/integration/`과의 명칭 충돌 회피" 주석만 추가 | 이름 변경보다 문서화가 더 안전 |
+| 현재 | 제안 | 사유 | 상태 |
+|---|---|---|---|
+| `ProjectRecommendationEngine` | `ProjectRecommendationAnalyzer` | 위 Engine 표의 두 의미 어디에도 속하지 않음 | 미해결 |
+| `intelligence/recommendation.py` | `intelligence/project_recommendation.py` | `recommendation_rules.py`/`recommendation_service.py`(M35, 더 넓은 의미)와 구별 | 미해결 |
+| `tests/integration_layer/` | (이름 유지) §9에 "`tests/integration/`과의 명칭 충돌 회피" 주석만 추가 | 이름 변경보다 문서화가 더 안전 | 미해결 |
 
 이 4건을 한꺼번에 처리하는 대규모 Rename PR은 만들지 않는다 —
-대신 **Boy Scout Rule**을 적용한다:
+대신 다음 3원칙을 유지한다(2026-07-30 사용자 결정, `.ai/RULES.md`
+§1.6에 영구 반영):
 
-- **기존 코드**(위 표의 대상 포함, ADR-0054 확립 이전에 만들어진
-  파일 전반)는 그 파일을 **기능 개발 때문에 수정할 일이 생기는
-  시점에** 같은 PR 안에서 함께 Rename한다 — Rename만을 목적으로
-  별도 PR을 만들지 않는다.
-- **신규 코드**(M42 이후 새로 작성하는 모든 파일/클래스)는 §13.6을
-  예외 없이 100% 적용한다 — 새 코드에서 위 표와 같은 패턴이
-  반복되면 그 자체가 §13.6 위반이다.
-- 이 방식으로 대규모 일괄 Rename 없이도 저장소가 점진적으로
-  표준에 수렴한다. 개선 여지 표는 계속 §13.6에 남겨 다음에 해당
-  파일을 만지는 사람이 참고하게 한다 — 항목이 실제로 처리되면
-  표에서 지운다.
+1. **신규 코드는 §13.6을 예외 없이 100% 준수한다** — "이번만 예외"는
+   허용하지 않는다.
+2. **기존 코드는 Boy Scout Rule로 정리한다** — 해당 파일을 **기능
+   변경이 발생한 PR에서만** 함께 Rename한다. Rename만을 목적으로 한
+   별도 PR(Cleanup Sprint 포함)은 만들지 않는다.
+3. **이 표는 공식 기술 부채 목록으로 유지한다** — 새 위반이
+   발견되면 이 표에 행을 추가한다. 항목이 해결되면 행을 **지우지
+   않고** "현재"/"제안" 칸에 취소선(`~~이전 이름~~`)을 긋고, "상태"
+   칸에 해결 일자와 처리한 PR/커밋을 짧게 남긴다(예: "해결
+   2026-08-05, PR #40") — 표 자체가 언제 무엇이 왜 바뀌었는지의
+   변경 이력이 된다.
+
+이 방식으로 대규모 일괄 Rename 없이도 저장소가 점진적으로 표준에
+수렴하며, 별도 Cleanup Sprint를 편성할 필요가 없다.
 
 ## 14. Obsidian Graph Convention (ADR-0054, 2026-07-30)
 
