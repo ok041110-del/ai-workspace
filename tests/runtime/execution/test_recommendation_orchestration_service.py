@@ -10,6 +10,9 @@ from ai_workspace.integration.agent_adapter import AgentAdapter
 from ai_workspace.integration.vault_adapter import VaultAdapter
 from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
 from ai_workspace.intelligence.experience_service import ExperienceIntelligenceService
+from ai_workspace.intelligence.recommendation_explanation_service import (
+    RecommendationExplanationService,
+)
 from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
 from ai_workspace.intelligence.report import ProjectIntelligenceService
 from ai_workspace.interfaces.execution_environment import ExecutionResult
@@ -33,7 +36,9 @@ def _make_agent_adapter() -> AgentAdapter:
 
 
 def _make_orchestration_service(
-    vault_root: Path, execution_memory_store: ExecutionMemoryStore
+    vault_root: Path,
+    execution_memory_store: ExecutionMemoryStore,
+    explanation_service: RecommendationExplanationService | None = None,
 ) -> tuple[RecommendationOrchestrationService, FakeExecutionEnvironment]:
     vault_adapter = VaultAdapter(vault_root)
     recommendation_service = RecommendationIntelligenceService(
@@ -61,7 +66,7 @@ def _make_orchestration_service(
     )
     experience_service = ExperienceIntelligenceService(vault_adapter, execution_memory_store)
     service = RecommendationOrchestrationService(
-        experience_service, recommendation_service, execution_service
+        experience_service, recommendation_service, execution_service, explanation_service
     )
     return service, execution_environment
 
@@ -151,3 +156,29 @@ def test_publish_writes_recommendation_execution_file(tmp_path: Path) -> None:
     assert path == tmp_path / "15 Project Intelligence" / "Recommendation Execution.md"
     assert path.exists()
     assert outcome.gate_decision.approved is False
+
+
+def test_publish_without_explanation_service_does_not_write_explanation_file(
+    tmp_path: Path,
+) -> None:
+    execution_memory_store = ExecutionMemoryStore(InMemoryMemoryEngine())
+    service, _execution_environment = _make_orchestration_service(tmp_path, execution_memory_store)
+
+    service.publish(manual_trigger=False)
+
+    assert not (tmp_path / "15 Project Intelligence" / "Recommendation Explanation.md").exists()
+
+
+def test_publish_with_explanation_service_writes_explanation_file(tmp_path: Path) -> None:
+    vault_adapter = VaultAdapter(tmp_path)
+    execution_memory_store = ExecutionMemoryStore(InMemoryMemoryEngine())
+    explanation_service = RecommendationExplanationService(vault_adapter)
+    service, _execution_environment = _make_orchestration_service(
+        tmp_path, execution_memory_store, explanation_service
+    )
+
+    service.publish(manual_trigger=False)
+
+    path = tmp_path / "15 Project Intelligence" / "Recommendation Explanation.md"
+    assert path.exists()
+    assert "Recommendation Explanation" in path.read_text(encoding="utf-8")

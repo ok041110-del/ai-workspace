@@ -13,6 +13,9 @@ from ai_workspace.integration.agent_adapter import AgentAdapter
 from ai_workspace.integration.vault_adapter import VaultAdapter
 from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
 from ai_workspace.intelligence.experience_service import ExperienceIntelligenceService
+from ai_workspace.intelligence.recommendation_explanation_service import (
+    RecommendationExplanationService,
+)
 from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
 from ai_workspace.intelligence.report import ProjectIntelligenceService
 from ai_workspace.memory.execution_memory_store import ExecutionMemoryStore
@@ -87,7 +90,9 @@ def build_app(
     (M43)도 이 시점에 처음 조립된다 — `RecommendationExecutionService`
     는 M43부터 Recommendation 의존성을 갖지 않으므로(ADR-0059),
     Orchestration Service가 Experience 조회 → Recommendation 계산
-    (Adaptation 포함) → Execution 위임까지 전체 흐름을 제어한다."""
+    (Adaptation 포함) → Explanation 기록(M44) → Execution 위임까지
+    전체 흐름을 제어한다. `RecommendationExplanationService`(M44)도
+    이 시점에 조립돼 선택적으로 주입된다."""
     config = config or load_production_config()
 
     event_bus = InMemoryEventBus()
@@ -122,10 +127,12 @@ def build_app(
         execution_memory_store,
     )
     experience_service = ExperienceIntelligenceService(vault_adapter, execution_memory_store)
+    explanation_service = RecommendationExplanationService(vault_adapter)
     recommendation_orchestration_service = RecommendationOrchestrationService(
         experience_service,
         recommendation_service,
         recommendation_execution_service,
+        explanation_service,
     )
 
     automation_repository = InMemoryAutomationRepository()

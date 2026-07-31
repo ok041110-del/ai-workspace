@@ -368,6 +368,12 @@ tags: [decision]
 - 결정: `src/ai_workspace/` 전수 검색으로 4개 대안(`Suggest`/`Selection`/`Decision`/`Proposal`) 비교. `Suggest`는 충돌 없으나 동의어일 뿐 실질적 이득 없음, `Selection`은 `EngineSelectionPolicy`/`EngineSelectionDecision`(M17/18)과 충돌, `Decision`은 이미 확립된 6개 `*Decision` 패턴(`GateDecision`/`ApprovalDecision`/`EngineSelectionDecision`/`BudgetDecision`/`LLMPolicyDecision`/`RetryDecision`)과 충돌하고 비구속성을 반영 못해 의미도 부정확, `Proposal`은 "Milestone Proposal" 프로세스 용어와 충돌. `Recommendation`을 공식 Domain Vocabulary로 유지 확정하고 정의를 한 문장으로 고정 — *"The domain concept responsible for determining the most appropriate Next Action from the current project state. It represents an actionable recommendation, not a mandatory decision."*
 - 영향: `docs/ARCHITECTURE.md` §13.3 Recommendation 행에 정의 문장과 대안 비교 요약 반영. 코드/테스트 변경 없음(문서화 전용, 리네이밍 없음). 상세는 [[Architecture Overview]]
 
+## ADR-0061: Recommendation Explainability — Recommendation의 근거를 구조적으로 재구성 (Milestone 44)
+
+- 목적: M43로 Recommendation(M35)→Adaptation(M42)→Orchestration(M43)→Execution(M36)→Memory(M39)→Experience(M40) 내부 루프가 완성된 시점에, Recommendation이 "무엇을 할 것인가"뿐 아니라 "왜 그렇게 결정했는가"를 공식 Domain Concept로 만듦. Domain Analysis로 Recommendation(무엇을)과 Explainability(왜)의 책임 차이를 확인
+- 결정: `RecommendationExplanationAnalyzer`(신규, `intelligence/recommendation_explanation.py`)가 `RecommendationIntelligenceReport`(M35/M42) + `ExperienceReport`(M40, 선택)를 읽어 5단계 Priority Rule 평가 흔적 + Experience 성공률 요약 + Adaptation 적용 여부/사유를 재구성 — 새 AI 판단·새 지표 없음, Recommendation 자체는 바꾸지 않음. `RecommendationExplanationService`(신규)가 Vault `15 Project Intelligence/Recommendation Explanation.md`에 발행. `Explainability`는 §13.3 Behavioral Concept로 등재(`Adaptation`과 동일 급, 1급 Domain 승격 보류). `RecommendationOrchestrationService`(M43)에 `explanation_service` 선택적 주입으로 Recommendation→Explainability→Execution 순서 연결, 미주입 시 M43 이전과 100% 동일 동작
+- 영향: `intelligence/recommendation_explanation.py`/`recommendation_explanation_service.py`(신규), `vault/recommendation_explanation.py`(신규), `integration/vault_adapter.py`(확장), `runtime/execution/recommendation_orchestration_service.py`(확장), `web/server.py`(Composition Root 갱신), `docs/ARCHITECTURE.md` §13.3/§13.4/§3.36(신규) 갱신. Vault `Recommendation Explanation.md` 실제 저장소 상태로 신규 발행. 새 Core Domain Interface/Adapter 없음(27종 유지). `pytest` 1073개(9개 신규)·ruff·mypy 전부 클린, Guardian all_passed 유지, `build_app()` 실제 조립 스모크 테스트 통과. 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
