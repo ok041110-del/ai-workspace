@@ -4071,3 +4071,74 @@ recommendation, not a mandatory decision.* — 이 한 문장이 M35
   Ubiquitous Language를 확정하는 기준 문서로 남긴다.
 - 결과/영향: `docs/ARCHITECTURE.md` §13.3 Recommendation 행에 정의
   문장과 대안 비교 요약 반영. 코드/테스트 변경 없음(문서화 전용).
+
+## ADR-0061: Recommendation Explainability — Recommendation의 근거를 구조적으로 재구성(Milestone 44)
+
+- 상태: 승인됨 (2026-07-31, 사용자가 M43 완료로 Recommendation Flow
+  가 완전히 연결된 시점을 근거로 M44 제안서를 직접 작성해 제시 —
+  Responsibility/관계 다이어그램/출력 예시/Domain Analysis/구현
+  난이도까지 포함된 상세 제안을 검토한 뒤 그대로 진행 승인)
+- 날짜: 2026-07-31
+- 배경: M43(Recommendation Orchestration)으로 Recommendation(M35)
+  →Adaptation(M42)→Orchestration(M43)→Execution(M36)→Memory(M39)
+  →Experience(M40)로 이어지는 내부 루프가 완성됐다. 이 시점부터는
+  "AI가 올바르게 행동하는 능력"(M29~M43)에서 "AI가 자신의 행동을
+  설명할 수 있는 능력"으로 확장하는 것이 자연스럽다는 사용자 판단에
+  따라, Recommendation이 왜 선택됐는지("Current Work보다 Capability
+  Gap이 왜 선택됐는가", "Experience 때문에 왜 Adjustment가
+  발생했는가")를 공식 Domain Concept로 만든다.
+- 결정:
+  1. **Recommendation과 Explainability는 책임이 다르다(Domain
+     Analysis)**: Recommendation은 "무엇을 할 것인가", Explainability
+     는 "왜 그렇게 결정했는가" — Explainability는 Recommendation
+     자체를 바꾸지 않는다(새 Responsibility, 새 판단 아님).
+  2. **`RecommendationExplanationAnalyzer`(신규,
+     `intelligence/recommendation_explanation.py`)**: `RecommendationIntelligenceReport`
+     (M35, Adaptation 반영 시 M42) + `ExperienceReport`(M40, 선택)를
+     입력받아 5단계 Priority Rule 평가 흔적(`PriorityStepTrace`) +
+     Experience 성공률 요약 + Adaptation 적용 여부/사유를
+     `RecommendationExplanationReport`로 재구성하는 순수 Analyzer.
+     새 AI 판단·새 지표 없음 — 이미 계산된 값만 읽는다. Deterministic
+     + Immutable Input(M40/M42와 동일 조건).
+  3. **`RecommendationExplanationService`(신규,
+     `intelligence/recommendation_explanation_service.py`)**: Analyzer
+     호출 + Vault 발행만 조합. `VaultAdapter.publish_recommendation_explanation()`
+     (신규)이 `15 Project Intelligence/Recommendation Explanation.md`
+     에 원자적으로 덮어쓴다.
+  4. **`Explainability`는 §13.3 Behavioral Concept로 등재** —
+     `Adaptation`(M42)과 동일한 급. 재사용 사례가 이번 1건뿐이라
+     1급 Domain(§13.2) 승격은 보류(재사용 사례 축적 시 재검토).
+  5. **`RecommendationOrchestrationService`(M43) 연결**:
+     `explanation_service`를 선택적으로 주입하면 Recommendation
+     계산 직후(Execution 위임 전) Explanation을 Vault에 기록한다 —
+     Recommendation→Explainability→Execution 순서(사용자 제안
+     다이어그램과 일치). 미주입 시 M43 이전과 100% 동일 동작
+     (하위 호환). `web/server.py`가 이 Service를 조립해 실제로
+     매 추천 실행마다 근거가 Vault에 기록되도록 배선한다.
+- 대안:
+  - **Explanation을 Recommendation Report 안에 직접 포함시킨다** —
+    기각. Recommendation(M35)/Adaptation(M42)이 이미 안정적으로
+    쓰이는 값 객체에 새 필드를 계속 추가하면 책임이 섞인다 —
+    별도 Analyzer/Service로 분리해 "무엇을"과 "왜"의 책임을
+    명확히 나눈다(Domain Analysis 결론).
+  - **`RecommendationExecutionService`(M36)나 `RecommendationOrchestrationService`
+    (M43)에 설명 로직을 내장한다** — 기각. 두 Service 모두 이미
+    확립된 좁은 책임(실행/흐름 제어)을 갖는다 — Explanation은 별도
+    Analyzer로 분리해야 재사용성(Dashboard/API/CLI/Multi-Agent
+    Reviewer)이 생긴다.
+- 이유: M43로 완성된 Recommendation Flow가 "설명할 대상이 안정된"
+  시점을 만들었다 — 이미 계산된 값(Recommendation Report/Experience
+  Report/Priority Rule/Adaptation 결과)만 재사용하면 되므로 새로운
+  AI 판단이나 새 데이터 접근 경로 없이 구현 난이도가 낮다. Analyzer/
+  Service 분리는 ADR-0057 역할 규칙에 그대로 부합한다.
+- 결과/영향: `intelligence/recommendation_explanation.py`(신규),
+  `intelligence/recommendation_explanation_service.py`(신규),
+  `vault/recommendation_explanation.py`(신규), `integration/vault_adapter.py`
+  (확장), `runtime/execution/recommendation_orchestration_service.py`
+  (`explanation_service` 선택적 인자 추가), `web/server.py`(Composition
+  Root 갱신), `docs/ARCHITECTURE.md` §13.3/§13.4/§3.36(신규) 갱신.
+  Vault `15 Project Intelligence/Recommendation Explanation.md`
+  신규 생성(실제 저장소 상태로 발행). 새 Core Domain Interface/
+  Adapter 없음(27종 유지). `pytest` 1073개(9개 신규) 통과, `ruff`/
+  `mypy` 통과, `guardian.checker.evaluate()` all_passed 유지,
+  `build_app()` 실제 조립 스모크 테스트 통과.

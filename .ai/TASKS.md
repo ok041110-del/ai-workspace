@@ -12683,6 +12683,68 @@ Recommendation Vocabulary Review 공식 완료(Approved)** — Recommendation
 
 ---
 
+## Milestone 44 — Recommendation Explainability
+
+**목표**(2026-07-31 사용자 제안, ADR-0061): M43로 Recommendation(M35)
+→Adaptation(M42)→Orchestration(M43)→Execution(M36)→Memory(M39)→
+Experience(M40) 내부 루프가 완성된 시점에, Recommendation이 "무엇을
+할 것인가"뿐 아니라 "왜 그렇게 결정했는가"를 공식 Domain Concept로
+만든다. 사용자가 Responsibility/관계 다이어그램/출력 예시/Domain
+Analysis/구현 난이도까지 포함한 상세 제안서를 직접 작성해 제시,
+그대로 진행 승인.
+
+**Domain Analysis(사용자 제시, 검토 완료)**: Recommendation과
+Explainability는 책임이 다르다 — Recommendation은 "무엇을", Explainability
+는 "왜"를 답한다. Explainability는 Recommendation 자체를 바꾸지
+않는 별도 Responsibility.
+
+**T05 — Implementation(완료)**:
+- `intelligence/recommendation_explanation.py`(신규) —
+  `RecommendationExplanationAnalyzer`: `RecommendationIntelligenceReport`
+  (M35/M42) + `ExperienceReport`(M40, 선택)를 읽어 5단계 Priority
+  Rule 평가 흔적(`PriorityStepTrace`) + Experience 성공률 요약 +
+  Adaptation 적용 여부/사유를 재구성. 새 AI 판단·새 지표 없음,
+  Deterministic + Immutable Input.
+- `intelligence/recommendation_explanation_service.py`(신규) —
+  `RecommendationExplanationService`: Analyzer 호출 + Vault 발행만
+  조합. `VaultAdapter.publish_recommendation_explanation()`(신규)이
+  `15 Project Intelligence/Recommendation Explanation.md`에 발행.
+- `Explainability`는 §13.3 Behavioral Concept로 등재(`Adaptation`과
+  동일 급, 1급 Domain 승격 보류).
+- `runtime/execution/recommendation_orchestration_service.py`
+  (M43) — `explanation_service` 선택적 인자 추가. Recommendation
+  계산 직후(Execution 위임 전) Explanation을 Vault에 기록 —
+  Recommendation→Explainability→Execution 순서. 미주입 시 M43
+  이전과 100% 동일 동작.
+- `web/server.py`(Composition Root) — `RecommendationExplanationService`
+  조립해 `RecommendationOrchestrationService`에 주입.
+- `docs/ARCHITECTURE.md` §13.3(Explainability 추가)/§13.4(예시 행
+  추가)/§3.36(신규)/헤더 상태 갱신.
+- 테스트: `test_recommendation_explanation.py`(5건),
+  `test_recommendation_explanation_service.py`(3건),
+  `test_recommendation_orchestration_service.py`에 explanation_service
+  배선 테스트 2건 추가. 전체 `pytest` 1073개 통과, `ruff`/`mypy`
+  통과, `guardian.checker.evaluate()` all_passed 유지, `build_app()`
+  스모크 테스트 통과. Vault `Recommendation Explanation.md` 실제
+  저장소 상태로 신규 발행.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Recommendation과 Explainability의 책임 차이를 Domain Analysis로 확인 | ✅ |
+| 2 | Recommendation 자체를 바꾸지 않음(새 AI 판단 없음) | ✅ |
+| 3 | `Explainability`를 §13.3 Behavioral Concept로 등재(1급 Domain 승격 보류) | ✅ |
+| 4 | `RecommendationOrchestrationService`에 선택적 주입, 미주입 시 M43과 100% 동일 동작 | ✅ |
+| 5 | 신규 Core Domain Interface/Adapter 0개(27종 유지) | ✅ |
+| 6 | `pytest`/`ruff`/`mypy`/Guardian 통과, `build_app()` 스모크 테스트 통과 | ✅ |
+| 7 | Vault `Recommendation Explanation.md` 실제 발행 확인 | ✅ |
+
+**사용자 승인(2026-07-31)**: 위 7개 항목을 확인해 **Milestone 44
+Recommendation Explainability 공식 완료(Approved)**.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

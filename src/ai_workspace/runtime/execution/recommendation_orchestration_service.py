@@ -19,13 +19,23 @@ Adaptation까지 반영된 최종 `RecommendationIntelligenceReport`를
 - Composition Root(`web/server.py`) — 조립
 - Analyzer(`RecommendationRuleAnalyzer`/`RecommendationAdjustmentAnalyzer`) — 판단
 - `RecommendationOrchestrationService`(이 모듈) — 실행 흐름 제어
-- `RecommendationExecutionService` — 실행"""
+- `RecommendationExecutionService` — 실행
+
+**Recommendation Explainability 연결(M44, ADR-0061)**: `explanation_service`
+를 선택적으로 주입하면, Recommendation을 계산한 직후(Execution
+위임 전) `RecommendationExplanationService.publish()`(M44)를 호출해
+근거를 Vault에 기록한다 — Recommendation→Explainability→Execution
+순서(M44 설계). 미주입 시(기본값 `None`) M43 이전과 완전히 동일하게
+동작한다."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from ai_workspace.intelligence.experience_service import ExperienceIntelligenceService
+from ai_workspace.intelligence.recommendation_explanation_service import (
+    RecommendationExplanationService,
+)
 from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
 from ai_workspace.runtime.execution.recommendation_execution_service import (
     RecommendationExecutionOutcome,
@@ -35,18 +45,21 @@ from ai_workspace.runtime.execution.recommendation_execution_service import (
 
 class RecommendationOrchestrationService:
     """`ExperienceIntelligenceService`(M40) + `RecommendationIntelligenceService`
-    (M35/M42) + `RecommendationExecutionService`(M36)를 정해진 순서로
-    호출만 하는 순수 흐름 제어 계층. 새 판단 로직 없음."""
+    (M35/M42) + `RecommendationExplanationService`(M44, 선택) +
+    `RecommendationExecutionService`(M36)를 정해진 순서로 호출만
+    하는 순수 흐름 제어 계층. 새 판단 로직 없음."""
 
     def __init__(
         self,
         experience_service: ExperienceIntelligenceService,
         recommendation_service: RecommendationIntelligenceService,
         execution_service: RecommendationExecutionService,
+        explanation_service: RecommendationExplanationService | None = None,
     ) -> None:
         self._experience_service = experience_service
         self._recommendation_service = recommendation_service
         self._execution_service = execution_service
+        self._explanation_service = explanation_service
 
     def execute(self, *, manual_trigger: bool) -> RecommendationExecutionOutcome:
         """
@@ -57,9 +70,13 @@ class RecommendationOrchestrationService:
         보장: side-effect는 전부 `RecommendationExecutionService`가
               일으킨다 — 이 메서드 자체는 Experience 조회 +
               Recommendation 계산(Read Only)만 추가로 수행한다.
+              `explanation_service`가 주입돼 있으면 Vault에 근거도
+              함께 기록한다(M44, Recommendation 자체는 바뀌지 않음).
         """
         experience_report = self._experience_service.generate()
         report = self._recommendation_service.generate(experience_report=experience_report)
+        if self._explanation_service is not None:
+            self._explanation_service.publish(report, experience_report)
         return self._execution_service.execute(report, manual_trigger=manual_trigger)
 
     def publish(self, *, manual_trigger: bool) -> tuple[RecommendationExecutionOutcome, Path]:
@@ -68,4 +85,6 @@ class RecommendationOrchestrationService:
         가 사용하는 진입점)."""
         experience_report = self._experience_service.generate()
         report = self._recommendation_service.generate(experience_report=experience_report)
+        if self._explanation_service is not None:
+            self._explanation_service.publish(report, experience_report)
         return self._execution_service.publish(report, manual_trigger=manual_trigger)
