@@ -12745,6 +12745,113 @@ Recommendation Explainability 공식 완료(Approved)**.
 
 ---
 
+## Milestone 45 — Workspace Observability
+
+**목표**(2026-07-31 사용자 요청, ADR-0062): M44까지 완성된
+Recommendation(M35)→Adaptation(M42)→Explainability(M44)→
+Orchestration(M43)→Execution(M36)→Memory(M39)→Experience(M40)
+파이프라인은 사후(Vault 문서/pytest 로그)로만 확인 가능했다. 새
+AI 판단이나 자동화를 만드는 것이 아니라, Claude Code 세션 안에서
+이 파이프라인이 지금 어떤 상태인지 + Claude Code 자체 Runtime
+(Model/Effort/Context 사용량)을 **StatusLine으로 실시간 반영**하는
+Observability를 Phase 1(Claude Code 내부 표시만, Dashboard/Web UI/
+Automation 제외)로 구축한다. 사용자가 표시 항목·설계 원칙
+(`WorkspaceRuntimeSnapshot` 읽기 전용 모델, StatusLine은 표시만
+담당)까지 제시하고 T01(Domain Analysis)~T04(Implementation Plan)
+프로세스로 진행을 요청.
+
+**T01 — Domain Analysis(완료)**: `Observability`는 §13.2 4개 핵심
+Domain(Intelligence/Memory/Execution/Guardian) 중 어느 것도 정확히
+들어맞지 않는다 — Intelligence와 같이 Read Only지만 "지금 상황이
+어떤가"를 새로 판단(분석·요약)하지 않고 이미 계산된 값의 존재
+여부만 반영한다는 점이 다르다. 재사용 사례가 이번 1건(StatusLine)
+뿐이므로 `Adaptation`/`Explainability`/`Orchestration`과 같은 급의
+**Behavioral Concept**로 §13.3에 신규 등재(1급 Domain 승격 보류).
+
+**T02 — Architecture Review(완료)**: 새 Core Domain Interface/Adapter
+0개(27종 유지). `VaultAdapter`에 읽기 전용 메서드
+`report_last_modified()` 1개만 추가(Reuse First — 새 Adapter 대신
+기존 Adapter 확장). `intelligence/`에 얹지 않고 별도 `observability/`
+패키지로 분리 — Intelligence의 좁은 의존 계약(`VaultAdapter`/
+`AgentAdapter`만)과 Observability의 실제 데이터 소스(Claude Code
+StatusLine stdin, Vault/Agent와 무관)가 맞지 않기 때문(Guardian이
+Read Only이면서도 별도 패키지를 받은 선례와 동일 논리). `runtime/`
+재사용은 기각 — 이미 Agent/Engine/Execution/Automation Runtime을
+가리키는 확립된 이름이라 전혀 다른 의미로 재사용하면 이름만으로
+책임을 유추할 수 없게 된다.
+
+**T03 — Detailed Design(완료, Phase 1의 정직한 한계 포함)**: 7단계
+중 Adaptation/Orchestration은 별도 Vault 산출물이 없음(M42/M43에서
+이미 확인된 사실, 다른 산출물에 구조적으로 포함) → `STRUCTURAL_INCLUDED`.
+Memory(M39)는 `InMemoryMemoryEngine` 기반이라 프로세스 재시작 시
+사라지고 영속화되지 않아 별도 프로세스인 StatusLine에서 조회 불가
+→ `NOT_OBSERVABLE`(이유 명시). 실제로 관측 가능한 4단계
+(Recommendation/Explainability/Execution/Experience)만 Vault 문서
+존재 여부로 `OBSERVED_DONE`/`OBSERVED_NOT_YET` 판정 — 값을 지어내지
+않는다(사용자 요청 "추정값 사용 금지"를 그대로 지킴). Claude Runtime
+정보는 StatusLine stdin JSON의 공식 문서화된 필드(`model.display_name`/
+`effort.level`/`context_window.*`)만 옮기고, 제공되지 않는 필드는
+`None`으로 남긴다. `WorkspaceInfo.current_workflow`는 §13.2 Workflow
+와 혼동을 피하기 위해 Phase 1은 항상 `None`(사용자가 "선택"으로
+표시한 항목, Phase 2 후보).
+
+**T04 — Implementation Plan + 구현(완료)**:
+- `observability/snapshot.py`(신규) — `WorkspaceRuntimeSnapshot`/
+  `ClaudeRuntimeInfo`/`WorkspaceInfo`/`PipelineStageState`/
+  `PipelineStageStatus`: 메서드 없는 `frozen dataclass`/`Enum`만
+  (`guardian/rules.py` `*Rule`과 동일 원칙).
+- `observability/claude_runtime_analyzer.py`(신규) —
+  `ClaudeRuntimeAnalyzer`: StatusLine stdin JSON을 그대로 옮기는
+  순수 Analyzer.
+- `observability/pipeline_stage_analyzer.py`(신규) —
+  `PipelineStageAnalyzer`: `VaultAdapter.report_last_modified()`로
+  7단계 상태를 재구성하는 순수 Analyzer.
+- `observability/workspace_info_analyzer.py`(신규) —
+  `WorkspaceInfoAnalyzer`: `pyproject.toml`/`Milestones Index.md`만
+  읽는 순수 Analyzer.
+- `observability/runtime_snapshot_service.py`(신규) —
+  `RuntimeSnapshotService`: 3개 Analyzer 호출만 조합.
+- `observability/statusline_renderer.py`(신규) —
+  `StatusLineRenderer`: `WorkspaceRuntimeSnapshot` → StatusLine
+  평문 문자열 변환만 하는 순수 함수형 Renderer.
+- `observability/statusline_main.py`(신규) — 진입점. stdin 파싱
+  실패/예외 발생 시에도 항상 한 줄을 출력(StatusLine이 빈 줄로
+  사라지지 않도록).
+- `integration/vault_adapter.py`(확장) — `report_last_modified()`
+  1개 메서드 추가.
+- `.claude/settings.json`(신규) — `statusLine.command`로
+  `observability/statusline_main.py` 배선(`PYTHONPATH=src python3 -m
+  ai_workspace.observability.statusline_main`).
+- `docs/ARCHITECTURE.md` §13.3(Observability 추가)/§13.4(예시 행
+  추가)/§3.37(신규)/헤더 상태 갱신.
+- 테스트: `tests/observability/`(신규, 5개 파일 17건) +
+  `tests/integration_layer/test_vault_adapter.py`에
+  `report_last_modified()` 테스트 2건 추가. 전체 `pytest` 1090개
+  (17개 신규) 통과, `ruff`/`mypy` 통과, `guardian.checker.evaluate()`
+  all_passed 유지, `build_app()` 실제 조립 스모크 테스트 통과.
+  `statusline_main.py`를 실제 stdin JSON으로 수동 실행해 실제
+  저장소 상태(M44/Recommendation Intelligence.md 등)를 정확히
+  반영하는 것을 확인.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Observability가 §13.2 4개 핵심 Domain 중 무엇에도 해당하지 않음을 Domain Analysis로 확인 | ✅ |
+| 2 | `Observability`를 §13.3 Behavioral Concept로 등재(1급 Domain 승격 보류) | ✅ |
+| 3 | 새 Core Domain Interface/Adapter 0개(27종 유지, `VaultAdapter` 확장 1건만) | ✅ |
+| 4 | 기존 Domain(Recommendation/Adaptation/Explainability/Orchestration/Execution/Memory/Experience) 판단 로직 무변경 | ✅ |
+| 5 | 관측 불가능한 부분(Adaptation/Orchestration/Memory)을 값 지어내지 않고 정직하게 표시 | ✅ |
+| 6 | Claude Runtime 정보가 StatusLine 공식 문서 필드만 사용(추정값 없음) | ✅ |
+| 7 | Dashboard/Web UI/Automation/Telemetry 범위 밖 유지(Phase 1 = Claude Code 내부 표시만) | ✅ |
+| 8 | `pytest`/`ruff`/`mypy`/Guardian 통과, `build_app()` 스모크 테스트 통과 | ✅ |
+| 9 | `.claude/settings.json` StatusLine 실배선 + 실제 stdin 입력으로 수동 검증 | ✅ |
+
+**사용자 승인(2026-07-31)**: 위 9개 항목을 확인해 **Milestone 45
+Workspace Observability(Phase 1) 공식 완료(Approved)**.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

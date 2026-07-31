@@ -167,6 +167,18 @@ class VaultAdapter:
             for doc in documents
         ]
 
+    def report_last_modified(self, *path_parts: str) -> float | None:
+        """`vault_root` 하위 문서(`path_parts`로 지정)의 마지막 수정
+        시각(epoch seconds)을 조회한다(ADR-0062, Milestone 45). 파일이
+        없으면 `None` — side-effect 없음(read-only), 새 판단 로직 없음.
+        `observability/` Layer가 Vault 산출물의 존재/최신 여부를
+        읽기 전용으로 확인하는 유일한 통로다(Intelligence와 동일하게
+        `VaultAdapter`만 의존)."""
+        path = self._vault_root.joinpath(*path_parts)
+        if not path.exists():
+            return None
+        return path.stat().st_mtime
+
     def publish_intelligence_report(self, markdown: str) -> Path:
         """`intelligence/report.py`가 렌더링한 Markdown을 `15 Project
         Intelligence/Project Intelligence.md`에 덮어쓴다(ADR-0043,
