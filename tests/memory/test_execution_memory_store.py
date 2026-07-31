@@ -1,5 +1,5 @@
 from ai_workspace.domain.execution_memory import ExecutionMemory
-from ai_workspace.memory.execution_memory_store import ExecutionMemoryStore
+from ai_workspace.memory.execution_memory_store import ExecutionMemoryEntry, ExecutionMemoryStore
 from ai_workspace.memory.memory_engine import InMemoryMemoryEngine
 
 
@@ -7,7 +7,17 @@ def _make_store() -> ExecutionMemoryStore:
     return ExecutionMemoryStore(InMemoryMemoryEngine())
 
 
-def test_record_then_query_returns_recorded_memory() -> None:
+def _entry(memory: ExecutionMemory) -> ExecutionMemoryEntry:
+    return ExecutionMemoryEntry(
+        task_id=memory.task_id,
+        action=memory.action,
+        result=memory.result,
+        timestamp=memory.timestamp,
+        reason=memory.reason,
+    )
+
+
+def test_record_then_query_returns_recorded_memory_as_entry() -> None:
     store = _make_store()
     memory = ExecutionMemory(
         task_id="M36-T01",
@@ -18,7 +28,7 @@ def test_record_then_query_returns_recorded_memory() -> None:
 
     store.record(memory)
 
-    assert store.query() == [memory]
+    assert store.query() == [_entry(memory)]
 
 
 def test_query_without_task_id_returns_all_records_sorted_by_timestamp() -> None:
@@ -33,7 +43,7 @@ def test_query_without_task_id_returns_all_records_sorted_by_timestamp() -> None
     store.record(later)
     store.record(earlier)
 
-    assert store.query() == [earlier, later]
+    assert store.query() == [_entry(earlier), _entry(later)]
 
 
 def test_query_filters_by_task_id() -> None:
@@ -47,7 +57,7 @@ def test_query_filters_by_task_id() -> None:
     store.record(target)
     store.record(other)
 
-    assert store.query(task_id="M36-T01") == [target]
+    assert store.query(task_id="M36-T01") == [_entry(target)]
 
 
 def test_query_returns_empty_list_when_nothing_recorded() -> None:
@@ -84,4 +94,4 @@ def test_query_ignores_unrelated_keys_in_shared_memory_engine() -> None:
 
     store.record(memory)
 
-    assert store.query() == [memory]
+    assert store.query() == [_entry(memory)]
