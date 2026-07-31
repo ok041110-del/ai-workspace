@@ -12489,6 +12489,12 @@ Repository Naming Standard 공식 완료(Approved)**. 발견된 4건의
 Rename Candidate는 실행하지 않고 §13.6에 개선 여지로만 남긴다 —
 실행은 별도 요청·승인 시점에 진행한다.
 
+**후속 결정 — Boy Scout Rule 채택(2026-07-30)**: 4건의 Rename
+Candidate를 처리하는 별도 대규모 Rename PR은 만들지 않는다. 대신
+①기존 코드는 해당 파일을 기능 개발로 수정할 일이 생길 때 같은 PR
+안에서 함께 Rename하고, ②신규 코드는 §13.6을 예외 없이 100%
+적용한다. `.ai/RULES.md` §1.6(v0.10.1)에 영구 반영.
+
 ---
 
 ## GitHub Flow Migration
