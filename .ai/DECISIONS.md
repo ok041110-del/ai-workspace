@@ -3557,3 +3557,101 @@
   **`Experience Intelligence`**로 확정했다. 이 결정은 이름만
   확정하며, 실제 Scope((a)/(b) 선택)/DoD/MDD Review는 M40 착수
   시점에 별도로 진행한다.
+
+## ADR-0055: Experience Intelligence 도입 — Execution Memory를 Read Only로 집계, §8 규칙 21을 Role 기반으로 재정의 (Milestone 40)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 제안서 검토 후 Scope (a)Read-Only
+  Experience Reporting으로 조건부 승인. 조건: ①Analyzer는 Deterministic
+  ②`ExecutionMemory`는 Immutable Input으로 취급, 절대 수정하지 않음
+  ③신규 Interface/Adapter 없음 ④§8 규칙 21에 `ExecutionMemoryStore`
+  클래스명을 예외로 나열하지 않음 ⑤대신 Rule을 역할(Role) 중심으로
+  재정의해 Service의 오케스트레이션은 허용하고 Analyzer의 순수성은
+  계속 강제 — 전부 반영)
+- 날짜: 2026-07-30
+- 배경: ADR-0053(M39)이 "Learning은 M40 이후"로 미뤘고, ADR-0054의
+  T02~T05 분석에서 Domain은 **Intelligence**(기존 어휘 재사용), 이름은
+  **`Experience Intelligence`**로 확정됐다. 실제 설계 단계에서
+  `ExecutionMemoryStore.query()`가 `domain.execution_memory.
+  ExecutionMemory`(domain 타입)를 그대로 반환한다는 사실이 드러났다
+  — `intelligence/`는 `domain`을 직접 참조할 수 없다는 §8 규칙 21과
+  정면으로 충돌한다(MDD Review 단계에서는 발견하지 못하고 구현
+  단계에서 실제로 import를 시도하다 `tests/intelligence/
+  test_intelligence_layering.py`가 이를 잡아냈다).
+- 결정:
+  1. **`ExecutionMemoryStore.query()`의 반환 타입을 domain의
+     `ExecutionMemory`에서 `memory/`가 스스로 정의하는
+     `ExecutionMemoryEntry`(신규, `memory/execution_memory_store.py`)
+     로 변경한다.** `integration/vault_adapter.py`가 `domain.Task`를
+     그대로 노출하지 않고 `TaskDocumentView`로 감싸는 것과 동일한
+     이유·동일한 패턴이다. `record()`는 여전히 domain의
+     `ExecutionMemory`를 받는다 — 쓰기 쪽 호출자(`runtime/execution/`)
+     는 domain 참조 제약이 없어 바꿀 이유가 없다.
+  2. **`intelligence/experience_rules.py`(신규)의 `ExperienceAnalyzer`
+     는 `ExecutionMemoryEntry`조차 직접 받지 않고, `intelligence/`가
+     스스로 정의하는 `ExperienceRecord`만 입력으로 받는다.** `memory/`
+     를 포함해 이 파일 밖 어떤 패키지도 import하지 않는다 —
+     `RecommendationRuleAnalyzer`(M35)가 오직 intelligence/-owned
+     dataclass만 받는 것과 동일한 최고 수준의 순수성. Deterministic
+     (현재 시각·난수·외부 상태 미참조, 같은 입력에 항상 같은 결과)과
+     Immutable Input(입력 `ExperienceRecord`는 frozen, 쓰기 메서드
+     호출 없음)을 이 설계로 만족한다(사용자 조건 ①②).
+  3. **`intelligence/experience_service.py`(신규)의
+     `ExperienceIntelligenceService`가 `ExecutionMemoryStore`를 쥐고
+     `ExecutionMemoryEntry`→`ExperienceRecord` 변환 + Analyzer 호출 +
+     Vault 노출(`publish()`)까지 담당한다.** `RecommendationIntelligenceService`
+     (M35)와 동일한 얇은 조합 계층 뼈대.
+  4. **§8 규칙 21을 이름 나열이 아니라 Role 기반으로 재정의한다
+     (사용자 조건 ④⑤).** `integration/`의 3개 named Adapter는
+     패키지 전체에 계속 허용(기존 관례 무변경). `memory/`는 **`*Service`
+     로 끝나는 클래스를 정의하는 모듈에만** 새로 허용 — `tests/
+     intelligence/test_intelligence_layering.py`에 `_defines_service_class()`
+     기반 검사를 추가해 강제한다. `ExecutionMemoryStore`라는 이름은
+     규칙 어디에도 나열하지 않는다 — 앞으로 `memory/`에 무엇이
+     추가되든 Service 모듈이면 자동으로 허용된다(장기 확장성, 사용자
+     근거).
+  5. **`VaultAdapter.publish_experience_intelligence()`(신규 메서드
+     1개)** — 기존 `publish_recommendation_intelligence()` 등 8개와
+     동일한 시그니처 반복. `vault/experience_intelligence.py`(신규)가
+     `15 Project Intelligence/Experience Intelligence.md`에 원자적
+     덮어쓰기.
+  6. **Composition Root(`web/server.py`) 배선은 이번 범위에 포함하지
+     않는다.** M29~M34의 다른 순수 Intelligence Service(Context/
+     Session Resume/Workflow/Synthesis)도 `RecommendationIntelligenceService`
+     가 필요로 하지 않는 한 `build_app()`에 연결된 적이 없다는 기존
+     관례를 그대로 따른다 — `ExperienceIntelligenceService`도
+     `RecommendationExecutionService`에 아무것도 제공하지 않으므로
+     (Scope (a), Recommendation 미반영) 같은 취급을 받는다.
+- 대안:
+  - **§8 규칙 21에 `ExecutionMemoryStore`를 이름으로 나열한 예외
+    추가** — 기각(사용자 조건 ④). 특정 구현체 이름을 아키텍처
+    규칙에 박아 넣으면 `memory/`에 새 컴포넌트가 추가될 때마다 규칙을
+    다시 고쳐야 한다 — 유지보수성이 떨어진다.
+  - **새 `MemoryAdapter`(Integration Layer) 신설** — 기각(MDD Review
+    단계 결론 유지). `ExecutionMemoryStore.query()`를 그대로
+    전달만 하는 순수 Passthrough라 레이어 추가 가치가 없다(YAGNI).
+  - **`ExecutionMemoryEntry` 없이 `ExecutionMemory`를 그대로
+    `intelligence/`에 흘려보낸다** — 기각. §8 규칙 21의 domain 금지
+    원칙 자체를 훼손하며, `TaskDocumentView` 선례와도 어긋난다.
+  - **Analyzer가 `ExecutionMemoryEntry`를 직접 받는다(Service가
+    변환하지 않음)** — 기각. `ExecutionMemoryEntry`가 `memory/`
+    소속이라 Analyzer 파일이 `memory/`를 import하게 되고, 새로
+    추가한 Role 기반 규칙(Analyzer는 `memory/` import 불가)을
+    스스로 어기게 된다.
+- 이유: `ExecutionMemoryStore`(M39)가 쌓기만 하던 실행 이력을 처음으로
+  "판단 가능한 통찰"로 바꾸면서도, Learning(Rule 반영)은 여전히
+  손대지 않아 ADR-0053의 "저장과 활용의 분리" 원칙을 지킨다. 동시에
+  §8 규칙 21을 이름 목록에서 역할 정의로 바꿔, Memory Domain(§13.2)이
+  이미 "저장/검색만, 판단하지 않음"으로 정의돼 있다는 사실(ADR-0054)
+  을 그대로 활용해 향후 `memory/` 확장이 아키텍처 규칙 재작성 없이
+  자동으로 흡수되게 한다.
+- 결과/영향: `memory/execution_memory_store.py`(확장,
+  `ExecutionMemoryEntry` 추가)/`intelligence/experience_rules.py`
+  (신규)/`intelligence/experience_service.py`(신규)/`vault/
+  experience_intelligence.py`(신규)/`integration/vault_adapter.py`
+  (확장 1건)/`tests/intelligence/test_intelligence_layering.py`
+  (확장, Role 기반 검사 추가) 구현 완료, 신규 테스트 12개 포함
+  pytest 1033개, ruff, mypy(197 source files) 전부 통과. `docs/
+  ARCHITECTURE.md` §3.32(신규)/§8 규칙 21(재정의) 갱신, `.ai/TASKS.md`
+  에 Milestone 40 절 신규 추가. 새 Core Domain Interface/Adapter
+  없음(27종 유지). Composition Root 배선·영속화·Learning(Rule 반영)
+  은 계속 범위 밖(YAGNI, M41 이후 논의).

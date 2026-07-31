@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | v0.43.0 |
 | 작성일 | 2026-07-30 |
-| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. Milestone 29(Project Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0043, `intelligence/` 신규 Layer, 결과는 Vault `15 Project Intelligence/Project Intelligence.md`에 노출, "의존성 위험" Deferred by Design). 새 Core Domain Interface 없음, 27종 유지. Milestone 30(Context Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0044, `intelligence/context*.py`, 결과는 Vault `15 Project Intelligence/Project Context.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. Milestone 31(Capability Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0045, `intelligence/capability*.py`, `AgentAdapter` 확장, 결과는 Vault `15 Project Intelligence/Capability Intelligence.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. Milestone 32(Intelligence Synthesis) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0046, `intelligence/synthesis*.py`, M29~M31 Service 3개를 조합해 결과는 Vault `15 Project Intelligence/Intelligence Overview.md`에 노출). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지. M29~M32로 Intelligence Layer 기반 완성(Project/Context/Capability/Synthesis). **Milestone 33(Session Resume) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0047, `intelligence/session_resume*.py`, "현재 작업" 선택 규칙 1개 + M29~M32 재사용, 결과는 Vault `15 Project Intelligence/Session Resume.md`에 공식 확정). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지. **Intelligence Layer를 실제 사용 시나리오(세션 시작)에 처음 연결한 Execution 쪽 첫 기능**. **Milestone 34(Workflow Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0048, `intelligence/workflow_flow.py`/`workflow_service.py`, "Workflow"를 `domain.Workflow`가 아니라 Milestone Task 실행 흐름으로 재정의하고 Blocked/Next Rule 1개 + `WorkflowFlowAnalyzer` 캡슐화로 구현, 결과는 Vault `15 Project Intelligence/Workflow Intelligence.md`에 공식 확정). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지, `domain.Workflow`/`WorkflowEngine`/`WorkflowAdapter` 무변경(사용하지 않음). **Milestone 35(Recommendation Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0049, `intelligence/recommendation_rules.py`/`recommendation_service.py`, M29/M31/M33/M34 Intelligence를 그대로 조합한 5단계 Priority Rule 1개로 단일 Next Action을 결정, 결과는 Vault `15 Project Intelligence/Recommendation Intelligence.md`에 공식 확정). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지 — Execution Layer 이전의 마지막 Decision Layer, 자동 실행 없음. **Milestone 36(Execution) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0050, `runtime/execution/recommendation_execution_gate.py`/`recommendation_action_builder.py`/`recommendation_execution_service.py`, M35 `NextAction`의 `source=next_task`만·수동 트리거로만 기존 `ExecutionDispatcher`/`EngineRegistry`/`EngineSelectionPolicy`(M17/M18)에 연결해 실행, 결과는 Vault `15 Project Intelligence/Recommendation Execution.md`에 공식 확정). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지, `AutomationActionExecutor`/`AutomationScheduler`/`ExecutionDispatcher` 무변경(그대로 재사용) — **M29~M35 Read Only Intelligence를 실제 실행으로 연결한 첫 side-effecting Milestone**. **Milestone 37(Task Lifecycle) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0051, `runtime/execution/recommendation_task_lifecycle.py`, M36 Execution 결과를 기존 Task 상태 전이 기계(`_ALLOWED_TRANSITIONS`, M28)에 연결 — 실행 시작 시 `todo→in-progress`, 성공 시 `in-progress→review`, 실패 시 `in-progress→todo`만 자동화하고 `review→done`은 사람 검토로 남김, 결과는 Vault `15 Project Intelligence/Recommendation Execution.md`의 "Task Status 이력" 섹션에 공식 확정). 새 상태·새 전이 규칙·새 Adapter 없음(`VaultAdapter` 확장도 없음, 기존 `transition_task()` 그대로 재사용), 27종 유지. **Milestone 38(AutomationScheduler 연결) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0052, `web/server.py`의 `build_app()`에 `VaultAdapter`/`AgentAdapter`/`RecommendationIntelligenceService`/`RecommendationExecutionService`를 최초로 실배선하고, `AutomationActionExecutor`에 신설 `ActionKind.RUN_RECOMMENDATION`을 연결해 `AutomationScheduler`의 TIME/INTERVAL Trigger로 M35 `source=next_task` 추천이 자동 실행되게 함). 새 정책 없음 — `ExecutionGate`는 M36과 동일하게 `source=next_task`만 승인. 새 Core Domain Interface/Adapter 없음(27종 유지), `ExecutionGate`/`ActionBuilder`/`TaskLifecycleTransitioner` 무변경. **M29(Project Intelligence)~M38(AutomationScheduler 연결)로 Intelligence→Execution→Automation 기본 폐쇄 루프 완성**. **Milestone 39(Execution Memory) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0053, `domain/execution_memory.py`/`memory/execution_memory_store.py` 신규, `RecommendationExecutionService`에 `execution_memory_store` 선택적 주입으로 Execution 결과가 기존 `MemoryEngine`(M1)에 자동 저장, `ExecutionMemoryStore.query()`로 조회만 제공하고 Learning/영속화/Rule 반영은 범위 밖). 새 Core Domain Interface 없음(27종 유지, `MemoryEngine` interface 무변경) — 다음은 M40이며 착수 시점에 별도 제안·승인 |
+| 상태 | Draft (Milestone 1~22 완료. Milestone 23(Obsidian Integration & Auto Save) — Completed. Milestone 24(Real Obsidian Vault Integration) — Completed(ADR-0036). Milestone 25(Production Vault Activation) — Completed. Milestone 26(Obsidian Vault Root Refactoring) — Completed(ADR-0037, Vault == Repository Root). Milestone 27(Obsidian Workspace Templates, 사용자 요청 "M25") — Completed(ADR-0038, `VaultDocumentKind.TASK` 신규). Milestone 28(Live Task Management & Integration) — Completed(T01~T06 전체, ADR-0039~0041). Architecture Freeze(ADR-0042) — 사용자 승인 완료. Milestone 29(Project Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0043, `intelligence/` 신규 Layer, 결과는 Vault `15 Project Intelligence/Project Intelligence.md`에 노출, "의존성 위험" Deferred by Design). 새 Core Domain Interface 없음, 27종 유지. Milestone 30(Context Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0044, `intelligence/context*.py`, 결과는 Vault `15 Project Intelligence/Project Context.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. Milestone 31(Capability Intelligence) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0045, `intelligence/capability*.py`, `AgentAdapter` 확장, 결과는 Vault `15 Project Intelligence/Capability Intelligence.md`에 노출). 새 Core Domain Interface 없음, 27종 유지. Milestone 32(Intelligence Synthesis) 완료 — 사용자 승인 완료(2026-07-30)(ADR-0046, `intelligence/synthesis*.py`, M29~M31 Service 3개를 조합해 결과는 Vault `15 Project Intelligence/Intelligence Overview.md`에 노출). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지. M29~M32로 Intelligence Layer 기반 완성(Project/Context/Capability/Synthesis). **Milestone 33(Session Resume) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0047, `intelligence/session_resume*.py`, "현재 작업" 선택 규칙 1개 + M29~M32 재사용, 결과는 Vault `15 Project Intelligence/Session Resume.md`에 공식 확정). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지. **Intelligence Layer를 실제 사용 시나리오(세션 시작)에 처음 연결한 Execution 쪽 첫 기능**. **Milestone 34(Workflow Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0048, `intelligence/workflow_flow.py`/`workflow_service.py`, "Workflow"를 `domain.Workflow`가 아니라 Milestone Task 실행 흐름으로 재정의하고 Blocked/Next Rule 1개 + `WorkflowFlowAnalyzer` 캡슐화로 구현, 결과는 Vault `15 Project Intelligence/Workflow Intelligence.md`에 공식 확정). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지, `domain.Workflow`/`WorkflowEngine`/`WorkflowAdapter` 무변경(사용하지 않음). **Milestone 35(Recommendation Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0049, `intelligence/recommendation_rules.py`/`recommendation_service.py`, M29/M31/M33/M34 Intelligence를 그대로 조합한 5단계 Priority Rule 1개로 단일 Next Action을 결정, 결과는 Vault `15 Project Intelligence/Recommendation Intelligence.md`에 공식 확정). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지 — Execution Layer 이전의 마지막 Decision Layer, 자동 실행 없음. **Milestone 36(Execution) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0050, `runtime/execution/recommendation_execution_gate.py`/`recommendation_action_builder.py`/`recommendation_execution_service.py`, M35 `NextAction`의 `source=next_task`만·수동 트리거로만 기존 `ExecutionDispatcher`/`EngineRegistry`/`EngineSelectionPolicy`(M17/M18)에 연결해 실행, 결과는 Vault `15 Project Intelligence/Recommendation Execution.md`에 공식 확정). 새 Core Domain Interface/Adapter 없음(`VaultAdapter` 확장 1건), 27종 유지, `AutomationActionExecutor`/`AutomationScheduler`/`ExecutionDispatcher` 무변경(그대로 재사용) — **M29~M35 Read Only Intelligence를 실제 실행으로 연결한 첫 side-effecting Milestone**. **Milestone 37(Task Lifecycle) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0051, `runtime/execution/recommendation_task_lifecycle.py`, M36 Execution 결과를 기존 Task 상태 전이 기계(`_ALLOWED_TRANSITIONS`, M28)에 연결 — 실행 시작 시 `todo→in-progress`, 성공 시 `in-progress→review`, 실패 시 `in-progress→todo`만 자동화하고 `review→done`은 사람 검토로 남김, 결과는 Vault `15 Project Intelligence/Recommendation Execution.md`의 "Task Status 이력" 섹션에 공식 확정). 새 상태·새 전이 규칙·새 Adapter 없음(`VaultAdapter` 확장도 없음, 기존 `transition_task()` 그대로 재사용), 27종 유지. **Milestone 38(AutomationScheduler 연결) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0052, `web/server.py`의 `build_app()`에 `VaultAdapter`/`AgentAdapter`/`RecommendationIntelligenceService`/`RecommendationExecutionService`를 최초로 실배선하고, `AutomationActionExecutor`에 신설 `ActionKind.RUN_RECOMMENDATION`을 연결해 `AutomationScheduler`의 TIME/INTERVAL Trigger로 M35 `source=next_task` 추천이 자동 실행되게 함). 새 정책 없음 — `ExecutionGate`는 M36과 동일하게 `source=next_task`만 승인. 새 Core Domain Interface/Adapter 없음(27종 유지), `ExecutionGate`/`ActionBuilder`/`TaskLifecycleTransitioner` 무변경. **M29(Project Intelligence)~M38(AutomationScheduler 연결)로 Intelligence→Execution→Automation 기본 폐쇄 루프 완성**. **Milestone 39(Execution Memory) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0053, `domain/execution_memory.py`/`memory/execution_memory_store.py` 신규, `RecommendationExecutionService`에 `execution_memory_store` 선택적 주입으로 Execution 결과가 기존 `MemoryEngine`(M1)에 자동 저장, `ExecutionMemoryStore.query()`로 조회만 제공하고 Learning/영속화/Rule 반영은 범위 밖). 새 Core Domain Interface 없음(27종 유지, `MemoryEngine` interface 무변경). **Milestone 40(Experience Intelligence) 완료 — 사용자 승인 완료(2026-07-30)**(ADR-0055, `intelligence/experience_rules.py`/`experience_service.py` 신규, `ExecutionMemoryStore.query()`가 domain 타입 대신 `ExecutionMemoryEntry`를 반환하도록 변경(M39 확장), §8 규칙 21을 Adapter 이름 나열 대신 Role(`*Service` 클래스 유무) 기반으로 재정의해 `memory/` 접근을 Service 계층에만 허용. Scope는 (a)Read-Only Reporting만(Recommendation 미반영), Analyzer는 Deterministic+Immutable Input 조건 충족(사용자 조건부 승인), 결과는 Vault `15 Project Intelligence/Experience Intelligence.md`에 노출). 새 Core Domain Interface/Adapter 없음(27종 유지) — 다음은 M41이며 착수 시점에 별도 제안·승인 |
 
 이 문서는 `docs/PRD.md`에 정의된 요구사항을 바탕으로 AI Workspace의 구조를 설계한다.
 실제 구현이 진행됨에 따라 이 문서와 실제 구조가 항상 일치하도록 갱신한다
@@ -1858,6 +1858,56 @@ M37 완료 노트).
   남는다. 새 Core Domain Interface/Adapter 없음(27종 유지),
   `ExecutionGate`/`ActionBuilder`/`TaskLifecycleTransitioner` 무변경.
 
+### 3.32 Experience Intelligence (Milestone 40, ADR-0055, 설계: M40-T01)
+
+`ExecutionMemoryStore`(M39)에 쌓인 실행 기록을 task_id별 성공/실패
+집계로 바꾸는 Read Only Intelligence 계층. M29~M35와 같은 뼈대
+(Analyzer + Service + Vault Presentation)를 그대로 따르되, 데이터
+소스가 처음으로 `integration/`의 Adapter가 아니라 `memory/`라는
+점이 다르다 — 이를 위해 §8 규칙 21을 이름 나열이 아닌 **Role 기반**
+으로 재정의했다(위 참고).
+
+- **Scope(사용자 승인)**: (a) Read-Only Experience Reporting만 —
+  `RecommendationRuleAnalyzer`(M35)의 판정 로직에는 관여하지 않는다.
+  (b)Experience-Informed Recommendation(판단 기준 자체를 바꾸는 것)
+  은 명시적으로 범위 밖 — Learning은 여전히 M40 이후 과제다.
+- **`ExperienceRecord`/`ExperienceAnalyzer`(`intelligence/
+  experience_rules.py`)**: `memory/`를 포함해 이 파일 밖 어떤
+  패키지도 import하지 않는 순수 Analyzer. `ExecutionMemoryEntry`
+  (`memory/`)를 그대로 받지 않고, `intelligence/`가 스스로 정의한
+  `ExperienceRecord`로 변환된 값만 받는다 — Analyzer 순수성을
+  Import 경계로도 강제하기 위함이다.
+- **Deterministic + Immutable Input(사용자 조건, DoD)**: `ExperienceAnalyzer.
+  analyze()`는 현재 시각·난수·외부 상태를 참조하지 않아 같은 입력에
+  항상 같은 결과를 낸다(`stats`도 task_id 오름차순으로 고정). 입력
+  `ExperienceRecord`는 `@dataclass(frozen=True)`라 구조적으로
+  불변이고, Analyzer는 쓰기 메서드를 전혀 호출하지 않는다.
+- **`ExperienceIntelligenceService`(`intelligence/experience_service.py`)**:
+  `VaultAdapter` + `ExecutionMemoryStore`를 조합해 `ExecutionMemoryEntry`
+  →`ExperienceRecord` 변환 + Analyzer 호출 + Vault 노출(`publish()`
+  →`VaultAdapter.publish_experience_intelligence()`)까지 담당하는
+  얇은 조합 계층 — `RecommendationIntelligenceService`(M35)와 동일한
+  패턴. `*Service`로 끝나는 이름이라 §8 규칙 21의 Role 판정에서
+  `memory/` 접근이 허용된다.
+- **`ExecutionMemoryEntry`(M39 `memory/execution_memory_store.py`
+  확장)**: `ExecutionMemoryStore.query()`의 반환 타입을 domain의
+  `ExecutionMemory`에서 `memory/`가 스스로 정의하는
+  `ExecutionMemoryEntry`로 바꿨다 — `integration/vault_adapter.py`가
+  `TaskDocumentView`로 `domain.Task`를 감싸 노출하는 것과 같은
+  이유(경계를 넘는 자리에서는 domain 타입을 그대로 흘려보내지
+  않는다). `record()`는 여전히 domain의 `ExecutionMemory`를 받는다
+  (쓰기 쪽 호출자인 `runtime/execution/`은 domain 참조 제약이 없다).
+- **결과 노출**: `15 Project Intelligence/Experience Intelligence.md`
+  (M29~M35와 동일한 1-파일-1-리포트 관례). 매 `publish()` 호출마다
+  전체가 덮어써진다.
+- **범위 밖(YAGNI)**: 영속화(ADR-0053 유지, `InMemoryMemoryEngine`
+  그대로), embedding/score 등 Learning 전용 필드, Composition Root
+  (`web/server.py`) 배선 — M29~M34의 다른 순수 Intelligence Service
+  (Context/Session Resume/Workflow/Synthesis)와 동일하게, 실제
+  프로덕션 실행 경로에 자동 연결되는 것은 `RecommendationIntelligenceService`
+  가 필요로 하는 것들뿐이라는 기존 관례를 그대로 따른다. 새 Core
+  Domain Interface/Adapter 없음(27종 유지).
+
 ## 4. Mission → Workflow → Task → Step 계층 (ADR-0011)
 
 ```
@@ -2030,13 +2080,31 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
     자체는 별도 코드 패키지가 아니라 이 Connector의 호출자이므로,
     이 규칙은 실제로는 "`ConversationConnector` 밖에 이 접근 경로를
     또 만들지 않는다"는 의미로 강제된다 — §9 참고).
-21. **`intelligence/`(Intelligence Layer, ADR-0043, Milestone 29)는
-    `integration/`의 `VaultAdapter`/`AgentAdapter`에만 의존한다** —
-    `domain`/`interfaces`/`engines`/`vault`를 직접 참조하지 않는다.
+21. **`intelligence/`(Intelligence Layer, ADR-0043, Milestone 29;
+    Role 기반으로 재정의 — ADR-0055, Milestone 40)는 `domain`/
+    `interfaces`/`engines`/`vault`를 직접 참조하지 않는다**(무변경).
+    Read-Only 데이터 제공자 접근은 **역할(Role)**로 나뉜다 —
+    이름을 규칙에 나열하는 대신 "이 모듈이 무엇을 하는가"로
+    판단한다:
+    - `integration/`의 Adapter(`VaultAdapter`/`AgentAdapter`/
+      `KnowledgeAdapter`)는 패키지 전체에 계속 허용된다(M29부터의
+      기존 관례, M40에서 넓히지 않음).
+    - `memory/`(Memory Domain — §13.2, 저장/검색만 하고 판단하지
+      않는 컴포넌트)는 **`*Service`로 끝나는 클래스를 정의하는
+      모듈(오케스트레이션 역할)에만** 새로 허용한다(M40) —
+      `ExecutionMemoryStore` 같은 특정 클래스 이름을 규칙에 박아
+      넣지 않고, 앞으로 `memory/`에 무엇이 추가되든 "Service
+      역할인가"만으로 자동 적용되게 한다. `*Service` 클래스가 없는
+      모듈(Analyzer/값 객체)은 여전히 `memory/`를 import할 수 없다
+      — Analyzer의 순수성(Deterministic, 부작용 없음)을 그대로
+      강제한다.
     Intelligence Layer는 쓰기를 하지 않는 Read Only Query Layer이며,
-    Integration Layer가 이미 노출한 값을 읽어 집계·판단만 한다(새
-    비즈니스 로직 없음). `tests/intelligence/
-    test_intelligence_layering.py`가 `ast` 기반으로 이를 강제한다.
+    Integration/Memory Layer가 이미 노출한 값을 읽어 집계·판단만
+    한다(새 비즈니스 로직 없음). `tests/intelligence/
+    test_intelligence_layering.py`가 `ast` 기반으로 이를 강제한다 —
+    금지 패키지 검사(도메인 4종)와 Adapter 화이트리스트 검사에
+    더해, `memory/`를 import하는 모듈은 반드시 `*Service` 클래스를
+    가져야 한다는 검사가 추가됐다(M40).
 22. **Execution 결과의 Memory 기록은 `RecommendationExecutionService`
     → `ExecutionMemoryStore` → `MemoryEngine`** 순서로만 이루어진다
     (Milestone 39, ADR-0053) — §8 규칙 7(Agent → Context Manager →
@@ -2084,7 +2152,8 @@ src/ai_workspace/
 │                       #   (InMemoryAuthenticationManager, Milestone 18)
 ├── memory/            # Context Manager + Memory Engine 구현 (Milestone 2 이후)
 │                       #   + execution_memory_store.py (ExecutionMemoryStore,
-│                       #   Execution 결과 저장/조회, Milestone 39)
+│                       #   Execution 결과 저장/조회, Milestone 39;
+│                       #   query()는 ExecutionMemoryEntry 반환, Milestone 40)
 ├── events/            # Event Bus + Event Store 구현 (Milestone 2 이후)
 ├── interaction/        # Interaction Layer 구현 (Milestone 3 이후)
 ├── adapters/          # EngineAdapter 구현 (Milestone 3: claude_code.py, codex.py, gemini_cli.py)

@@ -15,6 +15,7 @@ from pathlib import Path
 from ai_workspace.vault.capability_report import write_capability_report
 from ai_workspace.vault.context_report import write_project_context_report
 from ai_workspace.vault.engine import VaultSaveEngine
+from ai_workspace.vault.experience_intelligence import write_experience_intelligence_report
 from ai_workspace.vault.intelligence_overview import write_intelligence_overview_report
 from ai_workspace.vault.intelligence_report import write_project_intelligence_report
 from ai_workspace.vault.models import VaultDocumentKind, VaultDocumentRequest
@@ -215,3 +216,10 @@ class VaultAdapter:
         Execution.md`에 덮어쓴다(ADR-0050, Milestone 36-T04). 렌더링
         로직은 갖지 않는다."""
         return write_recommendation_execution_report(self._vault_root, markdown)
+
+    def publish_experience_intelligence(self, markdown: str) -> Path:
+        """`intelligence/experience_service.py`가 렌더링한 Markdown을
+        `15 Project Intelligence/Experience Intelligence.md`에
+        덮어쓴다(ADR-0055, Milestone 40-T03). 렌더링 로직은 갖지
+        않는다."""
+        return write_experience_intelligence_report(self._vault_root, markdown)
