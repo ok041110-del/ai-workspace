@@ -12,6 +12,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from ai_workspace.vault.architecture_guardian import write_architecture_guardian_report
 from ai_workspace.vault.capability_report import write_capability_report
 from ai_workspace.vault.context_report import write_project_context_report
 from ai_workspace.vault.engine import VaultSaveEngine
@@ -223,3 +224,9 @@ class VaultAdapter:
         덮어쓴다(ADR-0055, Milestone 40-T03). 렌더링 로직은 갖지
         않는다."""
         return write_experience_intelligence_report(self._vault_root, markdown)
+
+    def publish_architecture_guardian(self, markdown: str) -> Path:
+        """`guardian/service.py`가 렌더링한 Markdown을 `15 Project
+        Intelligence/Architecture Guardian.md`에 덮어쓴다(ADR-0056,
+        Milestone 41-T02). 렌더링 로직은 갖지 않는다."""
+        return write_architecture_guardian_report(self._vault_root, markdown)

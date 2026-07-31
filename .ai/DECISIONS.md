@@ -3655,3 +3655,116 @@
   에 Milestone 40 절 신규 추가. 새 Core Domain Interface/Adapter
   없음(27종 유지). Composition Root 배선·영속화·Learning(Rule 반영)
   은 계속 범위 밖(YAGNI, M41 이후 논의).
+
+## ADR-0056: Architecture Guardian 도입 — 기존 5곳의 중복 ast 경계 검사를 순수 값 객체 Rule Registry로 통합, Vault 발행이 핵심 Output (Milestone 41)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 제안서 검토 후 3단계에 걸쳐
+  조건부 승인. ①제안서: Scope (a)통합+Read Only 리포트만, ②MDD
+  Review 1차: 역할 정의("canonical registry and evaluation engine")
+  확정 + ArchitectureRule을 확장 가능한 Value Object로/ArchitectureCheckResult
+  Domain Model 정의/Checker는 pytest를 모르는 순수 평가기로/Vault
+  Report를 핵심 Output으로, ③MDD Review 2차: 역할 정의를
+  "Guardian owns the executable representation of architectural
+  rules..."로 재확정 + ArchitectureRule ABC 제거(메서드 없는
+  immutable Rule 타입 집합으로)/GUARDIAN_RULES를 Final·immutable
+  tuple로/Connector 그룹 규칙은 무리하게 일반화하지 말고 제외 —
+  전부 반영)
+- 날짜: 2026-07-30
+- 배경: `docs/ARCHITECTURE.md` §13.2가 Guardian을 1급 Domain
+  어휘로 이미 예약해뒀지만 Scope/Output은 "착수 시점에 별도 제안"
+  으로 비워둔 상태였다(ADR-0054). Reuse First로 저장소를 확인한
+  결과, "아키텍처 규칙 위반 감시"는 이미 `tests/` 5곳(`test_
+  architecture_boundary.py`/`test_connector_layering.py`/`test_
+  conversation_connector_boundary.py`/`test_intelligence_layering.py`)
+  에 개별 구현·중복돼 있었다 — 전부 `ast` 기반, 전부 각자
+  `_imported_modules()` 헬퍼를 중복 구현. M41은 새 감시 로직을
+  만드는 Milestone이 아니라 이미 존재하는 것을 통합하는 Milestone
+  이라는 것이 이번 제안의 핵심 발견이다.
+- 결정:
+  1. **역할 정의를 `docs/ARCHITECTURE.md` §13.2 Guardian 행에 그대로
+     반영한다**: "Guardian owns the executable representation of
+     architectural rules. Architecture documentation defines the
+     rules; Guardian encodes them, evaluates conformance, and
+     publishes architectural health." — Guardian은 규칙을 정의하지
+     않는다(§8이 여전히 규칙의 소유자), 평가·공표만 한다.
+  2. **`guardian/models.py`** — `ArchitectureViolation`(위반 1건)/
+     `ArchitectureCheckResult`(규칙 1개의 평가 결과)/
+     `ArchitectureHealthReport`(전체 결과 + `all_passed` 프로퍼티,
+     이미 계산된 `passed` 값들의 단순 논리곱이라 새 판정 로직이
+     아님).
+  3. **`guardian/rules.py`** — `ArchitectureRule`은 ABC가 아니라
+     `ForbiddenPackageImportRule`/`AllowedImportPrefixRule`/
+     `ServiceRoleGatedImportRule` 3개 `frozen dataclass`의 Union
+     이다(메서드 없음, 순수 값 객체, 사용자 조건). 평가 로직은 전부
+     `checker.py`가 타입별로 분기해 담당 — Rule을 다형적 객체가
+     아니라 데이터로 유지해 새 Rule 종류가 필요할 때 이 Union에
+     타입 하나만 추가하면 된다(확장 가능성, 사용자 조건). `GUARDIAN_RULES:
+     Final[tuple[ArchitectureRule, ...]]`로 선언해 실행 중 변경
+     불가능한 Registry로 고정(사용자 조건).
+  4. **`guardian/checker.py`** — `evaluate(rules, src_root) ->
+     ArchitectureHealthReport`. `pytest`/`assert`를 전혀 쓰지 않는
+     순수 평가기다(사용자 조건) — `pytest` 테스트는 이 함수의 결과를
+     받아 자기 스스로 `assert`할 뿐이다.
+  5. **`guardian/service.py`의 `ArchitectureGuardianService`** —
+     `checker.evaluate()` + Vault 발행을 조합. **`publish()`가 핵심
+     진입점**(사용자 조건) — Guardian의 목적("공표한다")은 평가만
+     으로 완수되지 않는다는 것을 설계로 명시했다. `VaultAdapter.
+     publish_architecture_guardian()`(신규 메서드 1개)이 `15
+     Project Intelligence/Architecture Guardian.md`에 원자적으로
+     덮어쓴다.
+  6. **5곳 중 3개 형태에 자연스럽게 맞는 5개 규칙만 이전한다**:
+     `test_architecture_boundary.py`의 2개(Core Domain↔vault 개별
+     금지, `ForbiddenPackageImportRule`) + `test_intelligence_
+     layering.py`의 3개(금지 패키지/`ForbiddenPackageImportRule`,
+     Adapter 화이트리스트/`AllowedImportPrefixRule`, Role 기반
+     Memory 접근/`ServiceRoleGatedImportRule`, M40/ADR-0055 패턴
+     재사용). 두 파일의 나머지 테스트(`test_architecture_boundary.py`
+     의 "Integration Layer만 양쪽을 동시에 참조 가능")는 Guardian
+     결과를 `assert`하는 얇은 wrapper로 재작성됐다 — 각 테스트가
+     잡아내는 위반 내용은 변경 전과 100% 동일(회귀 없음이 최우선
+     검증 대상).
+  7. **`test_connector_layering.py`/`test_conversation_connector_
+     boundary.py`는 이번 범위에서 제외한다**(사용자 조건 3): 이
+     둘은 그룹 기반(Adapter/Peer Connector/Orchestrating Connector)
+     또는 단일 파일 기준 규칙이라, 위 3개 Rule 형태로 억지로
+     일반화하면 Rule 타입 자체가 특수 사례에 맞춰 뒤틀린다. 두
+     파일은 기존 `ast` 검사를 그대로 유지 — Guardian을 거치지
+     않는다.
+- 대안:
+  - **`ArchitectureRule`을 `evaluate()` 메서드를 가진 ABC + 구체
+    서브클래스로 설계** — 기각(사용자 조건 1). MDD Review 1차에서
+    제안했으나, 2차에서 "메서드 없는 immutable Rule 타입 집합"으로
+    재조정 — Rule을 순수 데이터로 유지하면 평가 로직이 `checker.py`
+    한 곳에만 있어 감사하기 쉽고, Rule 자체는 어떤 부작용도 가질 수
+    없다는 보장이 타입 시스템 수준에서 생긴다.
+  - **`GUARDIAN_RULES`를 일반 list로 선언** — 기각(사용자 조건 2).
+    list는 실행 중 append/remove가 가능해 "정본 Registry"라는
+    Guardian의 정의(규칙을 정의하지 않고 평가만 한다)와 어긋난다 —
+    `Final` + `tuple`로 구조적으로 불변임을 보장한다.
+  - **모든 5곳(Connector 그룹 규칙 포함)을 억지로 통합** — 기각
+    (사용자 조건 3). 그룹 기반 화이트리스트를 표현하려면 기존 3개
+    Rule 형태에 없는 새 필드·새 의미론이 필요해 Rule 타입이
+    비대해진다 — 억지 일반화보다 정직하게 범위를 좁히는 것을
+    택했다.
+  - **CI 강제 게이트 신설(Scope (b))** — 기각(제안서 단계 결론
+    유지, YAGNI). `pytest` 통과가 이미 §8.6 Merge 조건에 포함돼
+    있어 "위반하면 병합이 막힌다"는 새로 만들 게 없다.
+- 이유: Guardian이라는 이름이 예약만 되어 있던 §13.2의 빈자리를,
+  새 코드를 발명하지 않고 이미 검증된 5곳의 로직을 통합해서
+  채운다 — MDD Review Gate의 Reuse First 원칙을 "코드 감시 코드"
+  자체에도 그대로 적용한 사례다. Rule을 순수 데이터로, Checker를
+  pytest 비의존 순수 함수로 분리해 "규칙을 실행 가능한 명세로
+  공식화"하는 것과 "그 명세를 pytest로 강제하는 것"을 완전히
+  분리했다 — 후자는 이미 §8.6이 하고 있으므로 새로 만들지 않았다.
+- 결과/영향: `guardian/models.py`/`rules.py`/`checker.py`/`service.py`
+  (전부 신규)/`vault/architecture_guardian.py`(신규)/`integration/
+  vault_adapter.py`(확장 1건)/`tests/integration_layer/test_
+  architecture_boundary.py`(확장, 2개 테스트 Guardian 경유)/`tests/
+  intelligence/test_intelligence_layering.py`(확장, 3개 테스트
+  Guardian 경유) 구현 완료, 신규 테스트 18개 포함 pytest 1051개,
+  ruff, mypy(203 source files) 전부 통과. `docs/ARCHITECTURE.md`
+  §3.33(신규)/§13.2 Guardian 행(내용 확정) 갱신, `.ai/TASKS.md`에
+  Milestone 41 절 신규 추가. 새 Core Domain Interface/Adapter
+  없음(27종 유지), 새 Layer 1개(`guardian/`, §13.2가 이미 예약해
+  둔 자리). Connector 그룹 규칙 편입·CI 강제 게이트는 범위 밖
+  (YAGNI, M42 이후 논의).

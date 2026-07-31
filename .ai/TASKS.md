@@ -12326,6 +12326,114 @@ Only 요약)"의 분리를 지켰다.
 
 ---
 
+## Milestone 41 — Architecture Guardian
+
+**목표**(2026-07-30 사용자 승인, ADR-0056): `docs/ARCHITECTURE.md`
+§13.2가 예약해 둔 Guardian Domain의 내용을 채운다. 역할 정의: "Guardian
+owns the executable representation of architectural rules. Architecture
+documentation defines the rules; Guardian encodes them, evaluates
+conformance, and publishes architectural health." Scope는 (a)기존
+`tests/` 5곳에 흩어진 `ast` 경계 검사 통합 + Vault Read Only 리포트만
+— CI 강제 게이트(b)는 이미 §8.6 Merge 조건이 하고 있어 범위 밖.
+
+**MDD Review 요약(제안서 → 2차에 걸친 조건부 승인)**
+
+- **Scope(YAGNI)**: 새 위반 탐지 로직 0개 — 기존 5곳의 규칙만 옮긴다.
+  CI 강제 게이트 신설 없음(이미 `pytest` 통과가 §8.6 Merge 조건).
+- **Reuse(핵심 발견)**: "아키텍처 규칙 위반 감시"는 이미 `test_
+  architecture_boundary.py`/`test_connector_layering.py`/`test_
+  conversation_connector_boundary.py`/`test_intelligence_layering.py`
+  4개 파일(5개 이상의 개별 테스트)에 중복 구현돼 있었다 — 전부
+  `ast` 기반, 전부 각자 `_imported_modules()` 재구현. M41은 새로
+  만드는 Milestone이 아니라 통합하는 Milestone.
+- **Interface/Service/Adapter**: 새 Core Domain Interface 0개.
+  `ArchitectureGuardianService` 1개 신규(Vault 발행이 핵심 진입점,
+  사용자 조건). 새 Adapter 0개 — `VaultAdapter`에 `publish_
+  architecture_guardian()` 1개만 추가.
+- **Layer**: 새 Layer 1개(`guardian/`) — §13.2가 Guardian을 Intelligence
+  와 별개 Domain으로 이미 예약해 둔 자리를 채우는 것이라 새 Layer
+  도입 자체는 이미 승인된 결정.
+
+**결정(ADR-0056, 상세 근거는 `.ai/DECISIONS.md` 참고, 2차례 조건부
+승인 전부 반영)**
+
+- `guardian/models.py`(신규) — `ArchitectureViolation`/
+  `ArchitectureCheckResult`/`ArchitectureHealthReport`(`all_passed`
+  프로퍼티, 새 판정 로직 아님).
+- `guardian/rules.py`(신규) — `ArchitectureRule`은 ABC가 아니라
+  `ForbiddenPackageImportRule`/`AllowedImportPrefixRule`/
+  `ServiceRoleGatedImportRule` 3개 메서드 없는 `frozen dataclass`의
+  Union(사용자 조건: ABC 제거). `GUARDIAN_RULES: Final[tuple[...]]`
+  로 실행 중 불변 Registry 고정(사용자 조건).
+- `guardian/checker.py`(신규) — `evaluate(rules, src_root)`. `pytest`/
+  `assert` 없는 순수 평가기(사용자 조건).
+- `guardian/service.py`(신규) — `ArchitectureGuardianService`.
+  `publish()`가 핵심 진입점(사용자 조건) — `VaultAdapter.publish_
+  architecture_guardian()`(신규 메서드 1개)로 위임.
+- `vault/architecture_guardian.py`(신규) — `15 Project Intelligence/
+  Architecture Guardian.md` 원자적 덮어쓰기.
+- **이전한 5개 규칙**(기존 5곳 중 3개 Rule 형태에 자연스럽게 맞는
+  것만): `test_architecture_boundary.py`의 2개(Core Domain↔vault
+  개별 금지) + `test_intelligence_layering.py`의 3개(금지 패키지/
+  Adapter 화이트리스트/Role 기반 Memory 접근, M40/ADR-0055 재사용).
+  두 파일은 이 규칙들에 한해 Guardian 결과를 `assert`하는 얇은
+  wrapper로 재작성 — 잡아내는 위반 내용은 100% 동일(회귀 없음).
+- **의도적으로 제외한 것(사용자 조건)**: `test_connector_layering.py`
+  (Adapter/Peer Connector/Orchestrating Connector 그룹 화이트리스트)
+  와 `test_conversation_connector_boundary.py`(단일 파일 기준
+  규칙)는 3개 Rule 형태로 자연스럽게 표현되지 않아 억지로
+  일반화하지 않고 제외 — 두 파일은 기존 `ast` 검사 그대로 유지.
+  `test_architecture_boundary.py`의 "Integration Layer만 양쪽을
+  동시에 참조 가능" 검사도 같은 이유로 미이전.
+
+**테스트**: `tests/guardian/test_models.py`(신규 3개)/`test_rules.py`
+(신규 3개 — 불변 tuple/이름 중복 없음/frozen)/`test_checker.py`
+(신규 7개 — 3개 Rule 타입별 통과/위반 케이스 + 순서 보존)/
+`test_service.py`(신규 3개 — 실제 소스 트리 평가/Vault 발행/Markdown
+렌더링), `tests/integration_layer/test_vault_adapter.py`(신규 1개),
+`tests/integration_layer/test_architecture_boundary.py`(기존 2개
+테스트가 Guardian 경유하도록 수정, 1개는 그대로), `tests/intelligence/
+test_intelligence_layering.py`(기존 3개 테스트가 Guardian 경유하도록
+수정 + 신규 1개 — Registry 누락 방지 안전장치). `pytest` 1051개
+(기존 1033개 + 신규 18개) 전부 통과, `ruff check src tests` clean,
+`mypy`(203 source files) clean.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Scope (a)통합+Vault Read Only 리포트만 — CI 게이트 신설 없음 | ✅ |
+| 2 | `ArchitectureRule`이 메서드 없는 immutable 값 객체(ABC 아님) | ✅ |
+| 3 | `GUARDIAN_RULES`가 `Final`+`tuple`(실행 중 변경 불가) | ✅ |
+| 4 | `guardian/checker.py`가 `pytest`/`assert`를 전혀 참조하지 않음 | ✅ |
+| 5 | `ArchitectureGuardianService.publish()`가 핵심 진입점(부가 기능 아님) | ✅ |
+| 6 | Connector 그룹 규칙 2개는 억지로 일반화하지 않고 범위 제외 | ✅ |
+| 7 | 이전된 5개 규칙이 기존과 100% 동일한 위반을 잡아냄(회귀 없음) | ✅ |
+| 8 | 새 Core Domain Interface/Adapter 0개(27종 유지) | ✅ |
+| 9 | 기존 pytest 전량 회귀 없음 + 신규 테스트, `ruff`/`mypy` 통과 | ✅ |
+| 10 | `docs/ARCHITECTURE.md`(§3.33/§13.2)/ADR-0056/`.ai/TASKS.md`/Vault 최신화 | ✅ |
+
+**개선 여지(참고용, 이번에 처리하지 않음)**: Connector 그룹 규칙
+(`test_connector_layering.py`/`test_conversation_connector_boundary.py`)
+의 Guardian 편입은 그룹 기반 Rule 형태가 필요해지는 시점에 별도
+논의. CI 강제 게이트, Composition Root 배선도 범위 밖으로 남아
+M42 이후 논의 대상이다.
+
+**Milestone 41(Architecture Guardian) 전체 완료.**
+
+**사용자 승인(2026-07-30)**: 제안서 → MDD Review 2차(역할 정의 재확정
++ ArchitectureRule ABC 제거/Final tuple/Connector 규칙 제외) →
+구현 완료까지 확인해 **Milestone 41(Architecture Guardian) 공식
+완료(Approved)**. "M29(Project Intelligence)→…→M40(Experience
+Intelligence)→M41(Architecture Guardian)"로 이어지며, §13.2가
+예약해 둔 세 번째 Domain(Guardian)이 처음으로 실제 코드를 갖췄다
+— Learning Engine만 남아 "Automation Core" 명명 논의가 계속된다.
+
+**다음은 Milestone 42** — 세부 Task는 착수 시점에 별도 제안·승인
+후 정의한다.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
