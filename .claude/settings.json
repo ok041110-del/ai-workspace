@@ -1,0 +1,6 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "PYTHONPATH=src python3 -m ai_workspace.observability.statusline_main"
+  }
+}

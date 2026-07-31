@@ -220,3 +220,24 @@ def test_publish_architecture_guardian_writes_markdown(tmp_path: Path) -> None:
 
     assert path == vault_root / "15 Project Intelligence" / "Architecture Guardian.md"
     assert path.read_text(encoding="utf-8") == "# Architecture Guardian\n\ncontent\n"
+
+
+def test_report_last_modified_returns_none_when_missing(tmp_path: Path) -> None:
+    vault_root = _make_vault(tmp_path)
+    adapter = VaultAdapter(vault_root)
+
+    mtime = adapter.report_last_modified(
+        "15 Project Intelligence", "Recommendation Execution.md"
+    )
+    assert mtime is None
+
+
+def test_report_last_modified_returns_mtime_when_published(tmp_path: Path) -> None:
+    vault_root = _make_vault(tmp_path)
+    adapter = VaultAdapter(vault_root)
+    adapter.publish_recommendation_execution("# Recommendation Execution\n\ncontent\n")
+
+    mtime = adapter.report_last_modified("15 Project Intelligence", "Recommendation Execution.md")
+
+    assert mtime is not None
+    assert mtime > 0

@@ -4142,3 +4142,211 @@ recommendation, not a mandatory decision.* — 이 한 문장이 M35
   Adapter 없음(27종 유지). `pytest` 1073개(9개 신규) 통과, `ruff`/
   `mypy` 통과, `guardian.checker.evaluate()` all_passed 유지,
   `build_app()` 실제 조립 스모크 테스트 통과.
+
+## ADR-0062: Workspace Observability — Claude Runtime + Pipeline 상태를 StatusLine으로 반영(Milestone 45)
+
+- 상태: 승인됨 (2026-07-31, 사용자가 M44까지 완성된 Recommendation
+  Flow 위에서 "결과만 보이던 것을 과정도 실시간으로 보이게 한다"는
+  목표와 함께 표시 항목·설계 원칙(`WorkspaceRuntimeSnapshot` 읽기
+  전용 모델, StatusLine은 표시만)까지 제시하고 T01~T04 프로세스로
+  진행을 요청 — 검토 결과에 따라 진행하도록 사전 승인)
+- 날짜: 2026-07-31
+- 배경: M35~M44로 Recommendation(M35)→Adaptation(M42)→Explainability(M44)
+  →Orchestration(M43)→Execution(M36)→Memory(M39)→Experience(M40)
+  파이프라인이 완성됐지만, 이 모든 과정은 Vault 문서나 pytest
+  로그로만 사후 확인 가능하고 Claude Code 세션 안에서 지금 무엇이
+  진행 중인지 실시간으로 볼 방법이 없었다. 새 AI 판단이나 자동화를
+  추가하는 것이 아니라, 이미 있는 상태를 사람이 볼 수 있게 만드는
+  것이 목적이다.
+- 결정:
+  1. **Domain Analysis(T01)**: `Observability`는 §13.2 4개 핵심
+     Domain 중 어느 것도 아니다 — Intelligence와 같이 Read Only지만
+     "지금 상황이 어떤가"를 새로 판단(분석·요약)하지 않고 이미
+     계산된 값의 존재 여부만 반영한다는 점에서 다르다. Guardian도
+     아니다 — 아키텍처 규칙 준수를 평가하지 않는다. 재사용 사례가
+     이번 1건(StatusLine)뿐이므로 `Adaptation`/`Explainability`/
+     `Orchestration`과 같은 급의 **Behavioral Concept**로 §13.3에
+     등재하고, 1급 Domain(§13.2) 승격은 재사용 사례가 쌓일 때(예:
+     Dashboard Observability) 재검토한다.
+  2. **Architecture Review(T02)**: 새 Core Domain Interface/Adapter를
+     만들지 않는다. `VaultAdapter`에 읽기 전용 메서드
+     `report_last_modified()` 1개만 추가(Reuse First — 새 Adapter
+     대신 기존 Adapter 확장)해 Vault 산출물의 존재/최신 여부를
+     조회한다. `intelligence/`에 얹지 않고 별도 `observability/`
+     패키지를 새로 둔다 — Intelligence는 `VaultAdapter`/`AgentAdapter`
+     읽기 의존만 허용하는 좁은 계약인데, Observability의 1차
+     데이터 소스는 Claude Code StatusLine stdin JSON(Vault/Agent와
+     무관한 외부 세션 정보)이라 그 계약에 억지로 끼워 맞추면 의미가
+     흐려진다(Guardian이 Read Only이면서도 별도 패키지를 받은
+     선례와 동일한 논리).
+  3. **Detailed Design(T03) — Phase 1의 정직한 한계**: 7단계 중
+     Adaptation/Orchestration은 별도 Vault 산출물이 없다(M42/M43
+     Domain Analysis에서 이미 확인된 사실 — 둘 다 다른 산출물에
+     구조적으로 포함됨) → `STRUCTURAL_INCLUDED`로 표시. Memory(M39)
+     는 `InMemoryMemoryEngine` 기반이라 프로세스 재시작 시 사라지고
+     Vault에도 영속화되지 않아, 별도 프로세스로 실행되는 StatusLine
+     에서는 조회할 수 없다 → `NOT_OBSERVABLE`로 표시하고 이유를
+     명시한다. 실제로 관측 가능한 4단계(Recommendation/Explainability/
+     Execution/Experience)만 Vault 문서 존재 여부(`report_last_modified()`)
+     로 `OBSERVED_DONE`/`OBSERVED_NOT_YET`을 판정한다 — 값을 지어내지
+     않는다는 원칙(사용자 요청 "추정값은 사용하지 않는다")을 그대로
+     지킨다. Claude Runtime 정보(Model/Effort/Context 사용량/
+     Input·Output Tokens)는 Claude Code StatusLine stdin JSON의
+     공식 문서화된 필드(`model.display_name`/`effort.level`/
+     `context_window.*`)만 그대로 옮긴다 — 제공되지 않는 필드(예:
+     effort를 지원하지 않는 모델)는 `None`으로 남기고 추정하지 않는다.
+  4. **Implementation Plan(T04)**: `observability/snapshot.py`
+     (`WorkspaceRuntimeSnapshot`/`ClaudeRuntimeInfo`/`WorkspaceInfo`/
+     `PipelineStageState`/`PipelineStageStatus`, 메서드 없는 값
+     객체만), `observability/claude_runtime_analyzer.py`/
+     `pipeline_stage_analyzer.py`/`workspace_info_analyzer.py`(3개
+     순수 Analyzer), `observability/runtime_snapshot_service.py`
+     (`RuntimeSnapshotService`, 3개 Analyzer 조합만), `observability/
+     statusline_renderer.py`(`StatusLineRenderer`, 순수 포맷팅),
+     `observability/statusline_main.py`(진입점 — stdin 파싱, 어떤
+     예외도 밖으로 내지 않고 항상 한 줄 출력). `.claude/settings.json`
+     신규(`statusLine.command`로 배선). `WorkspaceInfo.current_workflow`
+     는 §13.2 Workflow와 혼동을 피하기 위해 근거 없이 채우지 않고
+     Phase 1은 항상 `None`(사용자가 "선택"으로 표시한 항목, Phase 2
+     후보로 명시).
+- 대안:
+  - **`intelligence/`에 그대로 얹는다** — 기각. Intelligence의
+    좁은 의존 계약(§13.2, `VaultAdapter`/`AgentAdapter`만)과
+    Observability의 실제 데이터 소스(Claude Code 세션 stdin)가
+    맞지 않는다 — 억지로 맞추면 Intelligence의 "판단" 책임과
+    Observability의 "이미 있는 것을 보여주기"가 코드에서 구분되지
+    않는다.
+  - **`runtime/`(기존 Execution/Agent Runtime 패키지)를 재사용한다**
+    — 기각. `runtime/`은 이미 Agent Runtime/Engine Runtime/
+    Execution/Automation을 가리키는 확립된 이름(§13.6 디렉터리명↔
+    Domain 1:1 대응)이라, Claude Code 세션 Runtime이라는 전혀 다른
+    의미로 재사용하면 이름만 보고 책임을 유추할 수 없게 된다.
+  - **각 단계(Adaptation/Orchestration/Memory)에 새 상태 기록
+    (Instrumentation)을 추가해 완전한 실시간 추적을 만든다** —
+    기각(Phase 2 후보로만 문서화). 기존 Domain의 책임을 변경/추가
+    하는 것이라 이번 Milestone의 목표("새로운 AI 판단이나 자동화를
+    구현하는 것이 아니다")와 사용자가 명시한 범위(기존 Domain 책임
+    변경 금지)를 벗어난다 — 대신 Phase 1은 관측 가능한 것만
+    정직하게 관측한다.
+- 이유: M44까지 안정화된 Recommendation 계열 코드/판단 로직을 전혀
+  건드리지 않고, 이미 존재하는 Vault 산출물과 Claude Code가 이미
+  제공하는 세션 정보만 읽어 실시간 가시성을 얻을 수 있어 구현
+  난이도가 낮고 리스크가 없다. Analyzer/Service/Renderer 분리는
+  ADR-0057 역할 규칙과 §13.6 명명 규칙에 그대로 부합한다.
+- 결과/영향: `observability/`(신규 패키지: `snapshot.py`/
+  `claude_runtime_analyzer.py`/`pipeline_stage_analyzer.py`/
+  `workspace_info_analyzer.py`/`runtime_snapshot_service.py`/
+  `statusline_renderer.py`/`statusline_main.py`), `integration/
+  vault_adapter.py`(`report_last_modified()` 1개 메서드 추가),
+  `.claude/settings.json`(신규, `statusLine` 배선), `docs/ARCHITECTURE.md`
+  §13.3/§13.4/§3.37(신규)/헤더 상태 갱신. Vault 신규 발행 없음(Phase 1은
+  StatusLine 전용, Dashboard/Web UI는 범위 밖). 새 Core Domain
+  Interface/Adapter 없음(27종 유지). `pytest` 1090개(17개 신규)
+  통과, `ruff`/`mypy` 통과, `guardian.checker.evaluate()` all_passed
+  유지, `build_app()` 실제 조립 스모크 테스트 통과.
+
+## ADR-0063: Workspace Observability 확장 — Execution Environment(Git/Guardian/Vault/MCP) 관찰(Milestone 45 확장)
+
+- 상태: 승인됨 (2026-07-31, 사용자가 M45(Claude Runtime + Pipeline
+  Observability)를 "AI Workspace Runtime"뿐 아니라 "Execution
+  Environment"까지 확장하도록 요청 — 관측 가능한 필드를 먼저 조사한
+  뒤 추정값 없이 사용 가능한 항목만 구현하도록 명시적으로 조건을
+  제시하고 T01~T04 프로세스로 진행 요청)
+- 날짜: 2026-07-31
+- 배경: ADR-0062(M45)는 Claude Runtime(Model/Effort/Context)과
+  Recommendation 파이프라인 7단계만 관찰했다. 실제로 이 파이프라인이
+  "어떤 환경에서" 실행되는지(Git 브랜치/Working Tree 상태, Guardian
+  아키텍처 준수, Vault 문서 상태, MCP 연결 상태 — 특히 Obsidian MCP)
+  는 아직 보이지 않았다. 구현 전에 Claude Code/MCP가 실제로 무엇을
+  공식 제공하는지부터 조사(공식 문서 확인)하고, 확인되지 않은 것은
+  추정하지 말고 Not Available로 남기는 것을 전제 조건으로 진행했다.
+- 결정:
+  1. **Domain Analysis(T01)**: 이 확장은 새 Domain도, 새 Behavioral
+     Concept도 아니다 — ADR-0062가 이미 §13.3에 등재한 `Observability`
+     를 그대로 확장한 것(관찰 대상이 늘었을 뿐 책임의 성격은 동일:
+     이미 있는 상태를 읽기만 하고 새 판단을 하지 않음). §13.3에 새
+     행을 추가하지 않는다.
+  2. **Architecture Review(T02) — 조사 결과(공식 문서 확인)**:
+     - StatusLine stdin JSON에는 MCP 관련 필드가 전혀 없음(공식
+       문서 확인) — MCP는 별도 경로가 필요.
+     - `claude mcp list`(공식 CLI)가 서버별 연결 상태를 사람이 읽는
+       텍스트로 출력(`✔`=Connected/`✘`=Failed·Connection error/
+       `!`=Needs auth/`⏸`=Pending approval, JSON 옵션 없음, 공식
+       문서 확인). `.mcp.json`(프로젝트 범위 설정 파일, 공식 문서화된
+       스키마)이 "설정된 서버 목록"을 알려준다.
+     - Hook(`PostToolUse`) payload는 `tool_name`이 `mcp__<server>__
+       <tool>` 형식으로 MCP 서버/도구를 식별할 수 있지만, 별도 에러
+       필드나 "지금 연결 중인 서버" 상태는 제공하지 않음(공식 문서
+       확인) — Last MCP Call/Last Error를 안전하게 관측할 공식 경로
+       없음.
+     - `pytest`/`ruff`/`mypy`/Coverage 전체 재실행은 수 초 이상
+       걸려 StatusLine 갱신(세션 이벤트마다)마다 다시 실행하면
+       지연·타임아웃 위험이 큼 — `guardian.checker.evaluate()`만
+       AST 기반 순수 평가라 저비용으로 재사용 가능, 나머지는 재실행
+       금지.
+     - 새 Core Domain Interface/Adapter 없음(27종 유지). `observability/`
+       패키지(M45)를 그대로 확장 — 새 패키지 분리 불필요.
+  3. **Detailed Design(T03) — 관측 가능/불가능 항목 확정**:
+     - **관측 가능(구현)**: Git(`current_branch`/`working_tree_dirty`/
+       `ahead`/`behind`/`last_commit_summary`, `git` 하위 명령만),
+       Guardian(`guardian_all_passed`, 재평가 / `pytest_failed_count`,
+       `.pytest_cache/v/cache/lastfailed` 마지막 로컬 실행 결과만),
+       Vault(`vault_connected`/`current_milestone`(M45 재사용)/
+       `current_adr`/`last_modified_epoch`, `VaultAdapter.
+       report_last_modified()`만), MCP(`mcp_enabled`/`configured_servers`,
+       `.mcp.json`만 / `connected_servers`, `claude mcp list` 문서화된
+       기호만 매칭, 형식 불일치 시 `None`).
+     - **관측 불가(Not Available, 이유 명시)**: `ruff_status`/
+       `mypy_status`/`coverage_percentage`(재실행 비용), MCP
+       `active_server`(정적 조회로 "지금 이 순간" 알 수 없음)/
+       `available_tools`(공식 출력에 보장된 형식 없음)/`last_mcp_call`/
+       `last_mcp_error`(공식 로그 미문서화, Hook 신규 도입은 별도
+       승인 필요), Vault `current_pr`(GitHub API 네트워크+인증
+       필요), Workspace `current_task`(상시 실행 프로세스가 아니라
+       계측 불가, Domain 책임 변경 금지와 충돌).
+     - `ahead`/`behind`는 `git fetch`를 하지 않음(네트워크 호출 없음
+       원칙) — 마지막으로 로컬에 캐시된 원격 추적 브랜치 기준.
+  4. **Implementation Plan(T04)**: `observability/git_runtime_analyzer.py`/
+     `guardian_runtime_analyzer.py`/`vault_runtime_analyzer.py`/
+     `mcp_runtime_analyzer.py`(신규 4개 Analyzer) + `snapshot.py`
+     확장(`GitRuntimeInfo`/`GuardianRuntimeInfo`/`VaultRuntimeInfo`/
+     `McpRuntimeInfo`, `WorkspaceInfo.current_task` 필드 추가) +
+     `RuntimeSnapshotService`/`StatusLineRenderer` 확장(4개 Analyzer
+     조합 + 4개 줄 렌더링).
+- 대안:
+  - **MCP 연결 상태를 `~/.cache/claude-cli-nodejs/.../mcp-logs-*`
+    같은 비공식 로그 디렉터리에서 읽는다** — 기각. 실제로 관찰되긴
+    하지만 공식 문서에 없는 내부 구현 세부사항이라 버전이 바뀌면
+    깨질 수 있고, 이번 세션(Claude Code on the web) 환경 한정일
+    수 있어 "추정하지 않는다"는 원칙과 맞지 않는다. 문서화된
+    `.mcp.json`/`claude mcp list`만 사용한다.
+  - **PostToolUse Hook을 새로 추가해 MCP 호출/에러 이력을 로컬
+    파일에 기록한다** — 기각(Phase 2 후보로만 문서화). 이미 있는
+    상태를 읽는 것이 아니라 새로운 기록 메커니즘을 도입하는
+    것이라 "새로운 자동화/계측 추가 없음" 원칙과 이번 승인 범위를
+    벗어난다 — 필요하면 별도 제안·승인을 받는다.
+  - **`ruff`/`mypy`를 매 StatusLine 갱신마다 실행한다** — 기각.
+    수백 밀리초~수 초가 걸려 StatusLine이 매 세션 이벤트마다
+    호출된다는 점(공식 문서 확인)과 충돌 — 응답 지연/타임아웃
+    위험이 실사용성을 해친다.
+  - **Git `ahead`/`behind`를 위해 `git fetch`를 먼저 실행한다** —
+    기각. 네트워크 호출이 되어 Observability의 "네트워크 호출
+    없음" 원칙(§3.37/ADR-0062)과 충돌하고, StatusLine 응답이
+    네트워크 상태에 좌우된다.
+- 이유: 확장 대상(Git/Guardian/Vault/MCP) 모두 공식 문서 또는 이미
+  존재하는 Vault/Adapter 경로로 안전하게 읽을 수 있는 부분과, 공식
+  경로가 없어 정직하게 Not Available로 남겨야 하는 부분을 명확히
+  구분했다 — 추정값을 배제하면서도 실제로 유용한 관찰(Git 상태/
+  Guardian 준수/Vault 최신성/MCP 설정)을 추가할 수 있다.
+- 결과/영향: `observability/`(4개 파일 추가: `git_runtime_analyzer.py`/
+  `guardian_runtime_analyzer.py`/`vault_runtime_analyzer.py`/
+  `mcp_runtime_analyzer.py`), `observability/snapshot.py`(`GitRuntimeInfo`/
+  `GuardianRuntimeInfo`/`VaultRuntimeInfo`/`McpRuntimeInfo` 추가,
+  `WorkspaceInfo.current_task` 필드 추가), `observability/
+  runtime_snapshot_service.py`/`statusline_renderer.py`(확장),
+  `docs/ARCHITECTURE.md` §3.38(신규)/헤더 상태 갱신. 새 Core Domain
+  Interface/Adapter 없음(27종 유지, `VaultAdapter`/`guardian.checker`
+  기존 계약 재사용만). Vault 신규 발행 없음(StatusLine 전용 유지).
+  `pytest` 1108개(18개 신규) 통과, `ruff`/`mypy` 통과,
+  `guardian.checker.evaluate()` all_passed 유지, `build_app()` 실제
+  조립 스모크 테스트 통과.
