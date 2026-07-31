@@ -24,7 +24,7 @@ _VAULT_ROOT = Path(__file__).resolve().parents[2]
 # `[[...]]` 문법을 설명하기 위해 예시로 쓰는 텍스트 — 실제 문서를 가리키는
 # Backlink가 아니다(반복적으로 수동 검증에서도 확인된 오탐, PREPARATION_SUMMARY
 # 참고). 새로운 진짜 깨진 링크만 실패하도록 이 목록만 허용한다.
-_KNOWN_PROSE_EXAMPLE_LINKS = {"이중 대괄호", "링크", "문서 제목", ".."}
+_KNOWN_PROSE_EXAMPLE_LINKS = {"이중 대괄호", "링크", "문서 제목", "..", "WikiLink"}
 
 
 def test_vault_root_exists_and_is_readable() -> None:

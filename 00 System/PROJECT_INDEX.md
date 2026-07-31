@@ -26,6 +26,7 @@ Router 역할만 한다. 프로젝트 설명은 [[AI_CONTEXT]], 운영 규칙은
 | 과거 결정("왜 이렇게 했는가")이 궁금하다 | [[Decisions Index]] → 더 상세하면 [[ADR Index]] |
 | 특정 ADR 전문이 필요하다 | [[ADR Index]]에서 항목 확인 → GitHub `.ai/DECISIONS.md` 원문 |
 | 과거 Milestone 이력이 궁금하다 | [[Milestones Index]] |
+| Vault 구조/Metadata/Color/Link 원칙이 궁금하다(Information Architecture) | [[Vault Information Architecture]] |
 | 개별 Task 진행 상태를 Obsidian에서 관리하고 싶다 | [[Template - Task]] → [[Milestones Index]] |
 | Mobile(M23) 관련 작업 | [[iOS Design]] / [[Android Placeholder]] |
 | 프롬프트를 어떻게 짧게 쓸지 모르겠다 | [[PROMPT_PROFILE]] |
