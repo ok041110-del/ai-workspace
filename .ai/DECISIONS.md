@@ -4004,3 +4004,70 @@
   (3개 신규 + 기존 테스트 파라미터 갱신), `ruff`/`mypy` 통과,
   `guardian.checker.evaluate()` all_passed 유지. `build_app()` 실제
   조립 스모크 테스트 통과.
+
+## ADR-0060: Recommendation Vocabulary Decision — Domain Vocabulary 재검토 후 "Recommendation" 유지 확정 (문서화 전용)
+
+- 상태: 승인됨 (2026-07-31, 사용자가 M43 완료 후 "Recommendation"이라는
+  용어 자체가 이 책임에 가장 적합한지 재검토를 제안 — T02 Domain
+  Vocabulary Analysis로 4개 대안과 비교한 뒤 유지로 결론, 사용자가
+  ADR 제목을 "Recommendation Vocabulary Retained"에서
+  "Recommendation Vocabulary Decision"으로 일반화할 것과 Context/
+  Considered Alternatives/Decision/Consequences 4개 절 구성을
+  권고해 반영)
+- 날짜: 2026-07-31
+
+### Context
+
+M43(Recommendation Orchestration) 완료 이후 Recommendation의
+책임과 경계가 M35~M43 전 구간에서 충분히 명확해졌다 — 이 시점에
+"Recommendation"이라는 용어 자체가 이 책임에 가장 적합한지, 아니면
+"제안(Suggest)"에 더 가까운 것은 아닌지 재검토할 좋은 시점이라는
+사용자 제안에 따라 Domain Vocabulary Migration 절차(단순 Rename이
+아니라 T02 분석 → 비교 → ADR 결정 → 결정 시에만 전체 리네이밍)로
+다룬다.
+
+### Considered Alternatives
+
+`src/ai_workspace/` 전수 검색으로 각 후보의 기존 충돌 여부를 먼저
+확인했다.
+
+| 후보 | 기존 충돌 | 책임과의 적합도 | 판정 |
+|---|---|---|---|
+| **Recommendation**(현재) | 없음 — M35(2026-07-30) 도입 이후 이 개념 전용으로만 일관되게 쓰임 | "이유(`reason`) 있는 비구속적 조언"이라는 뜻이 `ExecutionGate`(M36)가 별도로 승인해야 실행된다는 구조와 정확히 일치 | 유지 |
+| **Suggest/Suggestion** | 코드 내 사용 0건 | Recommendation과 사실상 동의어 — 경계를 더 명확히 하는 지점 없음 | 실질적 이득 없음 |
+| **Selection** | `EngineSelectionPolicy`/`EngineSelectionDecision`(M17/18, "후보 Engine 중 하나를 고른다")과 충돌 | "5개 소스 중 하나를 고른다"는 표면적 유사성은 있으나 Engine Selection은 완전히 다른 실행 메커니즘을 가리키는 확립된 용어 | 기존 의미와 충돌 |
+| **Decision** | `GateDecision`/`ApprovalDecision`/`EngineSelectionDecision`/`BudgetDecision`/`LLMPolicyDecision`/`RetryDecision` — 이미 6개나 확립된 `*Decision`(정책의 확정적 판정) 접미사 패턴과 충돌 | 의미도 부정확 — Recommendation은 비구속적인데 "Decision"은 확정된 판정을 뜻해, Gate가 담당하는 실제 Decision(`GateDecision`)과의 구분이 흐려짐 | 기존 의미와 충돌 + 의미상 부정확 |
+| **Proposal** | 코드에는 없지만 `.ai/TASKS.md`/`.ai/DECISIONS.md`에서 "Milestone Proposal(T04 제안서)"이라는 프로젝트 메타 프로세스 용어로 이미 8회 이상 확립 | 뜻 자체는 나쁘지 않으나 Domain 용어와 프로세스 용어가 같은 단어를 쓰면 향후 문서에서 혼동 위험 | 기존 의미와 충돌(프로세스 어휘) |
+
+### Decision
+
+**"Recommendation"을 AI Workspace의 공식 Domain Vocabulary로
+유지한다.** 4개 대안(Suggest/Selection/Decision/Proposal) 모두
+기존 의미와 충돌하거나(Selection/Decision/Proposal) 실질적 이득이
+없어(Suggest) 채택하지 않는다.
+
+**Recommendation의 정의를 이 ADR로 고정한다**: *The domain concept
+responsible for determining the most appropriate Next Action from
+the current project state. It represents an actionable
+recommendation, not a mandatory decision.* — 이 한 문장이 M35
+(Recommendation Intelligence)/M42(Recommendation Adaptation)/M43
+(Recommendation Orchestration)를 모두 자연스럽게 설명한다.
+
+### Consequences
+
+- Recommendation은 "사용자에게 제안을 하는 기능"이 아니라, **현재
+  프로젝트 상태를 분석해 Next Action을 결정하는 Domain 개념**으로
+  정의된다 — 이 정의는 `docs/ARCHITECTURE.md` §13.3에 그대로
+  반영되어 새로 합류하는 개발자도 즉시 이 용어의 경계를 이해할 수
+  있다.
+- 리네이밍을 하지 않으므로 코드 변경은 0건이다 — `pytest`/`ruff`/
+  `mypy`/Guardian은 기존 상태 그대로 유지된다.
+- 이번에 비교한 4개 대안과 그 기각 사유가 문서로 고정되므로, 향후
+  같은 논의("Recommendation이라는 이름이 맞나?")가 재발해도 이
+  ADR을 먼저 참고하면 되고 같은 조사를 반복할 필요가 없다.
+- 이 ADR은 "리네이밍을 하지 않기로 했다"는 소극적 결론이 아니라,
+  Recommendation이 이 프로젝트에서 정확히 무엇을 의미하는지 공식
+  정의하고 대안을 검토한 뒤 유지를 결정한 것 — 프로젝트의
+  Ubiquitous Language를 확정하는 기준 문서로 남긴다.
+- 결과/영향: `docs/ARCHITECTURE.md` §13.3 Recommendation 행에 정의
+  문장과 대안 비교 요약 반영. 코드/테스트 변경 없음(문서화 전용).

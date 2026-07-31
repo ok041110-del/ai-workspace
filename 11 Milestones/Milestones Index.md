@@ -57,6 +57,20 @@ tags: [milestone]
 | M42 | Recommendation Adaptation | M39(Execution Memory)가 Non-goal로 명시적으로 미뤄뒀던 "과거 실행 결과로 판단 기준을 조정한다"는 책임을 처음 다룸. T02 Domain Analysis로 §13.4가 이미 배제해둔 `Learning`/`Insight` 대신 `Adaptation` 용어를 채택(재사용 사례 1건뿐이라 1급 Domain 승격은 보류, §13.3 Behavioral Concept로만 정의). `RecommendationAdjustmentAnalyzer`(신규)는 M35 `RecommendationRuleAnalyzer`의 `NextAction`을 새로 생성하지 않고 M40 `ExperienceReport`를 근거로 사후 조정(Adjustment)만 함 — 대상의 과거 실행이 전부 실패일 때만 추천 보류. `RecommendationIntelligenceService.generate()/publish()`에 `experience_report` 선택적 인자 추가, `None`이면 M35와 100% 동일 동작(사용자 조건 5개 전부 반영). 새 Core Domain Interface/Adapter 없음(27종 유지), `web/server.py` 자동 배선 없음(Non-goal). **Milestone Review 완료 — 사용자 승인(2026-07-31)** | ADR-0058 |
 | M43 | Recommendation Orchestration | M42가 Non-goal로 남겨둔 `web/server.py` 자동 배선을 완성 — M35(Recommendation)→M42(Adaptation)→M36(Execution)→M39(Memory)→M40(Experience)로 이어지는 실행 흐름을 명시적으로 연결. T02 Domain Analysis로 `Workflow`(M34, 다른 의미) 재사용을 배제하고, 이미 확립된 `Orchestrating Connector`(ADR-0041)/`Orchestrating 패턴`(M32, M40)과 같은 의미인 `Orchestration`을 §13.3에 최초 등재(1급 Domain 아님). `RecommendationOrchestrationService`(신규)가 Experience 조회 → Recommendation 계산(Adaptation 포함) → Execution 위임을 판단 로직 없이 순서대로 호출. MDD Review 중 사용자 재검토 요청으로 `RecommendationExecutionService`(M36)의 Recommendation 의존성을 아예 제거해 결합도 개선(Composition Root/Analyzer/Orchestration Service/Execution Service 네 책임 명시적 분리). `AutomationActionExecutor`/`web/server.py` 배선 교체로 M42 Non-goal 완성. 새 Core Domain Interface/Adapter 없음(27종 유지), `build_app()` 실제 조립 스모크 테스트 통과. **Milestone Review 완료 — 사용자 승인(2026-07-31)** | ADR-0059 |
 
+## Post-M43: Recommendation Vocabulary Review
+
+**Domain Vocabulary Migration 절차로 "Recommendation" 용어 재검토**(ADR-0060).
+Milestone 번호가 아닌 M43 완료 후 정리 단계. `src/ai_workspace/`
+전수 검색으로 `Suggest`/`Selection`/`Decision`/`Proposal` 4개
+대안과 비교 — `Selection`/`Decision`/`Proposal`은 기존 확립된 의미
+(각각 `EngineSelectionPolicy`, 6개 `*Decision` 패턴, "Milestone
+Proposal" 프로세스 용어)와 충돌하고 `Suggest`는 실질적 이득 없는
+동의어일 뿐이라 4개 모두 기각. `Recommendation`을 공식 Domain
+Vocabulary로 유지 확정하고 정의를 한 문장으로 고정("현재 프로젝트
+상태를 분석해 Next Action을 결정하는 Domain 개념, 비구속적").
+문서화 전용 작업 — 코드/클래스/파일명 변경 없음. 상세는 GitHub
+`.ai/DECISIONS.md`의 "ADR-0060" 절 참고.
+
 ## Pre-M40: Domain Vocabulary & Naming Convention
 
 **프로젝트 전체 명명 규칙 및 Obsidian Graph 규칙 확립**(ADR-0054).

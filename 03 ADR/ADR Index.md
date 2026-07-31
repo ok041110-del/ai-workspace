@@ -362,6 +362,12 @@ tags: [decision]
 - 결정: `RecommendationOrchestrationService`(신규, `runtime/execution/recommendation_orchestration_service.py`)가 Experience 조회(M40) → Recommendation 계산(M35, Adaptation은 M42) → Execution 위임(M36)을 판단 로직 없이 순서대로 호출. MDD Review 중 사용자 재검토 요청을 반영해 `RecommendationExecutionService`(M36)가 `RecommendationIntelligenceService` 의존성을 아예 제거하고 `RecommendationIntelligenceReport`를 파라미터로 받도록 결합도 개선. Composition Root(조립)/Analyzer(판단)/Orchestration Service(흐름 제어)/Execution Service(실행) 네 가지 책임을 명시적으로 분리(사용자 결정). `AutomationActionExecutor`/`web/server.py` 배선을 Orchestration Service로 교체해 M42 Non-goal을 완성
 - 영향: `runtime/execution/recommendation_orchestration_service.py`(신규), `runtime/execution/recommendation_execution_service.py`(Recommendation 의존성 제거), `runtime/automation/automation_action_executor.py`(배선 교체), `web/server.py`(Composition Root 갱신), `docs/ARCHITECTURE.md` §13.3/§13.4/§3.35(신규) 갱신. 새 Core Domain Interface/Adapter 없음(27종 유지). `pytest` 1063개·ruff·mypy 전부 클린, Guardian all_passed 유지, `build_app()` 실제 조립 스모크 테스트 통과. 상세는 [[Architecture Overview]]
 
+## ADR-0060: Recommendation Vocabulary Decision — Domain Vocabulary 재검토 후 "Recommendation" 유지 확정 (문서화 전용)
+
+- 목적: M43 완료로 Recommendation의 책임과 경계가 M35~M43 전 구간에서 충분히 명확해진 시점에 "Recommendation"이라는 용어 자체가 적합한지 Domain Vocabulary Migration 절차(단순 Rename 아님)로 재검토
+- 결정: `src/ai_workspace/` 전수 검색으로 4개 대안(`Suggest`/`Selection`/`Decision`/`Proposal`) 비교. `Suggest`는 충돌 없으나 동의어일 뿐 실질적 이득 없음, `Selection`은 `EngineSelectionPolicy`/`EngineSelectionDecision`(M17/18)과 충돌, `Decision`은 이미 확립된 6개 `*Decision` 패턴(`GateDecision`/`ApprovalDecision`/`EngineSelectionDecision`/`BudgetDecision`/`LLMPolicyDecision`/`RetryDecision`)과 충돌하고 비구속성을 반영 못해 의미도 부정확, `Proposal`은 "Milestone Proposal" 프로세스 용어와 충돌. `Recommendation`을 공식 Domain Vocabulary로 유지 확정하고 정의를 한 문장으로 고정 — *"The domain concept responsible for determining the most appropriate Next Action from the current project state. It represents an actionable recommendation, not a mandatory decision."*
+- 영향: `docs/ARCHITECTURE.md` §13.3 Recommendation 행에 정의 문장과 대안 비교 요약 반영. 코드/테스트 변경 없음(문서화 전용, 리네이밍 없음). 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
