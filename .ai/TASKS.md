@@ -12434,6 +12434,63 @@ Intelligence)→M41(Architecture Guardian)"로 이어지며, §13.2가
 
 ---
 
+## Post-M41: Repository Naming Standard
+
+**목표**(2026-07-30 사용자 요청, ADR-0057): M39~M41 실제 코드를
+전수 조사하는 "Repository Naming Consistency Review"(분석 전용,
+코드 변경 없음)를 수행한 뒤, 그 결과를 일회성으로 끝내지 않고 ADR로
+공식화한다. **새 규칙을 만드는 것이 아니라 이미 지켜지던 관행을
+문서화**하는 것이 목적 — Milestone 번호가 아닌 Pre-M40/M23-Preparation
+과 같은 준비/정리 단계.
+
+**리뷰 결과 요약**: `src/ai_workspace/` 300개 클래스·160여 개 모듈을
+전수 조사한 결과, ADR-0054(§13) 확립 **이후** 착수된 M39~M41은 새
+어휘 0개로 기존 체계를 정확히 재사용했다(Architecture Alignment
+Score: 양호). 확립 **이전**(M29~M34) 코드에만 잔재(`ProjectRecommendationEngine`
+의 "Engine" 오용 등 4건)가 남아 있었다 — 규칙 자체는 지금 시점부터
+잘 지켜지고 있고, 남은 건 과거 정리뿐이라는 결론.
+
+**반영 내용**
+
+1. `docs/ARCHITECTURE.md` 신규 §13.6(Class/File Naming Standard) —
+   클래스 접미사 12종(`*Analyzer`/`*Service`/`*Store`/`*Repository`/
+   `*Adapter`/`*View`/`*Record`/`*Report`/`*Result`/`*Rule`/
+   `*Manager`/`*Engine`)의 역할을 실측 근거와 함께 표로 고정.
+   `*Engine`은 Core Engine(§3.7)/구현 엔진 실행 관리(§3.9) 두 의미로만
+   한정. 파일명↔클래스명 대응(`{name}_service.py`는 반드시
+   `{Name}Service` 정의), 디렉터리명↔Domain 대응 원칙 명문화.
+   `domain/` 패키지와 ADR-0054 "Domain Vocabulary"가 동음이의어임을
+   최초로 명시적으로 기록.
+2. `.ai/RULES.md` 신규 §1.6(Repository Naming Standard, v0.10.0) —
+   위 내용을 영구 규칙으로 참조.
+
+**개선 여지(이번에 실행하지 않음, Rename Candidate로만 기록)**:
+`ProjectRecommendationEngine`→`ProjectRecommendationAnalyzer`,
+`intelligence/recommendation.py`→`intelligence/project_recommendation.py`,
+`tests/integration_layer/` 명칭 유지 + `docs/ARCHITECTURE.md` §9에
+주석 추가, `docs/ARCHITECTURE.md` §13.3에 "Store vs Repository"
+구분 명문화(문서만, 코드 변경 없음). 전부 사용자 별도 승인 시에만
+실행한다.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 클래스 접미사 12종 역할을 실측 근거와 함께 §13.6에 고정 | ✅ |
+| 2 | 파일명↔클래스명/디렉터리명↔Domain 대응 원칙 명문화 | ✅ |
+| 3 | `domain/` 패키지 vs ADR-0054 "Domain Vocabulary" 동음이의어 기록 | ✅ |
+| 4 | `.ai/RULES.md` §1.6 신규 추가 | ✅ |
+| 5 | 코드/클래스명/파일명 무변경(분석 전용) | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 기존 상태(1051 passed) 유지 확인 | ✅ |
+| 7 | ADR-0057/TASKS/Vault(ADR Index) 최신화 | ✅ |
+
+**사용자 승인(2026-07-30)**: 위 7개 항목을 확인해 **Post-M41
+Repository Naming Standard 공식 완료(Approved)**. 발견된 4건의
+Rename Candidate는 실행하지 않고 §13.6에 개선 여지로만 남긴다 —
+실행은 별도 요청·승인 시점에 진행한다.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

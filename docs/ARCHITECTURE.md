@@ -2414,6 +2414,63 @@ Approval Required에 따라 사용자 승인을 받아야 하며, 승인 시 그
 "새 용어 도입이 허용되는 경우" 참고). 이 규칙은 `.ai/RULES.md`
 §1.5(Vocabulary Reuse First)에도 동일하게 반영되어 있다.
 
+### 13.6 Class/File Naming Standard (ADR-0057, 2026-07-30)
+
+M39~M41 이후 "Repository Naming Consistency Review"(사용자 요청,
+2026-07-30)가 실제 저장소(300개 클래스, 160여 개 모듈)를 전수
+조사했다. 이 절은 **새 규칙을 만드는 것이 아니라, 그 조사에서 이미
+일관되게 지켜지고 있음이 확인된 관행을 공식 문서로 승격**한다 —
+M42 이후에도 계속 지켜야 할 기준선이다.
+
+**클래스 접미사별 역할(전부 실측 확인됨)**
+
+| 접미사 | 역할 | 근거 |
+|---|---|---|
+| `*Analyzer` | 순수 Read Only 판정 — 부작용 없음, 대부분 생성자 인자 없이 `analyze()`만 제공 | `intelligence/`의 9개 Analyzer(`RecommendationRuleAnalyzer`/`CapabilityGapAnalyzer`/`WorkflowFlowAnalyzer` 등) 전수 확인 |
+| `*Service` | 여러 Analyzer/Adapter/Store를 조합하는 얇은 계층. Vault 발행처럼 "공표"가 핵심이면 `publish()`를 기본 진입점으로 삼는다(M41 Guardian 선례) | `intelligence/`의 8개 `*_service.py` 파일 전수 확인(예외 없이 `*Service` 클래스 정의) |
+| `*Store` | **시간순/로그성 데이터**(추가되기만 하고 개별 항목을 갱신하지 않는 기록) | `EventStore`(M1)/`ExecutionMemoryStore`(M39) — 2건뿐이라 관찰에 가깝지만 방향은 일관됨 |
+| `*Repository` | **단일 Aggregate에 대한 CRUD**(생성/조회/갱신/삭제 대상이 명확한 하나의 엔티티) | `AgentRepository`/`ProjectRepository`/`AutomationRepository`/`DashboardRepository`/`KnowledgeRepository` 등 27종 Interface의 다수 |
+| `*Adapter` | Integration Layer의 유일한 진입점 — Core Domain(domain/interfaces/engines)과 외부 자원(Vault/Agent Runtime/Knowledge) 사이의 유일한 통로 | `VaultAdapter`/`AgentAdapter`/`KnowledgeAdapter`/`WorkflowAdapter` |
+| `*View` | Adapter가 domain 타입을 감싸 외부(주로 `intelligence/`)에 노출하는 읽기 전용 투영 — domain 타입을 그대로 흘려보내지 않기 위함(§8 규칙 18/21) | `TaskDocumentView`/`KnowledgeDocumentView`/`AgentCapabilityView`, M40의 `ExecutionMemoryEntry`(같은 역할, 이름만 `Entry`) |
+| `*Record` | 로그성 개별 기록 1건(발생 시점이 있는 사실) | `ExecutionRecord`/`ExperienceRecord` |
+| `*Report` | 여러 `Result`/`Record`/판단을 모은 집계 산출물. Service의 `generate()` 반환 타입 | `ArchitectureHealthReport`/`ProjectHealthReport`/`WorkflowFlowReport` 등 12건 |
+| `*Result` | 단일 연산 1회 호출의 결과(성공/실패 포함) | `EngineExecutionResult`/`TaskSyncResult`/`ArchitectureCheckResult` 등 11건 |
+| `*Rule` | 메서드 없는 순수 값 객체(평가 로직을 갖지 않는다 — 평가는 별도 함수/클래스가 담당) | `guardian/rules.py`의 3종(M41, ADR-0056) |
+| `*Manager` | 클래스 접미사로만 허용, Milestone/Domain 이름으로는 쓰지 않는다(§13.4에 이미 명시) | `AgentManager`/`ContextManager`/`LifecycleManager` |
+| `*Engine` | **두 가지 의미로만 한정**: ① Core Engine(§3.7, Agent가 쓰는 상태 없는 서비스 — `TaskEngine`/`WorkflowEngine`/`MemoryEngine` 등 27종 Interface 소속) ② 구현 엔진 실행 관리(§3.9, `EngineAdapter`/`EngineRuntime`/`EngineRegistry`) — 이 두 의미 **밖에서는 새로 쓰지 않는다** | 리뷰에서 `ProjectRecommendationEngine`(①·②도 아닌 사실상 Analyzer)이 위반 사례로 발견됨 — 개선 여지로 기록(아래) |
+
+**파일명 ↔ 클래스명 대응 원칙**
+
+- `{name}_service.py`는 반드시 `{Name}Service`로 끝나는 클래스를
+  정의해야 한다 — `guardian/`의 Role 기반 접근 규칙(M40/ADR-0055,
+  M41/ADR-0056)이 이를 실제로 `ast`로 강제한다.
+- `{name}_rules.py`는 순수 Rule/Analyzer(부작용 없음)만 담는다 —
+  Adapter/Store를 참조하면 안 된다(M40의 "Analyzer 순수성" 강제와
+  동일 원칙).
+- 파일명과 핵심 클래스명이 일치하지 않는 예외(`report.py`→
+  `ProjectIntelligenceService`, `recommendation.py`→
+  `ProjectRecommendationEngine`)는 M29(§13 확립 이전) 시절 파일이다
+  — 새 파일에서는 반복하지 않는다. 기존 파일 개선은 별도 논의
+  (아래 "개선 여지").
+
+**디렉터리명 ↔ Domain 대응 원칙**
+
+- `guardian/`/`intelligence/`/`memory/`/`runtime/execution/`은
+  §13.2 4개 1급 Domain과 정확히 1:1 대응한다 — 새 최상위 디렉터리를
+  만들 때도 이 대응을 우선 확인한다(§13.5와 동일한 절차).
+- `domain/`(Core Domain Model 패키지, ADR-0001)은 §13.2의 "Domain
+  Vocabulary"와 **이름만 같고 완전히 다른 개념**이다 — 착수하는
+  사람은 어느 쪽 "Domain"인지 문맥으로 구분해야 한다(동음이의어,
+  이번 리뷰에서 처음 명시적으로 기록됨).
+
+**개선 여지(이번에 실행하지 않음, 사용자 승인 시 별도 진행)**
+
+| 현재 | 제안 | 사유 |
+|---|---|---|
+| `ProjectRecommendationEngine` | `ProjectRecommendationAnalyzer` | 위 Engine 표의 두 의미 어디에도 속하지 않음 |
+| `intelligence/recommendation.py` | `intelligence/project_recommendation.py` | `recommendation_rules.py`/`recommendation_service.py`(M35, 더 넓은 의미)와 구별 |
+| `tests/integration_layer/` | (이름 유지) §9에 "`tests/integration/`과의 명칭 충돌 회피" 주석만 추가 | 이름 변경보다 문서화가 더 안전 |
+
 ## 14. Obsidian Graph Convention (ADR-0054, 2026-07-30)
 
 ### 14.1 목적

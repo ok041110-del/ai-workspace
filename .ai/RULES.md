@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.9.0 |
+| 문서 버전 | v0.10.0 |
 | 작성일 | 2026-07-30 |
 | 적용 대상 | 이 저장소에서 작업하는 모든 AI 구현 엔진(Claude Code, Codex, Gemini CLI 등) 및 기여자 |
 
@@ -10,6 +10,14 @@
 아래 규칙은 사용자가 제시한 개발 철학을 프로젝트 내부 규정으로 명문화한 것이며,
 모든 Task 수행 시 최우선으로 준수해야 한다.
 
+> **v0.10.0 변경 (Repository Naming Standard, ADR-0057, 2026-07-30)**:
+> 신규 §1.6 추가. M39~M41 실제 코드를 전수 조사한 "Repository Naming
+> Consistency Review"(사용자 요청)에서 확인된 클래스 접미사별 역할
+> (`*Analyzer`/`*Service`/`*Store`/`*Repository`/`*View`/`*Record`/
+> `*Report`/`*Result`/`*Rule`/`*Engine`)을 `docs/ARCHITECTURE.md`
+> §13.6으로 공식화했다 — 새 규칙이 아니라 이미 지켜지던 관행의
+> 문서화다.
+>
 > **v0.9.0 변경 (Vocabulary Reuse First, ADR-0054, 2026-07-30)**: 신규
 > §1.5 Vocabulary Reuse First 추가. `docs/ARCHITECTURE.md` §13(Domain
 > Vocabulary & Naming Convention)/§14(Obsidian Graph Convention)이
@@ -151,6 +159,23 @@
   때만 새 Domain 용어를 만든다 — 이 경우에도 §1.4 Approval Required에
   따라 사용자 승인이 필요하며, 승인된 새 용어는 즉시 §13.2에 추가해
   다음 Milestone부터 재사용 가능하게 한다.
+
+### 1.6 Repository Naming Standard (클래스/파일 명명, ADR-0057, 2026-07-30)
+- 새 클래스/파일 이름을 지을 때는 `docs/ARCHITECTURE.md` §13.6
+  (Class/File Naming Standard)의 접미사별 역할 표(`*Analyzer`/
+  `*Service`/`*Store`/`*Repository`/`*Adapter`/`*View`/`*Record`/
+  `*Report`/`*Result`/`*Rule`/`*Manager`/`*Engine`)를 먼저 확인한다
+  — M39~M41 실제 코드를 전수 조사해 이미 지켜지고 있음이 확인된
+  관행을 공식화한 것이다(새 규칙 발명 아님).
+- `{name}_service.py`는 반드시 `{Name}Service` 클래스를 정의해야
+  하고, `{name}_rules.py`는 순수 Analyzer/Rule(부작용 없음)만
+  담는다 — `guardian/`의 Role 기반 `ast` 검사(M40/M41)가 `_service.py`
+  규칙을 실제로 강제한다.
+- `*Engine`은 §3.7(Core Engine)과 §3.9(구현 엔진 실행 관리) 두 의미
+  에서만 쓴다 — 그 밖의 용도(예: 단순 Analyzer)에 `Engine`을 붙이지
+  않는다.
+- 새 최상위 디렉터리는 §13.2의 4개 1급 Domain과 먼저 대응을
+  확인한다(§1.5와 동일한 절차를 디렉터리명에도 적용).
 
 ---
 

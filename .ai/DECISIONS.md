@@ -3768,3 +3768,61 @@
   없음(27종 유지), 새 Layer 1개(`guardian/`, §13.2가 이미 예약해
   둔 자리). Connector 그룹 규칙 편입·CI 강제 게이트는 범위 밖
   (YAGNI, M42 이후 논의).
+
+## ADR-0057: Repository Naming Standard — 실측 조사로 확인된 클래스/파일/디렉터리 명명 관행을 공식 문서로 승격 (Post-M41, 문서화 전용)
+
+- 상태: 승인됨 (2026-07-30, 사용자가 "Repository Naming Consistency
+  Review"를 수행하고 그 결과를 일회성 분석으로 끝내지 않고 ADR로
+  공식화할 것을 제안 — 승인. **새 규칙을 만드는 것이 아니라 이번
+  분석에서 확인된 규칙을 공식화하는 것**이라는 전제 그대로 반영)
+- 날짜: 2026-07-30
+- 배경: M39(Execution Memory)~M41(Architecture Guardian) 착수 이후,
+  실제 저장소(`src/ai_workspace/` 300개 클래스, 160여 개 모듈,
+  `tests/` 18개 디렉터리, Vault 11개 문서)를 전수 조사하는 Domain
+  Naming Analysis를 수행했다(코드 변경 없는 분석 전용 리뷰). 결과:
+  ADR-0054(§13) 확립 **이후** 착수된 M39~M41은 새 어휘 0개로 기존
+  체계를 정확히 재사용했지만, 확립 **이전**(M29~M34) 코드에는 잔재
+  (`ProjectRecommendationEngine`의 "Engine" 오용 등)가 남아 있었다.
+  이 조사 자체가 재사용 가능한 자산이므로 반복 조사 없이 ADR로
+  고정한다.
+- 결정:
+  1. **`docs/ARCHITECTURE.md` 신규 §13.6(Class/File Naming Standard)**
+     — 클래스 접미사 12종(`*Analyzer`/`*Service`/`*Store`/
+     `*Repository`/`*Adapter`/`*View`/`*Record`/`*Report`/`*Result`/
+     `*Rule`/`*Manager`/`*Engine`)의 역할을 실측 근거와 함께 표로
+     고정. `*Engine`은 §3.7(Core Engine)/§3.9(구현 엔진 실행 관리)
+     두 의미로만 한정 — 그 밖의 용도로 새로 쓰지 않는다.
+  2. **파일명↔클래스명 대응 원칙**: `{name}_service.py`는 반드시
+     `{Name}Service` 클래스를 정의해야 하고(M40/M41의 `guardian/`
+     Role 기반 `ast` 검사가 이미 이를 실제로 강제하고 있음을 재확인),
+     `{name}_rules.py`는 순수 Analyzer/Rule만 담는다.
+  3. **디렉터리명↔Domain 대응 원칙**: 새 최상위 디렉터리는 §13.2의
+     4개 1급 Domain과 먼저 대응을 확인한다(§1.5 절차를 디렉터리명
+     에도 적용). `domain/`(Core Domain Model 패키지, ADR-0001)과
+     ADR-0054의 "Domain Vocabulary"가 이름만 같고 다른 개념이라는
+     동음이의어 관계를 최초로 명시적으로 기록한다.
+  4. **`.ai/RULES.md` 신규 §1.6(Repository Naming Standard, v0.10.0)**
+     — 위 내용을 영구 규칙으로 참조.
+  5. **개선 여지(이번에 실행하지 않음)**로만 기록: `ProjectRecommendationEngine`
+     →`ProjectRecommendationAnalyzer`, `intelligence/recommendation.py`
+     →`intelligence/project_recommendation.py`, `tests/integration_layer/`
+     명칭 유지 + 주석 추가. 전부 사용자 별도 승인 시에만 실행한다.
+- 대안:
+  - **이번 리뷰를 문서화하지 않고 지식으로만 남긴다** — 기각(사용자
+    요청). 세션이 바뀌면 조사 내용이 사라지고 같은 조사를 반복하게
+    된다 — ADR로 고정해야 M42 이후 세션도 재사용할 수 있다.
+  - **개선 여지(Rename Candidate)를 이번에 바로 실행한다** — 기각
+    (범위 밖). 이번 요청은 "규칙 공식화"이지 "코드 정리"가 아니다
+    (사용자가 별도 지시할 때까지 대기).
+  - **완전히 새로운 명명 규칙을 발명한다** — 기각. §1.5 Vocabulary
+    Reuse First의 정신을 명명 규칙 자체에도 적용 — 이미 있는 관행을
+    재사용하지 새로 만들지 않는다.
+- 이유: M39~M41이 이미 §13(ADR-0054)을 성실히 지켰다는 사실 자체가
+  "명명 규칙이 ADR 수준에서 문서화되면 실제로 지켜진다"는 증거다 —
+  이번 실측 조사 결과를 같은 방식으로 승격해 M42 이후에도 반복
+  가능한 기준선으로 만든다.
+- 결과/영향: `docs/ARCHITECTURE.md` §13.6(신규) 추가, `.ai/RULES.md`
+  §1.6(신규, v0.10.0) 추가. 코드 변경 없음 — `pytest`/`ruff`/`mypy`는
+  기존 상태(1051 passed) 그대로 유지. 4건의 Rename Candidate는
+  실행하지 않고 §13.6에 "개선 여지"로만 기록 — 실행은 별도 승인
+  대상.
