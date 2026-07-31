@@ -12,6 +12,7 @@ from ai_workspace.events.event_bus import InMemoryEventBus
 from ai_workspace.integration.agent_adapter import AgentAdapter
 from ai_workspace.integration.vault_adapter import VaultAdapter
 from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
+from ai_workspace.intelligence.experience_service import ExperienceIntelligenceService
 from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
 from ai_workspace.intelligence.report import ProjectIntelligenceService
 from ai_workspace.memory.execution_memory_store import ExecutionMemoryStore
@@ -29,6 +30,9 @@ from ai_workspace.runtime.engine.engine_registry import InMemoryEngineRegistry
 from ai_workspace.runtime.execution.execution_dispatcher import ExecutionDispatcher
 from ai_workspace.runtime.execution.recommendation_execution_service import (
     RecommendationExecutionService,
+)
+from ai_workspace.runtime.execution.recommendation_orchestration_service import (
+    RecommendationOrchestrationService,
 )
 from ai_workspace.runtime.production.config import ProductionConfig
 from ai_workspace.runtime.production.config_loader import load_production_config
@@ -68,8 +72,8 @@ def build_app(
     조립된 적이 없던 컴포넌트다 — 새 정책 없이 기존 생성자 그대로
     조립만 한다(`tests/runtime/execution/test_recommendation_execution_service.py`
     와 동일한 패턴). `RUN_RECOMMENDATION` Action이 `AutomationScheduler`
-    로 발동하면 `AutomationActionExecutor`가 `RecommendationExecutionService.
-    publish(manual_trigger=True)`를 호출한다 — `ExecutionGate`는
+    로 발동하면 `AutomationActionExecutor`가 `RecommendationOrchestrationService.
+    publish(manual_trigger=True)`(M43)를 호출한다 — `ExecutionGate`는
     `source=next_task`만 여전히 승인한다(M36과 동일, 새 정책 없음).
 
     `ExecutionMemoryStore`(M39)도 이 시점에 처음 조립돼
@@ -77,7 +81,13 @@ def build_app(
     `ExecutionMemory`로 자동 기록된다(ADR-0053). 이 서버 프로세스가
     살아있는 동안만 유지되는 `InMemoryMemoryEngine`을 사용한다 —
     영속화는 이번 Milestone 범위 밖이다(YAGNI, `.ai/DECISIONS.md`
-    ADR-0053 참고)."""
+    ADR-0053 참고).
+
+    `ExperienceIntelligenceService`(M40)+`RecommendationOrchestrationService`
+    (M43)도 이 시점에 처음 조립된다 — `RecommendationExecutionService`
+    는 M43부터 Recommendation 의존성을 갖지 않으므로(ADR-0059),
+    Orchestration Service가 Experience 조회 → Recommendation 계산
+    (Adaptation 포함) → Execution 위임까지 전체 흐름을 제어한다."""
     config = config or load_production_config()
 
     event_bus = InMemoryEventBus()
@@ -99,17 +109,23 @@ def build_app(
         InMemoryAgentManager(), InMemoryAgentRegistry(), InMemoryAgentScheduler()
     )
     execution_memory_store = ExecutionMemoryStore(InMemoryMemoryEngine())
+    recommendation_service = RecommendationIntelligenceService(
+        vault_adapter,
+        ProjectIntelligenceService(vault_adapter, agent_adapter),
+        CapabilityIntelligenceService(agent_adapter, vault_adapter),
+    )
     recommendation_execution_service = RecommendationExecutionService(
-        RecommendationIntelligenceService(
-            vault_adapter,
-            ProjectIntelligenceService(vault_adapter, agent_adapter),
-            CapabilityIntelligenceService(agent_adapter, vault_adapter),
-        ),
         vault_adapter,
         engine_registry,
         engine_selection_policy,
         execution_dispatcher,
         execution_memory_store,
+    )
+    experience_service = ExperienceIntelligenceService(vault_adapter, execution_memory_store)
+    recommendation_orchestration_service = RecommendationOrchestrationService(
+        experience_service,
+        recommendation_service,
+        recommendation_execution_service,
     )
 
     automation_repository = InMemoryAutomationRepository()
@@ -118,7 +134,7 @@ def build_app(
         engine_registry=engine_registry,
         engine_selection_policy=engine_selection_policy,
         execution_dispatcher=execution_dispatcher,
-        recommendation_execution_service=recommendation_execution_service,
+        recommendation_orchestration_service=recommendation_orchestration_service,
     )
     automation_scheduler = AutomationScheduler(
         automation_repository=automation_repository, action_executor=action_executor

@@ -1,7 +1,8 @@
-"""Execution Layer — Recommendation Execution Service (ADR-0050/ADR-0051, Milestone 36-T03~M37-T04).
+"""Execution Layer — Recommendation Execution Service
+(ADR-0050/ADR-0051/ADR-0059, Milestone 36-T03~M43-T05).
 
-M35 `RecommendationIntelligenceService.generate()`가 계산한
-`NextAction`을 `ExecutionGate`(승인 판정)/`ActionBuilder`(변환)를
+`RecommendationIntelligenceReport`(M35, Adaptation 반영 시 M42)를
+입력으로 받아 `ExecutionGate`(승인 판정)/`ActionBuilder`(변환)를
 거쳐 실제로 `ExecutionDispatcher`(M18)로 실행한다.
 `AutomationActionExecutor`(M21)를 감싸지 않고, 그 내부와 동일한
 3단계(`EngineRegistry.list_candidates()` → `EngineSelectionPolicy.
@@ -11,6 +12,14 @@ select()` → `ExecutionDispatcher.dispatch()`)를 직접 재사용한다 —
 (ADR-0050 결정 4). M37부터는 실행 시작/완료 시점에
 `TaskLifecycleTransitioner`(ADR-0051)로 기존 Task 상태 전이 기계
 (`_ALLOWED_TRANSITIONS`, M28)에도 연결한다.
+
+**Recommendation 단계와의 결합 제거(M43, ADR-0059)**: 이 Service는
+`RecommendationIntelligenceService`를 더 이상 생성자로 쥐지 않는다
+— `execute()`/`publish()`가 이미 계산된 `RecommendationIntelligenceReport`
+를 파라미터로 받는다. "Recommendation을 어떻게 얻는가"(Experience
+조회, Adaptation 반영 여부)는 전부 호출자(`RecommendationOrchestrationService`,
+M43)의 책임이고, 이 Service는 순수하게 "주어진 실행 대상을 실행한다"
+는 책임만 진다.
 
 **Memory 기록(M39, ADR-0053)**: `execution_memory_store`를 선택적으로
 주입하면 실행 결과가 `ExecutionMemory`로 자동 기록된다. 미주입 시
@@ -30,7 +39,7 @@ from ai_workspace.domain.execution_memory import ExecutionMemory
 from ai_workspace.domain.execution_result import EngineExecutionResult
 from ai_workspace.domain.task import Task
 from ai_workspace.integration.vault_adapter import TaskTransitionOutcome, VaultAdapter
-from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
+from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceReport
 from ai_workspace.interfaces.engine_registry import EngineRegistry
 from ai_workspace.interfaces.engine_selection_policy import EngineSelectionPolicy
 from ai_workspace.memory.execution_memory_store import ExecutionMemoryStore
@@ -58,22 +67,22 @@ class RecommendationExecutionOutcome:
 
 
 class RecommendationExecutionService:
-    """M35 Recommendation → M36 Execution을 연결하는 조합 계층.
-    `ExecutionGate`/`ActionBuilder`(판정/변환 각각의 책임)와
-    `EngineRegistry`/`EngineSelectionPolicy`/`ExecutionDispatcher`
-    (M17/M18, 그대로 재사용)만 조합한다 — 새 실행 경로를 만들지
-    않는다."""
+    """`RecommendationIntelligenceReport`(M35, Adaptation 반영 시 M42)
+    → 실제 실행을 연결하는 조합 계층. `ExecutionGate`/`ActionBuilder`
+    (판정/변환 각각의 책임)와 `EngineRegistry`/`EngineSelectionPolicy`/
+    `ExecutionDispatcher`(M17/M18, 그대로 재사용)만 조합한다 — 새
+    실행 경로를 만들지 않는다. Recommendation을 어떻게 얻는지는 전혀
+    모른다(M43, ADR-0059) — 호출자가 이미 계산한 `report`를
+    받는다."""
 
     def __init__(
         self,
-        recommendation_service: RecommendationIntelligenceService,
         vault_adapter: VaultAdapter,
         engine_registry: EngineRegistry,
         engine_selection_policy: EngineSelectionPolicy,
         execution_dispatcher: ExecutionDispatcher,
         execution_memory_store: ExecutionMemoryStore | None = None,
     ) -> None:
-        self._recommendation_service = recommendation_service
         self._vault_adapter = vault_adapter
         self._engine_registry = engine_registry
         self._engine_selection_policy = engine_selection_policy
@@ -83,9 +92,13 @@ class RecommendationExecutionService:
         self._builder = ActionBuilder()
         self._transitioner = TaskLifecycleTransitioner()
 
-    def execute(self, *, manual_trigger: bool) -> RecommendationExecutionOutcome:
+    def execute(
+        self, report: RecommendationIntelligenceReport, *, manual_trigger: bool
+    ) -> RecommendationExecutionOutcome:
         """
-        입력: manual_trigger(호출자가 수동 트리거임을 명시적으로
+        입력: report(호출자가 이미 계산한 `RecommendationIntelligenceReport`
+              — Experience/Adaptation 반영 여부는 호출자 책임),
+              manual_trigger(호출자가 수동 트리거임을 명시적으로
               전달해야 함 — 기본값 없음)
         출력: `RecommendationExecutionOutcome`(Gate 판정 + 승인된
               경우 실제 실행 결과 + 발생한 Task 상태 전이 이력)
@@ -98,8 +111,8 @@ class RecommendationExecutionService:
               상태면 조용히 건너뛴다. `execution_memory_store`가
               주입돼 있으면 실행 결과가 `ExecutionMemory`로 자동
               기록된다(M39, ADR-0053) — 미주입 시 기록을 건너뛴다.
+              `report`를 수정하지 않는다.
         """
-        report = self._recommendation_service.generate()
         decision = self._gate.check(report.next_action, manual_trigger=manual_trigger)
         if not decision.approved:
             return RecommendationExecutionOutcome(gate_decision=decision, action=None, result=None)
@@ -148,14 +161,16 @@ class RecommendationExecutionService:
             gate_decision=decision, action=action, result=result, lifecycle_transitions=transitions
         )
 
-    def publish(self, *, manual_trigger: bool) -> tuple[RecommendationExecutionOutcome, Path]:
+    def publish(
+        self, report: RecommendationIntelligenceReport, *, manual_trigger: bool
+    ) -> tuple[RecommendationExecutionOutcome, Path]:
         """`execute()` 결과를 Markdown으로 렌더링해 Vault에 쓴다
         (`VaultAdapter.publish_recommendation_execution()`에 위임).
 
         보장: `15 Project Intelligence/Recommendation Execution.md`
               가 이번 결과로 완전히 덮어써진다(누적 append 아님).
         """
-        outcome = self.execute(manual_trigger=manual_trigger)
+        outcome = self.execute(report, manual_trigger=manual_trigger)
         markdown = render_markdown(outcome)
         path = self._vault_adapter.publish_recommendation_execution(markdown)
         return outcome, path

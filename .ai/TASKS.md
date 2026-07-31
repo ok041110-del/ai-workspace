@@ -12568,6 +12568,83 @@ Recommendation Adaptation 공식 완료(Approved)**.
 
 ---
 
+## Milestone 43 — Recommendation Orchestration
+
+**목표**(2026-07-31 사용자 요청, ADR-0059): M42가 Non-goal로 남겨둔
+`web/server.py` 자동 배선을 완성한다 — M35(Recommendation)→M42
+(Adaptation)→M36(Execution)→M39(Memory)→M40(Experience)로 이어지는
+하나의 실행 흐름을 명시적으로 연결한다.
+
+**T02 — Domain Analysis(완료, 사용자 승인)**: 책임("Recommendation
+부터 Experience까지 하나의 작업 실행 흐름을 제어")이 기존
+`Workflow`(M34, Read-Only Task 상태 분석)에 포함되지 않음을 확인.
+`Workflow Runtime`/`Workflow Coordination`은 §13.4가 배제한
+`Learning`/`Insight`와 같은 유형의 충돌(이미 다른 의미인 `Workflow`
+재사용)을 일으켜 기각. 이 저장소에 이미 확립된 `Orchestrating
+Connector`(ADR-0041)/`Orchestrating 패턴`(M32, M40)과 정확히 같은
+의미임을 확인하고 `Orchestration`을 재사용(§13.3 구조적 관행으로
+최초 등재, 1급 Domain 승격 아님). Milestone 이름은 실제 다루는
+범위를 정확히 한정하기 위해 `Recommendation Orchestration`으로
+확정(원 제안 `Workspace Orchestration`은 범위가 넓게 들려 기각).
+
+**T03 — MDD Review(완료, 사용자 재검토 요청 반영)**: 신규 Interface/
+Adapter 없음, `intelligence_/`가 아니라 `runtime/execution/`(Execution
+Domain)에 위치해야 §8 규칙 21 위반 없음을 확인. T04 검토 과정에서
+사용자가 "Orchestration이 Recommendation 단계를 완결한 뒤 Execution
+에는 순수한 실행 대상만 전달하는 방향이 더 낮은 결합도"라는 재검토를
+요청 — 검토 결과 채택하여 `RecommendationExecutionService`(M36)의
+`RecommendationIntelligenceService` 의존성 자체를 제거하기로 설계
+변경.
+
+**T04 — Milestone Proposal(최종 승인, 2026-07-31)**: 아래 네 가지
+책임 분리를 반영해 승인됨.
+
+1. Composition Root(`web/server.py`) — 조립
+2. Analyzer(`RecommendationRuleAnalyzer`/`RecommendationAdjustmentAnalyzer`) — 판단
+3. `RecommendationOrchestrationService`(신규) — 실행 흐름 제어
+4. `RecommendationExecutionService` — 실행(Recommendation 의존성 제거)
+
+**T05 — Implementation(완료)**:
+- `runtime/execution/recommendation_orchestration_service.py`(신규)
+  — `RecommendationOrchestrationService`: Experience 조회 →
+  Recommendation 계산(Adaptation 포함) → Execution 위임을 순서대로
+  호출만 함. 판단 로직 0줄.
+- `runtime/execution/recommendation_execution_service.py` —
+  `RecommendationIntelligenceService` 생성자 의존성 제거,
+  `execute()`/`publish()`가 `RecommendationIntelligenceReport`를
+  파라미터로 받도록 변경.
+- `runtime/automation/automation_action_executor.py` — 주입 의존성을
+  `RecommendationExecutionService`에서 `RecommendationOrchestrationService`
+  로 교체(파라미터명도 갱신).
+- `web/server.py`(Composition Root) — `ExperienceIntelligenceService`
+  +`RecommendationOrchestrationService`를 조립해 `AutomationActionExecutor`
+  에 주입. `build_app()` 실제 조립 스모크 테스트 통과.
+- `docs/ARCHITECTURE.md` §13.3(Orchestration 추가)/§13.4(예시 행
+  추가)/§3.35(신규)/헤더 상태 갱신.
+- 테스트: 신규 `test_recommendation_orchestration_service.py`(3건),
+  `test_recommendation_execution_service.py`/`test_automation_action_executor.py`
+  기존 호출부를 `report` 파라미터 방식으로 갱신. 전체 `pytest` 1063개
+  통과, `ruff`/`mypy` 통과, `guardian.checker.evaluate()` all_passed
+  유지.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 책임이 기존 Workflow에 포함되지 않음을 Domain Analysis로 확인 | ✅ |
+| 2 | `Orchestration`을 §13.3 구조적 관행으로 정의(1급 Domain 승격 아님) | ✅ |
+| 3 | Milestone 이름을 `Recommendation Orchestration`으로 범위 한정 | ✅ |
+| 4 | 네 가지 책임(조립/판단/흐름 제어/실행) 명시적 분리 | ✅ |
+| 5 | `RecommendationExecutionService`의 Recommendation 의존성 제거(결합도 개선) | ✅ |
+| 6 | `web/server.py` 자동 배선 완성(M42 Non-goal 해소) | ✅ |
+| 7 | 신규 Core Domain Interface/Adapter 0개(27종 유지) | ✅ |
+| 8 | `pytest`/`ruff`/`mypy`/Guardian 통과, `build_app()` 스모크 테스트 통과 | ✅ |
+
+**사용자 승인(2026-07-31)**: 위 8개 항목을 확인해 **Milestone 43
+Recommendation Orchestration 공식 완료(Approved)**.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

@@ -10,7 +10,7 @@ type: recommendation-execution
 ## Gate 판정
 
 - 승인 여부: 거부
-- 이유: 지원하지 않음(Not Supported): source=capability_gap
+- 이유: 수동 트리거가 아님(manual_trigger=False)
 
 ## Task Status 이력
 

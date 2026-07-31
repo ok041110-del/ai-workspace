@@ -8,7 +8,10 @@ from ai_workspace.engines.engine_selection_policy import InMemoryEngineSelection
 from ai_workspace.integration.agent_adapter import AgentAdapter
 from ai_workspace.integration.vault_adapter import VaultAdapter
 from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
-from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
+from ai_workspace.intelligence.recommendation_service import (
+    RecommendationIntelligenceReport,
+    RecommendationIntelligenceService,
+)
 from ai_workspace.intelligence.report import ProjectIntelligenceService
 from ai_workspace.interfaces.execution_environment import ExecutionResult
 from ai_workspace.memory.execution_memory_store import ExecutionMemoryStore
@@ -28,15 +31,22 @@ def _make_agent_adapter() -> AgentAdapter:
     return AgentAdapter(InMemoryAgentManager(), InMemoryAgentRegistry(), InMemoryAgentScheduler())
 
 
-def _make_service(
-    vault_root: Path,
-) -> tuple[RecommendationExecutionService, FakeExecutionEnvironment]:
-    vault_adapter = VaultAdapter(vault_root)
-    recommendation_service = RecommendationIntelligenceService(
+def _make_recommendation_service(vault_adapter: VaultAdapter) -> RecommendationIntelligenceService:
+    return RecommendationIntelligenceService(
         vault_adapter,
         ProjectIntelligenceService(vault_adapter),
         CapabilityIntelligenceService(_make_agent_adapter()),
     )
+
+
+def _make_service(
+    vault_root: Path,
+) -> tuple[
+    RecommendationExecutionService, RecommendationIntelligenceReport, FakeExecutionEnvironment
+]:
+    vault_adapter = VaultAdapter(vault_root)
+    recommendation_service = _make_recommendation_service(vault_adapter)
+    report = recommendation_service.generate()
 
     execution_environment = FakeExecutionEnvironment()
     execution_environment.result = ExecutionResult(returncode=0, stdout="ok", stderr="")
@@ -51,19 +61,18 @@ def _make_service(
     dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
 
     service = RecommendationExecutionService(
-        recommendation_service,
         vault_adapter,
         registry,
         InMemoryEngineSelectionPolicy(),
         dispatcher,
     )
-    return service, execution_environment
+    return service, report, execution_environment
 
 
 def test_execute_rejects_when_manual_trigger_is_false(tmp_path: Path) -> None:
-    service, execution_environment = _make_service(tmp_path)
+    service, report, execution_environment = _make_service(tmp_path)
 
-    outcome = service.execute(manual_trigger=False)
+    outcome = service.execute(report, manual_trigger=False)
 
     assert outcome.gate_decision.approved is False
     assert outcome.result is None
@@ -93,11 +102,8 @@ def test_execute_runs_next_task_via_execution_dispatcher(tmp_path: Path) -> None
         created="2026-07-30",
         updated="2026-07-30",
     )
-    recommendation_service = RecommendationIntelligenceService(
-        vault_adapter,
-        ProjectIntelligenceService(vault_adapter),
-        CapabilityIntelligenceService(_make_agent_adapter()),
-    )
+    recommendation_service = _make_recommendation_service(vault_adapter)
+    report = recommendation_service.generate()
     execution_environment = FakeExecutionEnvironment()
     execution_environment.result = ExecutionResult(returncode=0, stdout="ok", stderr="")
     registry = InMemoryEngineRegistry()
@@ -110,14 +116,13 @@ def test_execute_runs_next_task_via_execution_dispatcher(tmp_path: Path) -> None
     auth = InMemoryAuthenticationManager(frozenset({"claude_code"}))
     dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
     service = RecommendationExecutionService(
-        recommendation_service,
         vault_adapter,
         registry,
         InMemoryEngineSelectionPolicy(),
         dispatcher,
     )
 
-    outcome = service.execute(manual_trigger=True)
+    outcome = service.execute(report, manual_trigger=True)
 
     assert outcome.gate_decision.approved is True
     assert outcome.action is not None
@@ -142,11 +147,8 @@ def test_execute_reverts_task_to_todo_on_execution_failure(tmp_path: Path) -> No
         created="2026-07-30",
         updated="2026-07-30",
     )
-    recommendation_service = RecommendationIntelligenceService(
-        vault_adapter,
-        ProjectIntelligenceService(vault_adapter),
-        CapabilityIntelligenceService(_make_agent_adapter()),
-    )
+    recommendation_service = _make_recommendation_service(vault_adapter)
+    report = recommendation_service.generate()
     execution_environment = FakeExecutionEnvironment()
     execution_environment.result = ExecutionResult(returncode=1, stdout="", stderr="boom")
     registry = InMemoryEngineRegistry()
@@ -159,14 +161,13 @@ def test_execute_reverts_task_to_todo_on_execution_failure(tmp_path: Path) -> No
     auth = InMemoryAuthenticationManager(frozenset({"claude_code"}))
     dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
     service = RecommendationExecutionService(
-        recommendation_service,
         vault_adapter,
         registry,
         InMemoryEngineSelectionPolicy(),
         dispatcher,
     )
 
-    outcome = service.execute(manual_trigger=True)
+    outcome = service.execute(report, manual_trigger=True)
 
     assert outcome.result is not None
     assert outcome.result.success is False
@@ -176,9 +177,9 @@ def test_execute_reverts_task_to_todo_on_execution_failure(tmp_path: Path) -> No
 
 
 def test_render_markdown_shows_rejected_gate_decision(tmp_path: Path) -> None:
-    service, _execution_environment = _make_service(tmp_path)
+    service, report, _execution_environment = _make_service(tmp_path)
 
-    outcome = service.execute(manual_trigger=False)
+    outcome = service.execute(report, manual_trigger=False)
     markdown = render_markdown(outcome)
 
     assert "## Gate 판정" in markdown
@@ -200,11 +201,8 @@ def test_render_markdown_shows_lifecycle_transitions_on_success(tmp_path: Path) 
         created="2026-07-30",
         updated="2026-07-30",
     )
-    recommendation_service = RecommendationIntelligenceService(
-        vault_adapter,
-        ProjectIntelligenceService(vault_adapter),
-        CapabilityIntelligenceService(_make_agent_adapter()),
-    )
+    recommendation_service = _make_recommendation_service(vault_adapter)
+    report = recommendation_service.generate()
     execution_environment = FakeExecutionEnvironment()
     execution_environment.result = ExecutionResult(returncode=0, stdout="ok", stderr="")
     registry = InMemoryEngineRegistry()
@@ -217,14 +215,13 @@ def test_render_markdown_shows_lifecycle_transitions_on_success(tmp_path: Path) 
     auth = InMemoryAuthenticationManager(frozenset({"claude_code"}))
     dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
     service = RecommendationExecutionService(
-        recommendation_service,
         vault_adapter,
         registry,
         InMemoryEngineSelectionPolicy(),
         dispatcher,
     )
 
-    markdown = render_markdown(service.execute(manual_trigger=True))
+    markdown = render_markdown(service.execute(report, manual_trigger=True))
 
     assert "## Task Status 이력" in markdown
     assert "M37-T02: todo → in-progress" in markdown
@@ -232,9 +229,9 @@ def test_render_markdown_shows_lifecycle_transitions_on_success(tmp_path: Path) 
 
 
 def test_publish_writes_recommendation_execution_file(tmp_path: Path) -> None:
-    service, _execution_environment = _make_service(tmp_path)
+    service, report, _execution_environment = _make_service(tmp_path)
 
-    outcome, path = service.publish(manual_trigger=False)
+    outcome, path = service.publish(report, manual_trigger=False)
 
     assert path == tmp_path / "15 Project Intelligence" / "Recommendation Execution.md"
     assert path.exists()
@@ -254,11 +251,8 @@ def test_execute_records_execution_memory_when_store_injected(tmp_path: Path) ->
         created="2026-07-30",
         updated="2026-07-30",
     )
-    recommendation_service = RecommendationIntelligenceService(
-        vault_adapter,
-        ProjectIntelligenceService(vault_adapter),
-        CapabilityIntelligenceService(_make_agent_adapter()),
-    )
+    recommendation_service = _make_recommendation_service(vault_adapter)
+    report = recommendation_service.generate()
     execution_environment = FakeExecutionEnvironment()
     execution_environment.result = ExecutionResult(returncode=0, stdout="ok", stderr="")
     registry = InMemoryEngineRegistry()
@@ -272,7 +266,6 @@ def test_execute_records_execution_memory_when_store_injected(tmp_path: Path) ->
     dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
     memory_store = ExecutionMemoryStore(InMemoryMemoryEngine())
     service = RecommendationExecutionService(
-        recommendation_service,
         vault_adapter,
         registry,
         InMemoryEngineSelectionPolicy(),
@@ -280,7 +273,7 @@ def test_execute_records_execution_memory_when_store_injected(tmp_path: Path) ->
         memory_store,
     )
 
-    outcome = service.execute(manual_trigger=True)
+    outcome = service.execute(report, manual_trigger=True)
 
     records = memory_store.query(task_id="M39-T01")
     assert len(records) == 1
@@ -291,8 +284,8 @@ def test_execute_records_execution_memory_when_store_injected(tmp_path: Path) ->
 
 
 def test_execute_skips_memory_recording_when_store_not_injected(tmp_path: Path) -> None:
-    service, _execution_environment = _make_service(tmp_path)
+    service, report, _execution_environment = _make_service(tmp_path)
 
-    outcome = service.execute(manual_trigger=False)
+    outcome = service.execute(report, manual_trigger=False)
 
     assert outcome.gate_decision.approved is False
