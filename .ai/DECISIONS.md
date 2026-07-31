@@ -3908,3 +3908,99 @@
   유지). `pytest` 1060개 통과(9개 신규), `ruff`/`mypy` 통과,
   `guardian.checker.evaluate()` all_passed 유지. `web/server.py`
   배선 없음(Non-goal, 향후 별도 승인 시 진행).
+
+## ADR-0059: Recommendation Orchestration — M35~M42 실행 흐름을 명시적으로 연결(Milestone 43)
+
+- 상태: 승인됨 (2026-07-31, T02 Domain Analysis → T03 MDD Review →
+  T04 Milestone Proposal 진행 중 사용자가 결합도 관련 재검토를
+  요청 — `RecommendationExecutionService`의 Recommendation 의존성
+  제거안으로 T04를 갱신한 뒤 최종 승인)
+- 날짜: 2026-07-31
+- 배경: M42(Recommendation Adaptation)가 `web/server.py`(Composition
+  Root)·`RecommendationExecutionService`(M36)·`AutomationScheduler`
+  (M38)에 자동 배선하지 않기로 Non-goal로 명시했었다 — Experience
+  기반 Adaptation이 실제 운영 경로(AutomationScheduler → RUN_RECOMMENDATION)
+  에서는 여전히 미적용 상태였다. M43은 이 배선을 완성해 M35
+  (Recommendation)→M42(Adaptation)→M36(Execution)→M39(Memory)→
+  M40(Experience)로 이어지는 하나의 실행 흐름을 명시적으로 연결한다.
+- 결정:
+  1. **T02 Domain Analysis**: 책임("Recommendation부터 Experience
+     까지 하나의 작업 실행 흐름을 제어")이 기존 `Workflow`(M34,
+     Read-Only Task 상태 분석)에 포함되지 않음을 확인. `Workflow
+     Runtime`/`Workflow Coordination` 등은 이미 다른 의미로 쓰이는
+     `Workflow`를 접두어로 재사용해 §13.4가 배제한 `Learning`/
+     `Insight`와 같은 유형의 충돌을 일으킨다 — 대신 이 저장소에
+     이미 확립된 `Orchestrating Connector`(ADR-0041)/`Orchestrating
+     패턴`(M32 Synthesis, M40 Experience)과 정확히 같은 의미임을
+     확인하고 `Orchestration`을 재사용한다(§13.3에 구조적 관행으로
+     최초 등재, 1급 Domain 승격 아님).
+  2. **Milestone 이름은 `Recommendation Orchestration`** — M36/M42
+     와 동일한 대상 표현 방식(`{대상} {Domain}`)을 따라 지금 실제로
+     다루는 범위(Recommendation→Experience 루프)를 정확히 한정한다.
+     원 제안 `Workspace Orchestration`은 범위를 필요 이상으로 넓게
+     들리게 해 채택하지 않는다.
+  3. **네 가지 책임의 명시적 분리(사용자 결정)**: Composition Root
+     (`web/server.py`, 조립) / Analyzer(`RecommendationRuleAnalyzer`/
+     `RecommendationAdjustmentAnalyzer`, 판단) / `RecommendationOrchestrationService`
+     (신규, 실행 흐름 제어) / `RecommendationExecutionService`(실행).
+     이 구조가 유지되면 향후 Automation·Multi-Agent가 동일한
+     Orchestration Service를 재사용하는 기반이 된다.
+  4. **`RecommendationExecutionService`(M36)의 Recommendation 의존성
+     제거**: T04 최초 제안은 `experience_report`를 이 Service에
+     선택적으로 threading하는 것이었으나(생성자에 `RecommendationIntelligenceService`
+     유지), 사용자가 "Orchestration이 Recommendation 단계를 완결한
+     뒤 Execution에는 순수한 실행 대상만 전달하는 방향이 더 낮은
+     결합도"라고 재검토를 요청 — 검토 결과 채택. `execute()`/
+     `publish()`가 이미 계산된 `RecommendationIntelligenceReport`를
+     파라미터로 받고, 생성자에서 `RecommendationIntelligenceService`
+     의존성 자체를 제거했다. 실제로는 원안보다 이 Service에 가하는
+     변경이 더 작다(파라미터 추가+threading 대신 생성자 의존성
+     제거+내부 `generate()` 호출을 파라미터로 교체).
+  5. **`RecommendationOrchestrationService`(신규,
+     `runtime/execution/recommendation_orchestration_service.py`)**:
+     `ExperienceIntelligenceService.generate()`(M40) → `RecommendationIntelligenceService.
+     generate(experience_report=...)`(M35/M42) → `RecommendationExecutionService.
+     execute()/publish()`를 순서대로 호출만 하는 순수 흐름 제어
+     계층. 판단 로직 0줄.
+  6. **`AutomationActionExecutor`/`web/server.py` 배선 교체**:
+     `AutomationActionExecutor`가 주입받는 의존성을
+     `RecommendationExecutionService`에서 `RecommendationOrchestrationService`
+     로 교체(파라미터명 `recommendation_orchestration_service`로
+     함께 갱신) — `web/server.py`가 `ExperienceIntelligenceService`
+     +`RecommendationOrchestrationService`를 조립해 주입한다. M42의
+     Non-goal(자동 배선 없음)을 이 Milestone에서 완성한다.
+- 대안:
+  - **`experience_report`를 `RecommendationExecutionService`에
+    선택적으로 threading한다(T04 원안)** — 기각(사용자 재검토
+    요청 반영). Execution Service가 여전히 "Recommendation을 어떻게
+    얻는지" 알아야 해 결합도가 남는다.
+  - **Milestone 이름을 `Workspace Orchestration`(원 제안) 그대로
+    확정한다** — 기각. 지금 실제로 다루는 범위(Recommendation→
+    Experience 루프)보다 넓게 들려 향후 다른 흐름과 혼동될 위험이
+    있다.
+  - **`Workflow Runtime`/`Workflow Coordination`을 새로 만든다** —
+    기각. `Workflow`가 이미 M34에서 다른 의미(Read-Only Task 상태
+    분석)로 확립돼 있어 재사용 시 §13.4가 경계했던 것과 같은 유형의
+    혼동을 일으킨다.
+  - **`Orchestration`을 즉시 §13.2 1급 Domain으로 승격한다** —
+    기각(`Adaptation`과 동일한 논리). 아직 이 저장소 안에서 다루는
+    범위가 Recommendation 흐름 하나뿐이며, ADR-0041 Orchestrating
+    Connector와의 관계를 §13.3 수준에서 먼저 명확히 하는 것이 더
+    안전하다.
+- 이유: M42가 명시적으로 남겨둔 Non-goal(자동 배선)을 완성하면서,
+  동시에 "Orchestration"이라는 이미 확립된(그러나 §13에는 미등재였던)
+  관행을 공식화했다. 사용자의 재검토 요청 덕분에 `RecommendationExecutionService`
+  의 결합도를 낮추는 더 나은 설계로 T04를 갱신할 수 있었다 — Execution
+  Service가 이제 Recommendation 계산 방식과 완전히 독립적이라 향후
+  다른 Recommendation 생성 경로(예: 다른 Analyzer 조합)에도 재사용
+  가능하다.
+- 결과/영향: `runtime/execution/recommendation_orchestration_service.py`
+  (신규), `runtime/execution/recommendation_execution_service.py`
+  (Recommendation 의존성 제거, `report` 파라미터 추가),
+  `runtime/automation/automation_action_executor.py`(배선 교체),
+  `web/server.py`(Composition Root 갱신), `docs/ARCHITECTURE.md`
+  §13.3(Orchestration 추가)/§13.4(예시 행 추가)/§3.35(신규). 새 Core
+  Domain Interface/Adapter 없음(27종 유지). `pytest` 1063개 통과
+  (3개 신규 + 기존 테스트 파라미터 갱신), `ruff`/`mypy` 통과,
+  `guardian.checker.evaluate()` all_passed 유지. `build_app()` 실제
+  조립 스모크 테스트 통과.

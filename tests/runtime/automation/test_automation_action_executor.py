@@ -8,9 +8,12 @@ from ai_workspace.engines.engine_selection_policy import InMemoryEngineSelection
 from ai_workspace.integration.agent_adapter import AgentAdapter
 from ai_workspace.integration.vault_adapter import VaultAdapter
 from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
+from ai_workspace.intelligence.experience_service import ExperienceIntelligenceService
 from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
 from ai_workspace.intelligence.report import ProjectIntelligenceService
 from ai_workspace.interfaces.execution_environment import ExecutionResult
+from ai_workspace.memory.execution_memory_store import ExecutionMemoryStore
+from ai_workspace.memory.memory_engine import InMemoryMemoryEngine
 from ai_workspace.runtime.agent.agent_manager import InMemoryAgentManager
 from ai_workspace.runtime.agent.agent_registry import InMemoryAgentRegistry
 from ai_workspace.runtime.agent.agent_scheduler import InMemoryAgentScheduler
@@ -22,6 +25,9 @@ from ai_workspace.runtime.engine.engine_registry import InMemoryEngineRegistry
 from ai_workspace.runtime.execution.execution_dispatcher import ExecutionDispatcher
 from ai_workspace.runtime.execution.recommendation_execution_service import (
     RecommendationExecutionService,
+)
+from ai_workspace.runtime.execution.recommendation_orchestration_service import (
+    RecommendationOrchestrationService,
 )
 
 _TRIGGER = Trigger(kind=TriggerKind.STARTUP)
@@ -121,22 +127,29 @@ def test_run_recommendation_action_calls_recommendation_execution_service_publis
     agent_adapter = AgentAdapter(
         InMemoryAgentManager(), InMemoryAgentRegistry(), InMemoryAgentScheduler()
     )
+    recommendation_service = RecommendationIntelligenceService(
+        vault_adapter,
+        ProjectIntelligenceService(vault_adapter, agent_adapter),
+        CapabilityIntelligenceService(agent_adapter, vault_adapter),
+    )
     recommendation_execution_service = RecommendationExecutionService(
-        RecommendationIntelligenceService(
-            vault_adapter,
-            ProjectIntelligenceService(vault_adapter, agent_adapter),
-            CapabilityIntelligenceService(agent_adapter, vault_adapter),
-        ),
         vault_adapter,
         registry,
         InMemoryEngineSelectionPolicy(),
         dispatcher,
     )
+    execution_memory_store = ExecutionMemoryStore(InMemoryMemoryEngine())
+    experience_service = ExperienceIntelligenceService(vault_adapter, execution_memory_store)
+    recommendation_orchestration_service = RecommendationOrchestrationService(
+        experience_service,
+        recommendation_service,
+        recommendation_execution_service,
+    )
     executor = AutomationActionExecutor(
         engine_registry=registry,
         engine_selection_policy=InMemoryEngineSelectionPolicy(),
         execution_dispatcher=dispatcher,
-        recommendation_execution_service=recommendation_execution_service,
+        recommendation_orchestration_service=recommendation_orchestration_service,
     )
     rule = make_rule(Action(kind=ActionKind.RUN_RECOMMENDATION))
 

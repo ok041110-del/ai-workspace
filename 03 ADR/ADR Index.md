@@ -356,6 +356,12 @@ tags: [decision]
 - 결정: `RecommendationRuleAnalyzer`(M35)가 고른 `NextAction`을 새로 생성하지 않고 사후 조정(Adjustment)만 하는 `RecommendationAdjustmentAnalyzer`(`intelligence/recommendation_adjustment.py`, 신규) 도입 — 입력은 Raw `NextAction` + M40 `ExperienceReport` 두 값으로 단순화, 대상의 과거 실행이 전부 실패일 때만 추천 보류. `ExperienceReport` 생성은 M40 책임(Non-goal). `Adaptation`은 §13.3 Behavioral Concept로 정의(1급 Domain 승격은 재사용 사례 축적 시 별도 ADR로 보류). `RecommendationIntelligenceService.generate()/publish()`에 `experience_report` 선택적 인자 추가, `None`이면 M35와 100% 동일 동작(사용자 조건 5개 전부 반영)
 - 영향: `intelligence/recommendation_adjustment.py`(신규), `intelligence/recommendation_service.py`(확장), `docs/ARCHITECTURE.md` §13.3/§13.4/§3.34(신규) 갱신. 새 Core Domain Interface/Adapter 없음(27종 유지). `pytest` 1060개(9건 신규)·ruff·mypy 전부 클린, Guardian all_passed 유지. `web/server.py` 자동 배선 없음(Non-goal). 상세는 [[Architecture Overview]]
 
+## ADR-0059: Recommendation Orchestration — M35~M42 실행 흐름을 명시적으로 연결 (Milestone 43)
+
+- 목적: M42가 Non-goal로 남겨둔 `web/server.py` 자동 배선을 완성 — M35(Recommendation)→M42(Adaptation)→M36(Execution)→M39(Memory)→M40(Experience)로 이어지는 하나의 실행 흐름을 명시적으로 연결. Domain Analysis로 `Workflow`(M34, 다른 의미) 재사용을 배제하고, 이미 확립된 `Orchestrating Connector`(ADR-0041)/`Orchestrating 패턴`(M32, M40)과 같은 의미인 `Orchestration`을 §13.3에 최초 등재
+- 결정: `RecommendationOrchestrationService`(신규, `runtime/execution/recommendation_orchestration_service.py`)가 Experience 조회(M40) → Recommendation 계산(M35, Adaptation은 M42) → Execution 위임(M36)을 판단 로직 없이 순서대로 호출. MDD Review 중 사용자 재검토 요청을 반영해 `RecommendationExecutionService`(M36)가 `RecommendationIntelligenceService` 의존성을 아예 제거하고 `RecommendationIntelligenceReport`를 파라미터로 받도록 결합도 개선. Composition Root(조립)/Analyzer(판단)/Orchestration Service(흐름 제어)/Execution Service(실행) 네 가지 책임을 명시적으로 분리(사용자 결정). `AutomationActionExecutor`/`web/server.py` 배선을 Orchestration Service로 교체해 M42 Non-goal을 완성
+- 영향: `runtime/execution/recommendation_orchestration_service.py`(신규), `runtime/execution/recommendation_execution_service.py`(Recommendation 의존성 제거), `runtime/automation/automation_action_executor.py`(배선 교체), `web/server.py`(Composition Root 갱신), `docs/ARCHITECTURE.md` §13.3/§13.4/§3.35(신규) 갱신. 새 Core Domain Interface/Adapter 없음(27종 유지). `pytest` 1063개·ruff·mypy 전부 클린, Guardian all_passed 유지, `build_app()` 실제 조립 스모크 테스트 통과. 상세는 [[Architecture Overview]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
