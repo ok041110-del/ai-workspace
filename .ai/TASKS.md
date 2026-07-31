@@ -12645,6 +12645,44 @@ Recommendation Orchestration 공식 완료(Approved)**.
 
 ---
 
+## Post-M43: Recommendation Vocabulary Review
+
+**목표**(2026-07-31 사용자 요청, ADR-0060): M43 완료로 Recommendation의
+책임과 경계가 M35~M43 전 구간에서 충분히 명확해진 시점에, "Recommendation"
+이라는 용어 자체가 이 책임에 가장 적합한지 Domain Vocabulary
+Migration 절차(단순 Rename 아님)로 재검토한다.
+
+**T02 — Domain Vocabulary Analysis(완료, 사용자 승인)**: `src/ai_workspace/`
+전수 검색으로 4개 대안의 기존 충돌 여부 확인 — `Suggest`(충돌 없으나
+실질적 이득 없음), `Selection`(`EngineSelectionPolicy`/
+`EngineSelectionDecision`, M17/18과 충돌), `Decision`(`GateDecision`/
+`ApprovalDecision`/`EngineSelectionDecision`/`BudgetDecision`/
+`LLMPolicyDecision`/`RetryDecision` 6개 기존 `*Decision` 패턴과 충돌 +
+비구속성을 반영하지 못해 의미도 부정확), `Proposal`("Milestone
+Proposal" 프로세스 용어와 충돌).
+
+**결정(ADR-0060)**: `Recommendation`을 공식 Domain Vocabulary로
+유지. 정의를 한 문장으로 고정 — *"The domain concept responsible
+for determining the most appropriate Next Action from the current
+project state. It represents an actionable recommendation, not a
+mandatory decision."* `docs/ARCHITECTURE.md` §13.3 Recommendation
+행에 반영.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 4개 대안(Suggest/Selection/Decision/Proposal)과 객관적 비교 | ✅ |
+| 2 | ADR-0060 작성(Context/Considered Alternatives/Decision/Consequences) | ✅ |
+| 3 | Recommendation 정의를 한 문장으로 고정, §13.3 반영 | ✅ |
+| 4 | 리네이밍 없음(유지 결정이므로 코드 변경 0건) | ✅ |
+
+**사용자 승인(2026-07-31)**: 위 4개 항목을 확인해 **Post-M43
+Recommendation Vocabulary Review 공식 완료(Approved)** — Recommendation
+유지 확정.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
