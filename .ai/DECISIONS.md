@@ -4350,3 +4350,93 @@ recommendation, not a mandatory decision.* — 이 한 문장이 M35
   `pytest` 1108개(18개 신규) 통과, `ruff`/`mypy` 통과,
   `guardian.checker.evaluate()` all_passed 유지, `build_app()` 실제
   조립 스모크 테스트 통과.
+
+## ADR-0064: Vault Information Architecture — Vault를 AI Long-term Memory Layer로 재정의 (Milestone 46, 문서화 전용)
+
+- 상태: 승인됨 (2026-07-31, 사용자가 M39~M45로 기능 아키텍처가
+  안정화된 시점에 Vault의 Information Architecture를 재검토하도록
+  T01~T04 절차와 "기능 변경 금지"/"Graphify는 참고 모델(그대로
+  복사 금지)"/"Long-term Memory First" 3대 원칙을 명시적으로 제시)
+- 날짜: 2026-07-31
+- 배경: Obsidian Vault는 M23(Obsidian Knowledge Base 구축)부터
+  Milestone이 진행될 때마다 점진적으로 자랐다 — 각 Milestone이
+  자기 산출물만 추가했을 뿐, Vault 전체를 하나의 Knowledge Graph
+  로 보는 상위 설계가 없었다. 실제로 Vault를 전수 분석(T01)한
+  결과 이 가설이 데이터로 확인됐다: Frontmatter는 100% 있지만
+  `type` 필드는 13/49 문서에만 있고, `ADR Index.md`/`Milestones
+  Index.md`가 관련 문서를 `[[WikiLink]]`가 아니라 백틱 텍스트로만
+  언급해 Graph View/Backlink 패널에 실제 지식 구조가 드러나지
+  않는다.
+- 결정:
+  1. **T01 Current Vault Analysis(실측)**: 49개 Vault Markdown
+     문서를 스크립트로 전수 분석 — Document Type/Tag/Frontmatter/
+     Wiki Link/Orphan/Backlink를 정량화했다. 강점(`00 System/
+     PROJECT_INDEX.md`가 이미 사실상 MOC로 기능, ADR/Decision
+     2단 계층 등)과 한계(백틱 텍스트 참조, 1회성 Tag, `13 Daily`/
+     `14 Tasks` 미사용, Concept 문서 부재 등) 모두 추측 없이
+     증명했다.
+  2. **T02 Domain & Architecture Analysis**: Graphify/Second
+     Brain 철학 7개 항목(Knowledge Graph First/MOC/Wiki Link
+     First/Metadata First/Project·Label Standard/Concept/Document
+     Type Color)마다 채택·수정·기각을 근거와 함께 판단했다 — 예:
+     "모든 것을 Node로 만든다"는 원문은 기각(GitHub 원본과 이중
+     관리 위험)하고 "GitHub 원문을 대표하는 얇은 Vault Node + Wiki
+     Link"로 수정 채택. Dataview는 `.obsidian/community-plugins.json`
+     이 빈 배열임을 실측 확인해 기각(Desktop 검증 후 재검토
+     조건부).
+  3. **T03 MDD Review**: Node Definition(ADR/Milestone/Decision/
+     Concept/Project Intelligence는 Node, PR/Runtime은 Node
+     아님), Relationship Definition(9종, 별도 Frontmatter 필드
+     없이 Wiki Link+문구로만 표현), Folder/Document/Index/Hub/
+     Concept/Lesson/Roadmap Role을 정의했다. Long-term Memory
+     Strategy로 "Concept 문서가 장기 기억의 뼈대"라는 원칙과 "실제
+     데이터 없이 Lesson 구조부터 만들지 않는다"(YAGNI)는 원칙을
+     확정했다.
+  4. **Document Type Color Strategy는 §14.2를 폐기하지 않고
+     확장한다**: 기존 Domain 기반 6-Cluster 색상(Intelligence=
+     Blue/Execution=Green/Memory=Yellow/Architecture=Purple/
+     Documentation=Orange)을 전부 재사용하고, Document Type이라는
+     새 1차 축을 추가한다. `.obsidian/graph.json` 실제 적용은
+     **이번에 하지 않는다** — 2026-07-30 사용자 결정으로 동결된
+     Pending Verification 상태(Desktop 검증 대기)를 그대로
+     유지한다.
+  5. **T04 Migration Plan은 삭제 없는 증분 방식**: 기존 문서 삭제
+     0건. 이번 PR은 Phase 0(`02 Architecture/`에 IA 문서 5개 신규
+     생성 + `PROJECT_INDEX.md`에 진입점 1줄 추가)만 실행한다.
+     Recommendation Hub/Concept 문서 8종/기존 문서 `type` 일괄
+     추가/Roadmap Hub/Color 실제 적용은 전부 별도 Phase로 제안만
+     하고 이번 범위에 포함하지 않는다.
+- 대안:
+  - **Graphify를 그대로 이식한다**(모든 것을 Node화, 광범위
+    Metadata 스키마) — 기각. 이 저장소는 GitHub이 이미 Source of
+    Truth이고 Vault는 파생 뷰라는 기존 원칙(§9, ADR-0037)과
+    충돌한다.
+  - **이번에 `.obsidian/graph.json`을 새 Color 체계로 즉시
+    적용한다** — 기각. graph.json은 이미 2026-07-30 Pending
+    Verification으로 동결돼 있고(Desktop 검증 없이는 Schema
+    비호환/iOS 구현 제약/Mobile 버그를 구분할 수 없음), 이 결정을
+    뒤집을 새 증거가 없다.
+  - **기존 36개 문서에 `type` Frontmatter를 이번 PR에서 일괄
+    추가한다** — 기각. 이번 Milestone 범위(Information Architecture
+    설계)를 벗어난 대규모 일괄 편집이며, ADR-0057 Boy Scout Rule과
+    동일 정신으로 실제 그 문서를 건드릴 이유가 생겼을 때 점진
+    적용한다.
+  - **Lesson Node를 이번에 함께 설계·생성한다** — 기각(YAGNI).
+    실제 회고 데이터가 없는 상태에서 구조부터 만들면 Graphify가
+    경계하는 "구조를 위한 구조"가 된다.
+- 이유: 실측(T01) 없이 설계하면 추측에 근거한 재설계가 되어 §9
+  "추측하지 않는다" 원칙과 충돌한다. Graphify를 항목별로 채택/
+  수정/기각하는 절차를 거쳐야 이 저장소의 기존 원칙(GitHub Source
+  of Truth, Vocabulary Reuse First, 최소 Metadata, Boy Scout Rule)
+  과 충돌 없이 통합된다. `.obsidian/graph.json` 동결을 유지한 채로
+  설계까지만 완료하면, Desktop 검증이 풀리는 즉시 적용 가능한
+  상태로 대비할 수 있다.
+- 결과/영향: `02 Architecture/Vault Information Architecture.md`
+  (신규, 마스터 문서), `Metadata Standard.md`(신규), `Document
+  Type Color Strategy.md`(신규), `Map of Content Guide.md`(신규),
+  `Vault Migration Plan.md`(신규), `00 System/PROJECT_INDEX.md`
+  (Retrieval First 표에 1행 추가), `docs/ARCHITECTURE.md` §14
+  (§15로의 연결 문구 추가)/§15(신규)/헤더 상태 갱신. 코드 변경
+  없음 — `pytest`/`ruff`/`mypy`/`guardian.checker.evaluate()`
+  전부 기존 상태(1108 passed) 그대로 유지. `.obsidian/graph.json`
+  무변경(동결 유지). 기존 Vault 문서 삭제 0건, Rename 0건.

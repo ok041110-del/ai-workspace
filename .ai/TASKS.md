@@ -12935,6 +12935,82 @@ Hook 신규 도입은 별도 승인 필요), Vault `current_pr`(GitHub API
 
 ---
 
+## Milestone 46 — Vault Information Architecture
+
+**목표**(2026-07-31 사용자 요청, ADR-0064): M39~M45로 기능 아키텍처
+(Recommendation/Execution/Memory/Experience/Guardian/Observability/
+Explainability/Orchestration)가 안정화된 시점에, Obsidian Vault를
+"문서 저장소"가 아니라 "AI Workspace의 Long-term Memory Layer"로
+재정의한다. **기능 변경 금지**(위 8개 기능 전부 무변경), Graphify는
+참고 모델이되 항목마다 채택/수정/기각 근거 제시, Long-term Memory
+First 관점으로 판단 — 3대 원칙을 사용자가 명시.
+
+**T01 — Current Vault Analysis(완료)**: Vault 49개 Markdown 문서를
+스크립트로 전수 분석(추측 없음). Frontmatter 100% 커버리지지만
+`type` 필드 13/49만 존재, Tag 대부분 1회성(재사용 0회), `15
+Project Intelligence/`의 AI 생성 리포트 6개는 outgoing link 0개,
+`ADR Index.md`/`Milestones Index.md`가 관련 문서를 `[[WikiLink]]`
+가 아닌 백틱 텍스트로만 언급(핵심 발견). 강점(`PROJECT_INDEX.md`가
+이미 사실상 MOC, ADR/Decision 2단 계층)과 한계(`13 Daily`/`14
+Tasks` 미사용, Concept 문서 부재, `04 Backend`~`10 Android` 정체)
+모두 증명.
+
+**T02 — Domain & Architecture Analysis(완료)**: Graphify/Second
+Brain 7개 항목(Knowledge Graph First/MOC/Wiki Link First/Metadata
+First/Project·Label Standard/Concept/Document Type Color)마다
+채택·수정·기각 판단. Dataview는 `.obsidian/community-plugins.json`
+이 빈 배열임을 실측 확인해 기각. Document Type Color는 §14.2
+(ADR-0054) Domain Cluster를 폐기하지 않고 확장.
+
+**T03 — MDD Review(완료)**: Node Definition(ADR/Milestone/
+Decision/Concept/Project Intelligence는 Node, PR/Runtime은 Node
+아님), Relationship 9종(별도 Frontmatter 필드 없이 Wiki Link+문구),
+Folder/Document/Index/Hub/Concept/Lesson/Roadmap Role, Long-term
+Memory Strategy(Concept가 장기 기억의 뼈대, Lesson은 YAGNI로 보류)
+확정.
+
+**T04 — Implementation Proposal(완료)**: Migration Plan은 삭제
+없는 증분 방식 — Phase 0(이번 PR, IA 문서 5개 신규 생성 +
+`PROJECT_INDEX.md` 진입점 1줄)만 즉시 실행. Recommendation Hub/
+Concept 문서 8종/기존 문서 `type` 일괄 추가/Roadmap Hub/Color 실제
+적용은 Phase 1~5로 제안만(별도 승인 또는 Boy Scout Rule 트리거
+대기). `.obsidian/graph.json` 실제 수정은 Desktop 검증 대기로
+계속 보류(2026-07-30 동결 유지).
+
+**ADR 검토**: 이번 변경은 Architecture 변경(코드 아님)이지만 향후
+Vault 문서 생성이 따라야 할 구속력 있는 표준(Node/Relationship
+모델, Metadata Standard, Document Type Color)을 정의하므로 ADR이
+필요하다고 판단 — ADR-0054(Domain Vocabulary)/ADR-0057(Naming
+Standard) 선례와 동일한 성격. **ADR-0064 작성**.
+
+**산출물**: `02 Architecture/Vault Information Architecture.md`
+(마스터), `Metadata Standard.md`, `Document Type Color Strategy.md`,
+`Map of Content Guide.md`, `Vault Migration Plan.md`(전부 신규).
+`00 System/PROJECT_INDEX.md` Retrieval First 표에 1행 추가(기존
+구조 무변경). `docs/ARCHITECTURE.md` §14(연결 문구)/§15(신규)/헤더
+상태 갱신.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 기능 변경 없음(8개 기존 기능 전부 무변경) | ✅ |
+| 2 | Guardian 통과 | ✅ |
+| 3 | 기존 테스트 전부 통과 | ✅ |
+| 4 | 기존 Link 최대 유지(삭제 0건, Rename 0건) | ✅ |
+| 5 | Metadata 표준 정의 | ✅ |
+| 6 | Color Strategy 정의(적용은 Desktop 검증 대기) | ✅ |
+| 7 | MOC 구조 정의 | ✅ |
+| 8 | Knowledge Graph 설계 완료(Node/Relationship Definition) | ✅ |
+| 9 | Long-term Memory Layer 설계 완료 | ✅ |
+| 10 | Migration Plan 완료(Phase 0~5) | ✅ |
+| 11 | ADR-0064 작성 | ✅ |
+
+**사용자 승인(2026-07-31)**: 위 11개 항목을 확인해 **Milestone 46
+Vault Information Architecture 공식 완료(Approved)**.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
