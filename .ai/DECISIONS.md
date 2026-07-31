@@ -3533,6 +3533,18 @@
   headless 세션이라 실제 Obsidian 화면 확인은 이 세션에서 할 수
   없다는 한계를 명시적으로 기록한다 — 사용자의 실제 앱 확인이
   필요하다.
+- **T01-Fix 상태: Pending Verification(2026-07-30, 사용자 확정,
+  `.ai/TASKS.md`의 "Pre-M40 T01-Fix 상태" 절 참고)**: 두 차례
+  수정(PR #26/#28) 후에도 사용자의 실제 환경(iOS Obsidian Mobile
+  뿐, Desktop 접근 없음)에서 결론을 낼 수 없음이 확인돼 검증을
+  보류한다. `.obsidian/graph.json`/Schema 비호환, iOS Graph 구현
+  자체의 제약, Obsidian Mobile 자체 버그(Forum "Bug graveyard") 세
+  가능성 중 무엇이 원인인지 현재 증거로는 구분 불가 — 서로 배타적이
+  아니고 겹칠 수도 있다. **`.obsidian/graph.json`은 이번에 전혀
+  수정하지 않았다**(PR #28 내용 그대로 유지, 사용자 명시 요청).
+  Desktop 접근이 가능해지면 실행할 5단계 검증 체크리스트를
+  `.ai/TASKS.md`에 기록했다 — 새 근거 없이는 Graph Query/색상을
+  바꾸는 PR을 다시 만들지 않는다.
 - **T02~T05 M40 명명 분석 완료(2026-07-30, `.ai/TASKS.md`의
   "Pre-M40 T02~T05" 절 참고)**: M40의 Responsibility를 (a)Read-Only
   Experience Reporting과 (b)Experience-Informed Recommendation 두

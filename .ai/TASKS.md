@@ -12055,6 +12055,71 @@ Query로 추가 가능, 이번 수정 범위 밖).
 `.obsidian/graph.json` 1개 파일만 수정했다. `pytest`/`ruff`/`mypy`는
 애초에 이 변경과 무관(Python 코드 없음).
 
+#### T01-Fix 상태: Pending Verification (2026-07-30, 사용자 확정)
+
+**상태: 검증 보류(Pending Verification)** — 두 차례 수정(PR #26, #28)
+후에도 실제 환경에서 Graph Group이 적용되는지 이 환경에서는 결론을
+낼 수 없다는 것이 확인됐다. 사용자 요청에 따라 **더 이상 `.obsidian/
+graph.json`을 수정하지 않는다** — 이 절은 코드/설정 변경이 아니라
+검증 상태를 기록하는 것만이 목적이다.
+
+**환경 제약(기록)**
+
+1. 사용자가 실제로 테스트 중인 환경은 **iOS(Obsidian Mobile)뿐**이다
+   — Desktop Obsidian 접근이 없다.
+2. 이 세션(Claude Code 실행 환경)은 GUI가 없는 headless 컨테이너로,
+   Desktop이든 Mobile이든 실제 Obsidian 앱을 실행해 화면을 확인할
+   방법이 이 세션에는 전혀 없다.
+3. 따라서 **Desktop 환경에서의 검증은 현재 이용 불가능**하다 — Query
+   문법이 Desktop에서는 정상 동작하는지조차 이 시점에는 알 수 없다.
+
+**Root Cause를 확정할 수 없는 이유**: 다음 세 가지 가능성 중 무엇이
+실제 원인인지 현재 증거로는 구분할 수 없다.
+
+| 가능성 | 설명 | 구분 불가능한 이유 |
+|---|---|---|
+| (a) `graph.json`/Schema 비호환 | Query 문법 또는 파일 구조가 사용자의 Obsidian 버전과 맞지 않음 | Desktop에서 동일 파일을 열어봐야 확인 가능한데 Desktop 접근이 없음 |
+| (b) iOS Graph 구현 자체의 제약 | Obsidian Mobile(iOS)의 Graph View가 Desktop과 다른 렌더링/설정 로딩 경로를 쓸 가능성 | iOS와 Desktop 양쪽에서 같은 파일로 비교 테스트를 해야 구분 가능한데 Desktop이 없음 |
+| (c) Obsidian Mobile 버그 | 이전 라운드에서 조사한 "Graph 설정은 Hot-Reload 대상이 아니다"/"기기 간 동기화 후 미반영" 등 Obsidian 자체의 알려진 이슈(Forum "Bug graveyard")가 iOS에서 더 심할 가능성 | Obsidian 개발팀만 확인 가능한 내부 동작이라 외부에서 확정 불가 |
+
+이 셋은 **서로 배타적이지 않고 원인이 여러 개 겹쳐 있을 수도 있다**
+— 지금 시점에 하나로 좁히는 것은 증거 부족 상태에서의 추측이라
+시도하지 않는다.
+
+**Desktop 접근이 가능해지면 실행할 검증 체크리스트**
+
+- [ ] 1. 동일 Vault를 Desktop Obsidian에서 열고, git `main`의 최신
+      `.obsidian/graph.json`(PR #28 버전)을 그대로 사용한다.
+- [ ] 2. Desktop에서 완전히 새로 앱을 시작(cold start, 재시작이
+      아니라 완전 종료 후 최초 기동)한 상태에서 Settings → Graph →
+      Groups를 열어 6개 Group이 목록에 보이는지 확인한다.
+      - 보인다 → 파일은 정상적으로 파싱된다는 뜻(원인 (a) 기각).
+        다음 단계로.
+      - 안 보인다 → 원인 (a)(Schema 비호환) 가능성이 높아진다 —
+        Command Palette → "Reload app without saving"을 실행한 뒤
+        다시 확인한다(그래도 안 보이면 Schema 문제로 사실상 확정).
+- [ ] 3. Groups가 보인다면 Graph View를 열어 실제로 노드에 색이
+      입혀지는지 확인한다.
+      - 색이 보인다 → Desktop은 정상 동작 — 원인은 iOS 쪽((b) 또는
+        (c))으로 좁혀진다.
+      - 색이 안 보인다 → Query 자체의 매칭 문제(문서 실제 경로가
+        Query와 다른지 재확인) — `docs/ARCHITECTURE.md` §14.3 매핑표와
+        실제 Vault 문서 경로를 다시 대조한다.
+- [ ] 4. Desktop에서 정상 동작이 확인되면, 같은 Vault를 iOS
+      Obsidian에서 열어(동기화 반영 후) 같은 절차(Groups 목록 확인 →
+      Graph View 색상 확인)를 반복해 iOS에서만 실패하는지 교차
+      검증한다.
+- [ ] 5. 위 4단계 결과를 조합해 원인을 (a)/(b)/(c) 중 하나 또는
+      조합으로 확정하고, 이 절의 "상태"를 Pending Verification에서
+      확정된 결론으로 갱신한다 — 그 결론에 따라서만 `.obsidian/
+      graph.json`을 다시 수정한다(근거 없는 재수정 금지, 사용자
+      명시적 요청).
+
+**이번 기록의 범위**: 이 절은 검증 상태 기록만 수행한다 —
+`.obsidian/graph.json`은 이번에 전혀 수정하지 않았다(PR #28의 내용
+그대로 유지). 새 근거 없이는 Graph Query/색상을 바꾸는 PR을 다시
+만들지 않는다(사용자 명시).
+
 ### T02: M40 Responsibility Analysis (2026-07-30)
 
 **목표**: M40이 실제로 무엇을 하는 Milestone인지 정의한다. ADR-0053
