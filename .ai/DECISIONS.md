@@ -6411,3 +6411,18 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   files) 전부 통과. `.ai/TASKS.md` Milestone 71 절 신규 추가.
   `docs/ARCHITECTURE.md` §3.12 Workflow Runner 절 및 §7 인터페이스 표
   (`WorkflowEngine`)에 Workflow Learning 서술 추가.
+
+## ADR-0090: Workflow Adaptive Planning — 학습된 실행 순서를 현재 dependency로 검증 (Milestone 72)
+
+- 배경: M71(ADR-0089)의 `_signature()`는 `task_ids`+`dependencies` 간선까지 정확히 일치해야 추천을 반환했다. 이 상태에서는 추천 순서가 존재하기만 하면 정의상 이미 현재 dependency를 만족하므로, "추천 순서가 유효하지 않으면 fallback"이라는 규칙이 코드에서 발동할 수 없는 죽은 경로였다. 사용자가 "M71의 학습을 실제 계획(plan)에 자동 반영"하는 M72를 요청하며 이 간극을 지적했다.
+- 사용자 승인(AskUserQuestion, 1회): `_signature()`를 `task_ids`만으로 완화한다(권장안 채택) — 같은 Task 묶음이면 dependency가 바뀌어도(예: 새 의존관계 추가) 과거 추천을 우선 조회하되, `plan()`이 그 추천을 채택하기 전 현재 dependency를 실제로 만족하는지 검증한다.
+- 결정:
+  1. `InMemoryWorkflowEngine._signature()`를 `(frozenset(task_ids), edges)`에서 `frozenset(task_ids)`로 축소한다. `WorkflowEngine`(interface) 메서드 시그니처는 무변경 — `plan()`/`record_run_outcome()`/`recommended_order()` 전부 기존 그대로.
+  2. `plan()`에 `_is_valid_order(order, workflow)` private 검증을 추가한다: (a) `order`가 `workflow.task_ids`와 정확히 같은 집합(순열)인지, (b) `workflow.dependencies`의 모든 간선(`dependent → {dependencies}`)이 `order` 상에서 dependency가 dependent보다 먼저 오는지. `recommended_order()`가 값을 반환하고 이 검증을 통과할 때만 그 순서를 채택하고, 그렇지 않으면(추천 없음 또는 검증 실패) 기존 DFS 위상 정렬로 완전히 동일하게 fallback한다.
+  3. `WorkflowOrderStat`/`recommended_order()` 자체는 M71 그대로 재사용한다 — 새 값 객체, 새 abstract method 없음. "추천은 힌트, 정합성 검증은 plan()의 책임"으로 관심사를 분리했다.
+  4. `FakeWorkflowEngine`(`tests/interfaces/fakes.py`)은 `recommended_order()`가 항상 `None`을 반환하는 기존 스텁을 그대로 유지 — 이 검증 경로를 타지 않으므로 수정 불필요.
+- 대안:
+  1. `_signature()`를 그대로 두고 `plan()`에 검증만 추가 — 기각: 검증이 항상 통과하는 죽은 코드가 되어 "학습을 실제 계획에 반영"한다는 M72 목표(dependency가 바뀌어도 적응)를 달성하지 못한다.
+  2. 검증 실패 시 추천에서 dependency를 어긴 부분만 국소 수정(순서 일부만 재배치) — 기각: 어떤 최소 변경이 "올바른" 재배치인지 기준이 불명확해 새 알고리즘을 설계해야 하고, "정합성 위반 시 전량 fallback"이 가장 단순하고 안전하다(YAGNI).
+- 이유: `_signature()` 완화는 M71이 이미 구축한 `WorkflowOrderStat`/dict 저장 구조를 전혀 바꾸지 않고 키 하나만 좁히는 최소 변경이다. `plan()`의 검증 로직은 순수 함수(side-effect 없음, `_plan_by_dependency_order()`와 동일한 계층)라 `WorkflowEngine`이 EventBus를 몰라야 한다는 §8 계층 규칙이나 새 Core Domain Interface 없이도 "추천은 힌트일 뿐, 정합성은 항상 보장"이라는 요구를 충족한다.
+- 결과/영향: `engines/workflow_engine.py`(`_signature()` 축소, `_is_valid_order()` 신설, `plan()` 검증 로직 추가), `interfaces/workflow_engine.py`(docstring 갱신, 계약 무변경) 수정. 새 파일/Core Domain Interface 없음(기존 `WorkflowEngine`의 메서드 3개 그대로, 30종 유지). `tests/engines/test_workflow_engine.py`에 신규 테스트 2건(추천이 새 dependency를 어기면 fallback, 여전히 유효하면 채택) 추가. `pytest` 1319개(신규 2개, 회귀 없음)/`ruff`/`mypy`(233 source files) 전부 통과. `docs/ARCHITECTURE.md` §3.12 Workflow Runner 절 및 §7 인터페이스 표(`WorkflowEngine`)에 Workflow Adaptive Planning 서술 추가.
