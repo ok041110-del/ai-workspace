@@ -62,6 +62,9 @@ class RecordingEngineRuntime(EngineRuntime):
     ):
         raise NotImplementedError
 
+    def run_ensemble(self, task, engine_names, *, model=None):
+        raise NotImplementedError
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

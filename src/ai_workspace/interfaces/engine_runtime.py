@@ -99,6 +99,38 @@ class EngineRuntime(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def run_ensemble(
+        self,
+        task: Task,
+        engine_names: list[str],
+        *,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        """**Multi-LLM Orchestrator(Milestone 62, ADR-0080)**: `run()`/
+        `run_parallel()`이 "어떤 하나의 엔진을 고를지"만 결정하는 것과 달리,
+        이 메서드는 **같은 Task**를 `engine_names`로 지정된 여러 등록된
+        엔진에 동시에 돌려 비교 가능한 결과 묶음을 만든다. capability 기준
+        선택(`_select`/`_require_adapter`)을 거치지 않고 `register_engine()`
+        에 쓰인 이름으로 정확히 지정한다 — 여러 Provider(Claude/Codex/
+        Gemini 등)를 의도적으로 섞어 돌리는 것이 목적이므로 "능력 만족하는
+        첫 하나" 규칙은 맞지 않는다. 결과를 투표/합치는 로직은 포함하지
+        않는다 — 호출자가 반환된 결과를 비교·선택한다(YAGNI).
+
+        입력: task (모든 엔진에 동일하게 실행할 Task), engine_names (실행할
+              등록된 엔진 이름 목록), model (선택적, 모든 엔진에 동일하게
+              전달할 모델 이름)
+        출력: engine_names의 각 이름을 key로, 그 엔진의 EngineResult를
+              value로 하는 dict. 반환된 dict의 key 집합은 항상 입력
+              engine_names와 같다(중복 이름은 마지막 결과로 덮어써짐).
+        예외: 없음 — `engine_names`가 비어 있으면 빈 dict를 반환한다.
+        보장(개별 엔진 실패 격리, `run_parallel()`의 M10-T01/T02 원칙과
+        동일): 등록되지 않은 이름이거나 실행 중 예외가 발생해도 그 이름의
+        `EngineResult(success=False, error=...)`로만 반영되고, 다른 이름의
+        결과나 이 메서드 자체의 반환에는 영향을 주지 않는다.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

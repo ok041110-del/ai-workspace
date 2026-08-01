@@ -504,3 +504,74 @@ def test_run_parallel_empty_list_returns_empty_list() -> None:
     runtime.register_engine("mock", MockEngineAdapter())
 
     assert runtime.run_parallel([]) == []
+
+
+def test_run_ensemble_runs_same_task_via_each_named_engine() -> None:
+    """M62(ADR-0080): 같은 Task를 여러 등록된 엔진 이름으로 동시에 돌려
+    이름별로 비교 가능한 결과를 얻는다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("claude", MockEngineAdapter())
+    runtime.register_engine("codex", MockEngineAdapter())
+    runtime.register_engine("gemini", MockEngineAdapter())
+
+    results = runtime.run_ensemble(make_task(), ["claude", "codex", "gemini"])
+
+    assert set(results) == {"claude", "codex", "gemini"}
+    assert all(result.success for result in results.values())
+
+
+def test_run_ensemble_executes_engines_concurrently() -> None:
+    """`run_parallel()`이 여러 Task를 동시에 돌리듯, `run_ensemble()`도
+    같은 Task를 여러 엔진에서 실제로 동시에 실행함을 시간으로 증명한다."""
+    delay_seconds = 0.2
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("a", SlowParallelEngineAdapter(delay_seconds))
+    runtime.register_engine("b", SlowParallelEngineAdapter(delay_seconds))
+    runtime.register_engine("c", SlowParallelEngineAdapter(delay_seconds))
+
+    started = time.monotonic()
+    results = runtime.run_ensemble(make_task(), ["a", "b", "c"])
+    elapsed = time.monotonic() - started
+
+    assert all(result.success for result in results.values())
+    assert elapsed < delay_seconds * 2
+
+
+def test_run_ensemble_isolates_individual_engine_failure() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("ok", MockEngineAdapter())
+    runtime.register_engine("broken", FailingFakeEngineAdapter())
+
+    results = runtime.run_ensemble(make_task(), ["ok", "broken"])
+
+    assert results["ok"].success is True
+    assert results["broken"].success is False
+
+
+def test_run_ensemble_unregistered_name_yields_failed_result_not_exception() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("ok", MockEngineAdapter())
+
+    results = runtime.run_ensemble(make_task(), ["ok", "missing"])
+
+    assert results["ok"].success is True
+    assert results["missing"].success is False
+
+
+def test_run_ensemble_empty_names_returns_empty_dict() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+
+    assert runtime.run_ensemble(make_task(), []) == {}
+
+
+def test_run_ensemble_does_not_affect_run_task_status_tracking() -> None:
+    """`run_ensemble()`은 `status(task_id)`(1개 task_id당 1개 상태만
+    추적)와 의미가 충돌하므로 이 추적에 전혀 관여하지 않는다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("a", MockEngineAdapter())
+    task = make_task()
+
+    runtime.run_ensemble(task, ["a"])
+
+    with pytest.raises(EngineTaskNotFoundError):
+        runtime.status(task.task_id)

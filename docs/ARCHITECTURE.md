@@ -594,6 +594,24 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   없이 내부 Runtime에 순수 위임한다(추정은 side-effect가 없어 재시도할
   이유가 없다). `CodingAgent`가 이를 §3.13 `BudgetPolicyEngine`과
   함께 사용해 실행 전 예산을 확인한다.
+- **Multi-LLM Orchestrator(Milestone 62, ADR-0080)**: `run()`/
+  `run_parallel()`은 항상 "하나의 Task ↔ 하나의 선택된 Adapter"만
+  다룬다 — `run_parallel()`도 **여러 Task**를 각자 하나씩 병렬로
+  돌릴 뿐, 하나의 Task를 여러 Provider에 동시에 보내 비교하는
+  메커니즘은 아니다. `run_ensemble(task, engine_names, *, model=None)
+  -> dict[str, EngineResult]`가 이 공백을 채운다 — capability 기반
+  선택(`_select`/`_require_adapter`)을 거치지 않고
+  `register_engine()`에 쓰인 정확한 이름으로 여러 등록된 Adapter를
+  지정해 **같은 Task**를 동시에 돌린다(`ManagedEngineRuntime`은
+  `run_parallel()`과 동일한 `ThreadPoolExecutor` 메커니즘 재사용).
+  결과를 투표/합치는 로직은 포함하지 않는다 — 호출자가 반환된 이름별
+  결과를 직접 비교한다(YAGNI). 개별 엔진 실패(미등록 이름 포함)는
+  `run_parallel()`의 M10-T01/T02 원칙과 동일하게 그 이름의
+  `EngineResult(success=False)`로만 격리되고 나머지 결과에 영향을
+  주지 않는다. `run_ensemble()`은 `status(task_id)`(task_id당 상태
+  1개) 추적과 의미가 충돌해 여기 관여하지 않는다.
+  `RecoveringEngineRuntime`은 재시도 없이 내부 Runtime에 위임한다 —
+  실패한 개별 결과도 비교 대상이라 재시도로 덮어쓰면 오히려 왜곡된다.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 

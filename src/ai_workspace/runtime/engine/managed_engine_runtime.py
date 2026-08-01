@@ -138,6 +138,40 @@ class ManagedEngineRuntime(EngineRuntime):
                     results.append(EngineResult(success=False, output="", error=str(exc)))
             return results
 
+    def run_ensemble(
+        self,
+        task: Task,
+        engine_names: list[str],
+        *,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        """등록된 이름별 어댑터에 `run_parallel()`과 같은 `ThreadPoolExecutor`
+        메커니즘으로 동시에 같은 Task를 돌린다. `run()`/`_task_status` 등
+        task_id 단위 상태 추적은 여기서 쓰지 않는다 — 같은 task.task_id가
+        여러 엔진에서 동시에 실행되면 그 상태 저장소(1개 task_id당 1개
+        상태만 갖는 구조)와 의미가 충돌하기 때문에, status()/cancel()
+        연동 없이 세션 생성→실행→정리만 독립적으로 수행한다."""
+        if not engine_names:
+            return {}
+        with ThreadPoolExecutor(max_workers=len(engine_names)) as executor:
+            futures = {
+                name: executor.submit(self._run_named, name, task, model)
+                for name in engine_names
+            }
+            return {name: future.result() for name, future in futures.items()}
+
+    def _run_named(self, name: str, task: Task, model: str | None) -> EngineResult:
+        adapter = self._engines.get(name)
+        if adapter is None:
+            return EngineResult(success=False, output="", error=f"engine '{name}' not registered")
+        try:
+            session_id = adapter.create_session()
+            result = adapter.run(session_id, task, model=model)
+            adapter.destroy_session(session_id)
+            return result
+        except BaseException as exc:
+            return EngineResult(success=False, output="", error=str(exc))
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

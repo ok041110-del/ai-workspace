@@ -96,3 +96,34 @@ def test_run_parallel_preserves_order() -> None:
     results = runtime.run_parallel(tasks)
 
     assert [result.success for result in results] == [True, True, True]
+
+
+def test_run_ensemble_runs_same_task_via_each_named_engine() -> None:
+    """M62(ADR-0080): 같은 Task를 여러 등록된 엔진 이름으로 동시에 돌려
+    이름별 결과를 얻는다."""
+    runtime = InMemoryEngineRuntime()
+    runtime.register_engine("claude", MockEngineAdapter())
+    runtime.register_engine("codex", MockEngineAdapter())
+    task = make_task()
+
+    results = runtime.run_ensemble(task, ["claude", "codex"])
+
+    assert set(results) == {"claude", "codex"}
+    assert results["claude"].success is True
+    assert results["codex"].success is True
+
+
+def test_run_ensemble_unregistered_name_yields_failed_result_not_exception() -> None:
+    runtime = InMemoryEngineRuntime()
+    runtime.register_engine("claude", MockEngineAdapter())
+
+    results = runtime.run_ensemble(make_task(), ["claude", "unknown"])
+
+    assert results["claude"].success is True
+    assert results["unknown"].success is False
+
+
+def test_run_ensemble_empty_names_returns_empty_dict() -> None:
+    runtime = InMemoryEngineRuntime()
+
+    assert runtime.run_ensemble(make_task(), []) == {}

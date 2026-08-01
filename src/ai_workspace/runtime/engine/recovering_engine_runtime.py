@@ -88,6 +88,21 @@ class RecoveringEngineRuntime(EngineRuntime):
                 final.append(EngineResult(success=False, output="", error=str(exc)))
         return final
 
+    def run_ensemble(
+        self,
+        task: Task,
+        engine_names: list[str],
+        *,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        """내부 Runtime에 그대로 위임한다 — 재시도(retry)는 `run()`/
+        `run_parallel()`처럼 "언젠가 성공하는 하나의 결과"를 목표로 하는
+        개념인데, `run_ensemble()`은 애초에 여러 Provider의 결과를 각각
+        비교하려는 목적이라 실패한 개별 결과 자체도 유의미한 정보다 —
+        재시도로 덮어쓰면 오히려 비교 대상을 왜곡한다(YAGNI로 추가하지
+        않음)."""
+        return self._inner.run_ensemble(task, engine_names, model=model)
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:
