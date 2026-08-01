@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.retry_policy import RetryPolicy
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_adapter import (
@@ -133,6 +134,11 @@ class RecoveringEngineRuntime(EngineRuntime):
 
     def consensus_weight(self, required_capabilities: frozenset[str], engine_name: str) -> float:
         return self._inner.consensus_weight(required_capabilities, engine_name)
+
+    def benchmark_profile(self, engine_name: str) -> EngineBenchmarkProfile:
+        """재시도와 무관한 read-only 조회이므로(Milestone 77, ADR-0095)
+        내부 Runtime에 그대로 위임한다."""
+        return self._inner.benchmark_profile(engine_name)
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

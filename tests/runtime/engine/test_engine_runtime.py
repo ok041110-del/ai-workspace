@@ -766,3 +766,84 @@ def test_load_balancing_prefers_lower_relative_load_over_raw_in_flight_count() -
 
     assert engine_a.run_count == 4
     assert engine_b.run_count == 1
+
+
+def test_benchmark_profile_zero_when_no_execution_recorded() -> None:
+    """M77(ADR-0095): 실행된 적 없는 엔진 이름을 조회해도 예외 없이
+    모든 카운트가 0인 프로필을 반환한다(consensus_weight()와 동일한
+    "미기록도 값 반환" 원칙)."""
+    runtime = InMemoryEngineRuntime()
+
+    profile = runtime.benchmark_profile("never-run")
+
+    assert profile.execution_count == 0
+    assert profile.success_rate() is None
+    assert profile.failure_rate() is None
+    assert profile.average_latency_seconds() is None
+
+
+def test_benchmark_profile_aggregates_reliability_and_execution_memory() -> None:
+    """M77(ADR-0095): run()이 M65(`_engine_reliability`)/M69(`_execution_
+    memory`)에 이미 기록해 둔 데이터를 새 측정 없이 그대로 집계해
+    반환한다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    adapter = CostedEngineAdapter(estimated_cost_usd=0.0)
+    runtime.register_engine("claude", adapter)
+    for _ in range(3):
+        runtime.run(make_task())
+    failing_runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    failing_adapter = CostedEngineAdapter(estimated_cost_usd=0.0, succeed=False)
+    failing_runtime.register_engine("claude", failing_adapter)
+    failing_runtime.run(make_task())
+
+    profile = runtime.benchmark_profile("claude")
+
+    assert profile.execution_count == 3
+    assert profile.success_count == 3
+    assert profile.failure_count == 0
+    assert profile.success_rate() == 1.0
+    assert profile.failure_rate() == 0.0
+    assert profile.latency_sample_count == 3
+    assert profile.average_latency_seconds() is not None
+
+    failing_profile = failing_runtime.benchmark_profile("claude")
+    assert failing_profile.execution_count == 1
+    assert failing_profile.failure_count == 1
+    assert failing_profile.success_rate() == 0.0
+
+
+def test_benchmark_profile_aggregates_execution_memory_across_capability_combinations() -> None:
+    """M77(ADR-0095): `_execution_memory`는 `(required_capabilities,
+    engine_name)` 조합 키지만, `benchmark_profile()`은 같은 engine_name의
+    모든 조합을 합산해 Provider 단위 latency를 계산한다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    adapter = CostedEngineAdapter(estimated_cost_usd=0.0, capabilities=frozenset({"a", "b"}))
+    runtime.register_engine("claude", adapter)
+
+    runtime.run(make_task("t1"), frozenset({"a"}))
+    runtime.run(make_task("t2"), frozenset({"b"}))
+
+    profile = runtime.benchmark_profile("claude")
+
+    assert profile.execution_count == 2
+    assert profile.latency_sample_count == 2
+
+
+def test_benchmark_profile_does_not_affect_engine_selection() -> None:
+    """M77(ADR-0095): `benchmark_profile()` 호출은 read-only 조회이며
+    Routing 결과에 전혀 영향을 주지 않는다 — 반복 조회 전후로 동일
+    엔진이 선택된다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    engine_a = CostedEngineAdapter(estimated_cost_usd=0.0)
+    engine_b = CostedEngineAdapter(estimated_cost_usd=5.0)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    runtime.run(make_task("first"))
+    for _ in range(5):
+        runtime.benchmark_profile("engine-a")
+        runtime.benchmark_profile("engine-b")
+    runtime.run(make_task("second"))
+
+    assert engine_a.run_count == 2
+    assert engine_b.run_count == 0

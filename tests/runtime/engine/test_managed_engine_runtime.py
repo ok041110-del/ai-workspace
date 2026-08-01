@@ -1148,3 +1148,35 @@ def test_load_balancing_prefers_lower_relative_load_over_raw_in_flight_count() -
 
     assert engine_a.run_count == 4
     assert engine_b.run_count == 1
+
+
+def test_benchmark_profile_counts_all_paths_but_latency_only_recorded_paths() -> None:
+    """M77(ADR-0095): `run()`(latency 기록)과 `run_ensemble()`(latency
+    미기록, `_record_engine_outcome()`만 호출)을 섞어 호출하면,
+    execution_count는 두 경로를 모두 반영하지만 latency 표본 수는
+    `run()` 호출분만 반영한다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    adapter = CostedSlowEngineAdapter(delay_seconds=0.01)
+    runtime.register_engine("claude", adapter)
+
+    runtime.run(make_task("solo"))
+    runtime.run_ensemble(make_task("ensemble"), ["claude"])
+
+    profile = runtime.benchmark_profile("claude")
+
+    assert profile.execution_count == 2
+    assert profile.success_rate() == 1.0
+    assert profile.latency_sample_count == 1
+    assert profile.average_latency_seconds() is not None
+
+
+def test_benchmark_profile_zero_when_engine_never_run() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+
+    profile = runtime.benchmark_profile("unregistered")
+
+    assert profile.execution_count == 0
+    assert profile.success_rate() is None
+    assert profile.average_latency_seconds() is None

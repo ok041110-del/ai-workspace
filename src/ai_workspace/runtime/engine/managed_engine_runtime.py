@@ -6,6 +6,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from ai_workspace.domain.consensus_agreement import ConsensusAgreementStat
+from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.engine_execution_memory import EngineExecutionMemoryStat
 from ai_workspace.domain.engine_reliability import EngineReliabilityStat
 from ai_workspace.domain.engine_selection import EngineCandidate
@@ -138,7 +139,13 @@ class ManagedEngineRuntime(EngineRuntime):
     diversity()`의 부하 신호를 절대 `_in_flight` 개수에서 `_load_ratio()`
     (= `_in_flight / max_concurrency`, 무제한 엔진은 0.0)로 개선했다 —
     `InMemoryEngineRuntime._load_ratio()`와 완전히 동일한 설계이며, M74
-    상태만 읽는 read-only 계산이라 새 상태를 만들지 않는다."""
+    상태만 읽는 read-only 계산이라 새 상태를 만들지 않는다.
+
+    **Engine Benchmark & Capability Profiling(Milestone 77, ADR-0095)**:
+    `benchmark_profile(engine_name)`은 `InMemoryEngineRuntime`과 완전히
+    동일한 설계 — M65 `_engine_reliability`/M69 `_execution_memory`를
+    새 측정 없이 읽기 전용으로 조합해 `EngineBenchmarkProfile`을
+    반환한다. Routing 로직은 전혀 수정하지 않는다."""
 
     def __init__(
         self,
@@ -394,6 +401,27 @@ class ManagedEngineRuntime(EngineRuntime):
         stat = self._consensus_agreement.get((required_capabilities, engine_name))
         rate = stat.agreement_rate() if stat is not None else None
         return rate if rate is not None else _NEUTRAL_RATE
+
+    def benchmark_profile(self, engine_name: str) -> EngineBenchmarkProfile:
+        """`InMemoryEngineRuntime.benchmark_profile()`과 동일 — M65/M69
+        상태를 새 측정 없이 읽기 전용으로 조합한다."""
+
+        reliability = self._engine_reliability.get(engine_name, EngineReliabilityStat())
+        latency_sample_count = 0
+        total_latency_seconds = 0.0
+        for (_required_capabilities, name), stat in self._execution_memory.items():
+            if name != engine_name:
+                continue
+            latency_sample_count += stat.total
+            total_latency_seconds += stat.total_latency_seconds
+        return EngineBenchmarkProfile(
+            engine_name=engine_name,
+            execution_count=reliability.total,
+            success_count=reliability.success_count,
+            failure_count=reliability.failure_count,
+            latency_sample_count=latency_sample_count,
+            total_latency_seconds=total_latency_seconds,
+        )
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

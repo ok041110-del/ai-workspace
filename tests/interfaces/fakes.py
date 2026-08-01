@@ -12,6 +12,7 @@ from ai_workspace.domain.dashboard import (
     ReliabilityStats,
     WorkspaceStatus,
 )
+from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.knowledge import KnowledgeDocument
 from ai_workspace.domain.llm_policy import LLMPolicyDecision
 from ai_workspace.domain.project import Project
@@ -488,6 +489,19 @@ class FakeEngineRuntime(EngineRuntime):
         if total < 3:
             return 0.5
         return agree / total
+
+    def benchmark_profile(self, engine_name: str) -> EngineBenchmarkProfile:
+        """이 Fake는 M65/M69 통계를 추적하지 않으므로(최소 테스트 대역)
+        항상 빈 프로필을 반환한다 — `consensus_weight()`처럼 기록이
+        없어도 예외 없이 값을 반환하는 계약만 만족하면 된다."""
+        return EngineBenchmarkProfile(
+            engine_name=engine_name,
+            execution_count=0,
+            success_count=0,
+            failure_count=0,
+            latency_sample_count=0,
+            total_latency_seconds=0.0,
+        )
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

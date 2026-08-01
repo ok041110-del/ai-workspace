@@ -15712,6 +15712,78 @@ capacity 여유를 낭비)가 코드로 확인됐다.
 
 ---
 
+## Milestone 77 — Engine Benchmark & Capability Profiling: Provider별 성능 프로파일 조회 (완료)
+
+**배경**: 사용자가 "M65~M76에서 축적된 실행 결과를 바탕으로 Provider/Model별
+객관적인 성능 프로파일을 생성하여 이후 Routing의 근거 데이터로 활용"하는
+M77을 요청했다. 최신 main(M76/ADR-0094까지 반영) 기준으로 조사한 결과,
+M65(`EngineReliabilityStat`)/M69(`EngineExecutionMemoryStat`)가 이미
+필요한 원시 데이터를 in-process로 누적하고 있었지만, 이를 하나의
+"Benchmark Profile"로 합쳐 조회하는 public API는 없었다.
+
+**사용자 승인(AskUserQuestion, 2회)**:
+1. Model 차원 — **Provider(engine_name) 수준만(권장안 채택)**: 어떤
+   기존 통계도 model을 키로 쓰지 않고, M14(ADR-0026)/M75가 이미 같은
+   이유로 Provider 수준으로 범위를 좁힌 선례를 그대로 따른다.
+2. Latency 집계 범위 — **Execution Count/Success/Failure는
+   `EngineReliabilityStat`(모든 실행 경로), Latency는
+   `EngineExecutionMemoryStat` 집계(기록된 경로만, 표본 부족 시 None)
+   (권장안 채택)**: `run_parallel()`/`run_ensemble()`은 latency를
+   기록하지 않는다는 점을 코드로 확인 후 결정.
+
+**구현**:
+- `src/ai_workspace/domain/engine_benchmark.py` — `EngineBenchmarkProfile`
+  (frozen dataclass) 신설. `execution_count`/`success_count`/
+  `failure_count`(M65), `latency_sample_count`/`total_latency_seconds`
+  (M69, `engine_name`으로 필터링해 합산)를 보관하고 `success_rate()`/
+  `failure_rate()`/`average_latency_seconds()`를 계산(표본 0이면 `None`).
+- `src/ai_workspace/interfaces/engine_runtime.py` — `benchmark_profile
+  (engine_name)` 추상 메서드 신설(M70 `consensus_weight()`와 동일한
+  방식의 계약 확장, 새 Core Domain Interface 아님). 미기록이어도 예외
+  없이 0 카운트 프로필 반환.
+- `src/ai_workspace/runtime/engine/engine_runtime.py`/
+  `managed_engine_runtime.py` — `_engine_reliability`/`_execution_memory`
+  를 새 상태 없이 읽기 전용으로 조합해 구현. Routing 로직(`_select()`/
+  `_build_candidates()`/`_reorder_by_diversity()`/`_reorder_by_execution_
+  memory()`)은 전혀 수정하지 않음.
+- `src/ai_workspace/runtime/engine/recovering_engine_runtime.py` — 내부
+  Runtime에 위임.
+- 테스트 대역 4곳(`tests/interfaces/fakes.py` `FakeEngineRuntime`,
+  `tests/agents/test_coding_agent.py` `RecordingEngineRuntime`,
+  `tests/core/test_workspace_core.py` `SpyEngineRuntime`,
+  `tests/runtime/engine/test_recovering_engine_runtime.py`
+  `ScriptedEngineRuntime`)에 계약 준수 최소 구현 추가.
+- `tests/domain/test_engine_benchmark.py`(도메인 단위 테스트 4건),
+  `tests/runtime/engine/test_engine_runtime.py`(신규 4건: 미기록 시
+  빈 프로필/reliability+execution memory 집계/여러 capability 조합
+  합산/Routing 결과 불변 증명), `tests/runtime/engine/
+  test_managed_engine_runtime.py`(신규 2건: latency 기록 경로와
+  미기록 경로가 섞였을 때 count와 latency 표본 수가 다름을 증명/
+  미실행 엔진 빈 프로필) 추가.
+- `docs/ARCHITECTURE.md` §3.9 Engine Runtime 절에 Engine Benchmark &
+  Capability Profiling(M77) 서술 추가, §7 인터페이스 표 `EngineRuntime`
+  행 갱신.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 최신 main 기준에서 시작, 기존 ADR/TASKS/ROADMAP·구현 상태를 먼저 조사 | ✅ |
+| 2 | 기존 EngineRuntime/EngineSelectionPolicy/Learning/Statistics(M65/M69) 구조 재사용 | ✅ |
+| 3 | Provider별 Success Rate/Failure Rate/Average Latency/Execution Count를 하나의 Benchmark Profile로 관리 | ✅ |
+| 4 | Routing 로직 무변경, Benchmark 정보만 생성·조회 가능함을 테스트로 증명 | ✅ |
+| 5 | M65~M76 기록 데이터 재사용, 새로운 측정 시스템 없음(새 record 지점 추가 없음) | ✅ |
+| 6 | 새로운 Core Domain Interface 없음(EngineRuntime 계약 확장만, M70과 동일 방식) | ✅ |
+| 7 | 상태는 EngineRuntime 내부 in-process로만 관리, 영속화 없음 | ✅ |
+| 8 | 기존 API와 100% 하위 호환(YAGNI) | ✅ |
+| 9 | 넓은 "Engine Benchmark & Capability Profiling" 주제를 AskUserQuestion 2회로 구체 설계까지 좁힘 | ✅ |
+| 10 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1349개(신규 10개, 회귀 없음)/`ruff`/`mypy`(234 source files)
+전부 통과. ADR-0095.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

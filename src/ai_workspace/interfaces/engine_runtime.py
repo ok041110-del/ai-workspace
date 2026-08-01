@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_adapter import (
     CostEstimate,
@@ -234,6 +235,27 @@ class EngineRuntime(ABC):
               않았을 뿐인 엔진이 부당하게 불리해지지 않도록 한다.
         예외: 없음
         보장: side-effect 없음(read-only).
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def benchmark_profile(self, engine_name: str) -> EngineBenchmarkProfile:
+        """**Engine Benchmark & Capability Profiling(Milestone 77,
+        ADR-0095)**: M65(`EngineReliabilityStat`)/M69(`EngineExecutionMemoryStat`)
+        가 이미 기록해 둔 in-process 데이터를 `engine_name` 하나에 대해
+        읽기 전용으로 집계해 반환한다 — 새로운 측정을 하지 않으며 Routing
+        로직(`_select()`/`_build_candidates()`)에는 전혀 관여하지 않는다.
+
+        입력: engine_name (조회할 엔진 이름 — 등록 여부와 무관하게 호출
+              가능하다)
+        출력: EngineBenchmarkProfile(execution_count/success_count/
+              failure_count는 모든 실행 경로 반영, latency는 기록된
+              경로만 반영). 기록이 전혀 없으면 모든 카운트가 0인 프로필을
+              반환한다(예외를 던지지 않음 — `consensus_weight()`의
+              "미기록도 값을 반환" 원칙과 동일).
+        예외: 없음
+        보장: side-effect 없음(read-only), 상태를 in-process로만 유지하고
+              영속화하지 않는다.
         """
         raise NotImplementedError
 
