@@ -1,6 +1,7 @@
 """Intelligence Layer — Recommendation Adjustment Analyzer (ADR-0058, Milestone 42-T02;
 표본 수 조건 정교화는 Milestone 49-T03, ADR-0066; 추세 기반 규칙 추가는
-Milestone 51-T03, ADR-0068; 가중치 결합은 Milestone 52-T03, ADR-0070).
+Milestone 51-T03, ADR-0068; 가중치 결합은 Milestone 52-T03, ADR-0070;
+지수 Decay 실패율 반영은 Milestone 53-T03, ADR-0071).
 
 Milestone 42(Recommendation Adaptation)의 유일한 판정 로직. "Adaptation"은
 새로운 1급 Domain이 아니라 **Behavioral Concept**(§13.3)이다 — 과거
@@ -12,7 +13,7 @@ Milestone 42(Recommendation Adaptation)의 유일한 판정 로직. "Adaptation"
 실패율 100%" 또는 "최근 연속 실패 5회" 중 하나를 만족하면 보류하는
 이진(OR) 판정이었다. M52는 두 신호를 연속값으로 바꿔 가중 합산한다:
 
-- `signal_overall = failure_count / total`(단, `total <
+- `signal_overall = stat.decayed_failure_rate`(단, `total <
   _MIN_SAMPLE_SIZE_FOR_WITHHOLD`이면 0 — 최소 표본 조건 그대로 유지)
 - `signal_recent = min(recent_failure_streak /
   _RECENT_FAILURE_STREAK_THRESHOLD, 1.0)`
@@ -27,9 +28,19 @@ Milestone 42(Recommendation Adaptation)의 유일한 판정 로직. "Adaptation"
 임계값 미달이지만 합치면 위험한 조합(예: 실패율 60% + 최근 3회
 연속 실패)도 잡아내는 것이다.
 
+**지수 Decay 실패율(M53, ADR-0071)**: M52의 `signal_overall`은 원래
+`failure_count / total`(단순 평균, 모든 기록을 동등하게 반영)이었다.
+M53은 이를 `ExperienceStat.decayed_failure_rate`(M40/M51,
+`experience_rules.py`가 계산 — 지수 Decay 가중치로 최근 기록에 더
+큰 비중)로 교체한다. 전체 이력이 100% 실패면 `decayed_failure_rate`
+는 가중치와 무관하게 항상 정확히 1.0이므로, M49 단일 규칙과 M52의
+"신호 1.0이면 score=0.6 성립" 체인이 그대로 보존된다(회귀 없음).
+
 **Non-goal**: 가중치(`_OVERALL_FAILURE_WEIGHT`/`_RECENT_STREAK_WEIGHT`)
-와 threshold는 코드에 고정된 상수다 — 데이터로부터 가중치 자체를
-학습하거나 세션 중에 값을 조정하는 온라인 학습은 하지 않는다.
+와 threshold, 그리고 `decayed_failure_rate`가 사용하는 Decay 계수
+(`experience_rules._DECAY_FACTOR`)는 모두 코드에 고정된 상수다 —
+데이터로부터 이 값들을 학습하거나 세션 중에 조정하는 온라인 학습은
+하지 않는다.
 
 **ExperienceReport 생성은 M40의 책임이다(Non-goal)** — 이 모듈은
 `ExperienceReport`를 만들지 않고 오직 소비만 한다.
@@ -114,7 +125,7 @@ class RecommendationAdjustmentAnalyzer:
 
 def _withhold_score(stat: ExperienceStat) -> float:
     signal_overall = (
-        stat.failure_count / stat.total if stat.total >= _MIN_SAMPLE_SIZE_FOR_WITHHOLD else 0.0
+        stat.decayed_failure_rate if stat.total >= _MIN_SAMPLE_SIZE_FOR_WITHHOLD else 0.0
     )
     signal_recent = min(stat.recent_failure_streak / _RECENT_FAILURE_STREAK_THRESHOLD, 1.0)
     return _OVERALL_FAILURE_WEIGHT * signal_overall + _RECENT_STREAK_WEIGHT * signal_recent
@@ -127,7 +138,9 @@ def _build_withhold_reason(
     overall_failure_triggered: bool,
     recent_streak_triggered: bool,
 ) -> str:
-    overall_text = f"실패율 {stat.failure_count}/{stat.total}"
+    overall_text = (
+        f"실패율 {stat.failure_count}/{stat.total}(Decay 반영 {stat.decayed_failure_rate:.2f})"
+    )
     recent_text = f"최근 {stat.recent_failure_streak}회 연속 실패"
 
     if overall_failure_triggered and recent_streak_triggered:

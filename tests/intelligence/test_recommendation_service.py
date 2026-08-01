@@ -180,6 +180,7 @@ def test_generate_withholds_next_action_when_experience_shows_only_failures(
                 failure_count=3,
                 last_result="failure",
                 last_timestamp="2026-07-30T00:00:00",
+                decayed_failure_rate=1.0,
             )
         ]
     )

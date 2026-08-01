@@ -14061,6 +14061,64 @@ Learning Weighting 공식 완료(Approved)**. PR #53(코드) 병합
 
 ---
 
+## Milestone 53 — Learning Decay (T03 완료, 사용자 승인 대기)
+
+**배경**: M51 승인 코멘트에서 사용자가 예고한 "M52(가중치), M53
+(Decay)" 중 마지막 M53 착수.
+
+**T01 Domain Analysis(사용자 확인)**: M52의 `signal_overall`
+(`failure_count/total`, 모든 기록을 동등 반영)을 지수 Decay 가중
+실패율로 교체하는 확장으로 확정 — 새 Domain/Behavioral Concept
+아님, 기존 `Adaptation`의 신호 계산 정교화.
+
+**T02 MDD Review(사용자 승인)**: `ExperienceStat`에
+`decayed_failure_rate: float` 필드 신설(M51 `recent_failure_streak`
+패턴 재사용), `experience_rules.py`에서 계산(`weight(rank) =
+decay_factor**rank`, `rank=0`이 최신). Decay 함수는 지수(사용자
+선택), `decay_factor=0.8`(사용자 선택 — 10번째 이전 기록도
+0.8^9≈0.13 가중치로 약간 반영되는 중간 강도). `recommendation_
+adjustment.py`의 `signal_overall`을 이 필드로 교체(M52의 가중치
+0.6/0.6·threshold 0.6은 그대로 유지). 전체 이력 100% 실패 시
+`decayed_failure_rate`가 가중치와 무관하게 항상 정확히 1.0임을
+근거로 M49 단일 규칙 보존을 재확인.
+
+**T03 구현**:
+- `src/ai_workspace/intelligence/experience_rules.py` —
+  `_DECAY_FACTOR: Final[float] = 0.8` 추가, `_compute_decayed_
+  failure_rate()` 헬퍼 신규, `ExperienceStat.decayed_failure_rate`
+  필드 추가.
+- `src/ai_workspace/intelligence/recommendation_adjustment.py` —
+  `_withhold_score()`의 `signal_overall`을 `stat.failure_count /
+  stat.total`에서 `stat.decayed_failure_rate`로 교체. `reason`
+  텍스트에 `(Decay 반영 {rate:.2f})` 추가로 투명성 확보. Non-goal
+  문구에 Decay 계수도 고정 상수임을 명시.
+- **구현 중 발견한 테스트 인프라 함의**: `ExperienceStat`을 수동
+  생성하는 기존 테스트 5건이 새 필드 기본값(`0.0`)을 그대로 둔 채
+  "전체 실패" 시나리오를 표현하고 있어, M49 트리거가 깨지는 것을
+  테스트 실행으로 발견 — 각 테스트에 `decayed_failure_rate` 명시
+  지정으로 수정(`test_recommendation_adjustment.py` 4건,
+  `test_recommendation_service.py` 1건).
+- `tests/intelligence/test_experience_rules.py`(신규 4건 — 전체
+  실패 시 정확히 1.0, 전체 성공 시 0.0, 최근 실패가 오래된 실패보다
+  더 높게 반영됨(수치 검증 포함), 입력 순서 무관).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 새 Domain/Service/Interface 없이 기존 파일 2개만 수정 | ✅ |
+| 2 | M49 단일 규칙 무변경(전체 실패 시 decayed_failure_rate=1.0 보장) | ✅ |
+| 3 | Decay 계수는 고정 상수, 데이터 기반 학습 아님(사용자 확인) | ✅ |
+| 4 | Decay 함수/계수 값 사용자 직접 확정(지수, 0.8) | ✅ |
+| 5 | 최근 기록이 오래된 기록보다 더 큰 비중을 갖는 것을 수치로 검증 | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음(값 명시 5건 제외) | ✅ |
+
+`pytest` 1149개(신규 4개, 회귀 없음)/`ruff`/`mypy`(221 source files)
+전부 통과. ADR-0071. PR 생성·CI 확인·Merge·`main` 반영·Vault Index
+갱신 후 최종 완료 선언 예정(이전 Milestone과 동일한 절차).
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
