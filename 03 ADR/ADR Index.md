@@ -451,6 +451,12 @@ M46이 Phase 0까지만 실행하고 Deferred로 남긴 Metadata Backfill/Wiki L
 - 결정: `recommendation_adjustment.py`의 private `_withhold_score()`를 공개 함수 `compute_learning_score(stat)`로 승격(`WITHHOLD_SCORE_THRESHOLD`도 공개) — 가중치·threshold 공식 중복 방지. `experience_summary`가 보류 여부와 무관하게 항상 `decayed_failure_rate`/`recent_failure_streak`/학습 Score를 성공률과 함께 노출
 - 영향: `intelligence/recommendation_adjustment.py`(공개 승격), `intelligence/recommendation_explanation.py`(experience_summary 확장) 2개 파일만 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음. `pytest` 1156개(신규 1개, 회귀 없음)/ruff/mypy(222 source files) 전부 통과. 상세는 [[Automation Index]]
 
+## ADR-0074: Multi-Agent 자가 확인 가드를 현재 구현된 Agent 전체로 일반화 (Milestone 56)
+
+- 목적: M13이 `CodingAgent`에만 적용하고 "Review/Documentation 등으로 확장은 후속 Milestone"이라고 남겨뒀던 `is_agent_selected()` 자가 확인 가드를 일반화
+- 결정: `ReviewAgent`/`DocumentationAgent`/`ShellAgent`/`CoordinatorAgent` 4개에 `CodingAgent`와 정확히 같은 패턴(선택적 `agent_registry`/`agent_scheduler` 키워드 인자, 기본값 `None`이면 기존 동작과 100% 동일) 적용. `PlanningAgent`는 Event를 구독하지 않고 직접 호출되는 진입점이라 이 가드의 전제(여러 인스턴스가 같은 broadcast Event에 반응)가 성립하지 않아 구조적 이유로 제외
+- 영향: `agents/` 4개 파일 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음(기존 27종 유지). 새 중앙 디스패처·Base Class 없이 M13의 기존 패턴만 반복(YAGNI). `pytest` 1160개(신규 4개, 회귀 없음)/ruff/mypy(222 source files) 전부 통과. 프로덕션 Composition Root에는 M13도 아직 배선되지 않아 이번에도 배선하지 않음
+
 ## 관련 문서
 
 - [[Architecture Overview]]
