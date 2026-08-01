@@ -17,6 +17,7 @@ from ai_workspace.observability.snapshot import (
     ClaudeRuntimeInfo,
     GitRuntimeInfo,
     GuardianRuntimeInfo,
+    LearningRuntimeInfo,
     McpRuntimeInfo,
     PipelineStageState,
     PipelineStageStatus,
@@ -55,6 +56,7 @@ class StatusLineRenderer:
             _render_guardian_line(snapshot.guardian_runtime),
             _render_vault_line(snapshot.vault_runtime),
             _render_mcp_line(snapshot.mcp_runtime),
+            _render_learning_line(snapshot.learning_runtime),
         ]
         return "\n".join(lines)
 
@@ -148,3 +150,17 @@ def _render_mcp_line(info: McpRuntimeInfo) -> str:
     else:
         connected = ", ".join(info.connected_servers) if info.connected_servers else "(none)"
     return f"MCP {enabled} · Configured [{configured}] · Connected [{connected}]"
+
+
+def _render_learning_line(info: LearningRuntimeInfo) -> str:
+    if info.tracked_task_count == 0 or info.highest_risk_task_id is None:
+        return "Learning tracked 0 tasks"
+    decayed_rate = info.highest_risk_decayed_failure_rate
+    decayed_text = f"{decayed_rate:.2f}" if decayed_rate is not None else _NOT_AVAILABLE
+    streak = info.highest_risk_recent_failure_streak
+    streak_text = str(streak) if streak is not None else _NOT_AVAILABLE
+    return (
+        f"Learning tracked {info.tracked_task_count} tasks · "
+        f"최고위험 {info.highest_risk_task_id}(Decay실패율 {decayed_text}, "
+        f"연속실패 {streak_text})"
+    )
