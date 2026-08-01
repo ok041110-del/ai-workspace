@@ -20,7 +20,6 @@ from ai_workspace.intelligence.recommendation_explanation_service import (
 from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceService
 from ai_workspace.intelligence.report import ProjectIntelligenceService
 from ai_workspace.memory.execution_memory_store import ExecutionMemoryStore
-from ai_workspace.memory.memory_engine import InMemoryMemoryEngine
 from ai_workspace.runtime.agent.agent_manager import InMemoryAgentManager
 from ai_workspace.runtime.agent.agent_registry import InMemoryAgentRegistry
 from ai_workspace.runtime.agent.agent_scheduler import InMemoryAgentScheduler
@@ -43,6 +42,7 @@ from ai_workspace.runtime.production.config_loader import load_production_config
 from ai_workspace.runtime.production.health import HealthMonitor
 from ai_workspace.runtime.production.lifecycle import LifecycleManager
 from ai_workspace.runtime.production.logging_setup import configure_logging
+from ai_workspace.storage.file_memory_engine import FileMemoryEngine
 from ai_workspace.web.app import create_app
 
 
@@ -82,10 +82,11 @@ def build_app(
 
     `ExecutionMemoryStore`(M39)도 이 시점에 처음 조립돼
     `RecommendationExecutionService`에 주입된다 — 매 실행 결과가
-    `ExecutionMemory`로 자동 기록된다(ADR-0053). 이 서버 프로세스가
-    살아있는 동안만 유지되는 `InMemoryMemoryEngine`을 사용한다 —
-    영속화는 이번 Milestone 범위 밖이다(YAGNI, `.ai/DECISIONS.md`
-    ADR-0053 참고).
+    `ExecutionMemory`로 자동 기록된다(ADR-0053). `FileMemoryEngine`
+    (M50, ADR-0067)이 `<vault_root>/.ai-workspace-data/`에 JSON으로
+    영속화해, 서버 재시작 후에도 학습 이력이 유지된다 — M39 당시의
+    `InMemoryMemoryEngine`(프로세스 생존 중에만 유지) 한계는 이번
+    Milestone에서 해소됐다.
 
     `ExperienceIntelligenceService`(M40)+`RecommendationOrchestrationService`
     (M43)도 이 시점에 처음 조립된다 — `RecommendationExecutionService`
@@ -122,7 +123,9 @@ def build_app(
     agent_adapter = AgentAdapter(
         InMemoryAgentManager(), InMemoryAgentRegistry(), InMemoryAgentScheduler()
     )
-    execution_memory_store = ExecutionMemoryStore(InMemoryMemoryEngine())
+    execution_memory_store = ExecutionMemoryStore(
+        FileMemoryEngine(Path(config.vault_root) / ".ai-workspace-data")
+    )
     recommendation_service = RecommendationIntelligenceService(
         vault_adapter,
         ProjectIntelligenceService(vault_adapter, agent_adapter),
