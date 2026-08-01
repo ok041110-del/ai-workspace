@@ -4622,3 +4622,70 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   `guardian.checker.evaluate()` all_passed 전부 통과. `.ai/TASKS.md`
   Milestone 48 절(T01~T03) 신규 추가. Learning Engine은 M49 이후로
   명시적으로 분리.
+
+## ADR-0066: Learning Engine 착수 — RecommendationAdjustmentAnalyzer에 최소 표본 조건 추가 (Milestone 49)
+
+- 상태: 승인됨 (2026-08-01, 사용자가 T01 Domain Analysis에서 학습
+  대상을 "Recommendation/Adaptation만"으로, 영속 저장소·Guardian
+  다건 이력을 이번 Scope에서 명시적으로 배제하는 데 동의. T02 MDD
+  Review에서 실패율 임계값 100%/최소 표본 3회로 최종 승인)
+- 날짜: 2026-08-01
+- 배경: ADR-0065(M48)가 "Learning Engine은 M49 이후 별도 제안·승인
+  대상"으로 명시적으로 분리했다. M49 T01 Domain Analysis(코드 전수
+  조사)는 다음을 확인했다: `ExperienceStat`(M40)이 task_id별
+  성공/실패 누적 카운트를 이미 제공하고, `RecommendationAdjustment
+  Analyzer`(M42)가 "성공 0건 + 실패 1건 이상"이면 추천을 보류하는
+  이진 규칙 1개만 갖고 있다는 것 — 즉 실패 1건만으로도 즉시 보류되어
+  표본이 부족한 상태에서 성급하게 판단을 바꾸는 한계가 있었다. Guardian
+  다건 이력(ADR-0065가 `ExecutionMemoryStore`에 기록하지 않기로 결정한
+  부분)과 영속 저장소(`InMemoryMemoryEngine`이 프로세스 재시작 시
+  소멸)는 이번에 함께 해결하지 않기로 사용자가 결정했다.
+- 결정:
+  1. **학습 대상 — Recommendation/Adaptation 규칙 정교화만**: Guardian
+     정책·영속화는 다루지 않는다(각각 별도 Milestone 대상으로 배제).
+  2. **규칙 — "실패율 100% AND 표본 3건 이상"**: 기존 규칙
+     (`success_count == 0 and failure_count > 0`, 즉 표본 1건부터
+     보류)을 `success_count == 0 and total >= 3`으로 교체 — 최소
+     표본 조건만 1 → 3으로 강화한 상위 집합이라 회귀 없음.
+  3. **새 Domain/Service/Interface 없음**: `RecommendationAdjustment
+     Analyzer.analyze()` 내부 조건식 1건만 교체, 시그니처·반환 타입
+     불변. `§13.4` 금지 어휘(Learning/Insight)를 실제로 쓸 새 1급
+     개념은 이번 Scope에 없다 — Milestone 제목은 M48 승인 시 확정된
+     "Learning Engine"을 유지하되, 산출물은 기존 Analyzer의 내부
+     로직 교체임을 명시한다.
+  4. **영속화·Guardian 이력 축적 — 이번엔 하지 않음**: `Execution
+     MemoryStore`가 여전히 in-process 저장소이므로, 이번 학습은
+     "서버 1회 구동 세션 내"로 자연히 한정된다. 이 한계를 해소하는
+     것은 향후 별도 Milestone 대상이다.
+- 대안:
+  1. 단순 실패율만 사용(최소 표본 조건 없음) — 기각: 실패 1건(실패율
+     100%)도 즉시 보류돼 기존 규칙보다 더 공격적으로 동작하는 회귀가
+     생긴다.
+  2. Guardian 위반 다건 이력을 이번에 함께 쌓기 시작 — 기각: 사용자가
+     T01에서 명시적으로 배제(ExecutionMemoryStore 성공/실패만으로
+     1차 범위 한정).
+  3. 영속 저장소(파일/DB)를 이번에 함께 도입 — 기각: 사용자가 T01에서
+     명시적으로 배제(이번엔 in-process 범위로 한정, YAGNI).
+  4. 실패율 임계값을 100% 미만(예: 80%)으로 완화 — 기각: 사용자가
+     T02에서 100%(기존 조건과 동일한 엄격도) + 표본 3회를 선택.
+  5. 가중치·점수화 체계 신규 도입 — 기각: M42 설계 시점부터
+     Non-goal로 명시돼 있고, 이번에도 새 데이터 없이 기존
+     `ExperienceStat` 필드만으로 해결 가능해 불필요.
+- 이유: 프로젝트가 이미 두 번(M40 Experience Intelligence, M42
+  Adaptation) "Learning Engine"이라는 무거운 이름을 스스로 피해온
+  이력과 일관되게, M49도 실제로 필요한 만큼만 — 기존 이진 규칙의
+  한 가지 약점(표본 부족)만 — 최소로 고친다. 새 Domain 개념을
+  만들지 않고 기존 파일 하나만 수정하는 것이 Reuse-First/YAGNI에
+  가장 부합한다.
+- 결과/영향: `intelligence/recommendation_adjustment.py`
+  (`_MIN_SAMPLE_SIZE_FOR_WITHHOLD` 상수 추가, 조건식 교체)만 수정.
+  새 Core Domain Interface/Adapter/Service/Layer/File 없음(기존 파일
+  1개 수정). `tests/intelligence/test_recommendation_adjustment.py`
+  (신규 케이스 1건 추가, 기존 케이스 표본 수 조정),
+  `tests/intelligence/test_recommendation_service.py`,
+  `tests/runtime/execution/test_recommendation_orchestration_service.py`
+  (표본 수를 3건으로 조정, 회귀 아님). `pytest` 1123개(신규 1개,
+  회귀 없음)/`ruff`/`mypy`(220 source files) 전부 통과. `.ai/
+  TASKS.md` Milestone 49 절(T01~T03) 신규 추가. Guardian 다건 이력
+  축적·영속 저장소 도입은 향후 별도 Milestone 대상으로 명시적으로
+  분리.

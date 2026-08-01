@@ -13443,7 +13443,7 @@ M49 이후 별도 제안·승인 대상으로 확정 분리.
 
 ---
 
-## Milestone 49 — Learning Engine (T01 진행 중)
+## Milestone 49 — Learning Engine (T03 완료, 사용자 승인 대기)
 
 **목표**: ADR-0065(M48)가 명시적으로 분리해 둔 "Learning Engine"을
 착수한다. ADR-0065 결정 4는 "M49 이후 Learning Engine 제안 시점에
@@ -13532,6 +13532,133 @@ M49 Scope는 이 네 가지 중 실제로 필요한 것만 최소로 채우는 �
    추세 반영)로 M49를 좁힐지.
 3. Gap A(Guardian 다건 이력)를 M49에서 새로 쌓기 시작할지, 아니면
    ExecutionMemoryStore의 성공/실패 이력만으로 1차 범위를 한정할지.
+
+**사용자 승인(2026-08-01)**: T01 세 가지 질문에 대해 모두 최소 범위로
+결정.
+1. 학습 대상 = **Recommendation/Adaptation만**(M42
+   `RecommendationAdjustmentAnalyzer`의 이진 규칙을 정교화하는 데만
+   집중, Guardian 정책은 건드리지 않음).
+2. 영속 저장소(Gap C) = **이번엔 in-process 범위로 한정**(서버 1회
+   구동 세션 내 학습만, 영속화는 별도 Milestone).
+3. Guardian 다건 이력(Gap A) = **이번엔 쌓지 않음**,
+   `ExecutionMemoryStore`의 성공/실패 이력만으로 1차 범위 한정.
+
+즉 M49 Scope = `ExperienceStat`(누적 성공/실패 카운트, 이미 존재)를
+근거로 `RecommendationAdjustmentAnalyzer`의 판단을 이진 규칙보다
+정교하게(예: 추세/임계값) 조정하는 것으로 확정. Gap A/C는 M49에서
+다루지 않고 향후 별도 Milestone 대상으로 명시적으로 배제.
+
+### T02 — MDD Review
+
+#### Scope Review
+- Scope: T01에서 사용자가 확정한 대로 `RecommendationAdjustmentAnalyzer`
+  (M42)의 단일 이진 규칙(`success_count == 0 and failure_count > 0`이면
+  보류)을 `ExperienceStat`(이미 존재하는 필드: `total/success_count/
+  failure_count`)만 근거로 조금 더 정교화하는 것으로 한정한다. Guardian
+  이력 축적(Gap A)·영속 저장소(Gap C)·새 점수화 체계는 Scope 밖(사용자가
+  T01에서 명시적으로 배제).
+- YAGNI 검토: 현재 규칙은 "성공 0건 + 실패 1건 이상"일 때만 보류한다 —
+  즉 성공 1건 + 실패 20건이어도 보류되지 않는다. 이는 실측으로 확인된
+  실제 한계(추측 아님)이며, `ExperienceStat`이 이미 갖고 있는
+  `failure_count`/`total`만으로 바로 개선 가능하다 — 새 데이터 수집
+  없이 기존 필드의 활용도만 높이는 것이므로 YAGNI 위반이 아니다.
+
+#### Reuse Review
+재사용 가능한 구성요소:
+- `ExperienceStat`(M40, `experience_rules.py`) — `total/success_count/
+  failure_count` 필드가 이미 존재. 새 필드·새 집계 로직 불필요.
+- `RecommendationAdjustmentAnalyzer`(M42, `recommendation_adjustment.py`)
+  — `analyze()` 시그니처·`RecommendationAdjustment` 반환 타입 그대로
+  유지 가능. 내부 판정 조건 하나만 교체.
+- `RecommendationIntelligenceService.generate(experience_report=None)`
+  (M35/M40/M42) — 이미 뚫려 있는 배선. 변경 불필요.
+
+재사용 전략: **새 파일·새 클래스·새 Interface를 전혀 만들지 않는다.**
+`RecommendationAdjustmentAnalyzer.analyze()` 내부의 단일 조건식만
+"성공 0건"에서 "실패율이 임계값을 넘고 표본이 충분함"으로 교체한다.
+
+**Naming 재확인(사용자 T01 결정 반영)**: 이 프로젝트는 이미 M40/M42에서
+"Learning Engine"이라는 이름을 의도적으로 피해 왔고, T01에서 사용자가
+Scope를 "기존 Adaptation 규칙의 정교화"로 좁혔다 — 즉 이번 변경은 새
+Domain 개념이나 새 Service를 만드는 것이 아니라 **기존
+`RecommendationAdjustmentAnalyzer` 내부 로직 1건 교체**에 그친다. 따라서
+`§13.4` 금지 어휘(Learning/Insight)를 실제로 쓸 만한 새 1급 개념이 이번
+Milestone에는 생기지 않는다 — Milestone 제목은 "Learning Engine"으로
+유지하되(사용자가 이미 M48 승인 시 이 이름으로 확정), 실제 산출물은 새
+"Engine" 클래스가 아니라 기존 Analyzer의 규칙 정교화임을 명확히 기록한다.
+
+#### Interface Review
+- 신규 Interface 불필요. `RecommendationAdjustment`/`analyze()` 시그니처
+  변경 없음(순수 내부 로직 교체).
+
+#### Service Review
+**규칙 정교화 — "실패율 임계값 + 최소 표본" 방식으로 결정**:
+- 기각 1 — 단순 실패율(`failure_count / total > threshold`)만 사용:
+  표본이 1건(실패 1건, 실패율 100%)이어도 보류돼 버려 기존 "성공 0건"
+  규칙보다 더 공격적으로 보류하는 회귀가 생긴다(성공 0건 + 실패 1건은
+  기존 규칙도 이미 보류 대상이라 문제 없지만, 최소 표본 없이 임계값만
+  쓰면 "성공 0건" 조건이 사실상 무의미해진다).
+- **채택 — 실패율(`failure_count / total >= 임계값`) AND 최소 표본
+  수(`total >= 최소 표본`) 둘 다 만족할 때만 보류**: 기존 규칙("성공
+  0건 + 실패 1건 이상")을 포함하는 상위 집합으로 확장 가능(임계값=1.0,
+  최소 표본=1로 두면 기존 규칙과 100% 동일 — 회귀 없음을 보장하는
+  근거). 표본이 적을 때(예: 실패 1건뿐) 성급하게 보류하지 않도록
+  최소 표본 조건을 추가하는 것이 실제 "학습"에 해당하는 정교화 지점.
+- **사용자 승인(2026-08-01)**: 실패율 임계값 = **100%**(`success_count
+  == 0`, 기존 조건 그대로 유지), 최소 표본 수 = **3**(`total >= 3`,
+  신규 추가). 즉 새 규칙 = `success_count == 0 and total >= 3`. 기존
+  규칙(`success_count == 0 and failure_count > 0`, 즉 `total >= 1`)
+  대비 최소 표본 조건만 1 → 3으로 강화 — 실패 1~2건만으로 성급하게
+  보류하지 않고, 3건 이상 실패가 쌓였을 때만 보류하도록 정교화한다.
+
+#### Adapter Review
+- 신규 Adapter 불필요. Vault 발행 경로(`Recommendation Execution.md`,
+  `RecommendationExecutionService`)는 변경 없음 — `reason` 문자열
+  내용만 달라질 수 있음(기존 렌더링 그대로 재사용).
+
+#### Layer Review
+- 신규 Layer 불필요. `intelligence/` 내부 기존 Analyzer 파일 하나만
+  수정.
+
+#### File Review
+- 새 파일 없음. `src/ai_workspace/intelligence/recommendation_adjustment.py`
+  기존 파일만 수정. 테스트도 기존
+  `tests/intelligence/test_recommendation_adjustment.py`에 케이스
+  추가(신규 테스트 파일 불필요).
+
+### T03 — Implementation(완료)
+
+- `intelligence/recommendation_adjustment.py`: `_MIN_SAMPLE_SIZE_
+  FOR_WITHHOLD: Final[int] = 3` 상수 추가, `analyze()`의 보류 조건을
+  `success_count == 0 and failure_count > 0`에서 `success_count == 0
+  and total >= _MIN_SAMPLE_SIZE_FOR_WITHHOLD`로 교체. 모듈/클래스
+  독스트링에 ADR-0066 근거 반영.
+- `tests/intelligence/test_recommendation_adjustment.py`: 기존
+  "전량 실패 시 보류" 테스트를 표본 3건으로 조정, "표본 부족(실패
+  2건)이면 보류하지 않는다" 신규 테스트 1건 추가.
+- `tests/intelligence/test_recommendation_service.py`,
+  `tests/runtime/execution/test_recommendation_orchestration_service.py`:
+  기존 "전량 실패 시 보류" 테스트가 표본 1건을 쓰고 있어 새 규칙
+  아래에서는 더 이상 보류되지 않으므로, 표본 3건(실패 3건)으로 조정
+  (회귀 아님 — 새 규칙의 의도된 동작).
+- `.ai/DECISIONS.md`: ADR-0066 신규 작성.
+
+**완료 체크리스트**:
+
+| # | 항목 | 결과 |
+|---|------|------|
+| 1 | 새 Domain/Service/Interface/Adapter/Layer/File 없음(기존 파일 1개만 수정) | ✅ |
+| 2 | 기존 규칙(표본 1건부터 보류)의 상위 집합 — 회귀 없음 근거 명시 | ✅ |
+| 3 | 표본 부족(실패 1~2건) 시 보류하지 않음을 신규 테스트로 증명 | ✅ |
+| 4 | 기존 테스트 전체 통과(의도된 동작 변화만 반영, 그 외 회귀 없음) | ✅ |
+| 5 | `ruff`/`mypy`(220 source files) 통과 | ✅ |
+| 6 | ADR-0066 작성 | ✅ |
+| 7 | Guardian 다건 이력·영속 저장소는 이번 Scope에서 명시적으로 배제 | ✅ |
+
+`pytest` 1123개(신규 1개, 회귀 없음) 전부 통과.
+
+**사용자 승인 대기**: 위 7개 항목을 확인해 Milestone 49 Learning
+Engine 공식 완료 여부 승인 필요.
 
 ---
 
