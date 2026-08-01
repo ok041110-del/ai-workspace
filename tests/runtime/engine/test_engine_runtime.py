@@ -639,8 +639,13 @@ class SlowCostedEngineAdapter(CostedEngineAdapter):
     한쪽 엔진이 "지금 실행 중"인 상태(M74 `_in_flight` > 0)를 진짜
     동시성으로 재현한다."""
 
-    def __init__(self, delay_seconds: float, estimated_cost_usd: float = 0.0) -> None:
-        super().__init__(estimated_cost_usd)
+    def __init__(
+        self,
+        delay_seconds: float,
+        estimated_cost_usd: float = 0.0,
+        capabilities: frozenset[str] = frozenset(),
+    ) -> None:
+        super().__init__(estimated_cost_usd, capabilities)
         self._delay_seconds = delay_seconds
 
     def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
@@ -728,3 +733,36 @@ def test_diversity_not_applied_without_engine_selection_policy() -> None:
 
     assert engine_a.run_count == 2
     assert engine_b.run_count == 0
+
+
+def test_load_balancing_prefers_lower_relative_load_over_raw_in_flight_count() -> None:
+    """M76(ADR-0094): engine-a(max_concurrency=10)가 지금 3건 실행 중(부하율
+    0.3)이고 engine-b(max_concurrency=2)가 1건 실행 중(부하율 0.5)이면,
+    raw in-flight 개수는 engine-a(3)가 더 많지만 상대 부하율은 engine-a가
+    더 낮으므로(0.3 < 0.5) 비용·성공률 완전 동률 상황에서 engine-a가
+    선택된다 — M75의 raw count 비교였다면 반대로 engine-b를 선택했을
+    시나리오다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    engine_a = SlowCostedEngineAdapter(delay_seconds=0.2, capabilities=frozenset({"cap_a"}))
+    engine_b = SlowCostedEngineAdapter(delay_seconds=0.2, capabilities=frozenset({"cap_b"}))
+    runtime.register_engine("engine-a", engine_a, max_concurrency=10)
+    runtime.register_engine("engine-b", engine_b, max_concurrency=2)
+
+    threads = [
+        threading.Thread(target=runtime.run, args=(make_task(f"busy-a-{i}"), frozenset({"cap_a"})))
+        for i in range(3)
+    ]
+    threads.append(
+        threading.Thread(target=runtime.run, args=(make_task("busy-b"), frozenset({"cap_b"})))
+    )
+    for thread in threads:
+        thread.start()
+    time.sleep(0.05)  # engine-a in-flight=3(부하율 0.3), engine-b in-flight=1(부하율 0.5)
+
+    runtime.run(make_task("tie"))
+
+    for thread in threads:
+        thread.join()
+
+    assert engine_a.run_count == 4
+    assert engine_b.run_count == 1
