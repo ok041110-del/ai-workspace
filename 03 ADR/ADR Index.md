@@ -427,6 +427,12 @@ M46이 Phase 0까지만 실행하고 Deferred로 남긴 Metadata Backfill/Wiki L
 - 결정: 공식 문서(`code.claude.com/docs/en/statusline`) 확인 결과 `.claude/settings.json` 형식과 stdin JSON 필드(`model.display_name`/`effort.level`/`context_window.*`)는 문제 없음을 확인. 실제 원인은 `statusline_main.py`의 `ai_workspace.*` import가 `try/except` 바깥에 있어 import 실패 시 아무 출력 없이 프로세스가 죽는 것 — 공식 Troubleshooting("Status line not appearing")과 일치. import를 `main()` 내부로 이동해 모든 예외가 항상 한 줄 출력으로 대체되도록 수정, 실패 시에만 남기는 디버그 로그(`/tmp/statusline.log`) 추가
 - 영향: `observability/statusline_main.py` 1개 파일만 수정. 새 Core Domain Interface/Service 없음. `pytest` 1143개(신규 6개, 회귀 없음)/ruff/mypy(221 source files) 전부 통과. Workspace Trust 미승인 등 사용자 환경 문제는 코드로 고칠 수 없어 DoD에 사용자 확인 항목으로 남김(헤드리스 원격 세션이라 실제 UI 접근 불가). 상세는 [[Automation Index]]
 
+## ADR-0070: Learning Weighting — M49/M51 두 신호를 고정 가중치 점수로 결합 (Milestone 52)
+
+- 목적: M49/M51 두 Rule의 OR 결합이 각 임계값 미달이지만 합치면 위험한 조합(예: 실패율 60%+최근 3회 연속 실패)을 포착 못 하는 한계를 해소
+- 결정: `signal_overall = failure_count/total`(표본 3건 미만이면 0), `signal_recent = min(recent_failure_streak/5, 1.0)`을 각각 0.6 가중치로 합산해 `score >= 0.6`이면 보류. 가중치를 신호의 완전 포화값(1.0)과 같은 0.6으로 설정해, 신호 하나가 완전히 1.0이면 그 신호만으로 `score=0.6`이 성립 — 기존 M49/M51 단일 규칙이 정확히 보존됨(회귀 없음, 경계값으로 증명). 사용자가 처음 제안한 "가중치 0.5/0.5 + threshold 0.6"은 이 보존 조건을 깨는 실제 회귀임을 수학적으로 지적해 0.6/0.6으로 재확정
+- 영향: `intelligence/recommendation_adjustment.py` 1개 파일만 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음. Explainability에 기존 M49/M51/Both 태깅을 보존하고 결합 전용 케이스에 "(M52 가중치 결합 규칙)" 태그 추가. 가중치는 고정 상수, 데이터 기반 학습 아님(Non-goal). `pytest` 1145개(신규 2개, 회귀 없음)/ruff/mypy(221 source files) 전부 통과. 상세는 [[Automation Index]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
