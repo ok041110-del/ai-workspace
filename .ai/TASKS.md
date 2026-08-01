@@ -13085,7 +13085,7 @@ Knowledge Graph Migration 공식 완료(Approved)**.
 
 ---
 
-## Milestone 48 — Automation Foundation (진행 중)
+## Milestone 48 — Automation Foundation (완료)
 
 **목표**(2026-08-01 사용자 요청, 재정의): `docs/ARCHITECTURE.md`
 §2.1은 원래 "Automation Core" 명명을 Memory Engine(M39)/Architecture
@@ -13437,8 +13437,9 @@ Execution만 차단, Execution 리포트에 위반 이유 기록), (d)
 | 8 | `ruff`/`mypy`/Guardian 자체 검사 통과 | ✅ |
 | 9 | ADR-0065 작성 | ✅ |
 
-**사용자 승인 대기 중** — 위 9개 항목을 확인해 Milestone 48
-Automation Foundation 공식 완료 여부를 결정해 주세요.
+**사용자 승인(2026-08-01)**: 위 9개 항목을 확인해 **Milestone 48
+Automation Foundation 공식 완료(Approved)**. Learning Engine은
+M49 이후 별도 제안·승인 대상으로 확정 분리.
 
 ---
 
