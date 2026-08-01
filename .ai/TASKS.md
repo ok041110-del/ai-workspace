@@ -15784,6 +15784,72 @@ M65(`EngineReliabilityStat`)/M69(`EngineExecutionMemoryStat`)가 이미
 
 ---
 
+## Milestone 78 — Adaptive Engine Benchmark Routing: Benchmark Profile을 Routing tie-break에 반영 (완료)
+
+**배경**: 사용자가 "M77에서 생성한 Provider/Model Benchmark Profile을
+실제 Engine 선택(Routing)에 안전하게 반영"하는 M78을 요청했다. 최신
+main(M77/ADR-0095까지 반영) 기준으로 조사한 결과, M77 `benchmark_profile()`
+은 순수 조회 전용이라 Routing 파이프라인 어디에도 반영되지 않고 있었다.
+M69 `_reorder_by_execution_memory()`가 이미 같은 목적(성공률 기반
+tie-break)의 더 좁은 범위 신호를 최우선으로 쓰고 있었다.
+
+**사용자 승인(AskUserQuestion, 3회)**:
+1. 파이프라인 내 위치 — **`_reorder_by_execution_memory()`와
+   `_reorder_by_diversity()` 사이(권장안 채택)**: M69의 정밀한 신호가
+   최우선을 유지하고, M78 Benchmark(Provider 전체 누적)는 M69가 표본
+   부족이거나 동률일 때만 개입, M75/76 부하보다는 우선한다.
+2. 지표 결합 방식 — **성공률 우선, 레이턴시로 2차 tie-break(권장안
+   채택)**: `failure_rate()`는 `success_rate()`의 보완값이라 별도 사용
+   안 함. 정렬 키는 `(-success_rate, average_latency_seconds)`.
+3. 표본 부족 기준 — **`execution_count < 3`이면 중립값 처리(권장안
+   채택)**: M69/M65가 이미 쓰는 "표본 3건 미만 판정 보류" 규칙을 그대로
+   재사용(새 임계치 발명 안 함). 성공률은 `_NEUTRAL_RATE`(0.5), 레이턴시는
+   `math.inf`로 대체해 기존 순서(diversity 결과)를 그대로 보존한다.
+
+**구현**:
+- `src/ai_workspace/runtime/engine/engine_runtime.py`/
+  `managed_engine_runtime.py` — `_MIN_BENCHMARK_SAMPLES = 3` 상수,
+  `_benchmark_rank(candidate) -> tuple[float, float]`(M77
+  `benchmark_profile()`을 읽어 `(-success_rate, average_latency_seconds)`
+  키 생성, 표본 부족 시 `(-_NEUTRAL_RATE, math.inf)`), `_reorder_by_
+  benchmark(candidates)` 신설.
+- `_build_candidates()`에서 `_reorder_by_diversity()` 다음·`_reorder_by_
+  execution_memory()` 이전에 `_reorder_by_benchmark()`를 삽입 — 안정
+  정렬 특성상 최종 우선순위는 cost > execution_memory(M69) >
+  benchmark(M78) > diversity(M75/76)가 되며, 기존 우선순위는 전혀
+  바뀌지 않는다.
+- `EngineRuntime`(interface)·`benchmark_profile()` 계약은 무변경 — 두
+  구현체의 내부 private 메서드만 추가.
+- `tests/runtime/engine/test_engine_runtime.py`(신규 4건: Benchmark가
+  execution_memory 동률 시 성공률 높은 엔진 우선/execution_memory
+  우선순위를 절대 뒤집지 않음/표본 부족 시 diversity로 fallback/정책
+  미주입 시 미관여), `tests/runtime/engine/test_managed_engine_runtime.py`
+  (동일 시나리오 3건 + 테스트 전용 `FailableCostedSlowEngineAdapter`
+  추가) 추가.
+- `docs/ARCHITECTURE.md` §3.9 Engine Runtime 절에 Adaptive Engine
+  Benchmark Routing(M78) 서술 추가, §7 인터페이스 표 `EngineRuntime`
+  행 갱신.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 최신 main 기준에서 시작, 기존 ADR/TASKS/ROADMAP·구현 상태를 먼저 조사 | ✅ |
+| 2 | 기존 EngineSelectionPolicy/EngineRuntime/Benchmark Profile(M77) 구조 재사용 | ✅ |
+| 3 | Benchmark의 Success Rate/Failure Rate/Average Latency로 후보 재정렬 | ✅ |
+| 4 | 비용 1순위, Benchmark는 동일 비용 후보에 대한 tie-break로만 사용(execution_memory보다 낮은 우선순위) | ✅ |
+| 5 | 표본 3건 미만/데이터 없으면 즉시 기존 Routing으로 fallback(중립값 처리) | ✅ |
+| 6 | 새로운 Core Domain Interface 없음(EngineRuntime 계약 무변경, 내부 private 메서드만 추가) | ✅ |
+| 7 | 상태는 EngineRuntime 내부 in-process로만 관리, 영속화 없음(M77 상태 재사용, 새 상태 없음) | ✅ |
+| 8 | 기존 API와 100% 하위 호환(YAGNI) | ✅ |
+| 9 | 파이프라인 위치·지표 결합 방식·표본 부족 기준을 AskUserQuestion 3회로 확정 | ✅ |
+| 10 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1356개(신규 7개, 회귀 없음)/`ruff`/`mypy`(234 source files)
+전부 통과. ADR-0096.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import threading
 import time
 import uuid
@@ -30,6 +31,7 @@ from ai_workspace.interfaces.event_bus import Event, EventBus
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 _NEUTRAL_RATE = 0.5
+_MIN_BENCHMARK_SAMPLES = 3
 
 
 class ManagedEngineRuntime(EngineRuntime):
@@ -145,7 +147,16 @@ class ManagedEngineRuntime(EngineRuntime):
     `benchmark_profile(engine_name)`은 `InMemoryEngineRuntime`과 완전히
     동일한 설계 — M65 `_engine_reliability`/M69 `_execution_memory`를
     새 측정 없이 읽기 전용으로 조합해 `EngineBenchmarkProfile`을
-    반환한다. Routing 로직은 전혀 수정하지 않는다."""
+    반환한다. Routing 로직은 전혀 수정하지 않는다.
+
+    **Adaptive Engine Benchmark Routing(Milestone 78, ADR-0096)**:
+    `InMemoryEngineRuntime`과 완전히 동일한 설계 — `_build_candidates()`가
+    `_reorder_by_diversity()`(부하) 이후·`_reorder_by_execution_memory()`
+    (특정 capability 조합 성공률) 이전에 `_reorder_by_benchmark()`를
+    적용해 M77 `benchmark_profile()`로 한 번 더 tie-break한다. 최종
+    우선순위는 cost > execution_memory > benchmark > diversity이며,
+    표본이 `_MIN_BENCHMARK_SAMPLES`(3) 미만이면 중립값으로 즉시 기존
+    순서(diversity 결과)로 fallback한다."""
 
     def __init__(
         self,
@@ -260,11 +271,37 @@ class ManagedEngineRuntime(EngineRuntime):
     def _reorder_by_diversity(self, candidates: list[EngineCandidate]) -> list[EngineCandidate]:
         """**Diversity Routing(Milestone 75, ADR-0093) / Adaptive Load
         Balancing(Milestone 76, ADR-0094)**: `InMemoryEngineRuntime.
-        _reorder_by_diversity()`와 동일 — 비용·성공률이 완전 동률인
-        후보끼리만 지금 이 순간의 상대 부하(`_load_rank()`)가 더 낮은
-        엔진을 앞세운다."""
+        _reorder_by_diversity()`와 동일 — 비용·성공률·Benchmark가 완전
+        동률인 후보끼리만 지금 이 순간의 상대 부하(`_load_rank()`)가 더
+        낮은 엔진을 앞세운다."""
 
         return sorted(candidates, key=self._load_rank)
+
+    def _benchmark_rank(self, candidate: EngineCandidate) -> tuple[float, float]:
+        """**Adaptive Engine Benchmark Routing(Milestone 78, ADR-0096)**:
+        `InMemoryEngineRuntime._benchmark_rank()`와 동일 — M77
+        `benchmark_profile()`로 `(-success_rate, average_latency_seconds)`
+        순위 키를 만든다. 표본이 `_MIN_BENCHMARK_SAMPLES`(3) 미만이거나
+        latency가 기록되지 않았으면 각각 `_NEUTRAL_RATE`/`math.inf`로
+        대체해 비교에서 제외한다."""
+
+        profile = self.benchmark_profile(candidate.engine_name)
+        if profile.execution_count < _MIN_BENCHMARK_SAMPLES:
+            return (-_NEUTRAL_RATE, math.inf)
+        rate = profile.success_rate()
+        latency = profile.average_latency_seconds()
+        return (
+            -(rate if rate is not None else _NEUTRAL_RATE),
+            latency if latency is not None else math.inf,
+        )
+
+    def _reorder_by_benchmark(self, candidates: list[EngineCandidate]) -> list[EngineCandidate]:
+        """**Adaptive Engine Benchmark Routing(Milestone 78, ADR-0096)**:
+        `InMemoryEngineRuntime._reorder_by_benchmark()`와 동일 — 비용과
+        특정 capability 조합 성공률이 모두 동률인 후보끼리 M77 Benchmark
+        Profile(Provider 전체 누적)로 한 번 더 tie-break한다."""
+
+        return sorted(candidates, key=self._benchmark_rank)
 
     def run(
         self,
@@ -515,6 +552,7 @@ class ManagedEngineRuntime(EngineRuntime):
                 )
             )
         candidates = self._reorder_by_diversity(candidates)
+        candidates = self._reorder_by_benchmark(candidates)
         return self._reorder_by_execution_memory(candidates, required_capabilities)
 
     def run_ensemble_auto(

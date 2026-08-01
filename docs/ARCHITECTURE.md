@@ -831,6 +831,25 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   메서드 하나만 추가한 순수 조회 확장이며, 새 Core Domain Interface는
   없다(기존 `EngineRuntime`의 계약을 M70(`consensus_weight()`)과 동일한
   방식으로 확장했을 뿐이다).
+- **Adaptive Engine Benchmark Routing(Milestone 78, ADR-0096)**: M77이
+  만든 `benchmark_profile()`은 순수 조회용이라 Routing에 실제로 반영되지
+  않았다. `_build_candidates()`가 `_reorder_by_diversity()`(부하, M75/76)
+  이후·`_reorder_by_execution_memory()`(특정 `required_capabilities`
+  조합 성공률, M69) 이전에 `_reorder_by_benchmark()`를 추가해, M77
+  Benchmark Profile(Provider 전체 누적, `_reorder_by_execution_memory()`
+  보다 넓은 범위·큰 표본)로 한 번 더 tie-break한다. 정렬 키는
+  `(-success_rate, average_latency_seconds)` — 성공률 내림차순이 1순위,
+  완전히 같은 성공률일 때만 평균 레이턴시 오름차순으로 2차 tie-break한다
+  (`failure_rate()`는 `success_rate()`의 보완값이라 별도 사용 안 함).
+  안정 정렬 순서상 최종 우선순위는 cost > execution_memory(좁지만 정밀)
+  > benchmark(넓지만 표본 큼) > diversity(부하, 최후순위)이며, 표본이
+  `_MIN_BENCHMARK_SAMPLES`(3) 미만이거나 latency가 없으면 각각
+  `_NEUTRAL_RATE`(0.5)/`math.inf`로 대체해 즉시 기존 순서(diversity
+  결과)로 fallback한다 — 페널티도 우대도 주지 않는다. 새 상태를 만들지
+  않고 M77이 이미 조합해 둔 값만 재사용하며, `engine_selection_policy`
+  미주입 시(첫 매칭 경로)에는 관여하지 않는다(100% 하위 호환). 새 Core
+  Domain Interface·새 public 메서드·새 상태 없음(30종 유지, `EngineRuntime`
+  계약 완전 무변경) — 내부 private 메서드 추가뿐이다.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -2735,7 +2754,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `InteractionEngine` | 입력 표면 정규화/응답 변환 (기존 ConversationEngine 대체) | Milestone 1 (T1-21) 계약, Milestone 3 구현 | **완료(계약)** |
 | `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료(계약)** |
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
-| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70)+Provider별 동시 실행 상한(M74)+동률 후보 다양성 라우팅(M75)+상대 부하율 기반 로드 밸런싱(M76)+Benchmark Profile 조회(M77) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장, M74(ADR-0092) `register_engine()`에 선택적 `max_concurrency` 확장, M75(ADR-0093) `_build_candidates()` 내부 tie-break 추가(계약 무변경), M76(ADR-0094) tie-break 신호를 raw count→상대 부하율로 개선(계약 무변경), M77(ADR-0095) `benchmark_profile()` 신규 public 메서드 추가(Routing 무변경) | **완료(계약)** |
+| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70)+Provider별 동시 실행 상한(M74)+동률 후보 다양성 라우팅(M75)+상대 부하율 기반 로드 밸런싱(M76)+Benchmark Profile 조회(M77)+Benchmark 기반 Routing tie-break(M78) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장, M74(ADR-0092) `register_engine()`에 선택적 `max_concurrency` 확장, M75(ADR-0093) `_build_candidates()` 내부 tie-break 추가(계약 무변경), M76(ADR-0094) tie-break 신호를 raw count→상대 부하율로 개선(계약 무변경), M77(ADR-0095) `benchmark_profile()` 신규 public 메서드 추가(Routing 무변경), M78(ADR-0096) `_build_candidates()` 내부에 Benchmark 기반 tie-break 추가(계약 무변경) | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 | `WorkflowRepository` | `Workflow` 조회/저장(`AutomationActionExecutor`의 RUN_WORKFLOW가 `workflow_id`로 실제 Workflow를 찾는 유일한 통로) | Milestone 59 (계약+`InMemoryWorkflowRepository` 구현) | **완료(계약+구현)** |

@@ -1180,3 +1180,117 @@ def test_benchmark_profile_zero_when_engine_never_run() -> None:
     assert profile.execution_count == 0
     assert profile.success_rate() is None
     assert profile.average_latency_seconds() is None
+
+
+class FailableCostedSlowEngineAdapter(CostedSlowEngineAdapter):
+    """M78(ADR-0096) 테스트용 — `CostedSlowEngineAdapter`에 호출마다
+    바꿔 쓸 수 있는 `succeed` 플래그를 더해, 하나의 엔진이 일부 호출은
+    성공·일부는 실패하는 상황(성공 0건은 아니라서 M65/M66의
+    `is_unreliable()` 제외 대상이 되지 않는)을 재현한다."""
+
+    def __init__(
+        self,
+        delay_seconds: float,
+        estimated_cost_usd: float = 0.0,
+        capabilities: frozenset[str] = frozenset({"code_generation"}),
+    ) -> None:
+        super().__init__(delay_seconds, estimated_cost_usd)
+        self._capabilities = capabilities
+        self.succeed = True
+
+    def capabilities(self) -> frozenset[str]:
+        return self._capabilities
+
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
+        result = super().run(session_id, task, model=model)
+        if self.succeed:
+            return result
+        return EngineResult(success=False, output="", error="scripted failure")
+
+
+def test_benchmark_prefers_higher_success_rate_engine_when_execution_memory_ties() -> None:
+    """M78(ADR-0096): `InMemoryEngineRuntime`과 동일한 시나리오 —
+    비용이 동률이고 이번 호출의 `required_capabilities` 조합에 대한 실행
+    메모리(M69)가 아직 없어 중립일 때, Provider 전체 누적(M65) Benchmark
+    Profile(M77)의 성공률이 더 높은 엔진을 우선한다. `run_ensemble()`은
+    M69 실행 메모리를 기록하지 않으므로 이번 tie-break 호출의
+    execution_memory는 계속 중립을 유지한다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    engine_a = FailableCostedSlowEngineAdapter(delay_seconds=0.0)
+    engine_b = FailableCostedSlowEngineAdapter(delay_seconds=0.0)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    for i in range(3):
+        runtime.run_ensemble(make_task(f"seed-a-{i}"), ["engine-a"])
+    runtime.run_ensemble(make_task("seed-b-0"), ["engine-b"])
+    engine_b.succeed = False
+    runtime.run_ensemble(make_task("seed-b-1"), ["engine-b"])
+    runtime.run_ensemble(make_task("seed-b-2"), ["engine-b"])
+    assert engine_a.run_count == 3
+    assert engine_b.run_count == 3
+
+    runtime.run(make_task("tie"))
+
+    assert engine_a.run_count == 4
+    assert engine_b.run_count == 3
+
+
+def test_benchmark_does_not_override_execution_memory_success_rate() -> None:
+    """M78(ADR-0096): 특정 `required_capabilities` 조합의 실행 메모리(M69)
+    가 이미 성공률로 후보를 가른 경우, Provider 전체 Benchmark(M77)가
+    정반대 결과를 보여줘도 M69의 좁지만 정밀한 판단을 절대 뒤집지
+    않는다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    reliable = FailableCostedSlowEngineAdapter(delay_seconds=0.0, capabilities=frozenset({"cap"}))
+    untested = FailableCostedSlowEngineAdapter(delay_seconds=0.0, capabilities=frozenset({"cap"}))
+    runtime.register_engine("reliable", reliable)
+    runtime.register_engine("untested", untested)
+
+    for i in range(3):
+        runtime.run(make_task(f"seed-{i}"), frozenset({"cap"}))
+    assert reliable.run_count == 3
+    assert untested.run_count == 0
+
+    reliable.succeed = False
+    for i in range(3):
+        runtime.run_ensemble(make_task(f"drag-{i}"), ["reliable"])
+    for i in range(3):
+        runtime.run_ensemble(make_task(f"boost-{i}"), ["untested"])
+
+    assert runtime.benchmark_profile("reliable").success_rate() == 0.5
+    assert runtime.benchmark_profile("untested").success_rate() == 1.0
+
+    runtime.run(make_task("tie"), frozenset({"cap"}))
+
+    assert reliable.run_count == 7
+    assert untested.run_count == 3
+
+
+def test_benchmark_falls_back_to_diversity_when_sample_insufficient() -> None:
+    """M78(ADR-0096): Benchmark 표본이 `_MIN_BENCHMARK_SAMPLES`(3) 미만이면
+    성공률이 아무리 좋아도 중립으로 처리해 M75/76의 부하 기반 tie-break
+    결과를 그대로 보존한다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    engine_a = CostedSlowEngineAdapter(delay_seconds=0.2)
+    engine_b = CostedSlowEngineAdapter(delay_seconds=0.01)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    runtime.run_ensemble(make_task("seed-0"), ["engine-a"])
+    runtime.run_ensemble(make_task("seed-1"), ["engine-a"])
+
+    thread = threading.Thread(target=runtime.run, args=(make_task("busy"),))
+    thread.start()
+    time.sleep(0.05)
+    runtime.run(make_task("tie"))
+    thread.join()
+
+    assert engine_a.run_count == 3
+    assert engine_b.run_count == 1
