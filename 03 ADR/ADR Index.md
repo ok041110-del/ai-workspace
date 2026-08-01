@@ -409,6 +409,12 @@ M46이 Phase 0까지만 실행하고 Deferred로 남긴 Metadata Backfill/Wiki L
 - 결정: T01 코드 전수 조사로 `RecommendationAdjustmentAnalyzer`(M42)가 "성공 0건 + 실패 1건 이상"이면 즉시 추천을 보류하는 이진 규칙 1개만 갖고 있어, 표본이 부족한 상태(실패 1건)에서도 성급하게 보류한다는 한계를 확인. 사용자가 학습 대상을 "Recommendation/Adaptation 규칙 정교화만"으로 한정하고, Guardian 다건 이력 축적(Gap A)·영속 저장소 도입(Gap C)은 이번 Scope에서 명시적으로 배제. T02 MDD Review에서 보류 조건을 `success_count == 0 and failure_count > 0`(표본 1건부터 보류)에서 `success_count == 0 and total >= 3`(실패율 100% + 표본 3건 이상)으로 교체하기로 결정 — 기존 규칙의 상위 집합이라 회귀 없음
 - 영향: `intelligence/recommendation_adjustment.py`(`_MIN_SAMPLE_SIZE_FOR_WITHHOLD` 상수 추가, 조건식 교체)만 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음(기존 파일 1개 수정). `pytest` 1123개(1개 신규, 회귀 없음)/ruff/mypy(220 source files) 전부 통과. Guardian 다건 이력 축적·영속 저장소 도입은 향후 별도 Milestone 대상으로 명시적으로 분리. 상세는 [[Automation Index]]
 
+## ADR-0067: Learning Persistence — FileMemoryEngine으로 ExecutionMemoryStore 영속화 (Milestone 50)
+
+- 목적: ADR-0066(M49)이 "in-process 저장소이므로 학습이 서버 1회 구동 세션 내로 한정된다"고 남긴 한계를 해소 — 재시작 후에도 학습 이력이 유지되게 함
+- 결정: T01 코드 전수 조사로 `MemoryEngine` Interface는 이미 존재하고 구현체는 `InMemoryMemoryEngine` 하나뿐이며 사용처는 `web/server.py` 1곳뿐임을 확인. `storage/`에 이미 확립된 File 기반 영속화 패턴(JSON 직렬화, `base_dir` 주입)을 그대로 재사용해 `FileMemoryEngine`을 신설, `<vault_root>/.ai-workspace-data/`에 단일 JSON 파일로 key-value를 영속화하기로 결정(사용자 승인). Composition Root 1곳만 교체 — 다른 `InMemoryMemoryEngine` 사용처는 무변경
+- 영향: `storage/file_memory_engine.py`(신규), `web/server.py`(1곳 교체), `observability/pipeline_stage_analyzer.py`(note 텍스트만 정확하게 갱신), `.gitignore`(`.ai-workspace-data/` 추가). 새 Core Domain Interface/Service 없음. `pytest` 1130개(7개 신규, 회귀 없음)/ruff/mypy(221 source files) 전부 통과. StatusLine Observability 배선은 향후 별도 Milestone 대상으로 명시적으로 분리. 상세는 [[Automation Index]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
