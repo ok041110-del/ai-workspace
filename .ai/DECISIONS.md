@@ -4905,3 +4905,71 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   대화형 터미널 사용 환경에는 여전히 유효·필요하지만, 그 환경에서
   실제로 표시되는지는 이 세션이 자체 검증할 수 없어 최종 확인은
   사용자 몫으로 남는다.
+
+## ADR-0070: Learning Weighting — M49/M51 두 신호를 고정 가중치 점수로 결합 (Milestone 52)
+
+- 상태: 승인됨 (2026-08-01, 사용자가 M51 승인 코멘트에서 예고한
+  "M52(가중치)" 방향을 확정 요청 — 두 차례 AskUserQuestion으로
+  범위(두 신호를 가중치 점수로 결합, 가중치는 고정 상수로 데이터
+  학습 아님)와 파라미터(가중치 0.6/0.6, threshold 0.6)를 직접 확정)
+- 날짜: 2026-08-01
+- 배경: M49(전체 실패율 100%+표본 3건 이상)/M51(최근 연속 실패
+  5회 이상) 두 Rule은 지금까지 OR로만 결합돼, 각 Rule의 임계값
+  미만이지만 "합쳐 보면 위험한" 조합(예: 실패율 60%+최근 3회 연속
+  실패)을 포착하지 못하는 한계가 있었다. `recommendation_
+  adjustment.py`의 클래스 docstring에는 M51 시점에 "우선순위
+  재설계나 임의의 점수화·가중치 학습은 하지 않는다(Non-goal)"가
+  명시돼 있어, 이번 확장은 그 Non-goal을 명시적으로 좁혀야 했다
+  (사용자 승인 필요 사항으로 별도 확인).
+- 결정:
+  1. **Domain Analysis(T01)**: 이 확장도 새 Domain/Behavioral
+     Concept가 아니라 기존 `Adaptation`(§13.3)의 연장이다. 새
+     Interface/Service 없이 `recommendation_adjustment.py` 1개
+     파일만 수정.
+  2. **Architecture Review(T02) — 설계**: `ExperienceStat` 필드만
+     으로 두 연속값 신호를 계산한다.
+     - `signal_overall = failure_count / total`(단, `total <
+       _MIN_SAMPLE_SIZE_FOR_WITHHOLD`이면 0 — 기존 최소 표본 조건
+       유지)
+     - `signal_recent = min(recent_failure_streak /
+       _RECENT_FAILURE_STREAK_THRESHOLD, 1.0)`
+     - `score = 0.6 * signal_overall + 0.6 * signal_recent`,
+       `score >= 0.6`이면 보류
+     - 사용자가 처음 제안한 "가중치 0.5/0.5 + threshold 0.6"은
+       신호 하나가 완전히 1.0이어도 `score=0.5<0.6`이 되어 기존
+       M49/M51 단일 규칙이 더 이상 트리거되지 않는 실제 회귀를
+       만든다는 것을 수학적으로 짚어 보고했고, 사용자가 가중치를
+       0.6/0.6으로 올려 이 문제를 해결하도록 확정(각 가중치가
+       threshold와 같아, 신호 하나가 1.0이면 그 신호만으로 이미
+       `score=0.6>=0.6`이 성립 — 기존 두 Rule이 정확히 보존됨을
+       경계값으로 증명).
+  3. **Detailed Design(T03)**: `_withhold_score()` 헬퍼로 점수를
+     계산. Explainability 태깅은 기존 M49/M51 요구(어느 규칙이
+     발동했는지 구분)를 그대로 유지하되, 개별 규칙(M49/M51 boolean)
+     으로는 안 걸리고 오직 가중치 결합으로만 걸린 새 케이스에
+     "(M52 가중치 결합 규칙)" 태그를 추가.
+  4. **Implementation**: `recommendation_adjustment.py` 1개 파일만
+     수정(상수 3개 추가, `analyze()`를 boolean OR에서 score 비교로
+     교체, `_withhold_score()` 신규, `_build_withhold_reason()`에
+     M52 분기 추가). 클래스/모듈 docstring의 Non-goal을 "가중치·
+     threshold는 고정 상수이며 데이터로부터 학습되지 않는다(온라인
+     학습 없음)"로 좁혀 실제로 하는 일과 안 하는 일을 명확히 구분.
+- 대안:
+  1. 가중치 0.5/0.5 + threshold 0.6 — 기각(회귀 발생, 위 T02 참고).
+  2. task_id별 가중치/임계값 차등화 — 기각: 사용자가 "두 신호를
+     가중치 점수로 결합"을 선택, task_id별 차등은 범위 밖(향후
+     별도 요청 시 검토).
+  3. 신호를 boolean 그대로 두고 가중합 — 기각: boolean×가중치는
+     결과적으로 기존 OR와 동일해 "가중치"가 무의미해짐 — 신호를
+     연속값(실패율/streak 비율)으로 바꿔야 결합이 실질적 의미를
+     가짐.
+- 이유: 기존 `ExperienceStat` 필드만으로 계산 가능해 새 저장소·
+  수집 로직이 필요 없고, 가중치를 개별 신호의 완전 포화값과 같은
+  값(0.6)으로 설정해 "기존 규칙 무변경"이라는 M49/M51 계약을 수학적
+  경계값 증명으로 지키면서 새 조합 포착 능력만 순수 추가했다.
+- 결과/영향: `intelligence/recommendation_adjustment.py` 1개 파일만
+  수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음.
+  `tests/intelligence/test_recommendation_adjustment.py`(기존 1건
+  수정, 신규 2건 추가 — 조합 트리거, 경계값 회귀 없음 증명).
+  `pytest` 1145개(회귀 없음)/`ruff`/`mypy`(221 source files) 전부
+  통과. `.ai/TASKS.md` Milestone 52 절(T01~T03) 신규 추가.

@@ -13993,6 +13993,71 @@ PR #48(Vault Index 반영) 병합(`1db0b7a`), `main` 반영 확인.
 
 ---
 
+## Milestone 52 — Learning Weighting (T03 완료, 사용자 승인 대기)
+
+**배경**: M51 승인 코멘트에서 사용자가 예고한 "이후 M52(가중치),
+M53(Decay)로도 확장하기 쉬운 구조" 중 M52를 착수. 착수 전 사용자가
+"Multi-Agent Foundation"으로 잘못 요약된 이전 세션 요약 오류를
+스스로 발견해 정정하고, M52는 실제로 "가중치" 확장임을 재확인.
+
+**T01 Domain Analysis(사용자 확인)**: 두 신호(M49 전체 실패율, M51
+최근 연속 실패)를 가중치 점수로 결합하는 확장으로 확정 — 가중치는
+데이터로부터 학습되는 것이 아니라 코드에 고정된 상수(사실상
+"학습" 아님, Deterministic 유지). 새 Domain/Behavioral Concept
+아님, 기존 `Adaptation`(§13.3)의 연장.
+
+**T02 MDD Review(사용자 승인, 2단계)**:
+1. 최초 설계안(신호 2개를 0.5/0.5로 가중, threshold 0.5, 기존 규칙
+   회귀 없음을 수학적으로 보장)을 제시 — 사용자가 "가중치는
+   0.5/0.5 유지, threshold는 0.6으로" 요청.
+2. 이 조합이 기존 M49/M51 **단일** 규칙(신호 하나가 완전히 1.0)의
+   트리거를 깨는 실제 회귀(`score=0.5<0.6`)를 만든다는 것을 수학적
+   경계값 계산으로 지적·보고 — 사용자가 "가중치를 0.6/0.6으로
+   올려 threshold=0.6 유지"로 재확정(신호 하나가 1.0이면 그 신호만
+   으로 `score=0.6>=0.6`이 성립해 기존 두 Rule이 정확히 보존됨).
+
+**T03 구현**:
+- `src/ai_workspace/intelligence/recommendation_adjustment.py` —
+  `_OVERALL_FAILURE_WEIGHT`/`_RECENT_STREAK_WEIGHT`/
+  `_WITHHOLD_SCORE_THRESHOLD`(모두 `Final[float] = 0.6`) 추가.
+  `_withhold_score()` 신규 헬퍼(`signal_overall = failure_count /
+  total`(단, `total < 3`이면 0)와 `signal_recent = min
+  (recent_failure_streak / 5, 1.0)`를 각각 0.6 가중치로 합산).
+  `analyze()`를 boolean OR 판정에서 `score >=
+  _WITHHOLD_SCORE_THRESHOLD` 판정으로 교체. `_build_withhold_reason()`
+  에 개별 규칙(M49/M51 boolean)으로는 안 걸리고 가중치 결합으로만
+  걸린 새 케이스를 위한 "(M52 가중치 결합 규칙)" 분기 추가 — 기존
+  M49/M51/M49+M51 태깅은 그대로 유지(사용자 M51 승인 시 요구사항
+  보존). 클래스/모듈 docstring의 Non-goal을 "가중치·threshold는
+  고정 상수이며 데이터로부터 학습되지 않는다"로 좁힘.
+- `tests/intelligence/test_recommendation_adjustment.py` —
+  기존 `test_analyze_passes_through_when_recent_failure_streak_
+  below_threshold`가 새 가중치 결합 로직 하에서는 실제로 트리거되는
+  케이스였음을 발견해 값 조정(총 8건/실패 1건/연속 1회로 진짜
+  낮은 결합 점수를 테스트하도록 수정) 후 이름도 `..._combined_
+  score_below_threshold`로 변경. 신규 2건 추가: 개별 규칙은 둘 다
+  미달이지만 결합 점수는 threshold 이상인 케이스(M52 태그 검증),
+  신호 하나가 완전히 1.0이고 다른 신호가 0이어도 여전히 보류되는
+  경계값(회귀 없음 증명).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 새 Domain/Service/Interface 없이 기존 파일 1개만 수정 | ✅ |
+| 2 | M49/M51 단일 규칙 무변경(회귀 없음) — 경계값 테스트로 증명 | ✅ |
+| 3 | 가중치는 고정 상수, 데이터 기반 학습 아님(사용자 확인) | ✅ |
+| 4 | 가중치/threshold 값 사용자 직접 확정(0.6/0.6, 회귀 이슈 보고 후 재확정) | ✅ |
+| 5 | Explainability에 M52 전용 태그 추가, 기존 M49/M51/Both 태깅 보존 | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음(값 조정 1건 제외) | ✅ |
+
+`pytest` 1145개(신규 2개, 수정 1개, 회귀 없음)/`ruff`/`mypy`(221
+source files) 전부 통과. ADR-0070. PR 생성·CI 확인·Merge·`main`
+반영·Vault Index 갱신 후 최종 완료 선언 예정(이전 Milestone과 동일한
+절차).
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
