@@ -65,6 +65,22 @@ AutomationRule → AutomationRepository → AutomationService(CRUD)
 최초로 실배선해, `AutomationScheduler`의 TIME/INTERVAL Trigger로
 실제 자동 실행이 가능해졌다.
 
+**Architecture Guardian Gate(Milestone 48, ADR-0065)**:
+`RecommendationOrchestrationService`가 `execution_service.execute()`
+를 호출하기 직전에(주입된 경우) `ArchitectureGuardianService.
+generate()`(M41, Read Only)를 호출한다 — Guardian 위반이 있으면
+Recommendation/Adaptation/Explainability는 그대로 생성하되 Execution
+만 차단한다(Override 없음). M45 StatusLine에 `AutomationGateStatus`
+(PASS/BLOCKED/UNKNOWN)로 최근 1건의 결과가 노출된다.
+
+**Adaptation 규칙 정교화(Milestone 49, ADR-0066)**:
+`RecommendationAdjustmentAnalyzer`(M42)의 추천 보류 조건이 "성공
+0건 + 실패 1건 이상"에서 "실패율 100% + 표본 3건 이상"으로
+정교화됐다 — 표본이 부족한 상태(실패 1~2건)에서 성급하게 보류하지
+않도록 최소 표본 조건을 추가했다. Guardian 다건 이력 축적·영속
+저장소 도입은 이번 Milestone Scope에서 명시적으로 배제됐다(향후
+별도 Milestone 대상).
+
 ## 관련 GitHub 문서
 
 - `docs/ARCHITECTURE.md` §3.19

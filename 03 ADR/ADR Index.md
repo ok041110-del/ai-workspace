@@ -397,6 +397,18 @@ type: adr
 
 M46이 Phase 0까지만 실행하고 Deferred로 남긴 Metadata Backfill/Wiki Link Migration/Concept Notes/Hub/Lessons를 실제 Vault 전체에 적용(새 ADR 아님, ADR-0064 구현 단계). `type` Frontmatter 전수 백필로 54/54(100%) 달성, `[[Recommendation Hub]]`로 Recommendation 파이프라인 리포트의 orphan 문제 해소, Concept 문서 7종(Adaptation/Orchestration/Explainability는 파이프라인 단계로 판단해 제외) + Architecture/Runtime/Decision/Knowledge Hub 4종 신규, `16 Lessons/` 신규(`VAULT_CONTENT_DIRECTORIES` 17종으로 확장, 실제 Lesson 데이터는 없음). `.obsidian/graph.json`은 계속 Pending Verification 동결 유지. 코드 변경은 `vault/mapping.py` 상수 목록 1건뿐(8개 보호 기능 전부 무변경) — `pytest` 1108개(회귀 없음)/ruff/mypy/Guardian 기존 상태 유지. 상세는 [[Vault Migration Plan]]
 
+## ADR-0065: Automation Foundation — Architecture Guardian을 Recommendation Orchestration의 Execution Gate에 연결 (Milestone 48)
+
+- 목적: 원래 "Automation Core" 3대 Engine(Memory/Guardian/Learning) 중 마지막 Learning Engine 구현으로 M48을 시작할 계획이었으나, M35~M47 구현 완료 후 사용자 지시로 T01 Domain Analysis를 실제 코드 기준으로 재수행하도록 함(§2.1 원안보다 현재 구현 상태 우선)
+- 결정: T01 코드 전수 조사로 `RecommendationOrchestrationService`(M43)가 Automation Trigger마다 Experience→Recommendation+Adaptation→Explainability→Execution→Task Lifecycle→Memory를 자동 실행하고 있음에도 Architecture Guardian(M41)만 이 자동 경로 어디에도 연결돼 있지 않음을 확인(테스트/StatusLine에서만 평가). T02 MDD Review에서 사용자가 지정한 4개 항목 결정: (1) Guardian 실행 시점 = Execution 직전(Pre-flight for Execution, Recommendation/Adaptation/Explainability는 Read-Only라 영향 없음), (2) 실패 정책 = Recommendation은 그대로 생성하고 Execution만 차단(Override 없음, Automation 전체 중단 아님), (3) Observability 연계 = M45 StatusLine에 `AutomationGateStatus`(PASS/BLOCKED/UNKNOWN) 신규 노출(사용자 요청으로 이유 문자열뿐 아니라 상태 필드도 추가), (4) Learning과의 경계 = Guardian 평가 결과를 `ExecutionMemoryStore`/Adaptation 입력에 전혀 포함하지 않음(Learning Engine은 M49 이후로 명시적으로 분리)
+- 영향: `guardian/models.py`(`GUARDIAN_BLOCK_REASON_PREFIX` 상수), `runtime/execution/recommendation_execution_gate.py`(`guardian_report` 선택적 파라미터), `runtime/execution/recommendation_execution_service.py`/`recommendation_orchestration_service.py`(선택적 주입 확장), `observability/snapshot.py`(`AutomationGateStatus` Enum 신규)/`guardian_runtime_analyzer.py`/`statusline_renderer.py`, `web/server.py`(`ArchitectureGuardianService` 조립). 새 Core Domain Interface/Adapter/Service/Layer/File 없음(27종 유지, 기존 6개 파일의 선택적 의존성 확장만). `pytest` 1122개(14개 신규, 회귀 없음)/ruff/mypy(220 source files)/Guardian 자체 검사 전부 통과. 상세는 [[Automation Index]]
+
+## ADR-0066: Learning Engine 착수 — RecommendationAdjustmentAnalyzer에 최소 표본 조건 추가 (Milestone 49)
+
+- 목적: ADR-0065가 명시적으로 분리해 둔 Learning Engine을 착수. Guardian 다건 이력·영속 저장소가 아직 없는 상태에서 무거운 Learning 체계를 새로 설계하는 대신, 실제로 존재하는 신호(`ExperienceStat`, M40)만으로 해결 가능한 최소 개선부터 시작
+- 결정: T01 코드 전수 조사로 `RecommendationAdjustmentAnalyzer`(M42)가 "성공 0건 + 실패 1건 이상"이면 즉시 추천을 보류하는 이진 규칙 1개만 갖고 있어, 표본이 부족한 상태(실패 1건)에서도 성급하게 보류한다는 한계를 확인. 사용자가 학습 대상을 "Recommendation/Adaptation 규칙 정교화만"으로 한정하고, Guardian 다건 이력 축적(Gap A)·영속 저장소 도입(Gap C)은 이번 Scope에서 명시적으로 배제. T02 MDD Review에서 보류 조건을 `success_count == 0 and failure_count > 0`(표본 1건부터 보류)에서 `success_count == 0 and total >= 3`(실패율 100% + 표본 3건 이상)으로 교체하기로 결정 — 기존 규칙의 상위 집합이라 회귀 없음
+- 영향: `intelligence/recommendation_adjustment.py`(`_MIN_SAMPLE_SIZE_FOR_WITHHOLD` 상수 추가, 조건식 교체)만 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음(기존 파일 1개 수정). `pytest` 1123개(1개 신규, 회귀 없음)/ruff/mypy(220 source files) 전부 통과. Guardian 다건 이력 축적·영속 저장소 도입은 향후 별도 Milestone 대상으로 명시적으로 분리. 상세는 [[Automation Index]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
