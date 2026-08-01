@@ -13772,7 +13772,7 @@ PR #46(Vault Index 보완) 병합(`8333888`), `main` 반영 확인.
 
 ---
 
-## Milestone 51 — Learning Evolution (T03 완료, 사용자 승인 대기)
+## Milestone 51 — Learning Evolution (완료)
 
 **목표**: M49/M50이 만든 "실패율 100% + 표본 3건 이상" 단일 규칙을
 추세(trend)/가중치/Decay 기반으로 확장해 Recommendation 품질을
@@ -13894,8 +13894,9 @@ Milestone에서 부분적으로 해제한다.
 `pytest` 1137개(신규 7개, 회귀 없음)/`ruff`/`mypy`(221 source files)
 전부 통과.
 
-**사용자 승인 대기**: 위 6개 항목을 확인해 Milestone 51 Learning
-Evolution 공식 완료 여부 승인 필요.
+**사용자 승인(2026-08-01)**: 위 6개 항목 확인 완료 — Milestone 51
+Learning Evolution 공식 완료 승인됨. PR #47(코드) 병합(`384214c`),
+PR #48(Vault Index 반영) 병합(`1db0b7a`), `main` 반영 확인.
 
 ---
 
