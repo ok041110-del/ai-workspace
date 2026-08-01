@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from tests.agents.test_coding_agent import RecordingEngineRuntime
-from tests.interfaces.fakes import FakeAgentManager, FakeAgentRegistry, FakeTaskEngine
+from tests.interfaces.fakes import (
+    FakeAgentManager,
+    FakeAgentRegistry,
+    FakeAgentScheduler,
+    FakeTaskEngine,
+)
 
 from ai_workspace.agents.documentation_agent import DocumentationAgent
 from ai_workspace.agents.events import DOCUMENTATION_COMPLETED, REVIEW_COMPLETED
@@ -243,3 +248,52 @@ def test_documentation_agent_second_mission_overwrites_session_snapshot_id() -> 
     )
 
     assert workspace_session.memory_snapshot_id != first_snapshot_id
+
+
+def test_documentation_agent_ignores_review_completed_when_not_selected_by_scheduler() -> None:
+    """M56(ADR-0074) — CodingAgent(M13)와 동일한 패턴: 같은 DOCUMENTATION
+    Capability를 가진 다른 DocumentationAgent 인스턴스가 Scheduler에게
+    선택되면, 선택되지 않은 인스턴스는 아무것도 하지 않는다."""
+    shared_registry = FakeAgentRegistry()
+    shared_manager = FakeAgentManager()
+    shared_scheduler = FakeAgentScheduler()
+    event_bus = InMemoryEventBus()
+    task_engine = FakeTaskEngine()
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="문서화 완료"))
+    context_manager = SpyContextManager()
+    workspace_session = WorkspaceSession(session_id="s1", current_project_id="p1")
+
+    selected_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    DocumentationAgent(
+        agent_runtime=selected_agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
+        engine_runtime=engine_runtime,
+        context_manager=context_manager,
+        workspace_session=workspace_session,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+    )
+    unselected_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    DocumentationAgent(
+        agent_runtime=unselected_agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
+        engine_runtime=engine_runtime,
+        context_manager=context_manager,
+        workspace_session=workspace_session,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+    )
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+    _advance_to_review(task_engine, task)
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=REVIEW_COMPLETED, payload={"task_id": task.task_id})
+    )
+
+    assert len(engine_runtime.received_tasks) == 1

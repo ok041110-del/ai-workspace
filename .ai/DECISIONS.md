@@ -5179,3 +5179,68 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   갱신 + 신규 1건 — near-miss 가시성 검증). `pytest` 1156개(신규
   1개, 회귀 없음)/`ruff`/`mypy`(222 source files) 전부 통과.
   `.ai/TASKS.md` Milestone 55 절(T01~T03) 신규 추가.
+
+## ADR-0074: Multi-Agent 자가 확인 가드를 현재 구현된 Agent 전체로 일반화 (Milestone 56)
+
+- 상태: 승인됨 (2026-08-01, 사용자가 "M56 Multi-Agent 진행" 착수
+  요청 — 로드맵에 사전 예고 없던 이름이라 AskUserQuestion 2회로
+  범위(M13이 CodingAgent에만 적용했던 자가 확인 가드를 다른 Agent로
+  확장) + 대상(현재 구현된 모든 Agent, 미래 Agent는 같은 계약을
+  따르도록 설계만) 확정)
+- 날짜: 2026-08-01
+- 배경: M13(Multi-Agent Collaboration)이 `is_agent_selected()` 자가
+  확인 가드를 `CodingAgent` 1개에만 적용하고 "Review/Documentation
+  등으로 확장은 후속 Milestone"이라고 명시적으로 남겼다(Non-goal).
+  T01 조사 중 `PlanningAgent`가 Event를 구독하지 않고
+  `plan_mission()`으로 직접 호출되는 진입점이라는 구조적 차이를
+  발견 — "여러 인스턴스가 같은 broadcast Event에 반응할 때 자가
+  선택"이라는 이 가드의 전제 자체가 성립하지 않는다(호출자가 이미
+  어떤 인스턴스를 부를지 결정하므로 선택 모호성이 없음).
+- 결정:
+  1. **Domain Analysis(T01)**: 새 Domain/Interface 아님 — M13이
+     이미 정의한 `is_agent_selected()`(`agents/scheduling.py`)를
+     그대로 재사용. 새로운 중앙 디스패처·새 메커니즘 없음.
+  2. **PlanningAgent 제외(T01 발견 사항, 사용자 확인)**: Event
+     구독 Agent(Coding/Review/Documentation/Shell/Coordinator) 5개
+     에만 적용하고, 직접 호출 진입점인 PlanningAgent는 구조적
+     이유로 범위에서 제외한다 — 억지로 끼워 맞추지 않는다.
+  3. **Architecture Review(T02)**: `CodingAgent`의 정확히 같은
+     패턴(선택적 키워드 인자 `agent_registry`/`agent_scheduler`,
+     기본값 `None`이면 기존 동작과 100% 동일, 이벤트 핸들러 진입
+     시점에 `is_agent_selected()`로 자가 확인)을 `ReviewAgent`/
+     `DocumentationAgent`/`ShellAgent`/`CoordinatorAgent` 4개에
+     동일하게 적용.
+  4. **범위 제한(사용자 확정)**: 현재 구현된 Agent까지만 일반화
+     하고, 미래에 추가될 Agent는 이번에 만들지 않는다 — 다만 이
+     Milestone으로 "새 Agent는 이 계약(선택적 `agent_registry`/
+     `agent_scheduler` 키워드 인자 + `is_agent_selected()` 자가
+     확인)을 따른다"는 패턴이 5개 사례로 확립되어, 향후 새 Agent가
+     같은 패턴을 그대로 반복하면 된다.
+- 대안:
+  1. Scheduler 선택 정책 고도화(우선순위/부하 기반) — 기각: 사용자가
+     "자가 확인 가드를 다른 Agent로 확장"을 선택. 더 큰 설계 변경.
+  2. 병렬 실행 — 기각: 사용자가 선택하지 않음, 동시성 이슈가 많은
+     영역이라 별도 Milestone 대상.
+  3. PlanningAgent에도 억지로 가드 적용(호출자 정보를 임의로 매핑) —
+     기각: 이 가드는 "여러 인스턴스가 같은 Event를 구독"하는 구조를
+     전제로 하는데 PlanningAgent는 직접 호출이라 전제 자체가
+     성립하지 않는다. 억지로 맞추면 의미 없는 코드만 늘어난다.
+  4. 모든 Agent에 새로운 공통 Base Class/Mixin 도입 — 기각: YAGNI —
+     5개 사례 모두 각자의 생성자·이벤트 핸들러에 동일한 코드 3~5줄을
+     반복하는 것으로 충분하고, 상속 계층을 새로 만들 필요가 없다.
+- 이유: M13이 검증한 패턴(결정적 Scheduler 선택 + 자가 확인, 새
+  중앙 디스패처 없음)을 그대로 복제해 회귀 위험을 최소화하면서,
+  M13이 명시적으로 남긴 기술 부채("Review/Documentation 등으로 확장은
+  후속 Milestone")를 해소했다. PlanningAgent를 억지로 포함시키지
+  않고 구조적 이유를 문서화한 것은 "추정 금지" 원칙과 일치한다.
+- 결과/영향: `agents/review_agent.py`/`agents/documentation_agent.py`/
+  `agents/shell_agent.py`/`agents/coordinator_agent.py` 4개 파일
+  수정(각각 선택적 `agent_registry`/`agent_scheduler` 키워드 인자 +
+  `is_agent_selected()` 자가 확인 추가). 새 Core Domain Interface/
+  Adapter/Service/Layer/File 없음(기존 27종 유지). `tests/agents/`
+  4개 파일에 각각 M13과 동일한 "선택되지 않은 인스턴스는 아무것도
+  하지 않는다" 테스트 신규 추가. `pytest` 1160개(신규 4개, 회귀
+  없음)/`ruff`/`mypy`(222 source files) 전부 통과. 프로덕션
+  Composition Root(`web/server.py`)에는 M13(CodingAgent)도 아직
+  배선되지 않아 이번에도 배선하지 않음(MVP 범위 일관 유지).
+  `.ai/TASKS.md` Milestone 56 절(T01~T03) 신규 추가.

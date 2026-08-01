@@ -14241,6 +14241,62 @@ Learning Explainability 고도화 공식 완료(Approved)**. PR #62(코드)
 
 ---
 
+## Milestone 56 — Multi-Agent 자가 확인 가드 일반화 (T03 완료, 사용자 승인 대기)
+
+**배경**: 로드맵에 사전 예고 없던 이름이라 착수 전 범위부터 확인.
+"Multi-Agent"는 이 프로젝트에서 반복적으로 Non-goal로 미뤄온 넓은
+영역이라, M13이 남긴 구체적 후속 과제(병렬 실행/Scheduler 정책
+고도화/다른 Agent로 확장) 중 무엇을 다룰지부터 확정.
+
+**T01 Domain Analysis(사용자 확인)**: M13의 자가 확인 가드
+(`is_agent_selected()`)를 `CodingAgent` 외 다른 Agent로 확장하는
+것으로 확정. 조사 중 `PlanningAgent`가 Event를 구독하지 않고
+`plan_mission()`으로 직접 호출되는 진입점이라, "여러 인스턴스가
+같은 broadcast Event에 반응할 때 자가 선택"이라는 이 가드의 전제가
+성립하지 않음을 발견 — 사용자가 PlanningAgent 제외(구조적 이유
+문서화)를 확정.
+
+**T02 MDD Review(사용자 승인)**: `CodingAgent`의 정확히 같은 패턴
+(선택적 키워드 인자 `agent_registry`/`agent_scheduler`, 기본값
+`None`이면 기존 동작과 100% 동일)을 `ReviewAgent`/
+`DocumentationAgent`/`ShellAgent`/`CoordinatorAgent` 4개에 적용.
+사용자가 "현재 구현된 모든 Agent까지 일반화, 미래 Agent는 동일
+계약을 따르도록 설계"로 범위를 확정 — 새 Base Class/Mixin 없이
+5개 사례 모두 같은 패턴을 반복하는 것으로 충분(YAGNI).
+
+**T03 구현**:
+- `src/ai_workspace/agents/review_agent.py`/`documentation_agent.py`/
+  `shell_agent.py`/`coordinator_agent.py` — 각각 선택적
+  `agent_registry: AgentRegistry | None = None`/`agent_scheduler:
+  AgentScheduler | None = None` 키워드 인자 추가, 이벤트 핸들러
+  진입 시점에 `is_agent_selected()`로 자가 확인(둘 다 주어졌을
+  때만 확인, 기본값이면 건너뜀).
+- `tests/agents/test_review_agent.py`/`test_documentation_agent.py`/
+  `test_shell_agent.py`/`test_coordinator_agent.py` — 각각 M13과
+  동일한 "선택되지 않은 인스턴스는 아무것도 하지 않는다" 테스트
+  신규 추가.
+- 확인: `web/server.py`(프로덕션 Composition Root)에는 M13
+  (CodingAgent)도 아직 배선되지 않음 — 이번에도 배선하지 않아
+  MVP 범위 일관성 유지(`grep`으로 5개 Agent 모두 `src/` 프로덕션
+  코드에서 생성되지 않고 테스트에서만 생성됨을 확인).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 새 Domain/Interface 없이 M13의 기존 `is_agent_selected()` 재사용 | ✅ |
+| 2 | 4개 Agent 모두 미주입 시(기본값) 기존 동작과 100% 동일(회귀 없음) | ✅ |
+| 3 | PlanningAgent는 구조적 이유로 제외, 문서화 | ✅ |
+| 4 | 새 중앙 디스패처/새 Base Class 없음(YAGNI) | ✅ |
+| 5 | 각 Agent에 M13과 동일한 "미선택 인스턴스는 무동작" 테스트 | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1160개(신규 4개, 회귀 없음)/`ruff`/`mypy`(222 source files)
+전부 통과. ADR-0074. PR 생성·CI 확인·Merge·`main` 반영·Vault Index
+갱신 후 최종 완료 선언 예정(이전 Milestone과 동일한 절차).
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

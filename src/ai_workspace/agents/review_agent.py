@@ -4,9 +4,12 @@ import uuid
 from dataclasses import replace
 
 from ai_workspace.agents.events import CODE_VERIFIED, REVIEW_COMPLETED
+from ai_workspace.agents.scheduling import is_agent_selected
 from ai_workspace.domain.agent import AgentCapability, AgentRole
 from ai_workspace.domain.development_context import DevelopmentContext
 from ai_workspace.domain.llm_policy import model_name, required_capabilities
+from ai_workspace.interfaces.agent_registry import AgentRegistry
+from ai_workspace.interfaces.agent_scheduler import AgentScheduler
 from ai_workspace.interfaces.engine_runtime import EngineRuntime
 from ai_workspace.interfaces.event_bus import Event, EventBus
 from ai_workspace.interfaces.task_engine import TaskEngine
@@ -29,7 +32,14 @@ class ReviewAgent:
     **Policy→Execution 라우팅(M6-T02)**: `CodingAgent`와 동일하게
     `AgentSession.llm_policy_decision`을 `required_capabilities()`로
     변환해 `engine_runtime.run()`에 전달한다. **Model 라우팅(M14-T03)**:
-    같은 방식으로 `model_name()`도 함께 전달한다."""
+    같은 방식으로 `model_name()`도 함께 전달한다.
+
+    **Multi-Agent Collaboration(M56, ADR-0074)**: `CodingAgent`(M13)와
+    동일한 패턴 — `agent_registry`/`agent_scheduler`를 둘 다 주입하면,
+    같은 REVIEW Capability의 다른 `ReviewAgent` 인스턴스가 함께
+    등록돼 있어도 `AgentScheduler`가 선택한 인스턴스만 실제로
+    처리한다(`is_agent_selected()`). 둘 중 하나라도 주어지지 않으면
+    (기본값 `None`) 이 확인을 건너뛰어 기존 동작과 완전히 동일하다."""
 
     def __init__(
         self,
@@ -38,10 +48,14 @@ class ReviewAgent:
         event_bus: EventBus,
         task_engine: TaskEngine,
         engine_runtime: EngineRuntime,
+        agent_registry: AgentRegistry | None = None,
+        agent_scheduler: AgentScheduler | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._task_engine = task_engine
         self._engine_runtime = engine_runtime
+        self._agent_registry = agent_registry
+        self._agent_scheduler = agent_scheduler
         self._session = agent_runtime.start_agent(
             AgentRole.REVIEWER, frozenset({AgentCapability.REVIEW})
         )
@@ -50,6 +64,14 @@ class ReviewAgent:
     def _on_code_verified(self, event: Event) -> None:
         if event.event_type != CODE_VERIFIED:
             return
+        if self._agent_registry is not None and self._agent_scheduler is not None:
+            if not is_agent_selected(
+                self._agent_registry,
+                self._agent_scheduler,
+                AgentCapability.REVIEW,
+                self._session.agent_id,
+            ):
+                return
         task_id = event.payload["task_id"]
         task = self._task_engine.get_task(task_id)
         context = DevelopmentContext(

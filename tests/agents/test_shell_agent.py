@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from tests.interfaces.fakes import FakeAgentManager, FakeAgentRegistry
+from tests.interfaces.fakes import FakeAgentManager, FakeAgentRegistry, FakeAgentScheduler
 
 from ai_workspace.adapters.process_runner import ProcessResult
 from ai_workspace.agents.events import CODE_COMPLETED, SHELL_COMPLETED
@@ -142,3 +142,41 @@ def test_ignores_unrelated_event_types() -> None:
     event_bus.publish(Event(event_id="e1", event_type="unrelated_event", payload={}))
 
     assert process_runner.received_commands == []
+
+
+def test_ignores_code_completed_when_not_selected_by_scheduler() -> None:
+    """M56(ADR-0074) — CodingAgent(M13)와 동일한 패턴: 같은 SHELL
+    Capability를 가진 다른 ShellAgent 인스턴스가 Scheduler에게
+    선택되면, 선택되지 않은 인스턴스는 아무것도 하지 않는다."""
+    shared_registry = FakeAgentRegistry()
+    shared_manager = FakeAgentManager()
+    shared_scheduler = FakeAgentScheduler()
+    event_bus = InMemoryEventBus()
+    process_runner = FakeProcessRunner(ProcessResult(returncode=0, stdout="ok", stderr=""))
+
+    selected_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    ShellAgent(
+        agent_runtime=selected_agent_runtime,
+        event_bus=event_bus,
+        command_kind="test",
+        process_runner=process_runner,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+    )
+    unselected_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    ShellAgent(
+        agent_runtime=unselected_agent_runtime,
+        event_bus=event_bus,
+        command_kind="test",
+        process_runner=process_runner,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+    )
+
+    event_bus.publish(Event(event_id="e1", event_type=CODE_COMPLETED, payload={"task_id": "t1"}))
+
+    assert process_runner.received_commands == [["pytest"]]
