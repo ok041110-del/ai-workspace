@@ -145,6 +145,19 @@ M51(최근 연속 실패) 두 Rule의 OR 결합을 가중치 점수 결합으로
 추가했다. 가중치·threshold는 코드에 고정된 상수로 데이터 기반
 학습은 하지 않는다(Non-goal 유지).
 
+**Learning Decay(Milestone 53, ADR-0071)**: M52의 `signal_overall`
+(단순 평균, 모든 기록을 동등 반영)을 지수 Decay 가중 실패율로
+교체했다. `ExperienceStat`에 `decayed_failure_rate: float` 필드를
+신설해 `weight(rank) = 0.8**rank`(`rank=0`이 최신 기록)로
+`Σ(weight×실패 여부)/Σ(weight)`를 계산한다 — 최근 기록일수록 더
+큰 비중을 갖는다. 전체 이력이 100% 실패면 가중치와 무관하게 항상
+정확히 1.0이라, M49/M52까지 쌓아온 "신호 1.0 → score=0.6" 회귀
+없음 증명 체인이 그대로 보존된다. 구현 중 `ExperienceStat`을 수동
+생성하는 기존 테스트 5건이 새 필드 기본값(0.0)으로 M49 트리거가
+깨지는 것을 테스트 실행으로 발견해 값 명시 지정으로 수정했다.
+Decay 계수(0.8)는 코드에 고정된 상수로 데이터 기반 학습은 하지
+않는다(Non-goal 유지).
+
 ## 관련 GitHub 문서
 
 - `docs/ARCHITECTURE.md` §3.19
