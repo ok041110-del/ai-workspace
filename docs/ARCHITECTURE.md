@@ -842,15 +842,26 @@ Core Engine도 아닌 별도 컴포넌트다.
 - **Workflow Learning(Milestone 71, ADR-0089)**: `run()`이 끝나면 실제로
   쓰인 순서(`order`)와 성공 여부를 `WorkflowEngine.record_run_outcome()`
   으로 자동 기록한다. `WorkflowEngine`(`InMemoryWorkflowEngine`)은 같은
-  `task_ids`+`dependencies` 조합(동일한 Workflow)의 과거 실행 이력 중
-  표본이 3건 이상이고 성공률이 가장 높은 순서를 `domain.
-  workflow_order_memory.WorkflowOrderStat`(M65/M69/M70과 동일한 in-process
-  dict + 최소 표본 패턴)으로 기억해 두었다가, 다음 `plan()` 호출에서
-  새로 위상 정렬하는 대신 그 순서를 그대로 반환한다(`recommended_order()`
-  로 조회 가능). 학습 이력이 없으면(기본값) `plan()`은 기존 DFS 기반
-  위상 정렬과 100% 동일하게 동작한다. 새 Core Domain Interface 없음 —
-  기존 `WorkflowEngine`의 메서드 2개(`record_run_outcome()`/
-  `recommended_order()`) 확장뿐(30종 유지).
+  `task_ids` 조합(동일한 Workflow)의 과거 실행 이력 중 표본이 3건 이상
+  이고 성공률이 가장 높은 순서를 `domain.workflow_order_memory.
+  WorkflowOrderStat`(M65/M69/M70과 동일한 in-process dict + 최소 표본
+  패턴)으로 기억해 두었다가, 다음 `plan()` 호출에서 새로 위상 정렬하는
+  대신 그 순서를 후보로 쓴다(`recommended_order()`로 조회 가능). 학습
+  이력이 없으면(기본값) `plan()`은 기존 DFS 기반 위상 정렬과 100% 동일
+  하게 동작한다. 새 Core Domain Interface 없음 — 기존 `WorkflowEngine`의
+  메서드 2개(`record_run_outcome()`/`recommended_order()`) 확장뿐(30종
+  유지).
+- **Workflow Adaptive Planning(Milestone 72, ADR-0090)**: `_signature()`
+  키는 `dependencies`를 더 이상 포함하지 않는다(`task_ids`만) — 같은
+  Task 묶음의 dependency가 나중에 바뀌어도(예: 새 의존관계 추가) 과거
+  추천을 우선 조회한다. 다만 추천은 "최적화 힌트"일 뿐이라, `plan()`은
+  채택 전 그 순서가 **호출 시점의** `workflow.dependencies`를 실제로
+  만족하는지 검증한다(`_is_valid_order()` — task_ids 집합 일치 + 모든
+  dependency가 그 대상보다 앞섬). 검증에 실패하면(추천이 없거나, 있어도
+  지금 dependency를 어기면) 기존 DFS 위상 정렬로 완전히 동일하게
+  fallback한다 — Workflow 정합성은 학습보다 항상 우선하며, 학습 이력이
+  없을 때의 동작은 M71 이전과 100% 동일하다. 새 Core Domain Interface
+  없음, `WorkflowEngine` 계약(메서드 시그니처) 무변경.
 
 ### 3.13 Budget Policy (BudgetPolicyEngine 인터페이스, Milestone 15, ADR-0027)
 `EngineAdapter.estimate_cost()`가 계산한 예상 비용/토큰을 Workspace
@@ -2620,7 +2631,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `EngineSelectionPolicy` | Task/Budget/Knowledge/후보를 종합해 최적 Engine 판단(Decision Only) | Milestone 17 (M17-T02 계약, `InMemoryEngineSelectionPolicy` 구현) | **완료(계약+구현)** |
 | `AuthenticationManager` | Engine별 실행 가능한 인증 상태 확인(`login`/`logout` 없음) | Milestone 18 (M18-T01 계약, `InMemoryAuthenticationManager` 구현) | **완료(계약+구현)** |
 | `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 (T1-15 계약, T1-23 `FileProjectRepository` 구현) | **완료(계약+구현)** |
-| `WorkflowEngine` | Mission→…→Step 협업 흐름, 의존관계 기반 실행 순서 계획(`plan()`) + 실행 순서 학습(M71) | 이후(Milestone 2, T2-03 `plan()` 구현), M71(ADR-0089) `record_run_outcome()`/`recommended_order()` 확장 | **완료(계약+구현)** |
+| `WorkflowEngine` | Mission→…→Step 협업 흐름, 의존관계 기반 실행 순서 계획(`plan()`) + 실행 순서 학습(M71) + 학습 순서의 dependency 정합성 검증(M72) | 이후(Milestone 2, T2-03 `plan()` 구현), M71(ADR-0089) `record_run_outcome()`/`recommended_order()` 확장, M72(ADR-0090) `plan()` 내부 검증 로직(계약 무변경) | **완료(계약+구현)** |
 | `TaskEngine` | Task 생성/상태 전이 + Step 실행 이력(M5-T06) | 이후 | 기존 |
 | `MemoryEngine` | Memory 저장/검색 (Snapshot 제외) | Milestone 1 (T1-15, T1-20 재확인) | 기존(축소, 변경 없음) |
 | `ApprovalEngine` | 승인 대상 판별/차단 | 이후 | 기존 |

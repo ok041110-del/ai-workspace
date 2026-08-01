@@ -15394,6 +15394,61 @@ successful_probe` 테스트를 깨뜨렸다 — Probe가 성공해 `is_unreliabl
 
 ---
 
+## Milestone 72 — Workflow Adaptive Planning: 학습된 순서를 실제 계획에 안전하게 반영 (완료)
+
+**배경**: 사용자가 "M71의 Workflow Learning을 실제 Workflow 계획(plan)에
+자동 반영"하는 M72 착수를 요청했다. 코드를 조사한 결과 `InMemoryWorkflowEngine.
+plan()`은 M71에서 이미 `recommended_order()`를 먼저 조회하고 없으면 기존
+DFS 위상 정렬로 fallback하는 구조였다. 다만 M71의 `_signature()`는
+`task_ids`+`dependencies` 간선까지 정확히 일치해야 추천을 반환했기 때문에,
+"추천 순서가 현재 dependency를 만족하지 않으면 fallback"이라는 M72 요구
+사항이 코드에서 발동할 수 없는 죽은 경로였다(추천이 존재하면 정의상 이미
+현재 dependency와 일치).
+
+**사용자 승인(AskUserQuestion, 1회)**: `_signature()`를 `task_ids`만으로
+완화(권장안 채택) — 같은 Task 묶음이면 dependency가 바뀌어도(예: 새
+의존관계 추가) 과거 추천을 우선 조회하되, `plan()`이 채택 전 현재
+dependency를 실제로 만족하는지 검증하도록 확정했다.
+
+**구현**:
+- `src/ai_workspace/engines/workflow_engine.py`(`InMemoryWorkflowEngine`)
+  — `_signature()`를 `(frozenset(task_ids), edges)`에서
+  `frozenset(task_ids)`로 축소. `plan()`에 `_is_valid_order(order,
+  workflow)` 검증(순열 일치 + 모든 dependency가 대상보다 앞섬)을 추가해,
+  `recommended_order()`가 값을 반환하고 이 검증을 통과할 때만 채택하고,
+  아니면(추천 없음 또는 dependency 위반) 기존 DFS 위상 정렬로 완전히
+  동일하게 fallback.
+- `src/ai_workspace/interfaces/workflow_engine.py` — `plan()`/
+  `record_run_outcome()`/`recommended_order()` 시그니처는 무변경, docstring만
+  갱신(추천은 "힌트"이고 dependency 정합성 검증은 `plan()`의 책임임을
+  명시).
+- `tests/engines/test_workflow_engine.py` — 2건 추가(추천 순서가 새
+  dependency를 어기면 fallback, 여전히 dependency를 만족하면 그대로
+  채택).
+- `docs/ARCHITECTURE.md` §3.12 Workflow Runner 절에 Workflow Adaptive
+  Planning(M72) 서술 추가, §7 인터페이스 표 `WorkflowEngine` 행 갱신.
+  새 Core Domain Interface 없음(기존 `WorkflowEngine`의 메서드 3개 그대로,
+  30종 유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 기존 WorkflowEngine/WorkflowRunner 구조 재사용, 새 컴포넌트 없음 | ✅ |
+| 2 | M71의 `WorkflowOrderStat`/`recommended_order()` 그대로 활용(수정 없음) | ✅ |
+| 3 | `plan()`이 학습된 추천 순서를 먼저 조회하고 유효하면 사용 | ✅ |
+| 4 | 추천 순서가 현재 dependency를 만족하지 않거나 없으면 기존 DFS 위상 정렬로 완전히 동일하게 fallback을 테스트로 증명 | ✅ |
+| 5 | 추천은 "최적화 힌트"일 뿐 Workflow 정합성을 깨뜨리지 않음(dependency 위반 시 항상 fallback) | ✅ |
+| 6 | 새 Core Domain Interface 없음(`WorkflowEngine` 계약 메서드 시그니처 무변경) | ✅ |
+| 7 | 기존 API와 100% 하위 호환(학습 이력 없으면 M71 이전과 동일 동작) | ✅ |
+| 8 | 넓은 "Workflow Adaptive Planning" 주제를 AskUserQuestion으로 구체 설계까지 좁힘 | ✅ |
+| 9 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1319개(신규 2개, 회귀 없음)/`ruff`/`mypy`(233 source files)
+전부 통과. ADR-0090.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
