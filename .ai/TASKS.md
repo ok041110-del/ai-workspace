@@ -13163,13 +13163,199 @@ Engine"이라는 무거운 이름을 스스로 거부한 이력이 있다.
 해소된 뒤 실제로 쌓이는 신호를 근거로 M49 이후 별도 제안·승인
 대상으로 분리하는 안을 다음 단계(T02 MDD Review)에 상정한다.
 
-**다음 단계**: T02(MDD Review) — 위 Gap 1(Guardian↔Automation
-연결) 재사용 전략과 신규 Interface/Service/ActionKind 필요 여부
-확정, Gap 2(Observability)는 설계 경계 유지 여부 재확인, Gap 3
-(RUN_WORKFLOW)/Scheduler 예외 처리 관찰은 범위 포함 여부 결정.
-**사용자 승인 대기 중** — 위 Domain Analysis와 "Automation
-Foundation(Guardian 우선 연결) + Learning Engine M49 이후 분리"
-방향에 동의하는지 확인 후 T02 착수.
+**사용자 승인(2026-08-01)**: T01 방향("Automation Foundation" +
+Learning Engine M49 이후 분리)에 동의하고, T02(MDD Review)에서
+반드시 다루라며 4개 항목(Guardian 실행 시점/실패 정책/Observability
+연계/Learning과의 경계)을 명시적으로 지정.
+
+### T02 — MDD Review(완료)
+
+#### Scope Review
+- Scope: T01 Gap 1(Architecture Guardian↔Automation 미연결)만
+  다룬다. Gap 2(Observability 자동화 미연결)는 M45가 이미 "Dashboard/
+  Web UI/Automation 범위 밖"을 명시적으로 확정한 설계 경계이므로
+  **이번에도 재확인만 하고 변경하지 않는다**(YAGNI — 사용자가 별도로
+  Observability 자동화를 요청한 적 없음). Gap 3(`RUN_WORKFLOW` 미지원)
+  /Scheduler 예외 흡수 관찰은 Guardian 연결과 무관한 별개 이슈라 이번
+  Scope에서 제외(YAGNI, 필요성이 드러나면 별도 Milestone).
+- YAGNI 검토: Guardian↔Automation 연결은 T01에서 실측으로 확인된
+  실제 공백이며(추측 아님), Learning Engine이 관찰할 신호(위반 이력)
+  가 자동으로 쌓이려면 반드시 필요한 선행 조건이다 — "미래를 위한
+  코드"가 아니라 이미 완성된 Guardian(M41)을 실제로 쓰는 것.
+
+#### Reuse Review
+재사용 가능한 구성요소:
+- `ArchitectureGuardianService`(M41, `guardian/service.py`) —
+  `generate()`(Read-Only 평가) + `publish()`(Vault
+  `Architecture Guardian.md` 발행) 이미 완비. 신규 평가 로직 불필요.
+- `ExecutionGate`(M36, `recommendation_execution_gate.py`) —
+  이미 `GateDecision(approved, reason)`으로 "승인/거부 + 이유"
+  판정 계약을 갖고 있다. Guardian 위반도 "실행을 승인하지 않는 이유"
+  중 하나로 자연스럽게 표현 가능.
+- `GateDecision.reason` → `RecommendationExecutionService`의 Vault
+  Execution 리포트 렌더링(`recommendation_execution_service.py:188`,
+  `f"- 이유: {outcome.gate_decision.reason}"`)이 이미 이유 문자열을
+  그대로 노출한다 — Guardian Skip Reason을 위한 새 렌더링 불필요.
+- `GuardianRuntimeAnalyzer`(M45 확장, `observability/
+  guardian_runtime_analyzer.py`) — 이미 Guardian을 매 StatusLine
+  갱신마다 라이브 재평가해 `guardian_all_passed`를 보여주고 있다.
+- `VaultAdapter.report_last_modified()`(M45, `PipelineStageAnalyzer`
+  가 이미 쓰는 패턴) — "Architecture Guardian.md가 언제 마지막으로
+  갱신됐는가"를 새 Adapter 메서드 없이 그대로 재사용 가능.
+
+재사용 전략: 새 평가 로직·새 렌더링·새 Adapter 메서드 없이, 기존
+4개 컴포넌트(Guardian Service/Execution Gate/Execution Report
+렌더링/Guardian Runtime Analyzer)를 배선만 새로 연결한다.
+
+#### Interface Review
+- 신규 Interface 불필요. `ExecutionGate.check()`의 시그니처에
+  선택적 파라미터 1개(`guardian_report: ArchitectureHealthReport
+  | None = None`, 기본값 `None`이면 M43 이전과 100% 동일 동작)만
+  추가 — 새 Interface 계약이 아니라 기존 메서드 확장.
+
+#### Service Review
+**1) Guardian 실행 시점 — Pre-Execution(Execution 직전)으로 결정**:
+Recommendation(M35)/Adaptation(M42)/Explainability(M44)는 전부
+Read-Only 분석이라 Guardian과 무관하게 항상 그대로 생성·발행돼야
+한다(Recommendation 자체가 "지금 무엇을 하면 좋을지"에 대한 정보이므로
+Architecture 위반과 무관하게 유용하다). 따라서:
+  - Recommendation 이전(Pre-flight) — 기각: Read-Only 분석까지
+    막을 이유가 없다(과잉 차단, YAGNI 위반).
+  - **Execution 이전(Pre-flight for Execution) — 채택**: `Recomm
+    endationOrchestrationService.execute()/publish()`가
+    `execution_service.execute()`를 호출하기 직전, `guardian_
+    service`가 주입돼 있으면 `generate()`(Read-Only, Vault
+    미기록)를 호출해 `ArchitectureHealthReport`를 얻고
+    `RecommendationExecutionService.execute()`에 전달한다. 이 값이
+    최종적으로 `ExecutionGate.check()`의 새 파라미터로 흘러간다.
+  - Execution 이후(Post-flight) — 기각: 이미 실행(부작용)이
+    발생한 뒤라 "차단"의 의미가 없다. Post-flight 관측은 이미
+    M45(`GuardianRuntimeAnalyzer`)가 StatusLine에서 라이브
+    재평가로 제공하고 있어 중복.
+
+**2) Guardian 실패 정책 — "Recommendation은 생성하지만 Execution
+차단"으로 결정, Override 없음**:
+  - Warning만 출력 — 기각: 경고만으로는 Guardian이 "평가·공표"에서
+    끝나던 M41 이전과 실질적으로 다르지 않다(연결의 의미가 없음).
+  - **Recommendation은 생성하지만 Execution 차단 — 채택**:
+    `ExecutionGate.check()`에 `guardian_report`가 주어지고
+    `guardian_report.all_passed is False`이면 `GateDecision(
+    approved=False, reason=f"Architecture Guardian 위반으로 실행
+    차단: {violation 요약}")`을 반환한다. Recommendation/Adaptation/
+    Explainability는 이미 Guardian 평가 이전에 계산이 끝나 있으므로
+    영향받지 않는다(Orchestration 호출 순서상 자연히 보장됨).
+  - Automation 전체 중단 — 기각: `AutomationScheduler`가 다른
+    무관한 Rule(`RUN_TASK` 등)까지 멈출 이유가 없다. 기존
+    `_fire()`의 "한 Rule 실패가 다른 Rule에 영향 없음" 설계와도
+    상충.
+  - Override 허용 — **M48에서는 허용하지 않는다**(YAGNI). 아직
+    Override가 실제로 필요했던 사례가 없고, Override 정책(누가/
+    어떤 조건으로) 자체가 별도 설계 결정이 필요한 사안이라 지금
+    설계하면 추측성 코드가 된다. 필요성이 실제로 드러나면 별도
+    제안·승인 대상.
+
+**3) Observability 연계 — StatusLine에 "마지막 Automation Guardian
+Gate" 1개 필드만 최소 추가, 실시간 재평가는 M45 그대로 유지**:
+  M45의 `guardian_all_passed`(라이브 재평가)와 이번에 필요한 정보
+  ("Automation이 마지막으로 Execution을 막았는가")는 서로 다른
+  정보다 — 전자는 "지금 소스가 통과하는가", 후자는 "가장 최근
+  Automation 실행이 Guardian 때문에 막혔는가"(이력). 신규 Vault
+  문서/Adapter 없이, 이미 Execution Gate 결과가 기록되는
+  `15 Project Intelligence/Recommendation Execution.md`(M36, 위
+  Reuse Review의 `GateDecision.reason` 렌더링)를 `GuardianRuntime
+  Analyzer`가 `VaultAdapter.report_last_modified()`로 함께 읽어
+  `GuardianRuntimeInfo`에 필드 1개(`last_automation_gate_reason:
+  str | None`, 최근 Execution 리포트에서 "Architecture Guardian
+  위반으로 실행 차단"으로 시작하는 이유 문자열이 있으면 그대로,
+  없으면 `None`)만 추가한다. Guardian Running 상태는 별도 표시
+  불필요(Guardian 평가는 동기 호출이라 "Running" 중간 상태가
+  존재하지 않음 — 실제로 없는 상태를 표시하면 §16 Lessons처럼
+  허위 데이터가 된다). Skip Reason은 위 필드가 이유 문자열을 그대로
+  전달하므로 별도 Enum 불필요.
+
+**4) Learning과의 경계 — M48은 Execution 결과를 절대 학습하지
+않는다(사용자 지정, 명문화)**:
+  - Guardian 평가 결과(`ArchitectureHealthReport`)는 `Execution
+    Memory`(M39, `ExecutionMemoryStore`)에 기록하지 않는다 — M39는
+    Task 실행 결과만 다루는 계약이고, Guardian 위반 이력을 저장하는
+    것은 "학습을 위한 데이터 축적"에 해당해 Scope 밖.
+  - `RecommendationAdjustmentAnalyzer`(M42 Adaptation)는 Guardian
+    결과를 입력으로 받지 않는다 — 여전히 `ExperienceReport`
+    (성공/실패 이력)만 본다. Guardian 위반 때문에 Gate가 거부해도
+    이는 `ExecutionGate`의 판정이지 Adaptation의 판정이 아니다.
+  - Guardian 위반 이력을 근거로 향후 추천을 조정하는 로직(예:
+    "이 파일은 자주 위반되니 추천에서 제외") 일체는 M48 범위가
+    아니며, M49 이후 Learning Engine 제안 시점에 실제로 쌓인
+    `Recommendation Execution.md` 이력(위 3번 필드)을 근거 자료로만
+    참고한다 — 지금 그 소비 로직을 설계하지 않는다.
+
+#### Adapter Review
+- 신규 Adapter 불필요. `VaultAdapter`도 확장하지 않는다 — Guardian
+  Vault 발행은 M41의 `publish_architecture_guardian()`을 그대로
+  쓰고, Execution 리포트 발행도 M36의 기존 메서드를 그대로 쓴다
+  (내용에 Guardian 이유 문자열이 자연히 포함될 뿐, 메서드 시그니처
+  변경 없음).
+
+#### Layer Review
+- 새 Layer 없음. `guardian/`(M41)과 `runtime/execution/`(M36/M43)
+  사이에 새 의존 방향 1개만 추가된다 — `RecommendationOrchestration
+  Service`(execution 담당)가 `ArchitectureGuardianService`를 선택적
+  으로 호출(생성자 주입, 기본값 `None`)하는 것으로 Architecture 변경
+  없이 흡수 가능. `docs/ARCHITECTURE.md` §2.1 다이어그램/텍스트에
+  "Guardian이 Automation Execution Gate에 연결됨" 1문장만 추가
+  (레이어 재배치 아님).
+
+#### File Review
+| 파일 | 기존 수정 가능 | 신규 필요 | 이유 |
+|------|---------------|----------|------|
+| `runtime/execution/recommendation_execution_gate.py` | ✅ 수정 | — | `check()`에 선택적 `guardian_report` 파라미터 1개 추가 |
+| `runtime/execution/recommendation_execution_service.py` | ✅ 수정 | — | `execute()`/`publish()`가 Guardian 평가 결과를 받아 Gate에 전달 |
+| `runtime/execution/recommendation_orchestration_service.py` | ✅ 수정 | — | 선택적 `guardian_service` 주입 + Execution 직전 `generate()` 호출 1줄 |
+| `observability/guardian_runtime_analyzer.py` | ✅ 수정 | — | `GuardianRuntimeInfo`에 필드 1개 추가, Execution 리포트 mtime/내용 재사용 |
+| `observability/snapshot.py` | ✅ 수정 | — | `GuardianRuntimeInfo`에 `last_automation_gate_reason: str \| None` 필드 추가 |
+| `web/server.py` | ✅ 수정 | — | `build_app()`에서 `ArchitectureGuardianService`를 생성해
+`RecommendationOrchestrationService`에 주입(Composition Root 배선) |
+| (신규 파일) | — | 없음 | 위 6개 기존 파일 확장만으로 충분 |
+
+#### Minimal Implementation Plan
+신규 파일 0개, 신규 클래스 0개. 변경만:
+1. `ExecutionGate.check(next_action, *, manual_trigger, guardian_report=None)`
+   — `guardian_report is not None and not guardian_report.all_passed`
+   이면 최우선으로 거부(다른 판정보다 먼저 확인 — Guardian 위반은
+   `source`/`manual_trigger` 조건과 독립적으로 항상 차단).
+2. `RecommendationExecutionService.execute()/publish()`에
+   `guardian_report: ArchitectureHealthReport | None = None` 파라미터
+   추가, `ExecutionGate.check()`로 그대로 전달.
+3. `RecommendationOrchestrationService.__init__`에
+   `guardian_service: ArchitectureGuardianService | None = None`
+   추가, `execute()/publish()`에서 Execution 위임 직전
+   `guardian_report = self._guardian_service.generate() if
+   self._guardian_service else None`.
+4. `GuardianRuntimeInfo`에 필드 1개 추가, `GuardianRuntimeAnalyzer`
+   가 `VaultAdapter.report_last_modified()`+기존 리포트 텍스트에서
+   최근 Guardian 차단 이유만 읽어 채움(신규 파싱은 "Architecture
+   Guardian 위반으로 실행 차단"로 시작하는 줄 유무만 확인하는 최소
+   로직).
+5. `web/server.py`에 `ArchitectureGuardianService` 인스턴스 1개
+   생성 후 `RecommendationOrchestrationService` 생성자에 주입.
+
+미주입/미제공 시(기존 테스트, 기존 배선 순서) 전부 M43 이전과
+100% 동일 동작 — 기존 15개 Milestone이 반복해 온 "선택적 의존성
+주입, 기본값 None" 패턴(M38/M39/M42/M44와 동일) 그대로 재사용.
+
+### 최종 결정
+✅ **기존 구조 확장**(새 Interface/Service/Adapter/Layer/File 없음
+— `ExecutionGate`/`RecommendationExecutionService`/`Recommendation
+OrchestrationService`/`GuardianRuntimeInfo`/`GuardianRuntimeAnalyzer`
+/`web/server.py` 6개 기존 파일의 최소 확장만).
+
+**다음 단계**: 위 MDD Review(Guardian 실행 시점=Pre-Execution,
+실패 정책=Execution만 차단·Override 없음, Observability=Execution
+Gate 이유 문자열 재노출 1필드, Learning 경계=완전 제외) 방향에
+동의하면 T03(구현: `ExecutionGate`→`RecommendationExecutionService`
+→`RecommendationOrchestrationService`→Observability→`web/server.py`
+배선 순으로 진행, 기존 테스트 전체 통과 + 신규 테스트 작성)으로
+착수. **사용자 승인 대기 중.**
 
 ---
 
