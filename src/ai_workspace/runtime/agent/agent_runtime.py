@@ -30,6 +30,15 @@ class AgentRuntime:
     등록할 수 있어 Role별로 다른 모델을 실제로 전환할 수 없음 — 실제
     반영은 Multi-Engine Adapter가 준비되는 M5-T05 이후).
 
+    **Self Optimization 피드백(Milestone 67, ADR-0085)**: `record_llm_policy_
+    outcome(session_id, success)`은 `CodingAgent`/`ReviewAgent`/
+    `DocumentationAgent`가 `engine_runtime.run()` 직후 호출하는 명시적
+    피드백 진입점이다. `llm_policy_engine`이 주입되지 않았거나 해당
+    session에 결정된 policy가 없으면 아무 것도 하지 않는다(no-op) —
+    Agent는 `LLMPolicyEngine` interface 자체를 알 필요 없이 `AgentRuntime`
+    한 곳을 통해서만 피드백을 전달한다(M5-T02가 세운 "Agent는
+    LLMPolicyEngine을 직접 참조하지 않는다" 경계를 그대로 유지).
+
     **Distributed Multi-Agent(Milestone 61, ADR-0079)**: `start_agent()`에
     `location`을 주면 생성된 Agent의 `Agent.location`에 그대로 기록한다.
     기본값 `None`이면 M4-T01과 완전히 동일하게 "같은 프로세스" Agent다.
@@ -75,6 +84,15 @@ class AgentRuntime:
         )
         self._sessions[session_id] = session
         return session
+
+    def record_llm_policy_outcome(self, session_id: str, success: bool) -> None:
+        if self._llm_policy_engine is None:
+            return
+        session = self.get_session(session_id)
+        if session.llm_policy_decision is None:
+            return
+        agent = self._agent_registry.get(session.agent_id)
+        self._llm_policy_engine.record_outcome(agent.role, session.llm_policy_decision, success)
 
     def stop_agent(self, session_id: str) -> None:
         session = self.get_session(session_id)

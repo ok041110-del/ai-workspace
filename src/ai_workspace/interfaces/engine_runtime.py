@@ -131,6 +131,96 @@ class EngineRuntime(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def run_ensemble_auto(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 2,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        """**Dynamic Ensemble Routing(Milestone 68, ADR-0086)**:
+        `run_ensemble()`(M62)은 `engine_names`를 호출자가 직접 나열해야
+        했고, `run()`/`estimate_cost()`가 이미 쓰는 `EngineSelectionPolicy`
+        기반 비용·신뢰도 인식 선택(M64/M65/M66)을 전혀 활용하지 못했다.
+        이 메서드는 `engine_names`를 직접 받는 대신 `run()`과 동일한
+        `required_capabilities` 기준으로 후보를 추리고, 그중 상위 `top_n`
+        개를 동적으로 골라 `run_ensemble()`에 그대로 위임한다 — 실제
+        동시 실행/개별 실패 격리 메커니즘은 새로 만들지 않고 M62의
+        것을 그대로 재사용한다(YAGNI).
+
+        입력: task (모든 후보 엔진에 동일하게 실행할 Task),
+              required_capabilities (후보가 반드시 지원해야 하는 능력
+              태그 집합, 생략 시 제약 없음), top_n (선택할 최대 엔진
+              개수, 기본값 2 — 1 미만이면 후보를 조회하지 않고 빈 dict를
+              반환한다), model (선택적, 선택된 모든 엔진에 동일하게
+              전달할 모델 이름)
+        출력: 실제로 선택된 엔진 이름을 key로 하는 `run_ensemble()`의
+              반환값 그대로. 선택된 엔진 수는 0 이상 `top_n` 이하이며,
+              후보 수가 `top_n`보다 적으면 있는 만큼만 선택된다.
+        예외: `top_n >= 1`인데 required_capabilities를 만족하는(그리고
+              `engine_selection_policy` 주입 시 신뢰도상 제외되지 않는)
+              등록된 엔진이 하나도 없으면 NoSuitableEngineError(선택
+              단계 오류는 `run()`과 동일하게 예외로 전파하고, 개별 엔진의
+              실행 실패는 `run_ensemble()`과 동일하게 결과로만 격리한다).
+        보장: `engine_selection_policy`가 주입된 구현체는 그 정책으로
+              후보를 반복 선택해(매번 이미 선택된 후보를 제외하고
+              재선택) 비용이 낮은 순으로 최대 `top_n`개를 고르며,
+              M65/M66의 신뢰도 기반 제외·Probe 규칙도 그대로 적용된다.
+              주입되지 않았으면(기본값) 등록 순서상 조건을 만족하는
+              첫 `top_n`개를 고른다 — `run()`의 정책 미주입 시 동작과
+              동일한 원칙이다.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def record_consensus_outcome(
+        self,
+        required_capabilities: frozenset[str],
+        agreeing_engines: tuple[str, ...],
+        dissenting_engines: tuple[str, ...],
+    ) -> None:
+        """**Adaptive Consensus(Milestone 70, ADR-0088)**: `run_ensemble()`/
+        `run_ensemble_auto()`(M62/M68)의 결과를 `ResultAggregator`(M63)로
+        합의(다수결)한 뒤, 어떤 엔진의 투표가 최종 합의와 일치(agreeing)
+        했고 어떤 엔진이 소수 의견(dissenting)이었는지를 `(required_
+        capabilities, engine_name)` 키로 in-process 누적한다. `EngineRuntime`
+        은 `ResultAggregator`의 존재를 모른다(ADR-0080/0081의 결합 방지
+        원칙 유지) — 호출자(대개 `AdaptiveConsensusAggregator`)가 자신이
+        계산한 합의 결과를 이 메서드로 "다시 알려주는" 것으로만 연결된다.
+
+        입력: required_capabilities (그 Ensemble 실행에 쓰인 능력 태그
+              집합 — `run_ensemble_auto()`에 전달했던 값과 같아야 한다),
+              agreeing_engines (합의된 output과 일치한 성공 엔진 이름들),
+              dissenting_engines (성공했지만 합의된 output과 다른 엔진
+              이름들)
+        출력: 없음
+        예외: 없음
+        보장: 이후 `consensus_weight(required_capabilities, name)` 호출
+              결과에 이 기록이 반영된다. `agreeing_engines`/
+              `dissenting_engines`에 없는 엔진(예: 실패한 엔진)의 기록은
+              변하지 않는다.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def consensus_weight(self, required_capabilities: frozenset[str], engine_name: str) -> float:
+        """**Adaptive Consensus(Milestone 70, ADR-0088)**: `record_consensus_
+        outcome()`으로 누적된, 같은 `required_capabilities` 조합에서
+        `engine_name`이 과거 Ensemble 합의와 일치했던 비율을 반환한다.
+
+        입력: required_capabilities, engine_name
+        출력: 표본이 3건 이상(M49/M65/M69와 동일한 최소 표본 기준)이면
+              `agree_count / total`, 그렇지 않으면(표본 부족 또는 기록
+              없음) 중립값 0.5 — 검증된 고성능 엔진보다는 낮지만 이미
+              나쁜 것으로 확인된 엔진보다는 높게 취급해, 아직 검증되지
+              않았을 뿐인 엔진이 부당하게 불리해지지 않도록 한다.
+        예외: 없음
+        보장: side-effect 없음(read-only).
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

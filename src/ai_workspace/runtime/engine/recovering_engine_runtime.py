@@ -103,6 +103,35 @@ class RecoveringEngineRuntime(EngineRuntime):
         않음)."""
         return self._inner.run_ensemble(task, engine_names, model=model)
 
+    def run_ensemble_auto(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 2,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        """`run_ensemble()`과 동일한 이유(M62)로 재시도 없이 내부
+        Runtime에 그대로 위임한다(Milestone 68, ADR-0086)."""
+        return self._inner.run_ensemble_auto(
+            task, required_capabilities, top_n=top_n, model=model
+        )
+
+    def record_consensus_outcome(
+        self,
+        required_capabilities: frozenset[str],
+        agreeing_engines: tuple[str, ...],
+        dissenting_engines: tuple[str, ...],
+    ) -> None:
+        """재시도와 무관한 read/write 상태이므로(Milestone 70, ADR-0088)
+        내부 Runtime에 그대로 위임한다."""
+        self._inner.record_consensus_outcome(
+            required_capabilities, agreeing_engines, dissenting_engines
+        )
+
+    def consensus_weight(self, required_capabilities: frozenset[str], engine_name: str) -> float:
+        return self._inner.consensus_weight(required_capabilities, engine_name)
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

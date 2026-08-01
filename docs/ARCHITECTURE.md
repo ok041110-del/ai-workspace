@@ -677,6 +677,87 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   되어 정상 복귀하고, 다시 실패하면 다음 probe까지 또 5번의 쿨다운을
   거친다. 새 Core Domain Interface 없음 — 기존 `EngineReliabilityStat`
   확장뿐이며, `EngineSelectionPolicy`(M17) 계약도 무변경이다.
+- **LLMPolicyEngine Self Optimizer(Milestone 67, ADR-0085)**: 위
+  M6-T02 "Policy→Execution 라우팅"이 만드는 `LLMPolicyDecision`은
+  M5-T01 이후 순수 정적 `dict.get()` 결과였다 — `CodingAgent`/
+  `ReviewAgent`/`DocumentationAgent`가 만들어내는 실행 결과
+  (`EngineResult.success`)가 정책으로 되먹여지는 경로가 없었다.
+  `domain.llm_policy_reliability.LLMPolicyReliabilityStat`(M65
+  `EngineReliabilityStat`과 동일한 필드 구성·임계값 규칙을 재사용,
+  Probe 관련 필드는 제외)로 `(AgentRole, LLMModel)` 조합별 성공/실패를
+  누적한다. `LLMPolicyEngine.record_outcome(role, decision, success)`
+  (신규 abstract method, `select()`의 read-only 계약은 무변경)로 3개
+  Agent가 `engine_runtime.run()` 직후 결과를 기록한다 —
+  `LLMPolicyEngine` interface를 직접 참조하지 않고 `AgentRuntime.
+  record_llm_policy_outcome(session_id, success)` 한 곳만 거친다(`
+  llm_policy_engine` 미주입/decision 없음이면 no-op). `InMemoryLLMPolicyEngine`
+  은 활성 Decision의 `(role, model)` 통계가 `is_unreliable()`이면
+  `select()`에서 `INITIAL_MODELS` 순서상 다음 모델로 자동 전환한
+  Decision(effort 유지)을 반환한다 — 이미 마지막 모델이면 더 이상
+  전환하지 않는다. Probe 기반 자동 복구(M66과 동일한 개념)는 이번
+  범위에서 명시적으로 제외하고 별도 Milestone 후보로 남긴다. 새 Core
+  Domain Interface 없음 — 기존 `LLMPolicyEngine`의 메서드 1개 확장뿐.
+- **Dynamic Ensemble Routing(Milestone 68, ADR-0086)**: `run_ensemble()`
+  (M62)은 호출자가 `engine_names`를 직접 나열해야 하는 계약이라 M64/M65/
+  M66이 `run()`/`estimate_cost()` 경로에 이미 구현한 `EngineSelectionPolicy`
+  기반 비용·신뢰도 인식 선택을 전혀 활용하지 못했다. 새 `run_ensemble_auto(
+  task, required_capabilities=frozenset(), *, top_n=2, model=None)`
+  (`EngineRuntime`의 새 abstract method)이 `run()`/`estimate_cost()`가
+  쓰는 후보 선정 로직(`_build_candidates()` — M65/M66의 신뢰도 기반
+  제외·Probe 규칙 포함)으로 `EngineCandidate` 목록을 만들고,
+  `engine_selection_policy`가 주입돼 있으면 `EngineSelectionPolicy.
+  select()`(M17)를 반복 호출해(매 회 직전 선택 후보를 제거) 비용이 낮은
+  순으로 top_n개를 고른다 — `EngineSelectionPolicy` 시그니처는 무변경
+  (Decision Only 계약 유지). 정책 미주입 시에는 등록 순서상 조건을
+  만족하는 첫 top_n개를 고른다(100% 하위 호환). 선택된 이름 목록은 새
+  실행 로직 없이 기존 `run_ensemble()`(M62의 `ThreadPoolExecutor` 동시
+  실행 + 개별 엔진 실패 격리)에 그대로 위임한다(YAGNI). `RecoveringEngineRuntime`
+  은 `run_ensemble()`과 동일한 이유로 재시도 없이 내부 Runtime에 위임한다.
+  새 Core Domain Interface 없음 — 기존 `EngineRuntime`의 메서드 1개
+  확장뿐(30종 유지).
+- **Execution Memory & Context Routing(Milestone 69, ADR-0087)**: M68까지
+  `EngineSelectionPolicy`/`EngineReliabilityStat`은 "이 엔진이 전반적으로
+  신뢰할 만한가"만 판단할 뿐, "이 종류의 Task(`required_capabilities`
+  조합)에서 어떤 엔진이 더 잘 수행했는가"를 기억해 다음 실행에 반영하지
+  않았다. `domain.engine_execution_memory.EngineExecutionMemoryStat`
+  (M65 `EngineReliabilityStat`과 필드 구성은 같지만 집계 키가
+  `(required_capabilities, engine_name)` 조합)로 `run()`(Managed는
+  Cancel된 경우 제외)/`run_ensemble_auto()`의 실행 결과+latency를
+  in-process 누적한다. `_build_candidates()`가 (기존 신뢰도 제외 이후)
+  `_reorder_by_execution_memory()`로 같은 `required_capabilities`
+  조합에서 표본이 충분한 엔진을 성공률 내림차순으로 재정렬한다 —
+  `EngineSelectionPolicy`의 비용 기준 `min()`은 비용이 다르면 항상 진짜
+  최저 비용을 그대로 고르므로, 이 재정렬은 **비용이 동률인 후보끼리의
+  tie-break로만** 작동한다(M65/M66의 "복구 즉시 완전 신뢰" 판정과
+  충돌하지 않도록 구현 중 발견해 의도적으로 이렇게 범위를 좁혔다).
+  표본 부족(미검증) 엔진은 가장 나쁜 값이 아니라 중립값(0.5)으로 취급해
+  이미 확인된 저성능 엔진보다는 우선한다. latency는 기록만 하고 랭킹에는
+  반영하지 않는다(YAGNI). 신뢰도 제외와 동일하게 `engine_selection_policy`
+  주입 경로에서만 적용된다(100% 하위 호환). `RecoveringEngineRuntime`은
+  무변경(순수 위임). 새 Core Domain Interface 없음 — 기존 `EngineRuntime`
+  의 내부 구현만 확장(30종 유지).
+- **Adaptive Consensus(Milestone 70, ADR-0088)**: M63의 `MajorityVoteAggregator`
+  는 `run_ensemble()`(M62) 결과를 정확한 문자열 일치 다수결(표 개수)로만
+  집계했다 — 어떤 엔진의 표가 과거에 실제 합의와 자주 일치했는지는
+  전혀 반영하지 않았다. `EngineRuntime`에 `record_consensus_outcome(
+  required_capabilities, agreeing_engines, dissenting_engines)`(기록)/
+  `consensus_weight(required_capabilities, engine_name)`(조회) 두
+  메서드를 최소 확장하고, `(required_capabilities, engine_name)` 키로
+  새 도메인 값 객체 `domain.consensus_agreement.ConsensusAgreementStat`
+  (M69 `EngineExecutionMemoryStat`과 필드 구성은 비슷하지만 "태스크
+  실행 성공/실패"가 아니라 "투표가 합의와 일치했는지"를 추적하는 별개
+  신호이므로 분리)에 in-process 누적한다. 새 `ResultAggregator`(M63)
+  구현체 `AdaptiveConsensusAggregator`(생성자로 `EngineRuntime`과
+  `required_capabilities`를 주입받음)는 표 개수 대신 `consensus_weight()`
+  가중치 합계로 승자를 정하고(동률이면 표 개수로 2차 tie-break), 집계
+  직후 자신이 계산한 합의 결과를 `record_consensus_outcome()`으로 다시
+  알려준다 — `EngineRuntime`은 `ResultAggregator`를 호출하거나 알지
+  못하며(ADR-0080/0081의 결합 방지 원칙 유지) 이 두 메서드로만
+  연결된다. `ResultAggregator.aggregate()`의 기존 시그니처·반환 타입은
+  무변경이라 `MajorityVoteAggregator`는 전혀 영향받지 않는다(100% 하위
+  호환). 표본 부족(미검증) 엔진은 M65/M69와 동일하게 중립값(0.5)으로
+  취급한다. 새 Core Domain Interface 없음 — 기존 `EngineRuntime`의
+  메서드 2개 확장뿐, 기존 `ResultAggregator` 계약 재사용(30종 유지).
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -758,6 +839,18 @@ Core Engine도 아닌 별도 컴포넌트다.
 - **전제 조건**: `workflow.task_ids`의 모든 Task는 호출 전에 이미
   `TaskEngine.create_task()`로 생성되어 있어야 한다 — `WorkflowRunner`
   는 Task를 새로 만들지 않는다.
+- **Workflow Learning(Milestone 71, ADR-0089)**: `run()`이 끝나면 실제로
+  쓰인 순서(`order`)와 성공 여부를 `WorkflowEngine.record_run_outcome()`
+  으로 자동 기록한다. `WorkflowEngine`(`InMemoryWorkflowEngine`)은 같은
+  `task_ids`+`dependencies` 조합(동일한 Workflow)의 과거 실행 이력 중
+  표본이 3건 이상이고 성공률이 가장 높은 순서를 `domain.
+  workflow_order_memory.WorkflowOrderStat`(M65/M69/M70과 동일한 in-process
+  dict + 최소 표본 패턴)으로 기억해 두었다가, 다음 `plan()` 호출에서
+  새로 위상 정렬하는 대신 그 순서를 그대로 반환한다(`recommended_order()`
+  로 조회 가능). 학습 이력이 없으면(기본값) `plan()`은 기존 DFS 기반
+  위상 정렬과 100% 동일하게 동작한다. 새 Core Domain Interface 없음 —
+  기존 `WorkflowEngine`의 메서드 2개(`record_run_outcome()`/
+  `recommended_order()`) 확장뿐(30종 유지).
 
 ### 3.13 Budget Policy (BudgetPolicyEngine 인터페이스, Milestone 15, ADR-0027)
 `EngineAdapter.estimate_cost()`가 계산한 예상 비용/토큰을 Workspace
@@ -2518,7 +2611,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 |---|---|---|---|
 | `AutomationRepository` | `AutomationRule` 저장/조회(CRUD는 `AutomationService`가 유일하게 사용) | Milestone 21 (M21-T01 계약, `InMemoryAutomationRepository` 구현) | **완료(계약+구현)** |
 | `DashboardRepository` | Execution 결과를 Event로 받아 Dashboard Read Model에 기록 + 조회 | Milestone 20 (M20-T01 계약, `InMemoryDashboardRepository` 구현) | **완료(계약+구현)** |
-| `LLMPolicyEngine` | AgentRole별 LLM Provider/Model/Effort Rule 기반 결정 | Milestone 5 (M5-T01) | **완료(계약+구현)** |
+| `LLMPolicyEngine` | AgentRole별 LLM Provider/Model/Effort Rule 기반 결정 + 실행 결과 기반 자동 대체(Self Optimizer, M67) | Milestone 5 (M5-T01), M67(ADR-0085) `record_outcome()` 확장 | **완료(계약+구현)** |
 | `BudgetPolicyEngine` | `CostEstimate` vs `Budget` 대조로 실행 허용 여부 결정 | Milestone 15 (M15-T01 계약, `InMemoryBudgetPolicyEngine` 구현) | **완료(계약+구현)** |
 | `KnowledgeRepository` | 프로젝트 문서를 `KnowledgeDocument`로 조회 | Milestone 16 (M16-T01 계약, `FileKnowledgeRepository` 구현) | **완료(계약+구현)** |
 | `KnowledgeSearch` | `KnowledgeRepository` 문서의 Keyword 검색 | Milestone 16 (M16-T02 계약, `InMemoryKnowledgeSearch` 구현) | **완료(계약+구현)** |
@@ -2527,7 +2620,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `EngineSelectionPolicy` | Task/Budget/Knowledge/후보를 종합해 최적 Engine 판단(Decision Only) | Milestone 17 (M17-T02 계약, `InMemoryEngineSelectionPolicy` 구현) | **완료(계약+구현)** |
 | `AuthenticationManager` | Engine별 실행 가능한 인증 상태 확인(`login`/`logout` 없음) | Milestone 18 (M18-T01 계약, `InMemoryAuthenticationManager` 구현) | **완료(계약+구현)** |
 | `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 (T1-15 계약, T1-23 `FileProjectRepository` 구현) | **완료(계약+구현)** |
-| `WorkflowEngine` | Mission→…→Step 협업 흐름 | 이후 | 기존 |
+| `WorkflowEngine` | Mission→…→Step 협업 흐름, 의존관계 기반 실행 순서 계획(`plan()`) + 실행 순서 학습(M71) | 이후(Milestone 2, T2-03 `plan()` 구현), M71(ADR-0089) `record_run_outcome()`/`recommended_order()` 확장 | **완료(계약+구현)** |
 | `TaskEngine` | Task 생성/상태 전이 + Step 실행 이력(M5-T06) | 이후 | 기존 |
 | `MemoryEngine` | Memory 저장/검색 (Snapshot 제외) | Milestone 1 (T1-15, T1-20 재확인) | 기존(축소, 변경 없음) |
 | `ApprovalEngine` | 승인 대상 판별/차단 | 이후 | 기존 |
@@ -2540,12 +2633,12 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `InteractionEngine` | 입력 표면 정규화/응답 변환 (기존 ConversationEngine 대체) | Milestone 1 (T1-21) 계약, Milestone 3 구현 | **완료(계약)** |
 | `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료(계약)** |
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
-| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15) | Milestone 1 (T1-19) | **완료(계약)** |
+| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장 | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 | `WorkflowRepository` | `Workflow` 조회/저장(`AutomationActionExecutor`의 RUN_WORKFLOW가 `workflow_id`로 실제 Workflow를 찾는 유일한 통로) | Milestone 59 (계약+`InMemoryWorkflowRepository` 구현) | **완료(계약+구현)** |
 | `RemoteAgentDispatcher` | `Agent.location`이 가리키는 위치로 Event 전달(Agent Runtime 레벨의 원격 실행 경계) | Milestone 61 (계약+`LoopbackAgentDispatcher` 구현) | **완료(계약+구현)** |
-| `ResultAggregator` | `run_ensemble()`의 `dict[str, EngineResult]`를 정확한 문자열 일치 다수결로 대표 결과 하나로 집계(투표) | Milestone 63 (계약+`MajorityVoteAggregator` 구현) | **완료(계약+구현)** |
+| `ResultAggregator` | `run_ensemble()`의 `dict[str, EngineResult]`를 대표 결과 하나로 집계(투표) — 정확한 문자열 일치 다수결(M63) 또는 과거 Consensus 이력 기반 가중 투표(M70) | Milestone 63 (계약+`MajorityVoteAggregator` 구현), M70(ADR-0088) `AdaptiveConsensusAggregator` 구현 추가(계약 무변경) | **완료(계약+구현)** |
 
 > **참고**: "완료(계약)"은 Interface 정의와 Fake 기반 계약 테스트만 존재하고
 > 실제 서비스에 쓰일 구체 구현체는 아직 없다는 뜻이다(각 컴포넌트의 계획된

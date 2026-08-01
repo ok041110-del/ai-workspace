@@ -65,6 +65,19 @@ class RecordingEngineRuntime(EngineRuntime):
     def run_ensemble(self, task, engine_names, *, model=None):
         raise NotImplementedError
 
+    def run_ensemble_auto(
+        self, task, required_capabilities: frozenset[str] = frozenset(), *, top_n=2, model=None
+    ):
+        raise NotImplementedError
+
+    def record_consensus_outcome(
+        self, required_capabilities, agreeing_engines, dissenting_engines
+    ) -> None:
+        raise NotImplementedError
+
+    def consensus_weight(self, required_capabilities, engine_name) -> float:
+        raise NotImplementedError
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

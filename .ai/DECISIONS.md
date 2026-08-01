@@ -5920,3 +5920,494 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   1242개(신규 8개, 회귀 없음)/`ruff`/`mypy`(229 source files) 전부
   통과. `.ai/TASKS.md` Milestone 66 절 신규 추가. `docs/ARCHITECTURE.md`
   §3.9 Engine Runtime 절에 Self Optimization 서술 추가.
+
+## ADR-0085: LLMPolicyEngine Self Optimizer — 실행 결과 기반 정책 자동 대체 (Milestone 67)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion 4회로 범위·집계 단위·대체
+  소스·피드백 경로를 순차 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M67 self optimization"으로 착수를 요청했다. ADR-0084
+  (M66)가 "LLMPolicyEngine Self Optimizer(원래 `.ai/RULES.md` §7 M5
+  개념)"를 명시적으로 범위 밖으로 미루고 별도 Milestone 후보로 남겨
+  두었던 항목이다. 조사 결과 `InMemoryLLMPolicyEngine.select()`는
+  M5-T01 이후 줄곧 순수 정적 `dict.get()`이었고(코드 확인), `AgentSession.
+  llm_policy_decision`은 `CodingAgent`/`ReviewAgent`/`DocumentationAgent`
+  가 `engine_runtime.run()`에 실제로 전달해 실행 결과(`EngineResult.
+  success`)까지 만들어내지만, 그 결과가 정책으로 되먹여지는 경로는
+  전혀 없었다(Role+Decision+Outcome이 한 곳에 모이는 지점은 이 3개
+  Agent의 `engine_runtime.run()` 직후뿐).
+- 결정:
+  1. AskUserQuestion으로 범위를 확정: (a) 관측만, (b) 관측 + 자동 대체,
+     (c) 관측 + 자동 대체 + Probe 복구까지 한 번에 — 사용자가 (b)를
+     선택. M65/M66이 관측→복구를 두 Milestone으로 나눈 전례와 동일하게
+     Probe/자동 복구는 이번 범위에서 제외하고 별도 Milestone 후보로
+     남긴다.
+  2. 집계 단위는 `(AgentRole, LLMModel)` 조합으로 확정 — Role 단독
+     집계는 모델 전환 후에도 이전 모델의 실패 이력과 새 모델의 이력이
+     뒤섞여 "자동 대체"가 의미를 갖지 못한다.
+  3. 대체 소스는 기존 `domain/llm_policy.py`의 `INITIAL_MODELS` 시드
+     목록 순서상 다음 모델로 확정 — 새 설정 파일/로더 확장 없이 이미
+     있는 데이터를 재사용한다(YAGNI).
+  4. 피드백 경로는 `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가
+     `engine_runtime.run()` 직후 명시적으로 호출하는 방식으로 확정 —
+     `EngineRuntime`이 `LLMPolicyEngine`을 주입받아 자동 기록하는
+     대안은 engine 계층이 policy 계층을 알아야 하는 새 계층 의존
+     방향이 생겨 기각.
+  5. `domain/llm_policy_reliability.py`(신규)에 `LLMPolicyReliabilityStat`
+     (total/success_count/failure_count)을 신설한다 — M65
+     `EngineReliabilityStat`과 필드 구성·임계값 규칙(`success_count ==
+     0 and total >= 3`)을 동일하게 재사용하되, 이번 범위에서 제외한
+     `skip_count`/Probe 필드는 가져오지 않는다.
+  6. `LLMPolicyEngine` interface에 `record_outcome(role, decision,
+     success) -> None` abstract method를 추가한다 — `select()`의
+     "side-effect 없음(read-only)" 계약은 그대로 두고, 결과 기록은
+     항상 이 별도 메서드를 통해서만 이루어진다(Interface First, 계약
+     명시).
+  7. `InMemoryLLMPolicyEngine`이 `dict[(AgentRole, LLMModel),
+     LLMPolicyReliabilityStat]`과 role별 "현재 활성 Decision" 재정의를
+     내부 상태로 갖는다. `select(role)`은 활성 Decision의 `(role,
+     model)` 통계가 `is_unreliable()`이면 `INITIAL_MODELS` 순서상 다음
+     모델로 전환한 Decision(effort는 원래 값 유지)을 반환하고 그 값을
+     활성 Decision으로 저장한다. 이미 목록의 마지막 모델이면 더 이상
+     전환하지 않는다(Probe 없이 그대로 유지 — 순환하면 이미 실패한
+     모델을 다시 쓰게 될 뿐이다).
+  8. `AgentRuntime`에 `record_llm_policy_outcome(session_id, success)`을
+     추가한다 — `llm_policy_engine` 미주입이거나 해당 session에 결정된
+     policy가 없으면 no-op. 3개 Agent는 `LLMPolicyEngine` interface를
+     직접 참조하지 않고 이 메서드 하나만 호출한다(M5-T02가 세운 "Agent는
+     LLMPolicyEngine을 모른다" 경계를 그대로 유지, `agent_runtime`을
+     생성자에서 저장하는 필드만 3곳에 추가).
+  9. 영속 저장소는 M49/M50/M65와 동일하게 이번 범위 밖(in-process
+     한정, YAGNI).
+- 대안:
+  1. `LLMPolicyEngine.select()` 시그니처에 실행 결과를 파라미터로
+     추가 — 기각: "규칙 조회는 read-only"라는 M5-T01 계약을 깨고, 모든
+     호출부가 매번 직전 결과를 들고 다녀야 해 더 큰 변경이 된다. 별도
+     `record_outcome()` 메서드가 훨씬 작은 변경이다.
+  2. Role 단독 키로 집계 — 기각: 자동 대체 이후에도 이전/새 모델의
+     실패가 뒤섞여 대체가 무의미해진다(위 결정 2 참고).
+  3. `docs/llm_policy.example.yaml`/`storage/llm_policy_loader.py`를
+     확장해 Role별 명시적 fallback 목록을 설정 가능하게 함 — 기각:
+     로더/스키마 변경이 필요해 범위가 커진다. `INITIAL_MODELS` 재사용만
+     으로 새 설정 없이 동일한 목표를 달성할 수 있다(YAGNI).
+  4. Effort만 단계적으로 낮춤(모델은 유지) — 기각: 사용자가 "다음
+     모델로 전환"을 명시적으로 선택. 초기 실패 원인이 Provider 장애 등
+     모델 자체 문제인 경우 effort만 낮춰서는 회복되지 않는다.
+  5. `EngineRuntime`이 `LLMPolicyEngine`을 주입받아 자동 기록 — 기각:
+     `runtime/engine/`이 정책 계층을 알아야 하는 새 의존 방향이
+     생긴다(M65/ADR-0083이 `intelligence/` 의존을 피하려고 별도 domain
+     타입을 만든 것과 같은 계층 경계 원칙).
+  6. M65/M66처럼 Probe 기반 자동 복구까지 이번 범위에 포함 — 기각:
+     사용자가 AskUserQuestion에서 "관측 + 자동 대체"만 선택. M65/M66이
+     의도적으로 두 Milestone으로 나눈 전례와 일관되게, 복구 메커니즘은
+     별도 Milestone 후보로 남긴다.
+- 이유: `.ai/RULES.md` §7 M5 로드맵이 원래 의도했던 "실행 결과 피드백
+  으로 정책 자체를 개선"을 M65/M66이 엔진 계층에서 이미 검증한 패턴
+  (임계값 재사용, 별도 domain 값 객체, 기존 Interface 무변경)을 정책
+  계층에 그대로 이식해 구현했다. `select()`의 read-only 계약과
+  `LLMPolicyEngine` interface의 최소 확장(메서드 1개 추가)만으로 자동
+  대체를 달성해 하위 호환성을 해치지 않는다.
+- 결과/영향: `domain/llm_policy_reliability.py`(신규),
+  `interfaces/llm_policy_engine.py`(`record_outcome()` abstract method
+  추가), `engines/llm_policy_engine.py`(`InMemoryLLMPolicyEngine`에
+  통계·활성 Decision 상태 + 자동 대체 로직), `runtime/agent/agent_runtime.py`
+  (`record_llm_policy_outcome()` 추가), `agents/coding_agent.py`/
+  `review_agent.py`/`documentation_agent.py`(`engine_runtime.run()`
+  직후 피드백 호출 + `agent_runtime` 필드 저장) 수정.
+  `tests/interfaces/fakes.py`의 `FakeLLMPolicyEngine`에 `record_outcome()`
+  구현 추가. 새 Core Domain Interface 없음(기존 `LLMPolicyEngine`
+  확장, 30종 유지). 신규 테스트 11건(`domain` 5건, `engines` 대체
+  로직 관련 다수 확장, `interfaces` 1건, `AgentRuntime` 3건 — 정확한
+  분해는 `.ai/TASKS.md` Milestone 67 참고). `pytest` 1259개(신규 11개,
+  회귀 없음)/`ruff`/`mypy`(230 source files) 전부 통과. `.ai/TASKS.md`
+  Milestone 67 절 신규 추가. `docs/ARCHITECTURE.md` §3.9에 Self
+  Optimization(정책 계층) 서술 추가, §7 Interface 표의 `LLMPolicyEngine`
+  행에 M67 확장 반영.
+
+## ADR-0086: Dynamic Ensemble Routing — EngineSelectionPolicy 기반 top-N 자동 선택 (Milestone 68)
+
+- 상태: 승인됨 (2026-08-01)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M68 Dynamic Ensemble Routing"으로 명확한 범위를 담아
+  착수를 요청했다 — `run_ensemble()`(M62, ADR-0080)은 호출자가
+  `engine_names`를 직접 나열해야 하는 계약이라, M64/M65/M66에서
+  `run()`/`estimate_cost()` 경로에 이미 구현된 `EngineSelectionPolicy`
+  기반 비용·신뢰도 인식 선택을 전혀 활용하지 못했다(코드 확인, 추측
+  아님) — 같은 Task를 여러 엔진에 "동적으로" 분산하는 경로가 없었다.
+- 결정:
+  1. 새 Core Domain Interface를 추가하지 않고 기존 `EngineRuntime`에
+     `run_ensemble_auto(task, required_capabilities=frozenset(), *,
+     top_n=2, model=None) -> dict[str, EngineResult]` abstract method
+     하나만 추가한다.
+  2. `InMemoryEngineRuntime`/`ManagedEngineRuntime`은 `run()`/
+     `estimate_cost()`가 이미 쓰는 후보 선정 로직(`_build_candidates()`,
+     `ManagedEngineRuntime`은 이번에 `_require_adapter()`에서 이 부분을
+     별도 메서드로 추출해 재사용)으로 `EngineCandidate` 목록을 만든다 —
+     M65/M66의 신뢰도 기반 제외·Probe 규칙이 후보 빌드 단계에서 자동으로
+     함께 적용된다.
+  3. `engine_selection_policy`가 주입돼 있으면 `EngineSelectionPolicy.
+     select()`(M17)를 반복 호출해(매 회 직전 선택 후보를 후보 목록에서
+     제거) top_n개를 얻는다 — "예산 내 최저 비용 하나"를 고르는 기존
+     규칙을 그대로 반복 적용할 뿐, `EngineSelectionPolicy` 시그니처는
+     전혀 바꾸지 않는다(Decision Only 계약 유지).
+  4. 정책 미주입 시에는 `run()`의 "등록 순서상 첫 매칭" 원칙을 그대로
+     확장해 조건을 만족하는 첫 top_n개를 고른다 — 100% 하위 호환.
+  5. 선택된 이름 목록은 새 실행 로직을 만들지 않고 기존 `run_ensemble()`
+     (M62의 `ThreadPoolExecutor` 동시 실행 + 개별 엔진 실패 격리)에
+     그대로 위임한다(YAGNI).
+  6. `required_capabilities`를 만족하며 신뢰도상 제외되지 않는 등록된
+     엔진이 하나도 없으면(`top_n >= 1`인 경우) `run()`과 동일하게
+     `NoSuitableEngineError`를 전파한다 — 선택 단계 오류와 개별 엔진의
+     실행 실패(결과로만 격리)를 구분하는 기존 원칙을 그대로 따른다.
+  7. `top_n < 1`이면 후보를 조회하지 않고 빈 dict를 반환한다(`run_ensemble()`
+     의 "engine_names가 비어 있으면 빈 dict" 계약과 대칭).
+  8. `RecoveringEngineRuntime`은 `run_ensemble()`과 동일한 이유(비교
+     대상인 개별 결과를 재시도로 덮어쓰면 안 됨)로 재시도 없이 내부
+     Runtime에 그대로 위임한다.
+- 대안:
+  1. `run_ensemble()` 자체의 시그니처를 `engine_names: list[str] | None`
+     으로 바꿔 `None`이면 자동 선택하도록 확장 — 기각: 하나의 메서드가
+     "명시적 지정"과 "동적 선택"이라는 서로 다른 계약을 함께 가지면
+     반환 dict의 key 집합이 입력과 항상 같다는 기존 `run_ensemble()`의
+     계약(§ "언제나 engine_names와 같다")이 깨진다. 별도 메서드가 기존
+     계약을 그대로 보존한다.
+  2. 새 `EnsembleRoutingPolicy` interface를 별도로 추가 — 기각: 사용자가
+     명시적으로 "새 Core Domain Interface는 추가하지 말고" 요청했고,
+     top-N 선택은 기존 `EngineSelectionPolicy.select()`를 반복 호출하는
+     것만으로 충분해 새 계약을 정당화할 필요성이 없다(YAGNI).
+  3. `EngineSelectionPolicy.select()`에 `top_n` 파라미터를 추가해 정책
+     구현체가 직접 목록을 반환하도록 확장 — 기각: M17 "Decision Only,
+     단일 선택" 계약과 기존 호출부(Automation 파이프라인 등 단일 선택만
+     쓰는 곳)에 영향을 준다. `EngineRuntime` 쪽에서 반복 호출하는 편이
+     기존 계약을 하나도 건드리지 않는다.
+  4. `EngineRegistry`를 통해 후보를 다시 조회 — 기각: ADR-0082(M64)가
+     이미 같은 이유로 기각한 대안과 동일 — `EngineRuntime`은 자체
+     `self._engines` dict로 이미 관리하므로 이중 관리가 된다.
+- 이유: `EngineSelectionPolicy.select()`가 이미 "후보 목록 중 최적 하나"
+  를 검증된 형태로 판단하므로, 그 후보 목록에서 직전 선택을 제거하며
+  반복 호출하면 새 랭킹 알고리즘 없이 top-N을 얻을 수 있다. `run_ensemble()`
+  의 실행/격리 메커니즘도 그대로 재사용해, 이번 Milestone은 순수하게
+  "후보를 어떻게 정할지"만 다루는 최소 확장으로 끝난다.
+- 결과/영향: `interfaces/engine_runtime.py`(abstract method 추가),
+  `runtime/engine/engine_runtime.py`(`InMemoryEngineRuntime`),
+  `runtime/engine/managed_engine_runtime.py`(`ManagedEngineRuntime`,
+  `_build_candidates()` 추출), `runtime/engine/recovering_engine_runtime.py`
+  (`RecoveringEngineRuntime`, 위임) 수정. 새 abstract method 추가로
+  기존 `EngineRuntime` 테스트 더블(`tests/interfaces/fakes.py`
+  `FakeEngineRuntime`, `tests/runtime/engine/test_recovering_engine_runtime.py`
+  `ScriptedEngineRuntime`, `tests/core/test_workspace_core.py`
+  `SpyEngineRuntime`, `tests/agents/test_coding_agent.py`
+  `RecordingEngineRuntime`)에도 최소 구현을 추가했다(ABC 계약 충족
+  목적, 대부분 미사용 경로는 기존 관례대로 `NotImplementedError`/
+  `AssertionError`). 새 Core Domain Interface 없음(기존 `EngineRuntime`
+  확장, 30종 유지). 신규 테스트 15건(`InMemoryEngineRuntime` 7건,
+  `ManagedEngineRuntime` 7건, `RecoveringEngineRuntime` 1건 — 정확한
+  분해는 `.ai/TASKS.md` Milestone 68 참고). `pytest` 1274개(신규 15개,
+  회귀 없음)/`ruff`/`mypy`(230 source files) 전부 통과. `.ai/TASKS.md`
+  Milestone 68 절 신규 추가. `docs/ARCHITECTURE.md` §3.9 Engine Runtime
+  절에 Dynamic Ensemble Routing 서술 추가.
+
+## ADR-0087: Execution Memory & Context Routing — 실행 결과 기반 Engine 추천 (Milestone 69)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion 4회로 유사도 기준·저장
+  위치·반영 방식·지표 범위를 순차 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M69 Execution Memory & Context Routing"으로 착수를
+  요청했다 — M68까지 `EngineSelectionPolicy`(M17)/`EngineReliabilityStat`
+  (M65)는 "이 엔진이 전반적으로 신뢰할 만한가/저렴한가"만 판단할 뿐,
+  "이 종류의 Task에서 어떤 Engine이 더 잘 수행했는가"를 기억해 다음
+  실행에 반영하는 경로는 없었다(코드 확인, 추측 아님).
+- 결정:
+  1. AskUserQuestion으로 유사도 판단 키를 확정: domain.Task에는
+     TaskType/난이도 필드가 없고 `EngineRuntime`은 `required_
+     capabilities`만 받으므로, Role/TaskType까지 포함하려면 `run()`/
+     `run_parallel()`/`run_ensemble_auto()` 전체 시그니처에 새 파라미터가
+     필요해 범위가 커진다 — 사용자가 `required_capabilities` 조합만
+     사용하는 안(권장)을 선택.
+  2. 저장 위치는 새 domain 값 객체 + `EngineRuntime` in-process 상태로
+     확정 — 기존 `ExecutionMemoryStore`(M39, `memory/
+     execution_memory_store.py`)는 `RecommendationExecutionService`
+     (Execution Platform) 전용의 완전히 분리된 경로(ADR-0053,
+     ARCHITECTURE.md §8 규칙 14)라, `EngineRuntime`(Agent 경로)에서
+     직접 재사용하면 이미 확정된 계층 경계가 깨진다. `EngineReliabilityStat`
+     (M65)와 동일한 패턴(도메인 값 객체 + in-process dict)만 재사용한다.
+  3. `domain/engine_execution_memory.py`(신규)에
+     `EngineExecutionMemoryStat`(total/success_count/failure_count/
+     total_latency_seconds)을 신설한다 — `EngineReliabilityStat`과
+     필드 구성은 같지만 집계 키가 `(required_capabilities, engine_name)`
+     조합이라는 점이 다르다(엔진 이름 단독 키인 M65와 달리 "같은 종류의
+     Task에서만" 비교). `success_rate()`는 M49/M65와 동일한 임계값
+     (표본 3건 미만이면 `None`)을 재사용한다.
+  4. `InMemoryEngineRuntime`/`ManagedEngineRuntime`의 `run()`(Managed는
+     Cancel된 경우 제외)/`run_ensemble_auto()`가 실행 결과와 latency를
+     `_record_execution_memory()`로 누적한다.
+  5. 반영 방식은 "후보 랭킹에 성공률을 반영해 재정렬"로 확정 — 다만
+     구현 중 발견한 충돌(아래 참고) 때문에, 문자 그대로 "재정렬"만
+     하고 후보를 제외/좁히지는 않는다. `_build_candidates()`가 (기존
+     신뢰도 제외 이후) `_reorder_by_execution_memory()`로 후보를 성공률
+     내림차순 정렬한다.
+  6. latency는 기록만 하고 랭킹 공식에는 반영하지 않는다(사용자 선택,
+     새 가중치 공식을 설계하지 않는다, YAGNI).
+  7. **설계 충돌과 해결**: 최초 구현("표본 충분 + 최고 성공률 엔진으로
+     후보를 좁힘")은 M65 `test_run_with_policy_recovers_after_
+     successful_probe`를 깨뜨렸다 — Probe가 성공해 `is_unreliable()`이
+     즉시 거짓이 되어도(M66의 "복구 즉시 완전 신뢰" 보장), 과거 실패
+     이력이 남아 있는 실행 메모리 성공률이 다른 엔진보다 낮으면 그
+     보장이 깨졌다. `EngineSelectionPolicy.select()`가 비용 기준
+     `min()`으로 항상 진짜 최저 비용을 고르고, 동률일 때만 순서가
+     결과에 영향을 준다는 성질을 이용해, **"후보 제외"가 아니라 "비용
+     동률 tie-break로만" 범위를 좁혔다** — 비용이 다른 모든 기존
+     M64/M65/M66/M68 테스트는 정렬 순서와 무관하게 그대로 통과한다.
+  8. 재정렬 자체도 "표본 부족(미검증)"을 가장 나쁜 값이 아니라
+     중립값(`_NEUTRAL_RATE = 0.5`)으로 취급한다 — 그렇지 않으면 아직
+     검증되지 않았을 뿐인 엔진이 이미 확인된 저성능(성공률 0.0) 엔진
+     보다 부당하게 밀리는 새 버그가 생긴다(구현 중 테스트로 발견해
+     즉시 수정).
+  9. 신뢰도 제외와 동일하게 `engine_selection_policy` 주입 경로에서만
+     적용된다 — 미주입 시(M64 이전 동작) 100% 하위 호환.
+  10. `RecoveringEngineRuntime`은 변경 없음(순수 위임 구조 그대로).
+  11. 영속 저장소는 M49/M50/M65와 동일하게 이번 범위 밖(in-process
+      한정, YAGNI).
+- 대안:
+  1. 기존 `ExecutionMemoryStore`/`MemoryEngine`(M39) 재사용 — 기각:
+     ARCHITECTURE.md §8 규칙 14가 이미 "완전히 별도의 경로"로 분리해
+     둔 Agent 경로와 Execution Platform 경로를 다시 합치게 된다.
+  2. Role까지 포함한 유사도 키 — 기각: `EngineRuntime`의 `run()`/
+     `run_parallel()`/`run_ensemble_auto()` 전체에 새 `role` 파라미터를
+     추가해야 해 인터페이스 변경 범위가 M69의 "최소 확장" 취지를
+     벗어난다.
+  3. 조회 전용 `recommend_engine()` 메서드만 추가하고 실제 선택 로직은
+     바꾸지 않음 — 기각: 사용자가 "다음 실행에 반영"을 명시적으로
+     요구했고, 단순 조회 API는 그 요구를 충족하지 못한다.
+  4. 성공률+평균 latency 가중 합산 랭킹 — 기각: 사용자가 성공/실패만
+     반영하는 안을 선택. 가중치 공식(합산 비율)을 새로 설계해야 해
+     범위가 커진다.
+  5. 표본 충분 시 최고 성공률 엔진으로 후보를 제외/좁힘(최초 구현) —
+     기각(구현 중 회귀 발견 후 철회): M65/M66의 "복구 즉시 완전 신뢰"
+     보장과 충돌해 기존 통과 테스트가 깨졌다. tie-break 재정렬로
+     범위를 좁혀 이 충돌을 해소했다.
+- 이유: `EngineReliabilityStat`(M65)이 이미 "표본 부족 시 성급하게
+  판단하지 않는다"는 임계값 규칙을 검증된 형태로 갖고 있었으므로, 같은
+  패턴을 `(required_capabilities, engine_name)` 키로 재사용하면 새
+  알고리즘 없이 "Task 종류별 Engine 성과 기억"이라는 공백을 메울 수
+  있었다. `EngineSelectionPolicy`의 비용 `min()`이 동률에서만 순서에
+  의존한다는 성질을 활용해 재정렬 범위를 tie-break로 좁힘으로써, 기존
+  M64~M68의 모든 확정된 동작(비용 우선, 신뢰도 제외, Probe 복구)을
+  전혀 건드리지 않고 새 신호를 안전하게 추가할 수 있었다.
+- 결과/영향: `domain/engine_execution_memory.py`(신규),
+  `runtime/engine/engine_runtime.py`(`InMemoryEngineRuntime`),
+  `runtime/engine/managed_engine_runtime.py`(`ManagedEngineRuntime`)
+  수정. `RecoveringEngineRuntime` 무변경. 새 Core Domain Interface 없음
+  (기존 `EngineRuntime`의 내부 구현만 확장, 30종 유지). 신규 테스트
+  12건(`domain` 7건, `InMemoryEngineRuntime` 2건, `ManagedEngineRuntime`
+  2건 — 정확한 분해는 `.ai/TASKS.md` Milestone 69 참고). `pytest` 1286개
+  (신규 12개, 회귀 없음)/`ruff`/`mypy`(231 source files) 전부 통과.
+  `.ai/TASKS.md` Milestone 69 절 신규 추가. `docs/ARCHITECTURE.md`
+  §3.9 Engine Runtime 절에 Execution Memory & Context Routing 서술 추가.
+
+## ADR-0088: Adaptive Consensus — Consensus 합의 이력 기반 가중 투표 (Milestone 70)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion 4회로 이력 의미·저장 위치·
+  반영 방식·인터페이스 변경 범위를 순차 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M70 Adaptive Consensus"로 착수를 요청했다 — M69까지는
+  과거 실행 이력을 바탕으로 Engine/Ensemble 선택 자체는 학습하지만,
+  `run_ensemble()`(M62) 결과를 합치는 `ResultAggregator`(M63,
+  `MajorityVoteAggregator`)는 `EngineResult.output`의 정확한 문자열
+  일치 다수결(표 개수)만 본다 — 어떤 엔진의 표가 과거에 실제 합의와
+  자주 일치했는지는 전혀 반영하지 않는다(코드 확인, 추측 아님).
+- 결정:
+  1. AskUserQuestion으로 "Consensus 성공 이력"의 의미를 확정: M69의
+     `EngineExecutionMemoryStat`(태스크 실행 성공/실패)을 그대로
+     재사용하는 안과, 엔진의 투표가 최종 합의와 일치했는지를 추적하는
+     새 이력을 만드는 안 중 사용자가 후자(권장)를 선택했다 — "실행
+     성공"과 "투표가 다수 의견에 속함"은 서로 다른 신호이기 때문이다
+     (실행은 성공했지만 소수 의견일 수 있다).
+  2. 저장 위치는 M65/M69와 동일한 패턴(`EngineRuntime` in-process
+     상태)으로 확정 — 새 `domain/consensus_agreement.py`에
+     `ConsensusAgreementStat`(total/agree_count/disagree_count,
+     `agreement_rate()`는 M49/M65/M69와 동일한 최소 표본 3건 임계값)을
+     신설하고, `InMemoryEngineRuntime`/`ManagedEngineRuntime`에
+     `(required_capabilities, engine_name)` 키의 `_consensus_agreement`
+     dict로 누적한다.
+  3. `EngineRuntime`에 `record_consensus_outcome(required_capabilities,
+     agreeing_engines, dissenting_engines)`(기록, side-effect)와
+     `consensus_weight(required_capabilities, engine_name)`(조회,
+     read-only — 표본 부족/기록 없음이면 중립값 0.5)을 최소 확장한다.
+     `EngineRuntime`은 `ResultAggregator`의 존재를 모른 채로 남는다
+     (ADR-0080/0081이 이미 명시한 두 계약 간 결합 방지 원칙 유지) — 이
+     두 메서드만이 유일한 접점이다.
+  4. 반영 방식은 "가중치 합계 비교"로 확정 — 새 `ResultAggregator`
+     구현체 `AdaptiveConsensusAggregator`(생성자로 `EngineRuntime`과
+     `required_capabilities`를 주입받음)가 `votes`를 표 개수 대신
+     `consensus_weight()` 합계로 비교해 승자를 정하고, 동률이면(M63과
+     동일하게) 표 개수 → 입력 순서로 2차 tie-break한다. 신뢰도 낮은
+     엔진의 표를 아예 제외하는 필터링 방식은 채택하지 않았다 — M69에서
+     "제외/필터링" 방식이 M65/M66 회귀를 일으켰던 전례를 반복하지
+     않기 위해서다.
+  5. 기존 `ResultAggregator` 인터페이스는 무변경으로 확정 — `aggregate()`
+     시그니처·반환 타입에 손대지 않고 새 클래스만 추가한다.
+     `MajorityVoteAggregator`를 포함한 기존 구현체·호출자는 전혀
+     영향받지 않는다(100% 하위 호환).
+  6. `AdaptiveConsensusAggregator.aggregate()`는 승자를 정한 직후 자신이
+     계산한 `agreeing_engines`/`dissenting_engines`를
+     `record_consensus_outcome()`으로 그대로 되돌려준다 — 호출자가
+     별도로 기록을 챙기지 않아도 다음 호출부터 자동으로 학습이
+     누적된다. `failed_engines`(성공하지 못해 애초에 투표하지 못한
+     엔진)는 기록 대상에서 제외한다 — 합의 자체에 참여하지 않았기
+     때문이다.
+  7. `RecoveringEngineRuntime`은 두 메서드 모두 내부 Runtime에 순수
+     위임한다 — 재시도와 무관한 read/write 상태이기 때문이다(M62/M68과
+     동일한 근거).
+  8. 영속 저장소는 M49/M50/M65/M69와 동일하게 이번 범위 밖(in-process
+     한정, YAGNI).
+- 대안:
+  1. M69 `EngineExecutionMemoryStat`(태스크 실행 성공률)을 그대로 투표
+     가중치로 재사용 — 기각: 사용자가 "Consensus 성공 이력을 재사용"을
+     명시적으로 요구했고, "실행 성공"과 "투표가 합의와 일치"는 의미가
+     다른 신호라 재사용 시 혼란을 야기할 수 있어 별도 값 객체로
+     분리하는 안(권장)을 선택했다.
+  2. `ResultAggregator` 인스턴스 자체가 상태를 들고 다님(EngineRuntime과
+     완전 독립) — 기각: 여러 aggregator 인스턴스 간 이력 공유가 안
+     되고, M65/M69가 이미 확립한 "EngineRuntime이 상태를 갖고 조회
+     메서드를 노출" 패턴과 어긋난다.
+  3. 신뢰도 낮은 엔진 표를 집계에서 아예 제외(필터링) — 기각: M69의
+     "narrow candidates" 최초 시도가 M65/M66 회귀를 일으켰던 전례가
+     있어, 위험이 검증된 tie-break/가중합 방식(권장안)만 채택했다.
+  4. `aggregate()`에 optional `weights` 매개변수 추가 — 기각: 사용자가
+     "무변경, 새 클래스만 추가"를 선택했다. 기존 시그니처를 건드리면
+     `ResultAggregator`를 구현하는 모든 클래스(현재와 향후)가 새
+     매개변수를 알아야 해 계약 변경 범위가 M70의 "최소 확장" 취지를
+     벗어난다.
+- 이유: `EngineReliabilityStat`(M65)/`EngineExecutionMemoryStat`(M69)이
+  이미 검증한 "in-process dict + 최소 표본 임계값 + 중립값 처리" 패턴을
+  그대로 재사용하면, `ResultAggregator`/`EngineRuntime` 두 계약의
+  시그니처를 전혀 바꾸지 않고도 "과거 합의에 자주 참여한 엔진의 표를
+  더 무겁게 반영"이라는 새 요구를 안전하게 추가할 수 있었다. `EngineRuntime`
+  이 `ResultAggregator`를 모르는 기존 결합 방지 원칙(ADR-0080/0081)도
+  "기록/조회 메서드 2개"로만 접점을 좁혀 그대로 유지했다.
+- 결과/영향: `domain/consensus_agreement.py`(신규),
+  `interfaces/engine_runtime.py`(`record_consensus_outcome()`/
+  `consensus_weight()` abstract method 2개 추가),
+  `runtime/engine/engine_runtime.py`(`InMemoryEngineRuntime`),
+  `runtime/engine/managed_engine_runtime.py`(`ManagedEngineRuntime`),
+  `runtime/engine/recovering_engine_runtime.py`(순수 위임 2개 추가),
+  `runtime/engine/result_aggregator.py`(`AdaptiveConsensusAggregator`
+  신규 클래스) 수정. 테스트 더블(`tests/interfaces/fakes.py`
+  `FakeEngineRuntime`, `tests/core/test_workspace_core.py`
+  `SpyEngineRuntime`, `tests/agents/test_coding_agent.py`
+  `RecordingEngineRuntime`, `tests/runtime/engine/
+  test_recovering_engine_runtime.py` `ScriptedEngineRuntime`) 모두
+  새 abstract method 2개에 대한 최소 구현/스텁 추가. 새 Core Domain
+  Interface 없음(기존 `EngineRuntime`의 메서드 2개 확장 + 기존
+  `ResultAggregator` 계약 재사용, 30종 유지). 신규 테스트 18건(`domain`
+  5건, `InMemoryEngineRuntime` 5건, `ManagedEngineRuntime` 3건,
+  `ResultAggregator` 4건, `RecoveringEngineRuntime` 1건). `pytest`
+  1304개(신규 18개, 회귀 없음)/`ruff`/`mypy`(232 source files) 전부
+  통과. `.ai/TASKS.md` Milestone 70 절 신규 추가. `docs/ARCHITECTURE.md`
+  §3.9 Engine Runtime 절 및 §7 인터페이스 표(`EngineRuntime`/
+  `ResultAggregator`)에 Adaptive Consensus 서술 추가.
+
+## ADR-0089: Workflow Learning — 성공률 높은 실행 순서(Template) 추천 (Milestone 71)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion 4회로 유사도 기준·반영
+  방식·저장 위치·최소 표본 기준을 순차 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M71 Workflow Learning"으로 착수를 요청했다. 최신 main
+  기준(`origin/main` = `831ef11`)에서 시작했고 이미 그 커밋을 포함하고
+  있어 별도 병합이 필요 없었다. 조사 결과 "Workflow"라는 용어는 이
+  코드베이스에 두 갈래로 존재한다 — (a) `domain.Workflow`/`WorkflowEngine`
+  /`WorkflowRunner`(Milestone 2/12, task_ids+dependencies 기반 DAG와
+  그 위상 정렬·순차 실행), (b) M34(ADR-0048)가 "Workflow"를 `domain.
+  Workflow`가 아니라 Milestone Task 실행 흐름으로 재정의한 Intelligence
+  경로(`intelligence/workflow_flow.py`, `domain.Workflow`/`WorkflowEngine`
+  무변경). 사용자 요청이 "WorkflowEngine"을 명시적으로 지목했으므로
+  (a) 경로가 대상임을 확인했다. `WorkflowEngine.plan()`은 의존관계를
+  만족하는 위상 정렬만 계산하는 순수 계산이었고, 실행 결과(성공/실패)를
+  기억해 다음 계획에 반영하는 경로는 전혀 없었다(코드 확인, 추측 아님).
+  "Learning Engine"(M49~M51, ADR-0066/0067/0068)은 `RecommendationAdjustmentAnalyzer`
+  /`ExperienceStat` 기반의 완전히 다른 경로(Intelligence/Recommendation)
+  라 이번 범위와 무관함을 확인했다.
+- 결정:
+  1. AskUserQuestion으로 "동일하거나 유사한 Workflow"의 식별 기준을
+     확정: `domain.Workflow`에는 이름 있는 템플릿 ID가 없으므로,
+     `frozenset(task_ids)` + 의존관계 간선 집합(`frozenset[tuple[str,
+     str]]`)을 정확히 일치시키는 키(사용자 선택, 권장안)로 확정했다 —
+     M69의 `required_capabilities` 정확 일치 키 패턴을 그대로 재사용해
+     새 그래프 유사도 알고리즘을 설계하지 않는다(YAGNI).
+  2. 반영 방식은 "성공률 높은 전체 순서를 Template로 저장해 그대로
+     추천"으로 확정(사용자 선택, 권장안) — M69/M70의 "tie-break만"
+     방식과 달리, 이번에는 서로 충돌하는 기존 보장(M65/M66의 "복구 즉시
+     완전 신뢰" 같은)이 없어 더 직접적인 "전체 순서 추천"을 채택해도
+     회귀 위험이 없다고 판단했다.
+  3. 저장 위치는 "WorkflowEngine in-process 상태 + WorkflowRunner가
+     자동 기록"으로 확정(사용자 선택, 권장안) — M65/M69/M70과 동일한
+     패턴. `WorkflowEngine`에 `record_run_outcome(workflow, order,
+     success)`(기록)/`recommended_order(workflow)`(조회) 두 메서드를
+     최소 확장한다. `plan()` 시그니처는 무변경 — 학습 상태는 인스턴스
+     내부에서만 조회한다.
+  4. 최소 표본 기준은 "기존과 동일하게 3건 이상"으로 확정(사용자 선택,
+     권장안) — M49/M65/M69/M70과 동일한 임계값 상수를 그대로 재사용,
+     새 임계값을 설계하지 않는다.
+  5. `domain/workflow_order_memory.py`(신규)에 `WorkflowOrderStat`
+     (total/success_count/failure_count, `success_rate()`는 표본 3건
+     미만이면 `None`)을 신설한다 — `EngineReliabilityStat`(M65)/
+     `EngineExecutionMemoryStat`(M69)/`ConsensusAgreementStat`(M70)과
+     동일한 필드 구성·패턴이지만, 키가 "엔진 이름"이 아니라 "실행
+     순서(order tuple) 자체"라는 점이 다르다.
+  6. `InMemoryWorkflowEngine.plan()`은 `recommended_order()`가 값을
+     반환하면 그 순서를 그대로 반환하고, `None`이면(학습 이력 없음)
+     기존 DFS 기반 위상 정렬 그대로 동작한다(100% 하위 호환). 동률이면
+     표본 수가 더 많은 순서, 그마저 같으면 먼저 기록된 순서를 반환한다
+     (dict 삽입 순서 기반 결정적 tie-break).
+  7. `WorkflowRunner.run()`이 완료 직후(성공/실패 모두) 실제로 쓰인
+     `order`와 결과를 `record_run_outcome()`으로 자동 기록한다 —
+     호출자가 별도로 학습을 챙기지 않아도 다음 `plan()` 호출부터
+     반영된다(M70의 `AdaptiveConsensusAggregator` 자동 되먹임과 동일한
+     설계).
+  8. `WorkflowEngine`의 유일한 다른 구현체인 `FakeWorkflowEngine`
+     (`tests/interfaces/fakes.py`)은 두 메서드를 최소 스텁(기록은
+     no-op, 조회는 항상 `None`)으로 구현해 기존 테스트 동작을 그대로
+     유지한다.
+  9. 영속 저장소는 M49/M50/M65/M69/M70과 동일하게 이번 범위 밖
+     (in-process 한정, YAGNI).
+- 대안:
+  1. 구조적 시그니처(task 개수 + 의존관계 그래프 모양, task_id 값 무시)
+     — 기각: 그래프 동형(isomorphism) 비교 로직을 새로 설계해야 해
+     범위가 M71의 "최소 확장" 취지를 벗어난다.
+  2. mission_id 기준 — 기각: Mission이 재실행되는 시나리오에만
+     적용되고, 이름은 다르지만 구조가 반복되는 파이프라인 패턴은
+     학습되지 않는다.
+  3. 위상정렬 동점(tie) 상황에서만 Task별 성공률로 재정렬(M69/M70과
+     동일한 tie-break 방식) — 기각(사용자가 더 직접적인 "전체 순서
+     추천" 방식을 선택): "실행 순서(Workflow Template)를 추천"이라는
+     요구사항을 tie-break보다 더 직접적으로 충족하고, 이번 범위에는
+     tie-break로 좁혀야 할 만한 기존 충돌 사례가 없었다.
+  4. 새 domain 값 객체를 `MemoryEngine`(M1)에 저장 — 기각:
+     `WorkflowEngine`과의 연결고리가 없어 `plan()`이 그 기록을 조회할
+     방법이 없다(추천 자체가 동작하지 않는다).
+  5. 첫 성공 1건부터 즉시 추천 — 기각(사용자가 기존 임계값 재사용을
+     선택): 표본 부족 상태에서 우연한 1회 성공 순서에 과도하게
+     의존하는 위험을 M49/M65/M69/M70과 동일하게 피한다.
+- 이유: `EngineReliabilityStat`(M65)/`EngineExecutionMemoryStat`(M69)/
+  `ConsensusAgreementStat`(M70)이 이미 검증한 "in-process dict + 정확한
+  frozenset 키 + 최소 표본 3건" 패턴을 그대로 `WorkflowEngine`에
+  옮기면, `plan()`/`WorkflowRunner.run()`의 기존 시그니처를 전혀 바꾸지
+  않고도 "성공률 높은 실행 순서를 Template로 기억해 추천"이라는 새
+  요구를 안전하게 추가할 수 있었다. `WorkflowEngine`이 `EventBus`를
+  몰라야 한다는 §8 계층 규칙, `WorkflowRunner`가 Agent가 아니라는
+  ADR-0023의 경계도 전혀 건드리지 않았다.
+- 결과/영향: `domain/workflow_order_memory.py`(신규),
+  `interfaces/workflow_engine.py`(`record_run_outcome()`/
+  `recommended_order()` abstract method 2개 추가),
+  `engines/workflow_engine.py`(`InMemoryWorkflowEngine`),
+  `runtime/workflow/workflow_runner.py`(`WorkflowRunner.run()`이
+  완료 직후 자동 기록) 수정. `tests/interfaces/fakes.py`
+  `FakeWorkflowEngine`에 두 메서드 최소 스텁 추가. 새 Core Domain
+  Interface 없음(기존 `WorkflowEngine`의 메서드 2개 확장, 30종 유지).
+  신규 테스트 12건(`domain` 5건, `InMemoryWorkflowEngine` 6건,
+  `WorkflowRunner` 2건 — 정확한 분해는 `.ai/TASKS.md` Milestone 71
+  참고). `pytest` 1317개(신규 13개, 회귀 없음)/`ruff`/`mypy`(233 source
+  files) 전부 통과. `.ai/TASKS.md` Milestone 71 절 신규 추가.
+  `docs/ARCHITECTURE.md` §3.12 Workflow Runner 절 및 §7 인터페이스 표
+  (`WorkflowEngine`)에 Workflow Learning 서술 추가.

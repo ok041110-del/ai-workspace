@@ -132,6 +132,12 @@ class FakeWorkflowEngine(WorkflowEngine):
             visit(task_id)
         return order
 
+    def record_run_outcome(self, workflow: Workflow, order: list[str], success: bool) -> None:
+        pass
+
+    def recommended_order(self, workflow: Workflow) -> list[str] | None:
+        return None
+
 
 class FakeTaskEngine(TaskEngine):
     def __init__(self) -> None:
@@ -359,6 +365,7 @@ class FakeEngineRuntime(EngineRuntime):
     def __init__(self) -> None:
         self._engines: dict[str, EngineAdapter] = {}
         self._task_status: dict[str, EngineSessionStatus] = {}
+        self._consensus_agreement: dict[tuple[frozenset[str], str], tuple[int, int]] = {}
 
     def register_engine(self, name: str, adapter: EngineAdapter) -> None:
         if name in self._engines:
@@ -438,6 +445,47 @@ class FakeEngineRuntime(EngineRuntime):
             except BaseException as exc:
                 results[name] = EngineResult(success=False, output="", error=str(exc))
         return results
+
+    def run_ensemble_auto(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 2,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        if top_n < 1:
+            return {}
+        names: list[str] = []
+        for name, adapter in self._engines.items():
+            if required_capabilities.issubset(adapter.capabilities()):
+                names.append(name)
+            if len(names) >= top_n:
+                break
+        if not names:
+            raise NoSuitableEngineError(required_capabilities)
+        return self.run_ensemble(task, names, model=model)
+
+    def record_consensus_outcome(
+        self,
+        required_capabilities: frozenset[str],
+        agreeing_engines: tuple[str, ...],
+        dissenting_engines: tuple[str, ...],
+    ) -> None:
+        for name in agreeing_engines:
+            key = (required_capabilities, name)
+            total, agree = self._consensus_agreement.get(key, (0, 0))
+            self._consensus_agreement[key] = (total + 1, agree + 1)
+        for name in dissenting_engines:
+            key = (required_capabilities, name)
+            total, agree = self._consensus_agreement.get(key, (0, 0))
+            self._consensus_agreement[key] = (total + 1, agree)
+
+    def consensus_weight(self, required_capabilities: frozenset[str], engine_name: str) -> float:
+        total, agree = self._consensus_agreement.get((required_capabilities, engine_name), (0, 0))
+        if total < 3:
+            return 0.5
+        return agree / total
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
@@ -626,9 +674,15 @@ class FakeInteractionEngine(InteractionEngine):
 class FakeLLMPolicyEngine(LLMPolicyEngine):
     def __init__(self, rules: dict[AgentRole, LLMPolicyDecision] | None = None) -> None:
         self._rules = dict(rules) if rules is not None else {}
+        self.recorded_outcomes: list[tuple[AgentRole, LLMPolicyDecision, bool]] = []
 
     def select(self, role: AgentRole) -> LLMPolicyDecision | None:
         return self._rules.get(role)
+
+    def record_outcome(
+        self, role: AgentRole, decision: LLMPolicyDecision, success: bool
+    ) -> None:
+        self.recorded_outcomes.append((role, decision, success))
 
 
 class FakeBudgetPolicyEngine(BudgetPolicyEngine):

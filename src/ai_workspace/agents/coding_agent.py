@@ -70,7 +70,13 @@ class CodingAgent:
     Knowledge를 검색하고 `DevelopmentContext.related_knowledge`에
     실어 프롬프트에 반영한다. Memory는 LLM을 호출하지 않는다 — 검색
     결과를 그대로 프롬프트에 얹을 뿐이다. 미주입 시(기본값 `None`)
-    검색 자체를 건너뛰어 기존 동작과 완전히 동일하다."""
+    검색 자체를 건너뛰어 기존 동작과 완전히 동일하다.
+
+    **Self Optimization 피드백(Milestone 67, ADR-0085)**:
+    `engine_runtime.run()` 직후 `agent_runtime.record_llm_policy_outcome()`
+    으로 실행 성공/실패를 `LLMPolicyEngine`에 되먹인다 — `LLMPolicyEngine`
+    interface 자체는 참조하지 않고 항상 `AgentRuntime`을 통해서만
+    전달한다."""
 
     def __init__(
         self,
@@ -93,6 +99,7 @@ class CodingAgent:
         self._max_parallel_agents = max_parallel_agents
         self._budget_policy_engine = budget_policy_engine
         self._knowledge_provider = knowledge_provider
+        self._agent_runtime = agent_runtime
         self._session = agent_runtime.start_agent(
             AgentRole.CODING, frozenset({AgentCapability.CODING})
         )
@@ -136,6 +143,7 @@ class CodingAgent:
             required_capabilities=capabilities,
             model=model_name(self._session.llm_policy_decision),
         )
+        self._agent_runtime.record_llm_policy_outcome(self._session.session_id, result.success)
         self._task_engine.transition(task, TaskStatus.REVIEW)
         self._event_bus.publish(
             Event(

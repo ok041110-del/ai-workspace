@@ -5,6 +5,7 @@ from tests.interfaces.fakes import FakeEventBus, FakeTaskEngine, FakeWorkflowEng
 from ai_workspace.agents.events import MISSION_PLANNED
 from ai_workspace.domain.task import TaskStatus
 from ai_workspace.domain.workflow import Workflow
+from ai_workspace.engines.workflow_engine import InMemoryWorkflowEngine
 from ai_workspace.interfaces.event_bus import Event
 from ai_workspace.runtime.workflow.workflow_runner import WorkflowRunner
 
@@ -128,3 +129,45 @@ def test_run_single_task_workflow_succeeds() -> None:
 
     assert result.success is True
     assert result.completed_task_ids == [task.task_id]
+
+
+def test_run_records_outcome_for_workflow_learning() -> None:
+    """M71(ADR-0089): run()이 끝나면 실제로 쓰인 순서와 성공 여부가
+    자동으로 WorkflowEngine에 기록된다."""
+    task_engine = FakeTaskEngine()
+    task1 = task_engine.create_task("p1", "첫 번째 Task")
+    task2 = task_engine.create_task("p1", "두 번째 Task")
+    workflow = Workflow(
+        workflow_id="w1", mission_id="m1", task_ids=[task1.task_id, task2.task_id]
+    )
+    event_bus = FakeEventBus()
+    event_bus.subscribe(_complete_task_on_mission_planned(task_engine))
+    engine = InMemoryWorkflowEngine()
+    runner = WorkflowRunner(workflow_engine=engine, event_bus=event_bus, task_engine=task_engine)
+
+    for _ in range(3):
+        runner.run(workflow)
+
+    assert engine.recommended_order(workflow) == [task1.task_id, task2.task_id]
+
+
+def test_run_follows_workflow_engine_recommended_order() -> None:
+    """M71(ADR-0089): WorkflowEngine이 학습된 순서를 추천하면
+    WorkflowRunner는 그 순서 그대로 Task를 실행한다."""
+    task_engine = FakeTaskEngine()
+    task1 = task_engine.create_task("p1", "첫 번째 Task")
+    task2 = task_engine.create_task("p1", "두 번째 Task")
+    workflow = Workflow(
+        workflow_id="w1", mission_id="m1", task_ids=[task1.task_id, task2.task_id]
+    )
+    engine = InMemoryWorkflowEngine()
+    reversed_order = [task2.task_id, task1.task_id]
+    for _ in range(3):
+        engine.record_run_outcome(workflow, reversed_order, True)
+    event_bus = FakeEventBus()
+    event_bus.subscribe(_complete_task_on_mission_planned(task_engine))
+    runner = WorkflowRunner(workflow_engine=engine, event_bus=event_bus, task_engine=task_engine)
+
+    result = runner.run(workflow)
+
+    assert result.completed_task_ids == reversed_order
