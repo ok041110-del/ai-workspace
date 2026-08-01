@@ -81,6 +81,15 @@ Recommendation/Adaptation/Explainability는 그대로 생성하되 Execution
 저장소 도입은 이번 Milestone Scope에서 명시적으로 배제됐다(향후
 별도 Milestone 대상).
 
+**Learning Persistence(Milestone 50, ADR-0067)**: `ExecutionMemory
+Store`(M39)가 쓰는 `MemoryEngine` 구현체가 `InMemoryMemoryEngine`
+에서 `FileMemoryEngine`(신규, `storage/`)으로 교체됐다 —
+`<vault_root>/.ai-workspace-data/`에 단일 JSON 파일로 key-value를
+영속화해, 서버 재시작 후에도 학습 이력이 유지된다. 새 Interface/
+Service 없이 기존 `MemoryEngine` 계약을 구현만 했고, `web/server.py`
+Composition Root 1곳만 교체됐다. StatusLine이 이 파일을 읽는
+Observability 배선은 이번 Scope 밖(향후 별도 Milestone 대상).
+
 ## 관련 GitHub 문서
 
 - `docs/ARCHITECTURE.md` §3.19
