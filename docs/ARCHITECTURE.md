@@ -316,6 +316,16 @@ Execution Platform (M36~M38) — 실행·상태 전이·스케줄링
   `NOT_OBSERVABLE`에서 `OBSERVED_DONE`/`OBSERVED_NOT_YET`으로
   승격돼, M45/M50에서 두 번 미뤄뒀던 gap도 함께 해소했다. 새
   Domain/Interface/Service 없이 기존 컴포넌트 조합만 재사용.
+- **M55 Learning Explainability 고도화 — 완료(2026-08-01,
+  ADR-0073)**: M49~M53 학습 신호가 Adaptation이 실제로 보류를
+  발동했을 때만 보이고, 아직 보류되지 않은 "near-miss" 케이스는
+  전혀 드러나지 않던 것을 해소했다. `recommendation_adjustment.py`
+  의 private `_withhold_score()`를 공개 함수 `compute_learning_
+  score(stat)`로 승격해 `recommendation_explanation.py`가 재사용 —
+  `experience_summary`가 이제 보류 여부와 무관하게 항상 성공률 +
+  `decayed_failure_rate` + `recent_failure_streak` + 학습 Score를
+  노출한다. 새 계산 로직 없이 기존 공식만 재사용, 새 Domain/
+  Interface/Service 없이 기존 파일 2개만 수정.
 
 ## 3. 핵심 컴포넌트
 

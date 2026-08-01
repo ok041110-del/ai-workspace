@@ -1,4 +1,5 @@
-"""Intelligence Layer — Recommendation Explanation Analyzer (ADR-0061, Milestone 44-T02).
+"""Intelligence Layer — Recommendation Explanation Analyzer (ADR-0061, Milestone 44-T02;
+학습 신호 상시 노출은 Milestone 55-T03, ADR-0073).
 
 **책임(Responsibility)**: Recommendation은 "무엇을 할 것인가"를
 결정하고(M35/M42/M43), Explanation은 "왜 그렇게 결정했는가"를 이미
@@ -7,6 +8,16 @@
 `ExperienceReport`(M40)를 그대로 읽어, 5단계 Priority Rule 중 어느
 단계가 왜 통과/실패했는지, Adaptation이 왜 적용/미적용됐는지를
 사람이 읽을 수 있는 근거(Evidence)로 펼쳐 보일 뿐이다.
+
+**학습 신호 상시 노출(M55, ADR-0073)**: M49~M53까지 쌓인 학습 신호
+(`decayed_failure_rate`/`recent_failure_streak`/가중치 결합 score)
+는 M52까지 Adaptation이 실제로 보류를 발동했을 때만(`adaptation_
+reason` 프로즈 문자열 안에) 보였다 — 아직 보류되지 않았지만 값이
+임계값에 가까운 "near-miss" 케이스는 전혀 드러나지 않았다.
+`experience_summary`는 이제 보류 여부와 무관하게 이 신호들을 항상
+포함한다. `RecommendationAdjustmentAnalyzer.compute_learning_score()`
+(M52/M53이 이미 계산하는 공식, M55에서 공개 함수로 승격)를 그대로
+재사용해 가중치·threshold 공식을 중복 구현하지 않는다.
 
 Recommendation 자체를 바꾸지 않는다 — `next_action`은
 `RecommendationIntelligenceReport`가 이미 결정한 값을 그대로
@@ -20,6 +31,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ai_workspace.intelligence.experience_rules import ExperienceReport
+from ai_workspace.intelligence.recommendation_adjustment import (
+    WITHHOLD_SCORE_THRESHOLD,
+    compute_learning_score,
+)
 from ai_workspace.intelligence.recommendation_rules import (
     SOURCE_BLOCKED_TASK,
     SOURCE_CAPABILITY_GAP,
@@ -132,4 +147,10 @@ class RecommendationExplanationAnalyzer:
         if stat is None:
             return None
         success_rate = round((stat.success_count / stat.total) * 100)
-        return f"성공률 {success_rate}%({stat.total}건 중 {stat.success_count}건 성공)"
+        score = compute_learning_score(stat)
+        return (
+            f"성공률 {success_rate}%({stat.total}건 중 {stat.success_count}건 성공) · "
+            f"Decay실패율 {stat.decayed_failure_rate:.2f} · "
+            f"연속실패 {stat.recent_failure_streak} · "
+            f"학습 Score {score:.2f}/{WITHHOLD_SCORE_THRESHOLD:.2f}"
+        )

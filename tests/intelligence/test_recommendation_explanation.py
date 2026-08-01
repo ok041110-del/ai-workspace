@@ -106,13 +106,53 @@ def test_analyze_includes_experience_summary_when_available() -> None:
                 failure_count=1,
                 last_result="success",
                 last_timestamp="2026-07-31T00:00:00",
+                decayed_failure_rate=0.15,
+                recent_failure_streak=0,
             )
         ]
     )
 
     explanation = analyzer.analyze(report, experience_report)
 
-    assert explanation.experience_summary == "성공률 80%(5건 중 4건 성공)"
+    assert explanation.experience_summary == (
+        "성공률 80%(5건 중 4건 성공) · Decay실패율 0.15 · 연속실패 0 · 학습 Score 0.09/0.60"
+    )
+
+
+def test_analyze_experience_summary_exposes_near_miss_learning_score() -> None:
+    """M55(ADR-0073) — 아직 보류되지 않았지만(adaptation_applied=False)
+    학습 신호가 임계값에 가까운 near-miss 케이스도 experience_summary
+    에서 값이 보여야 한다."""
+    analyzer = RecommendationExplanationAnalyzer()
+    next_action = NextAction(
+        source=SOURCE_CAPABILITY_GAP,
+        action=ACTION_IMPROVE_CAPABILITY,
+        target="M44-T01",
+        reason="Capability Gap 존재",
+    )
+    report = _make_report(next_action=next_action)
+    experience_report = ExperienceReport(
+        stats=[
+            ExperienceStat(
+                task_id="M44-T01",
+                total=8,
+                success_count=4,
+                failure_count=4,
+                last_result="failure",
+                last_timestamp="2026-07-31T00:00:00",
+                decayed_failure_rate=0.4,
+                recent_failure_streak=2,
+            )
+        ]
+    )
+
+    explanation = analyzer.analyze(report, experience_report)
+
+    assert explanation.adaptation_applied is False
+    assert explanation.experience_summary is not None
+    assert "학습 Score 0.48/0.60" in explanation.experience_summary
+    assert "Decay실패율 0.40" in explanation.experience_summary
+    assert "연속실패 2" in explanation.experience_summary
 
 
 def test_analyze_is_deterministic() -> None:

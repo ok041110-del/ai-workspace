@@ -5127,3 +5127,55 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   수정. `pytest` 1155개(회귀 없음)/`ruff`/`mypy`(222 source files)
   전부 통과. 실제 `FileMemoryEngine` 데이터로 end-to-end 수동 검증
   완료. `.ai/TASKS.md` Milestone 54 절(T01~T03) 신규 추가.
+
+## ADR-0073: Learning Explainability 고도화 — experience_summary에 학습 신호 상시 노출 (Milestone 55)
+
+- 상태: 승인됨 (2026-08-01, 사용자가 "M55 Learning Explainability
+  고도화" 착수 요청 — 로드맵에 사전 예고 없던 이름이라 AskUserQuestion
+  으로 범위(experience_summary 확장) 확정, T02 설계도 별도 승인)
+- 날짜: 2026-08-01
+- 배경: M49~M53 학습 신호(`decayed_failure_rate`/`recent_failure_
+  streak`/가중치 결합 score)는 M44 Explainability의 `experience_
+  summary`에는 전혀 반영되지 않고, Adaptation이 **실제로 보류를
+  발동했을 때만**(`adaptation_reason` 프로즈 문자열 안에) 보였다 —
+  아직 보류되지 않았지만 값이 임계값에 가까운 "near-miss" 케이스는
+  전혀 드러나지 않았다.
+- 결정:
+  1. **Domain Analysis(T01)**: 새 Domain/Behavioral Concept 아님 —
+     기존 `Explainability`(§13.3, M44)의 확장.
+  2. **Architecture Review(T02) — 설계**: `recommendation_
+     adjustment.py`의 private `_withhold_score()`를 공개 함수
+     `compute_learning_score(stat)`로 승격(가중치·threshold 공식을
+     두 곳에 중복 구현하지 않기 위함), `WITHHOLD_SCORE_THRESHOLD`
+     상수도 공개. `recommendation_explanation.py`의 `_build_
+     experience_summary()`가 보류 여부와 무관하게 항상
+     `decayed_failure_rate`/`recent_failure_streak`/
+     `compute_learning_score()` 결과를 성공률과 함께 노출.
+  3. **Implementation(T03)**: `experience_summary` 형식을
+     `"성공률 X%(N건 중 M건 성공) · Decay실패율 R · 연속실패 S ·
+     학습 Score V/T"`로 확장. Vault 발행(`recommendation_
+     explanation_service.py`)은 문자열을 그대로 한 줄에 임베드할
+     뿐이라 포맷 가정이 없어 별도 수정 불필요.
+- 대안:
+  1. `reason` 텍스트 자체를 구조화(새 필드 도입) — 기각: 사용자가
+     `experience_summary` 확장을 선택. 기존 `adaptation_reason`
+     프로즈 채널은 M49~M52에서 이미 확립된 태깅 방식을 그대로
+     유지하고, 새 정보는 항상 채워지는 `experience_summary`에
+     추가하는 것이 최소 변경.
+  2. `compute_learning_score()`를 `recommendation_explanation.py`
+     안에 재구현 — 기각: 가중치·threshold 공식이 두 파일에
+     중복되면 향후 M52/M53 파라미터 변경 시 한쪽만 갱신되는 회귀
+     위험이 생김. 공개 함수로 승격해 재사용하는 것이 Reuse-First.
+- 이유: M52에서 도입한 `compute_learning_score()` 공식을 그대로
+  재사용해 새 계산 로직 없이 기존 값만 항상 노출하도록 만들어,
+  Explainability의 "새 판단 없음" 원칙(§13.3)을 지키면서 near-miss
+  가시성을 확보했다.
+- 결과/영향: `intelligence/recommendation_adjustment.py`(`_withhold_
+  score`→`compute_learning_score` 공개 승격, `WITHHOLD_SCORE_
+  THRESHOLD` 공개), `intelligence/recommendation_explanation.py`
+  (`_build_experience_summary()` 확장) 2개 파일만 수정. 새 Core
+  Domain Interface/Adapter/Service/Layer/File 없음. `tests/
+  intelligence/test_recommendation_explanation.py`(기존 1건 값
+  갱신 + 신규 1건 — near-miss 가시성 검증). `pytest` 1156개(신규
+  1개, 회귀 없음)/`ruff`/`mypy`(222 source files) 전부 통과.
+  `.ai/TASKS.md` Milestone 55 절(T01~T03) 신규 추가.
