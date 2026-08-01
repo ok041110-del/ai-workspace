@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from ai_workspace.domain.workflow import Workflow
 from ai_workspace.domain.workflow_order_memory import WorkflowOrderStat
+from ai_workspace.interfaces.engine_registry import EngineRegistry
+from ai_workspace.interfaces.engine_selection_policy import EngineSelectionPolicy
+from ai_workspace.interfaces.task_engine import TaskEngine, TaskNotFoundError
 from ai_workspace.interfaces.workflow_engine import WorkflowEngine
 
 _WorkflowSignature = frozenset[str]
@@ -23,10 +26,28 @@ class InMemoryWorkflowEngine(WorkflowEngine):
     추천 순서가 **현재** `workflow.dependencies`를 실제로 만족하는지
     `_is_valid_order()`로 검증한 뒤에만 채택한다. 검증에 실패하면(추천이
     없거나, 있어도 지금 dependency를 어기면) 기존 DFS 위상 정렬로 완전히
-    동일하게 fallback한다 — Workflow 정합성은 학습보다 항상 우선한다."""
+    동일하게 fallback한다 — Workflow 정합성은 학습보다 항상 우선한다.
 
-    def __init__(self) -> None:
+    **Workflow Cost Optimization(Milestone 73, ADR-0091)**: `recommended_
+    order()`가 동일한 최고 성공률로 타이가 난 복수의 학습된 순서 후보를
+    만나면, `task_engine`/`engine_registry`/`engine_selection_policy`가
+    모두 주입돼 있는 경우에 한해 각 후보의 예상 실행 비용(M64
+    `EngineSelectionPolicy`가 고른 Engine의 `estimated_cost_usd` 합)을
+    2차 tie-break로 쓴다. 셋 중 하나라도 주입되지 않았거나 비용을 계산할
+    수 없으면(Task/후보 조회 실패 등) 비용 비교를 건너뛰고 기존 tie-break
+    (표본 수 → 먼저 기록된 순서)로 즉시 fallback한다 — 100% 하위 호환."""
+
+    def __init__(
+        self,
+        *,
+        task_engine: TaskEngine | None = None,
+        engine_registry: EngineRegistry | None = None,
+        engine_selection_policy: EngineSelectionPolicy | None = None,
+    ) -> None:
         self._order_stats: dict[_WorkflowSignature, dict[tuple[str, ...], WorkflowOrderStat]] = {}
+        self._task_engine = task_engine
+        self._engine_registry = engine_registry
+        self._engine_selection_policy = engine_selection_policy
 
     def plan(self, workflow: Workflow) -> list[str]:
         recommended = self.recommended_order(workflow)
@@ -71,17 +92,60 @@ class InMemoryWorkflowEngine(WorkflowEngine):
         orders = self._order_stats.get(self._signature(workflow))
         if not orders:
             return None
-        best_order: tuple[str, ...] | None = None
-        best_rank: tuple[float, int] | None = None
-        for order_key, stat in orders.items():
+        best_rate: float | None = None
+        for stat in orders.values():
             rate = stat.success_rate()
-            if rate is None:
-                continue
-            rank = (rate, stat.total)
-            if best_rank is None or rank > best_rank:
-                best_rank = rank
-                best_order = order_key
-        return list(best_order) if best_order is not None else None
+            if rate is not None and (best_rate is None or rate > best_rate):
+                best_rate = rate
+        if best_rate is None:
+            return None
+        tied = [
+            order_key for order_key, stat in orders.items() if stat.success_rate() == best_rate
+        ]
+        tied = self._break_tie_by_cost(tied)
+        best_order = max(tied, key=lambda order_key: orders[order_key].total)
+        return list(best_order)
+
+    def _break_tie_by_cost(self, tied: list[tuple[str, ...]]) -> list[tuple[str, ...]]:
+        if len(tied) <= 1:
+            return tied
+        if self._task_engine is None or self._engine_registry is None:
+            return tied
+        if self._engine_selection_policy is None:
+            return tied
+        costs: dict[tuple[str, ...], float] = {}
+        for order_key in tied:
+            cost = self._order_cost(order_key)
+            if cost is None:
+                return tied
+            costs[order_key] = cost
+        min_cost = min(costs.values())
+        return [order_key for order_key in tied if costs[order_key] == min_cost]
+
+    def _order_cost(self, order: tuple[str, ...]) -> float | None:
+        assert self._task_engine is not None
+        assert self._engine_registry is not None
+        assert self._engine_selection_policy is not None
+        total = 0.0
+        for task_id in order:
+            try:
+                task = self._task_engine.get_task(task_id)
+            except TaskNotFoundError:
+                return None
+            candidates = self._engine_registry.list_candidates(task)
+            if not candidates:
+                return None
+            decision = self._engine_selection_policy.select(task, candidates)
+            if decision is None:
+                return None
+            selected = next(
+                (c for c in candidates if c.engine_name == decision.engine_name),
+                None,
+            )
+            if selected is None:
+                return None
+            total += selected.estimated_cost_usd
+        return total
 
     def _signature(self, workflow: Workflow) -> _WorkflowSignature:
         return frozenset(workflow.task_ids)

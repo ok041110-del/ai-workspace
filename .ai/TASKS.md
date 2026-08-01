@@ -15449,6 +15449,68 @@ dependency를 실제로 만족하는지 검증하도록 확정했다.
 
 ---
 
+## Milestone 73 — Workflow Cost Optimization: 동률 학습 순서를 M64 비용 정보로 tie-break (완료)
+
+**배경**: 사용자가 "M72의 Adaptive Planning이 여러 유효한 실행 순서를
+선택할 수 있는 경우, 가장 비용 효율적인 순서를 우선 선택"하는 M73을
+요청했다. M72의 `recommended_order()`는 성공률이 동률인 복수 학습 순서를
+표본 수 → 먼저 기록된 순서로만 tie-break했고, 비용은 전혀 고려하지
+않았다. M64(ADR-0064) `EngineSelectionPolicy`(예산 내 최저 비용 Engine
+선택)를 그대로 재사용하되 새 비용 정책은 만들지 않는 제약이었다.
+
+**사용자 승인(AskUserQuestion, 2회)**:
+1. 의존성 연결 방식 — **생성자 선택적 주입(권장안 채택)**:
+   `InMemoryWorkflowEngine(*, task_engine=None, engine_registry=None,
+   engine_selection_policy=None)`. `WorkflowEngine` 추상 메서드 시그니처는
+   무변경, 기존 호출부 수정 불필요.
+2. 비용 계산 의미 — **합산 방식 그대로 채택(권장안)**: order의 비용 =
+   모든 task_id의 선택된 Engine `estimated_cost_usd` 합. `EngineSelectionPolicy.
+   select()`가 순서를 모르는 순수함수라 같은 task_id 집합의 순열은 비용
+   합이 항상 동일함(=실제로는 tie-break가 후보를 거의 좁히지 못함)을
+   사용자에게 명시적으로 확인받고도, 계약상 올바르고 향후 순서-민감
+   `EngineSelectionPolicy`에도 대비되는 정직한 구현을 그대로 채택했다.
+
+**구현**:
+- `src/ai_workspace/engines/workflow_engine.py`(`InMemoryWorkflowEngine`)
+  — `__init__`에 `task_engine`/`engine_registry`/`engine_selection_policy`
+  선택적 협력자 3개 추가(기본값 `None`). `recommended_order()`를
+  재구성해 최고 성공률 동률 후보(`tied`)를 먼저 추출하고,
+  `_break_tie_by_cost()`(세 협력자 모두 있고 비용 계산이 전부 성공할
+  때만 최저 비용 후보로 좁힘, 하나라도 실패하면 즉시 원래 `tied` 그대로
+  반환)를 거쳐, 최종적으로 기존과 동일한 `max(..., key=total)`(표본 수 →
+  먼저 기록된 순서)로 선택한다. `_order_cost()`가 `TaskEngine.get_task()`
+  → `EngineRegistry.list_candidates()` → `EngineSelectionPolicy.select()`
+  체인으로 order 전체 비용을 합산한다.
+- `src/ai_workspace/interfaces/workflow_engine.py` — 추상 메서드
+  시그니처는 무변경, docstring만 M73 동작 명시.
+- `tests/engines/test_workflow_engine.py` — 4건 추가(비용 의존성 미주입
+  시 기존 tie-break 회귀 없음, 비용 계산 경로가 실제로 실행되지만 완전
+  동률 결과는 불변, Task 조회 실패 시 fallback, 등록된 Engine 없어 후보가
+  없을 때 fallback).
+- `docs/ARCHITECTURE.md` §3.12 Workflow Runner 절에 Workflow Cost
+  Optimization(M73) 서술 추가, §7 인터페이스 표 `WorkflowEngine` 행 갱신.
+  새 Core Domain Interface 없음(기존 `WorkflowEngine`의 메서드 3개
+  시그니처 그대로, 30종 유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 기존 WorkflowEngine/WorkflowRunner/M71~M72 구현 재사용, 새 컴포넌트 없음 | ✅ |
+| 2 | M64 `EngineSelectionPolicy`를 그대로 활용, 새 비용 정책 없음 | ✅ |
+| 3 | 여러 실행 후보가 가능할 때 예상 비용이 낮은 순서를 우선 추천하는 로직 구현 | ✅ |
+| 4 | 학습된 추천 순서가 있으면 그것을 우선 사용, 동일 성공률 후보가 여럿일 때만 비용을 tie-break로 사용 | ✅ |
+| 5 | 비용 정보를 계산할 수 없으면(의존성 미주입/Task 조회 실패/후보 없음) 기존 동작으로 즉시 fallback을 테스트로 증명 | ✅ |
+| 6 | 새 Core Domain Interface 없음(`WorkflowEngine` 계약 메서드 시그니처 무변경) | ✅ |
+| 7 | 기존 API와 100% 하위 호환(비용 의존성 미주입 시 M72 이전과 동일 동작) | ✅ |
+| 8 | 넓은 "Workflow Cost Optimization" 주제를 AskUserQuestion 2회로 구체 설계까지 좁힘 | ✅ |
+| 9 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1323개(신규 4개, 회귀 없음)/`ruff`/`mypy`(233 source files)
+전부 통과. ADR-0091.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
