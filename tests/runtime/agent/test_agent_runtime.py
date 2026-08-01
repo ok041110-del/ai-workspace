@@ -8,8 +8,12 @@ from tests.interfaces.fakes import FakeAgentManager, FakeAgentRegistry, FakeLLMP
 from ai_workspace.domain.agent import AgentCapability, AgentRole, AgentStatus
 from ai_workspace.domain.llm_policy import LLMEffort, LLMModel, LLMPolicyDecision, LLMProvider
 from ai_workspace.engines.llm_policy_engine import InMemoryLLMPolicyEngine
+from ai_workspace.events.event_bus import InMemoryEventBus
 from ai_workspace.interfaces.agent_registry import AgentNotRegisteredError
+from ai_workspace.interfaces.event_bus import Event
+from ai_workspace.interfaces.remote_agent_dispatcher import AgentUnreachableError
 from ai_workspace.runtime.agent.agent_runtime import AgentRuntime, AgentSessionNotFoundError
+from ai_workspace.runtime.agent.remote_agent_dispatcher import LoopbackAgentDispatcher
 from ai_workspace.storage.llm_policy_loader import load_llm_policy_rules
 
 _EXAMPLE_YAML = Path(__file__).resolve().parents[3] / "docs" / "llm_policy.example.yaml"
@@ -177,3 +181,70 @@ def test_start_agent_reflects_real_policy_loaded_from_example_yaml() -> None:
     assert session.llm_policy_decision == LLMPolicyDecision(
         model=LLMModel(LLMProvider.ANTHROPIC, "opus"), effort=LLMEffort.HIGH
     )
+
+
+def test_start_agent_without_location_leaves_agent_location_none() -> None:
+    agent_registry = FakeAgentRegistry()
+    runtime = make_runtime(agent_registry)
+
+    session = runtime.start_agent(AgentRole.CODING)
+
+    assert agent_registry.get(session.agent_id).location is None
+
+
+def test_start_agent_with_location_records_it_on_agent() -> None:
+    agent_registry = FakeAgentRegistry()
+    runtime = make_runtime(agent_registry)
+
+    session = runtime.start_agent(AgentRole.CODING, location="worker-1")
+
+    assert agent_registry.get(session.agent_id).location == "worker-1"
+
+
+def test_dispatch_event_does_nothing_for_local_agent() -> None:
+    """location이 없는(로컬) Agent는 dispatch_event()가 개입하지 않는다 —
+    remote_agent_dispatcher가 없어도 예외 없이 조용히 반환한다."""
+    runtime = make_runtime()
+    session = runtime.start_agent(AgentRole.CODING)
+
+    runtime.dispatch_event(session.session_id, Event(event_id="e1", event_type="x"))  # no raise
+
+
+def test_dispatch_event_without_dispatcher_raises_for_remote_agent() -> None:
+    runtime = make_runtime()
+    session = runtime.start_agent(AgentRole.CODING, location="worker-1")
+
+    with pytest.raises(ValueError):
+        runtime.dispatch_event(session.session_id, Event(event_id="e1", event_type="x"))
+
+
+def test_dispatch_event_forwards_to_remote_location_event_bus() -> None:
+    dispatcher = LoopbackAgentDispatcher()
+    remote_bus = InMemoryEventBus()
+    dispatcher.register_location("worker-1", remote_bus)
+    received: list[Event] = []
+    remote_bus.subscribe(received.append)
+    runtime = AgentRuntime(
+        agent_manager=FakeAgentManager(),
+        agent_registry=FakeAgentRegistry(),
+        remote_agent_dispatcher=dispatcher,
+    )
+    session = runtime.start_agent(AgentRole.CODING, location="worker-1")
+    event = Event(event_id="e1", event_type="mission_planned")
+
+    runtime.dispatch_event(session.session_id, event)
+
+    assert received == [event]
+
+
+def test_dispatch_event_unreachable_location_raises() -> None:
+    dispatcher = LoopbackAgentDispatcher()
+    runtime = AgentRuntime(
+        agent_manager=FakeAgentManager(),
+        agent_registry=FakeAgentRegistry(),
+        remote_agent_dispatcher=dispatcher,
+    )
+    session = runtime.start_agent(AgentRole.CODING, location="unknown-worker")
+
+    with pytest.raises(AgentUnreachableError):
+        runtime.dispatch_event(session.session_id, Event(event_id="e1", event_type="x"))
