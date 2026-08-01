@@ -367,7 +367,9 @@ class FakeEngineRuntime(EngineRuntime):
         self._task_status: dict[str, EngineSessionStatus] = {}
         self._consensus_agreement: dict[tuple[frozenset[str], str], tuple[int, int]] = {}
 
-    def register_engine(self, name: str, adapter: EngineAdapter) -> None:
+    def register_engine(
+        self, name: str, adapter: EngineAdapter, *, max_concurrency: int | None = None
+    ) -> None:
         if name in self._engines:
             raise DuplicateEngineError(name)
         self._engines[name] = adapter

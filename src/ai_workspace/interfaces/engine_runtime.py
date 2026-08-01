@@ -28,17 +28,31 @@ class EngineRuntime(ABC):
     실행을 담당하는 계약(ARCHITECTURE.md §3.9, ADR-0016). Agent는 EngineAdapter를
     직접 호출하지 않고 항상 이 EngineRuntime을 거친다(ARCHITECTURE.md §8
     의존성 규칙 6). 세션(create_session/destroy_session)은 이 계약의 구체
-    구현체가 내부적으로 관리하며, 호출자에게 session_id를 노출하지 않는다."""
+    구현체가 내부적으로 관리하며, 호출자에게 session_id를 노출하지 않는다.
+
+    **Provider Concurrency Management(Milestone 74, ADR-0092)**: `register_
+    engine()`에 선택적 `max_concurrency`를 지정하면, 구현체는 그 엔진에서
+    동시에 실행 중인 세션 수가 한도에 도달했을 때 `run()`/`run_parallel()`의
+    엔진 선택에서 그 엔진을 제외하고(다른 후보로 자동 fallback) 후보가
+    남아 있으면 그것을 선택한다. 생략(기본값 `None`)하면 이전 동작과 100%
+    동일하게 무제한이다."""
 
     @abstractmethod
-    def register_engine(self, name: str, adapter: EngineAdapter) -> None:
+    def register_engine(
+        self, name: str, adapter: EngineAdapter, *, max_concurrency: int | None = None
+    ) -> None:
         """
         입력: name (엔진 식별 이름, 예: "claude_code"), adapter (등록할
-              EngineAdapter 구현체)
+              EngineAdapter 구현체), max_concurrency (선택, Milestone 74 —
+              이 엔진에서 동시에 실행 가능한 세션(run() 등 하나의 실행
+              단위) 최대 개수. 생략하거나 `None`이면 무제한)
         출력: 없음
         예외: 이미 동일한 name이 등록되어 있으면 DuplicateEngineError
         보장: register_engine(name, adapter) 이후 run()/run_parallel()의 엔진
-              선택 대상에 adapter가 포함된다.
+              선택 대상에 adapter가 포함된다. `max_concurrency`를 지정하면
+              그 한도는 구현체 내부 in-process 카운터로만 추적된다(영속화
+              없음) — 이 카운터는 `run()`/`run_parallel()`이 그 엔진의 세션을
+              생성한 시점부터 실행이 끝날 때까지만 증가한다.
         """
         raise NotImplementedError
 
@@ -57,8 +71,11 @@ class EngineRuntime(ABC):
               엔진 선택 자체에 영향을 주지는 않는다)
         출력: EngineResult(success, output, error)
         예외: required_capabilities를 모두 만족하는 등록된 엔진이 없으면
-              NoSuitableEngineError. 선택된 엔진에서 EngineExecutionError가
-              발생하면 그대로 전파한다.
+              NoSuitableEngineError — Milestone 74부터는 능력은 만족하지만
+              `max_concurrency` 한도에 도달해 다른 후보로도 fallback할 수
+              없는 경우(모든 후보가 busy)도 이 예외로 취급한다(기존 예외
+              정책 그대로 재사용, 새 예외 타입 없음). 선택된 엔진에서
+              EngineExecutionError가 발생하면 그대로 전파한다.
         보장: run() 호출이 예외 없이 반환되면, 이후 status(task.task_id)는
               EngineResult.success에 대응하는 COMPLETED(성공) 또는
               FAILED(실패)를 반환한다. 세션 생성/정리는 이 호출 안에서

@@ -15511,6 +15511,79 @@ dependency를 실제로 만족하는지 검증하도록 확정했다.
 
 ---
 
+## Milestone 74 — Provider Concurrency Management: 엔진별 동시 실행 상한 (완료)
+
+**배경**: 사용자가 "여러 Agent가 동시에 동일 Provider(Claude/Codex/Gemini
+등)를 선택할 때 Provider의 동시 실행 한계를 안전하게 관리"하는 M74를
+요청했다. M64~M70이 쌓아온 선택 로직(비용/신뢰도/실행 이력/합의)은
+"어떤 엔진이 더 나은가"만 판단했고, "그 엔진이 지금 몇 개나 동시에
+실행 중인가"는 전혀 보지 않았음을 코드로 확인했다.
+
+**사용자 승인(AskUserQuestion, 2회)**:
+1. 적용 범위 — **`InMemoryEngineRuntime`과 `ManagedEngineRuntime` 둘 다
+   구현(권장안 채택)**: M65~M70이 두 구현체를 항상 함께 확장해온 기존
+   패턴과 일치.
+2. 설정 API — **`register_engine()`에 선택적 keyword 추가(권장안
+   채택)**: `register_engine(name, adapter, *, max_concurrency:
+   int | None = None)`. M14의 `run()` `model` 파라미터 확장과 동일한
+   패턴, 기존 호출부 수정 불필요.
+
+**구현**:
+- `src/ai_workspace/interfaces/engine_runtime.py` — `register_engine()`
+  시그니처에 `max_concurrency` 선택적 keyword 추가, docstring 갱신(그
+  외 계약 무변경).
+- `src/ai_workspace/runtime/engine/engine_runtime.py`(`InMemoryEngineRuntime`)
+  /`src/ai_workspace/runtime/engine/managed_engine_runtime.py`
+  (`ManagedEngineRuntime`) — `_max_concurrency`/`_in_flight`(`threading.
+  Lock` 보호) 신설. `_has_capacity()` 필터를 `_select()`/`_build_
+  candidates()`(`_require_adapter()`)의 신뢰도 필터와 같은 자리에 추가해
+  한도 도달 엔진을 후보에서 제외(capacity 있으면 기존과 동일 선택,
+  없으면 자동 fallback, 전부 busy면 기존 `NoSuitableEngineError`).
+  `_try_acquire()`/`_release()`(원자적 증감) + `_select_and_acquire()`/
+  `_require_adapter_and_acquire()`(필터-스냅샷과 실제 획득 사이 경쟁
+  처리, 획득 실패 시 제외하고 재선택)로 `run()`/`run_parallel()`을
+  감싼다(`finally`로 정상/실패/예외/타임아웃 모든 경로에서 해제 보장).
+  `run_ensemble()`/`run_ensemble_auto()`(M62/M68)는 여러 Provider를
+  의도적으로 동시에 비교하는 기능이라 범위에서 제외(YAGNI).
+- `src/ai_workspace/runtime/engine/recovering_engine_runtime.py` —
+  `register_engine()`이 `max_concurrency`를 내부 Runtime에 위임하도록
+  시그니처 갱신.
+- `tests/interfaces/fakes.py`(`FakeEngineRuntime`) — `register_engine()`
+  시그니처만 새 keyword를 수용하도록 갱신(로직은 그대로, YAGNI).
+- `tests/runtime/engine/test_engine_runtime.py` — 재진입(reentrant)
+  Adapter 기법(스레드 없이 결정적으로 "이미 사용 중" 상태 재현)으로
+  신규 테스트 6건(capacity 있으면 기존과 동일 선택, capacity 도달 시
+  자동 fallback, 전부 busy면 기존 예외, 해제 후 재사용 가능, 비용 기반
+  선택 경로에서도 필터 적용).
+- `tests/runtime/engine/test_managed_engine_runtime.py` — `ThreadPoolExecutor`
+  기반 실제 동시성 신규 테스트 3건(fallback, 여유 있을 때 회귀 없음,
+  전부 busy 시 개별 Task 실패 격리 — M10-T01/T02 원칙 재확인), 5회
+  연속 실행으로 타이밍 안정성 확인.
+- `docs/ARCHITECTURE.md` §3.9 Engine Runtime 절에 Provider Concurrency
+  Management(M74) 서술 추가, §7 인터페이스 표 `EngineRuntime` 행 갱신.
+  새 Core Domain Interface 없음(기존 `EngineRuntime`의 메서드 시그니처
+  1개만 확장, 30종 유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 기존 EngineRuntime/EngineRegistry/EngineSelectionPolicy 구조 재사용, 새 컴포넌트 없음 | ✅ |
+| 2 | Provider별 max_concurrency를 선택적으로 지원 | ✅ |
+| 3 | Provider가 여유(capacity)가 있으면 기존과 동일하게 선택함을 테스트로 증명 | ✅ |
+| 4 | Provider가 capacity에 도달하면 다른 후보 Engine으로 자동 fallback함을 테스트로 증명(InMemory 재진입 테스트 + Managed 실제 스레드 테스트) | ✅ |
+| 5 | 모든 Provider가 busy이면 기존 예외 처리 정책(NoSuitableEngineError)을 그대로 따름을 테스트로 증명 | ✅ |
+| 6 | 동시 실행 카운트는 EngineRuntime 내부 in-process 상태로만 관리(영속화 없음) | ✅ |
+| 7 | 새 Core Domain Interface 없음(EngineRuntime 계약은 register_engine() 선택적 확장 1개뿐) | ✅ |
+| 8 | 기존 API와 100% 하위 호환(max_concurrency 미지정 시 M74 이전과 동일 동작) | ✅ |
+| 9 | 넓은 "Provider Concurrency Management" 주제를 AskUserQuestion 2회로 구체 설계까지 좁힘 | ✅ |
+| 10 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1331개(신규 8개, 회귀 없음)/`ruff`/`mypy`(233 source files)
+전부 통과. ADR-0092.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

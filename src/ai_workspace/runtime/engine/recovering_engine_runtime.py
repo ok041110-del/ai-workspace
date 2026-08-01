@@ -42,8 +42,10 @@ class RecoveringEngineRuntime(EngineRuntime):
         self._inner = inner
         self._retry_policy = retry_policy
 
-    def register_engine(self, name: str, adapter: EngineAdapter) -> None:
-        self._inner.register_engine(name, adapter)
+    def register_engine(
+        self, name: str, adapter: EngineAdapter, *, max_concurrency: int | None = None
+    ) -> None:
+        self._inner.register_engine(name, adapter, max_concurrency=max_concurrency)
 
     def run(
         self,
