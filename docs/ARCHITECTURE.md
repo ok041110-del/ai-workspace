@@ -980,9 +980,11 @@ EventBus → Dashboard (Reader → Reader)
   `ExecutionDispatcher.dispatch()`)에 그대로 실어 실행한다(사용자
   승인 조건 5 — 새 실행 경로를 만들지 않음). DASHBOARD_REFRESH/
   NOTIFICATION은 실행할 Task가 없어 아무것도 하지 않는다.
-  RUN_WORKFLOW는 이번 Milestone이 Task 단위 실행 경로만 다뤄
-  `AutomationActionNotSupportedError`로 아직 지원하지 않는다(후속
-  Milestone 이월).
+  **RUN_WORKFLOW(Milestone 59, ADR-0077)**: 신설 `WorkflowRepository`
+  로 `workflow_id`에 해당하는 `Workflow`(M12)를 조회해 `WorkflowRunner`
+  (M12)에 그대로 위임한다 — `workflow_repository`/`workflow_runner`
+  를 둘 다 주입해야 하고, 미주입 시(기본값 `None`)에는 여전히
+  `AutomationActionNotSupportedError`로 M21 이후 동작과 100% 동일.
 - **Dashboard 연계(Reader → Reader)**: `DashboardService`가 선택적
   으로 `automation_service`를 주입받아(M15/M16과 동일한 선택적 DI
   패턴) `AutomationService.list_rules()`(읽기 전용)만 호출해
@@ -2393,7 +2395,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentCapability` | Coordination/Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP … |
 | `AgentStatus` | 생명주기 상태 |
 
-## 7. Interfaces (추상 계약, 총 27종)
+## 7. Interfaces (추상 계약, 총 28종)
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
@@ -2424,6 +2426,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15) | Milestone 1 (T1-19) | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
+| `WorkflowRepository` | `Workflow` 조회/저장(`AutomationActionExecutor`의 RUN_WORKFLOW가 `workflow_id`로 실제 Workflow를 찾는 유일한 통로) | Milestone 59 (계약+`InMemoryWorkflowRepository` 구현) | **완료(계약+구현)** |
 
 > **참고**: "완료(계약)"은 Interface 정의와 Fake 기반 계약 테스트만 존재하고
 > 실제 서비스에 쓰일 구체 구현체는 아직 없다는 뜻이다(각 컴포넌트의 계획된
