@@ -1,5 +1,6 @@
 ---
 tags: [dashboard]
+type: documentation
 ---
 
 # Dashboard Index

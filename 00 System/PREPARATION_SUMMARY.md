@@ -1,5 +1,6 @@
 ---
 tags: [system, milestone]
+type: system
 ---
 
 # PREPARATION_SUMMARY

@@ -1,5 +1,6 @@
 ---
 tags: [system]
+type: documentation
 ---
 
 # DECISION_TEMPLATE

@@ -1,5 +1,6 @@
 ---
 tags: [daily]
+type: documentation
 ---
 
 # {{date}}

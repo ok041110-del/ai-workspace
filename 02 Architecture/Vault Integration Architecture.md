@@ -1,5 +1,6 @@
 ---
 tags: [architecture]
+type: architecture
 ---
 
 # Vault Integration Architecture

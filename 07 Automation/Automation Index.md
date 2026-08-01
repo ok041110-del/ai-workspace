@@ -1,5 +1,6 @@
 ---
 tags: [automation]
+type: automation
 ---
 
 # Automation Index

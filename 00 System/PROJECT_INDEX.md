@@ -1,5 +1,6 @@
 ---
 tags: [system]
+type: system
 ---
 
 # PROJECT_INDEX
@@ -27,6 +28,9 @@ Router 역할만 한다. 프로젝트 설명은 [[AI_CONTEXT]], 운영 규칙은
 | 특정 ADR 전문이 필요하다 | [[ADR Index]]에서 항목 확인 → GitHub `.ai/DECISIONS.md` 원문 |
 | 과거 Milestone 이력이 궁금하다 | [[Milestones Index]] |
 | Vault 구조/Metadata/Color/Link 원칙이 궁금하다(Information Architecture) | [[Vault Information Architecture]] |
+| Vault 전체 Hub/Concept 지도가 필요하다(Knowledge Graph 탐색) | [[Knowledge Hub]] |
+| Recommendation 파이프라인(M35~M44) 산출물이 궁금하다 | [[Recommendation Hub]] |
+| 회고/교훈(Lesson)을 남기고 싶다 | [[Lessons]] |
 | 개별 Task 진행 상태를 Obsidian에서 관리하고 싶다 | [[Template - Task]] → [[Milestones Index]] |
 | Mobile(M23) 관련 작업 | [[iOS Design]] / [[Android Placeholder]] |
 | 프롬프트를 어떻게 짧게 쓸지 모르겠다 | [[PROMPT_PROFILE]] |

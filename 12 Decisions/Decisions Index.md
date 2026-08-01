@@ -1,5 +1,6 @@
 ---
 tags: [decision]
+type: decision
 ---
 
 # Decisions Index

@@ -1,5 +1,6 @@
 ---
 tags: [decision]
+type: adr
 ---
 
 # ADR Index
@@ -341,7 +342,7 @@ tags: [decision]
 ## ADR-0056: Architecture Guardian 도입 — 기존 5곳의 중복 ast 경계 검사를 순수 값 객체 Rule Registry로 통합, Vault 발행이 핵심 Output (Milestone 41)
 
 - 목적: `docs/ARCHITECTURE.md` §13.2가 예약해 둔 Guardian Domain의 내용을 채운다 — "아키텍처 규칙 위반 감시"가 이미 `tests/` 5곳에 개별 구현·중복돼 있음을 Reuse First 검토로 발견, 새로 만들지 않고 통합
-- 결정: 역할 정의를 §13.2에 그대로 반영("Guardian owns the executable representation of architectural rules... Architecture documentation defines the rules; Guardian encodes them, evaluates conformance, and publishes architectural health"). `guardian/rules.py`의 `ArchitectureRule`은 ABC가 아니라 `ForbiddenPackageImportRule`/`AllowedImportPrefixRule`/`ServiceRoleGatedImportRule` 3개 메서드 없는 `frozen dataclass`의 Union — `GUARDIAN_RULES: Final[tuple[...]]`로 불변 Registry 고정. `guardian/checker.py`는 `pytest`/`assert`를 전혀 쓰지 않는 순수 평가기. `ArchitectureGuardianService.publish()`가 핵심 진입점(Vault `15 Project Intelligence/Architecture Guardian.md`). 3개 Rule 형태에 자연스럽게 맞는 5개 규칙(Core Domain↔vault 개별 금지 2개 + Intelligence 금지 패키지/Adapter 화이트리스트/Role 기반 Memory 접근 3개)만 이전, Connector 그룹 규칙 2개는 억지로 일반화하지 않고 범위 제외(사용자 조건)
+- 결정: 역할 정의를 §13.2에 그대로 반영("Guardian owns the executable representation of architectural rules... Architecture documentation defines the rules; Guardian encodes them, evaluates conformance, and publishes architectural health"). `guardian/rules.py`의 `ArchitectureRule`은 ABC가 아니라 `ForbiddenPackageImportRule`/`AllowedImportPrefixRule`/`ServiceRoleGatedImportRule` 3개 메서드 없는 `frozen dataclass`의 Union — `GUARDIAN_RULES: Final[tuple[...]]`로 불변 Registry 고정. `guardian/checker.py`는 `pytest`/`assert`를 전혀 쓰지 않는 순수 평가기. `ArchitectureGuardianService.publish()`가 핵심 진입점(Vault [[Architecture Guardian]]). 3개 Rule 형태에 자연스럽게 맞는 5개 규칙(Core Domain↔vault 개별 금지 2개 + Intelligence 금지 패키지/Adapter 화이트리스트/Role 기반 Memory 접근 3개)만 이전, Connector 그룹 규칙 2개는 억지로 일반화하지 않고 범위 제외(사용자 조건)
 - 영향: `docs/ARCHITECTURE.md` §3.33(신규)/§13.2 Guardian 행(내용 확정) 갱신, `.ai/TASKS.md` Milestone 41 절 신규. `guardian/models.py`/`rules.py`/`checker.py`/`service.py`(전부 신규)/`vault/architecture_guardian.py`(신규)/`integration/vault_adapter.py`(확장)/기존 boundary 테스트 2개 파일(내부만 Guardian 경유하도록 재작성, 위반 판정 결과 100% 동일) 구현 완료, `pytest` 1051개·ruff·mypy(203 source files) 전부 클린. 새 Core Domain Interface/Adapter 없음(27종 유지), 새 Layer 1개(`guardian/`, §13.2가 이미 예약). CI 강제 게이트·Connector 그룹 규칙 편입은 범위 밖(YAGNI, M42 이후 논의). 상세는 [[Architecture Overview]]
 
 ## ADR-0057: Repository Naming Standard — 실측 조사로 확인된 클래스/파일/디렉터리 명명 관행을 공식 문서로 승격 (Post-M41, 문서화 전용)
@@ -371,8 +372,8 @@ tags: [decision]
 ## ADR-0061: Recommendation Explainability — Recommendation의 근거를 구조적으로 재구성 (Milestone 44)
 
 - 목적: M43로 Recommendation(M35)→Adaptation(M42)→Orchestration(M43)→Execution(M36)→Memory(M39)→Experience(M40) 내부 루프가 완성된 시점에, Recommendation이 "무엇을 할 것인가"뿐 아니라 "왜 그렇게 결정했는가"를 공식 Domain Concept로 만듦. Domain Analysis로 Recommendation(무엇을)과 Explainability(왜)의 책임 차이를 확인
-- 결정: `RecommendationExplanationAnalyzer`(신규, `intelligence/recommendation_explanation.py`)가 `RecommendationIntelligenceReport`(M35/M42) + `ExperienceReport`(M40, 선택)를 읽어 5단계 Priority Rule 평가 흔적 + Experience 성공률 요약 + Adaptation 적용 여부/사유를 재구성 — 새 AI 판단·새 지표 없음, Recommendation 자체는 바꾸지 않음. `RecommendationExplanationService`(신규)가 Vault `15 Project Intelligence/Recommendation Explanation.md`에 발행. `Explainability`는 §13.3 Behavioral Concept로 등재(`Adaptation`과 동일 급, 1급 Domain 승격 보류). `RecommendationOrchestrationService`(M43)에 `explanation_service` 선택적 주입으로 Recommendation→Explainability→Execution 순서 연결, 미주입 시 M43 이전과 100% 동일 동작
-- 영향: `intelligence/recommendation_explanation.py`/`recommendation_explanation_service.py`(신규), `vault/recommendation_explanation.py`(신규), `integration/vault_adapter.py`(확장), `runtime/execution/recommendation_orchestration_service.py`(확장), `web/server.py`(Composition Root 갱신), `docs/ARCHITECTURE.md` §13.3/§13.4/§3.36(신규) 갱신. Vault `Recommendation Explanation.md` 실제 저장소 상태로 신규 발행. 새 Core Domain Interface/Adapter 없음(27종 유지). `pytest` 1073개(9개 신규)·ruff·mypy 전부 클린, Guardian all_passed 유지, `build_app()` 실제 조립 스모크 테스트 통과. 상세는 [[Architecture Overview]]
+- 결정: `RecommendationExplanationAnalyzer`(신규, `intelligence/recommendation_explanation.py`)가 `RecommendationIntelligenceReport`(M35/M42) + `ExperienceReport`(M40, 선택)를 읽어 5단계 Priority Rule 평가 흔적 + Experience 성공률 요약 + Adaptation 적용 여부/사유를 재구성 — 새 AI 판단·새 지표 없음, Recommendation 자체는 바꾸지 않음. `RecommendationExplanationService`(신규)가 Vault [[Recommendation Explanation]]에 발행. `Explainability`는 §13.3 Behavioral Concept로 등재(`Adaptation`과 동일 급, 1급 Domain 승격 보류). `RecommendationOrchestrationService`(M43)에 `explanation_service` 선택적 주입으로 Recommendation→Explainability→Execution 순서 연결, 미주입 시 M43 이전과 100% 동일 동작
+- 영향: `intelligence/recommendation_explanation.py`/`recommendation_explanation_service.py`(신규), `vault/recommendation_explanation.py`(신규), `integration/vault_adapter.py`(확장), `runtime/execution/recommendation_orchestration_service.py`(확장), `web/server.py`(Composition Root 갱신), `docs/ARCHITECTURE.md` §13.3/§13.4/§3.36(신규) 갱신. Vault [[Recommendation Explanation]] 실제 저장소 상태로 신규 발행. 새 Core Domain Interface/Adapter 없음(27종 유지). `pytest` 1073개(9개 신규)·ruff·mypy 전부 클린, Guardian all_passed 유지, `build_app()` 실제 조립 스모크 테스트 통과. 상세는 [[Architecture Overview]]
 
 ## ADR-0062: Workspace Observability — Claude Runtime + Pipeline 상태를 StatusLine으로 반영 (Milestone 45)
 
@@ -391,6 +392,10 @@ tags: [decision]
 - 목적: M39~M45로 기능 아키텍처가 안정화된 시점에 Vault를 "문서 저장소"가 아니라 "AI Workspace의 Long-term Memory Layer"로 재정의. 기능 변경 금지, Graphify는 참고 모델(항목마다 채택/수정/기각 근거 제시), Long-term Memory First 3대 원칙을 사용자가 명시
 - 결정: T01에서 Vault 49개 문서를 전수 실측(추측 없음) — Frontmatter 100% 커버리지지만 `type` 필드 13/49만 존재, Tag 대부분 1회성, `ADR Index.md`/`Milestones Index.md`가 관련 문서를 Wiki Link가 아닌 백틱 텍스트로만 언급(핵심 발견). T02에서 Graphify 7개 항목마다 채택·수정·기각 판단(Dataview는 Plugin 미설치 실측 확인 후 기각). T03에서 Node/Relationship Definition(PR·Runtime은 Node 아님) 확정. Document Type Color Strategy는 §14.2(ADR-0054) Domain Cluster를 폐기하지 않고 확장 — `.obsidian/graph.json` 실제 적용은 Desktop 검증 대기로 계속 보류. T04 Migration Plan은 삭제 없는 증분 방식(Phase 0만 이번에 실행, 나머지는 제안만)
 - 영향: `02 Architecture/`에 Vault Information Architecture/Metadata Standard/Document Type Color Strategy/Map of Content Guide/Vault Migration Plan 5개 문서 신규, `00 System/PROJECT_INDEX.md` 1행 추가, `docs/ARCHITECTURE.md` §14/§15(신규)/헤더 상태 갱신. 코드 변경 없음 — `pytest` 1108개/ruff/mypy/Guardian 기존 상태 그대로 유지. 기존 Vault 문서 삭제 0건, Rename 0건. 상세는 [[Vault Information Architecture]]
+
+### 구현 단계 — Milestone 47(Knowledge Graph Migration, 신규 ADR 아님)
+
+M46이 Phase 0까지만 실행하고 Deferred로 남긴 Metadata Backfill/Wiki Link Migration/Concept Notes/Hub/Lessons를 실제 Vault 전체에 적용(새 ADR 아님, ADR-0064 구현 단계). `type` Frontmatter 전수 백필로 54/54(100%) 달성, `[[Recommendation Hub]]`로 Recommendation 파이프라인 리포트의 orphan 문제 해소, Concept 문서 7종(Adaptation/Orchestration/Explainability는 파이프라인 단계로 판단해 제외) + Architecture/Runtime/Decision/Knowledge Hub 4종 신규, `16 Lessons/` 신규(`VAULT_CONTENT_DIRECTORIES` 17종으로 확장, 실제 Lesson 데이터는 없음). `.obsidian/graph.json`은 계속 Pending Verification 동결 유지. 코드 변경은 `vault/mapping.py` 상수 목록 1건뿐(8개 보호 기능 전부 무변경) — `pytest` 1108개(회귀 없음)/ruff/mypy/Guardian 기존 상태 유지. 상세는 [[Vault Migration Plan]]
 
 ## 관련 문서
 

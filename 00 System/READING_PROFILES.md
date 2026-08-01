@@ -1,5 +1,6 @@
 ---
 tags: [system]
+type: system
 ---
 
 # READING_PROFILES
