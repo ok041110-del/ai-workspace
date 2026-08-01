@@ -97,13 +97,24 @@ class InMemoryEngineRuntime(EngineRuntime):
     모두 같은 Provider에 몰려 M74의 capacity 여유를 낭비하는 경우가
     있었다. `_build_candidates()`가 M74 capacity 필터링 **이후**,
     `_reorder_by_execution_memory()`보다 먼저 `_reorder_by_diversity()`
-    (안정 정렬)를 적용해 지금 이 순간 동시 실행 중인 세션 수(`_in_flight`,
-    M74 상태를 그대로 재사용 — 새 상태 없음)가 더 적은 엔진을 완전
+    (안정 정렬)를 적용해 지금 이 순간의 부하가 더 적은 엔진을 완전
     동률 상황에서만 우선한다. 비용·성공률 우선순위는 정렬 순서상 항상
     이 다양성 순서를 덮어쓰므로 절대 바뀌지 않는다 — 순수 tie-break이며
     `engine_selection_policy` 미주입 시(첫 매칭 경로)에는 관여하지
     않는다(100% 하위 호환). `run_ensemble()`/`run_ensemble_auto()`는
-    M74와 동일한 이유로 범위 밖(YAGNI)."""
+    M74와 동일한 이유로 범위 밖(YAGNI).
+
+    **Adaptive Load Balancing(Milestone 76, ADR-0094)**: M75의 부하
+    신호를 절대 `_in_flight` 개수에서 `_load_ratio()`(= `_in_flight /
+    max_concurrency`, M74 상태를 그대로 재사용 — 새 상태 없음)로
+    개선했다 — Provider마다 `max_concurrency`가 다르면 절대 개수만으로는
+    "한도 10 중 3개 사용 중"인 엔진과 "한도 2 중 1개 사용 중"인 엔진의
+    실제 여유를 구분할 수 없었다. `max_concurrency`를 지정하지 않은
+    (무제한) 엔진은 부하율 0.0으로 취급해 유한 엔진보다 항상 먼저
+    선택된다 — 실제 동시 실행 상한이 없으므로 병목 위험이 없다는
+    사실을 그대로 반영한다. `_reorder_by_diversity()`가 호출되는
+    위치·정렬 안정성·tie-break 전용 범위는 M75와 완전히 동일하게
+    유지된다."""
 
     def __init__(
         self,
@@ -189,21 +200,44 @@ class InMemoryEngineRuntime(EngineRuntime):
 
         return sorted(candidates, key=_rank)
 
+    def _load_ratio(self, name: str) -> float:
+        """**Adaptive Load Balancing(Milestone 76, ADR-0094)**: 지금 이
+        순간의 상대 부하 — `max_concurrency`가 설정된 엔진은 `_in_flight /
+        max_concurrency`(0.0~1.0)로, 무제한 엔진은 병목 위험이 없으므로
+        0.0으로 취급한다. M74/M75가 이미 관리하는 `_in_flight`/
+        `_max_concurrency`만 읽는 read-only 계산이며 새 상태를 만들지
+        않는다."""
+
+        limit = self._max_concurrency.get(name)
+        if limit is None:
+            return 0.0
+        return self._in_flight.get(name, 0) / limit
+
+    def _load_rank(self, candidate: EngineCandidate) -> tuple[float, int]:
+        """부하율이 동률(예: `max_concurrency`를 지정하지 않은 무제한
+        엔진끼리는 항상 0.0)이면 M75의 기존 신호였던 raw `_in_flight`
+        개수로 2차 tie-break한다 — M76 도입 이전에 무제한 엔진들 사이에서
+        동작하던 분산 동작을 그대로 보존하면서, `max_concurrency`가 서로
+        다른 엔진 사이에서는 상대 부하율이 우선한다."""
+
+        return (
+            self._load_ratio(candidate.engine_name),
+            self._in_flight.get(candidate.engine_name, 0),
+        )
+
     def _reorder_by_diversity(self, candidates: list[EngineCandidate]) -> list[EngineCandidate]:
-        """**Diversity Routing(Milestone 75, ADR-0093)**: 비용과 성공률이
-        모두 동률인 후보끼리는(`_reorder_by_execution_memory()`가 그
-        동률을 그대로 통과시킨 뒤, `EngineSelectionPolicy`의 `min()`이
-        동률일 때 반환하는 첫 원소를 이 순서로 결정) 지금 이 순간
-        동시 실행 중인 세션 수(M74 `_in_flight`, 새 상태 없이 그대로
-        재사용)가 더 적은(=덜 바쁜) 엔진을 앞세운다. `_reorder_by_
-        execution_memory()`보다 먼저 적용해(안정 정렬) 성공률이 갈리는
-        순간 이 다양성 순서는 곧바로 덮어써진다 — 비용·신뢰도 우선순위를
-        전혀 바꾸지 않고 "완전한 동률"에서만 개입하는 선택적 최적화다."""
+        """**Diversity Routing(Milestone 75, ADR-0093) / Adaptive Load
+        Balancing(Milestone 76, ADR-0094)**: 비용과 성공률이 모두 동률인
+        후보끼리는(`_reorder_by_execution_memory()`가 그 동률을 그대로
+        통과시킨 뒤, `EngineSelectionPolicy`의 `min()`이 동률일 때 반환하는
+        첫 원소를 이 순서로 결정) 지금 이 순간의 상대 부하(`_load_rank()`
+        = 부하율 우선, 부하율까지 동률이면 raw `_in_flight`)가 더 낮은
+        (=덜 바쁜) 엔진을 앞세운다. `_reorder_by_execution_memory()`보다
+        먼저 적용해(안정 정렬) 성공률이 갈리는 순간 이 부하 순서는 곧바로
+        덮어써진다 — 비용·신뢰도 우선순위를 전혀 바꾸지 않고 "완전한
+        동률"에서만 개입하는 선택적 최적화다."""
 
-        def _rank(candidate: EngineCandidate) -> int:
-            return self._in_flight.get(candidate.engine_name, 0)
-
-        return sorted(candidates, key=_rank)
+        return sorted(candidates, key=self._load_rank)
 
     def _select(
         self,

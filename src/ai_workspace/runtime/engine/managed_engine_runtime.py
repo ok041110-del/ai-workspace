@@ -130,10 +130,15 @@ class ManagedEngineRuntime(EngineRuntime):
     **Diversity Routing(Milestone 75, ADR-0093)**: `_build_candidates()`가
     M74 capacity 필터링 이후, `_reorder_by_execution_memory()`보다 먼저
     `_reorder_by_diversity()`(안정 정렬)를 적용해 비용·성공률이 완전
-    동률인 후보끼리는 지금 동시 실행 중인 세션 수(`_in_flight`, M74 상태
-    재사용)가 더 적은 엔진을 우선한다. `InMemoryEngineRuntime`과 동일한
-    설계(순수 tie-break, 새 상태 없음, `engine_selection_policy` 미주입
-    시 관여하지 않음)."""
+    동률인 후보끼리는 지금 이 순간의 부하가 더 적은 엔진을 우선한다.
+    `InMemoryEngineRuntime`과 동일한 설계(순수 tie-break, 새 상태 없음,
+    `engine_selection_policy` 미주입 시 관여하지 않음).
+
+    **Adaptive Load Balancing(Milestone 76, ADR-0094)**: `_reorder_by_
+    diversity()`의 부하 신호를 절대 `_in_flight` 개수에서 `_load_ratio()`
+    (= `_in_flight / max_concurrency`, 무제한 엔진은 0.0)로 개선했다 —
+    `InMemoryEngineRuntime._load_ratio()`와 완전히 동일한 설계이며, M74
+    상태만 읽는 read-only 계산이라 새 상태를 만들지 않는다."""
 
     def __init__(
         self,
@@ -225,16 +230,34 @@ class ManagedEngineRuntime(EngineRuntime):
 
         return sorted(candidates, key=_rank)
 
+    def _load_ratio(self, name: str) -> float:
+        """**Adaptive Load Balancing(Milestone 76, ADR-0094)**:
+        `InMemoryEngineRuntime._load_ratio()`와 동일 — `max_concurrency`가
+        설정된 엔진은 `_in_flight / max_concurrency`, 무제한 엔진은 0.0."""
+
+        limit = self._max_concurrency.get(name)
+        if limit is None:
+            return 0.0
+        return self._in_flight.get(name, 0) / limit
+
+    def _load_rank(self, candidate: EngineCandidate) -> tuple[float, int]:
+        """`InMemoryEngineRuntime._load_rank()`와 동일 — 부하율이 동률이면
+        (예: 무제한 엔진끼리) raw `_in_flight` 개수로 2차 tie-break해 M75
+        의 기존 분산 동작을 보존한다."""
+
+        return (
+            self._load_ratio(candidate.engine_name),
+            self._in_flight.get(candidate.engine_name, 0),
+        )
+
     def _reorder_by_diversity(self, candidates: list[EngineCandidate]) -> list[EngineCandidate]:
-        """**Diversity Routing(Milestone 75, ADR-0093)**: `InMemoryEngineRuntime.
+        """**Diversity Routing(Milestone 75, ADR-0093) / Adaptive Load
+        Balancing(Milestone 76, ADR-0094)**: `InMemoryEngineRuntime.
         _reorder_by_diversity()`와 동일 — 비용·성공률이 완전 동률인
-        후보끼리만 지금 동시 실행 중인 세션 수(M74 `_in_flight`)가 더
-        적은 엔진을 앞세운다."""
+        후보끼리만 지금 이 순간의 상대 부하(`_load_rank()`)가 더 낮은
+        엔진을 앞세운다."""
 
-        def _rank(candidate: EngineCandidate) -> int:
-            return self._in_flight.get(candidate.engine_name, 0)
-
-        return sorted(candidates, key=_rank)
+        return sorted(candidates, key=self._load_rank)
 
     def run(
         self,

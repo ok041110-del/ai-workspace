@@ -15649,6 +15649,69 @@ capacity 여유를 낭비)가 코드로 확인됐다.
 
 ---
 
+## Milestone 76 — Adaptive Load Balancing: 상대 부하율 기반 tie-break 개선 (완료)
+
+**배경**: 사용자가 "M74(Provider Concurrency)와 M75(Diversity Routing)를
+기반으로 현재 Provider의 실시간 부하를 고려하여 Engine을 자동 분산
+선택"하는 M76을 요청했다. 최신 main(M75/ADR-0093까지 반영) 기준으로
+시작해 조사한 결과, M75가 이미 "비용·신뢰도·capacity 동률일 때 M74
+`_in_flight`가 가장 적은 Provider를 tie-break로 선택"하는 로직을
+구현·병합해 M76 요구사항과 거의 동일했다. 다만 M75는 raw `_in_flight`
+**개수**만 비교해, Provider마다 `max_concurrency` 한도가 다르면 실제
+여유를 거꾸로 판단하는 문제가 있었다.
+
+**사용자 승인(AskUserQuestion, 2회)**:
+1. M76 차별점 — **상대 부하율(`in_flight/max_concurrency`)로 개선
+   (권장안 채택)**: raw 개수 대신 비율로 계산해 Provider마다 한도가
+   다를 때 실제 여유를 정확히 반영.
+2. 무제한 엔진 처리 — **부하율 0으로 간주(권장안 채택)**: 실제 동시
+   실행 상한이 없어 병목 위험이 없다는 사실을 그대로 반영.
+3. (구현 중 회귀 발견 후 재질의) 무제한 엔진끼리 부하율이 항상 0.0으로
+   동률이 되어 M75의 "무제한 엔진 간 분산" 동작이 사라지는 문제 —
+   **부하율이 동률이면 raw `_in_flight`로 2차 tie-break(권장안 채택)**.
+
+**구현**:
+- `src/ai_workspace/runtime/engine/engine_runtime.py`(`InMemoryEngineRuntime`)
+  /`src/ai_workspace/runtime/engine/managed_engine_runtime.py`
+  (`ManagedEngineRuntime`) — `_load_ratio(name)`(= `_in_flight /
+  max_concurrency`, 무제한이면 0.0) 및 `_load_rank(candidate)`(=
+  `(load_ratio, in_flight)` 튜플, read-only) 신설. `_reorder_by_
+  diversity()`의 정렬 키를 raw `_in_flight` 개수에서 `_load_rank()`로
+  교체 — 호출 위치(M74 capacity 필터링 이후, `_reorder_by_execution_
+  memory()` 이전)·정렬 안정성·tie-break 전용 범위는 M75와 완전히 동일.
+- `EngineRuntime`(interface) 계약은 전혀 무변경 — 새 메서드/파라미터
+  없음, private 메서드 추가와 정렬 키 교체뿐.
+- `tests/runtime/engine/test_engine_runtime.py`/`tests/runtime/engine/
+  test_managed_engine_runtime.py` — 서로 다른 `max_concurrency`를 가진
+  두 엔진에 서로 다른 개수의 동시 실행을 재현해 상대 부하율이 raw
+  in-flight 개수보다 우선함을 증명하는 신규 테스트 각 1건, M75의
+  기존 6개 다양성 테스트가 회귀 없이 통과함을 확인, 5회 연속 실행으로
+  타이밍 안정성 확인.
+- `docs/ARCHITECTURE.md` §3.9 Engine Runtime 절에 Adaptive Load
+  Balancing(M76) 서술 추가, §7 인터페이스 표 `EngineRuntime` 행 갱신.
+  새 Core Domain Interface 없음(기존 `EngineRuntime` 계약 완전 무변경,
+  30종 유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 최신 main 기준에서 시작, 기존 ADR/TASKS/ROADMAP·구현 상태를 먼저 조사 | ✅ |
+| 2 | 기존 EngineRuntime/EngineSelectionPolicy/Provider Concurrency(M74)/Diversity Routing(M75) 구조 재사용, 새 컴포넌트 없음 | ✅ |
+| 3 | Provider별 active execution 수(M74 `_in_flight`)로 현재 부하를 계산 | ✅ |
+| 4 | 비용·신뢰도·Capacity가 동일한 후보일 때만 가장 부하가 낮은 Provider를 우선 선택함을 테스트로 증명 | ✅ |
+| 5 | 부하는 tie-break 용도로만 사용, 기존 비용·신뢰도 정책 불변임을 테스트로 증명(정렬 안정성으로 구조적 보장) | ✅ |
+| 6 | 상태는 EngineRuntime 내부 in-process로만 관리(M74 상태 재사용, 영속화 없음) | ✅ |
+| 7 | 새로운 Core Domain Interface 없음(EngineRuntime 계약 완전 무변경) | ✅ |
+| 8 | 기존 API와 100% 하위 호환(engine_selection_policy 미주입 시 이전과 동일 동작) | ✅ |
+| 9 | 넓은 "Adaptive Load Balancing" 주제를 AskUserQuestion 2회(+구현 중 회귀 발견에 따른 재질의 1회)로 구체 설계까지 좁힘 | ✅ |
+| 10 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트(M75 포함) 회귀 없음 | ✅ |
+
+`pytest` 1339개(신규 2개, 회귀 없음)/`ruff`/`mypy`(233 source files)
+전부 통과. ADR-0094.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

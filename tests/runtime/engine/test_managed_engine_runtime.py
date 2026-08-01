@@ -1088,3 +1088,63 @@ def test_run_parallel_diversity_does_not_override_lower_cost() -> None:
     assert [result.success for result in results] == [True, True]
     assert engine_a.run_count == 2
     assert engine_b.run_count == 0
+
+
+class CapableCostedSlowEngineAdapter(CostedSlowEngineAdapter):
+    """M76(ADR-0094) 테스트용 — `CostedSlowEngineAdapter`에 커스텀
+    capabilities를 더해, `required_capabilities`로 특정 엔진에만 선택적으로
+    부하를 재현할 수 있게 한다(다른 엔진은 그 capability를 만족하지
+    못해 자동으로 후보에서 제외됨)."""
+
+    def __init__(
+        self,
+        delay_seconds: float,
+        estimated_cost_usd: float = 0.0,
+        capabilities: frozenset[str] = frozenset({"code_generation"}),
+    ) -> None:
+        super().__init__(delay_seconds, estimated_cost_usd)
+        self._capabilities = capabilities
+
+    def capabilities(self) -> frozenset[str]:
+        return self._capabilities
+
+
+def test_load_balancing_prefers_lower_relative_load_over_raw_in_flight_count() -> None:
+    """M76(ADR-0094): 실제 `ThreadPoolExecutor` 없이도 여러 `threading.Thread`
+    가 `ManagedEngineRuntime.run()`을 동시에 호출하는 상황에서, engine-a
+    (max_concurrency=10, 지금 3건 실행 중 → 부하율 0.3)와 engine-b
+    (max_concurrency=2, 지금 1건 실행 중 → 부하율 0.5)가 비용·성공률
+    완전 동률이면, raw in-flight 개수(3 > 1)가 아니라 상대 부하율이 더
+    낮은 engine-a가 선택된다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    engine_a = CapableCostedSlowEngineAdapter(
+        delay_seconds=0.2, capabilities=frozenset({"cap_a"})
+    )
+    engine_b = CapableCostedSlowEngineAdapter(
+        delay_seconds=0.2, capabilities=frozenset({"cap_b"})
+    )
+    runtime.register_engine("engine-a", engine_a, max_concurrency=10)
+    runtime.register_engine("engine-b", engine_b, max_concurrency=2)
+
+    threads = [
+        threading.Thread(
+            target=runtime.run, args=(make_task(f"busy-a-{i}"), frozenset({"cap_a"}))
+        )
+        for i in range(3)
+    ]
+    threads.append(
+        threading.Thread(target=runtime.run, args=(make_task("busy-b"), frozenset({"cap_b"})))
+    )
+    for thread in threads:
+        thread.start()
+    time.sleep(0.05)  # engine-a in-flight=3(부하율 0.3), engine-b in-flight=1(부하율 0.5)
+
+    runtime.run(make_task("tie"))
+
+    for thread in threads:
+        thread.join()
+
+    assert engine_a.run_count == 4
+    assert engine_b.run_count == 1
