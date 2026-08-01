@@ -4,6 +4,7 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
+from ai_workspace.domain.engine_reliability import EngineReliabilityStat
 from ai_workspace.domain.engine_selection import EngineCandidate
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.budget_policy_engine import BudgetPolicyEngine
@@ -66,6 +67,13 @@ class ManagedEngineRuntime(EngineRuntime):
     (M17)로 비용 기반 선택을 한다 — 이미 Automation 파이프라인이 쓰는 것과
     같은 선택 규칙을 이 경로에도 적용한다. 생략(기본값 `None`)하면 이전
     동작과 100% 동일하다.
+
+    **엔진별 신뢰도 추적 + 적응형 라우팅(Milestone 65, ADR-0083)**: `run()`
+    (Cancel된 경우는 제외)/`_finish_as_timeout()`/`run_ensemble()`이 실제로
+    실행한 엔진의 성공/실패를 이름별로 in-process 누적한다
+    (`EngineReliabilityStat`). 비용 기반 선택 경로(`engine_selection_policy`
+    주입 시)에서만 이 기록을 활용해 `is_unreliable()`(M49와 동일한 "성공
+    0건 + 표본 3건 이상" 규칙)에 해당하는 엔진을 후보에서 제외한다.
     """
 
     def __init__(
@@ -84,11 +92,16 @@ class ManagedEngineRuntime(EngineRuntime):
         self._task_adapters: dict[str, EngineAdapter] = {}
         self._engine_selection_policy = engine_selection_policy
         self._budget_policy_engine = budget_policy_engine
+        self._engine_reliability: dict[str, EngineReliabilityStat] = {}
 
     def register_engine(self, name: str, adapter: EngineAdapter) -> None:
         if name in self._engines:
             raise DuplicateEngineError(name)
         self._engines[name] = adapter
+
+    def _record_engine_outcome(self, name: str, success: bool) -> None:
+        stat = self._engine_reliability.get(name, EngineReliabilityStat())
+        self._engine_reliability[name] = stat.record(success)
 
     def run(
         self,
@@ -98,7 +111,7 @@ class ManagedEngineRuntime(EngineRuntime):
         *,
         model: str | None = None,
     ) -> EngineResult:
-        adapter = self._require_adapter(required_capabilities, task)
+        name, adapter = self._require_adapter(required_capabilities, task)
         session_id = adapter.create_session()
         self._task_sessions[task.task_id] = session_id
         self._task_adapters[task.task_id] = adapter
@@ -122,14 +135,19 @@ class ManagedEngineRuntime(EngineRuntime):
         thread.join(effective_timeout)
 
         if thread.is_alive():
+            self._record_engine_outcome(name, success=False)
             return self._finish_as_timeout(task.task_id, session_id, adapter)
 
         if "error" in error_box:
             adapter.destroy_session(session_id)
             self._task_status[task.task_id] = EngineSessionStatus.FAILED
+            self._record_engine_outcome(name, success=False)
             raise error_box["error"]
 
-        return self._finish_as_completed(task.task_id, session_id, adapter, result_box["result"])
+        result = self._finish_as_completed(task.task_id, session_id, adapter, result_box["result"])
+        if result.error != "cancelled":
+            self._record_engine_outcome(name, result.success)
+        return result
 
     def run_parallel(
         self,
@@ -179,19 +197,22 @@ class ManagedEngineRuntime(EngineRuntime):
     def _run_named(self, name: str, task: Task, model: str | None) -> EngineResult:
         adapter = self._engines.get(name)
         if adapter is None:
-            return EngineResult(success=False, output="", error=f"engine '{name}' not registered")
+            result = EngineResult(success=False, output="", error=f"engine '{name}' not registered")
+            self._record_engine_outcome(name, result.success)
+            return result
         try:
             session_id = adapter.create_session()
             result = adapter.run(session_id, task, model=model)
             adapter.destroy_session(session_id)
-            return result
         except BaseException as exc:
-            return EngineResult(success=False, output="", error=str(exc))
+            result = EngineResult(success=False, output="", error=str(exc))
+        self._record_engine_outcome(name, result.success)
+        return result
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:
-        adapter = self._require_adapter(required_capabilities, task)
+        _name, adapter = self._require_adapter(required_capabilities, task)
         return adapter.estimate_cost(task)
 
     def cancel(self, task_id: str) -> None:
@@ -211,16 +232,20 @@ class ManagedEngineRuntime(EngineRuntime):
             raise EngineTaskNotFoundError(task_id)
         return self._task_status[task_id]
 
-    def _require_adapter(self, required_capabilities: frozenset[str], task: Task) -> EngineAdapter:
+    def _require_adapter(
+        self, required_capabilities: frozenset[str], task: Task
+    ) -> tuple[str, EngineAdapter]:
         if self._engine_selection_policy is None:
-            for adapter in self._engines.values():
+            for name, adapter in self._engines.items():
                 if required_capabilities.issubset(adapter.capabilities()):
-                    return adapter
+                    return name, adapter
             raise NoSuitableEngineError(required_capabilities)
 
         candidates: list[EngineCandidate] = []
         for name, adapter in self._engines.items():
             if not required_capabilities.issubset(adapter.capabilities()):
+                continue
+            if self._engine_reliability.get(name, EngineReliabilityStat()).is_unreliable():
                 continue
             estimate = adapter.estimate_cost(task)
             candidates.append(
@@ -237,7 +262,7 @@ class ManagedEngineRuntime(EngineRuntime):
         )
         if decision is None:
             raise NoSuitableEngineError(required_capabilities)
-        return self._engines[decision.engine_name]
+        return decision.engine_name, self._engines[decision.engine_name]
 
     def _finish_as_completed(
         self, task_id: str, session_id: str, adapter: EngineAdapter, result: EngineResult

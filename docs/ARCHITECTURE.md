@@ -644,6 +644,25 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   거치므로 Task별 비용도 반영된다. 여러 Task에 걸친 **누적** 예산 소비
   추적(M15 Non-goal)은 이번 범위 밖으로 유지한다(YAGNI) —
   `BudgetPolicyEngine.check()`는 여전히 매 호출을 독립적으로 평가한다.
+- **Engine Learning & Adaptive Routing(Milestone 65, ADR-0083)**: M64의
+  비용 기반 선택은 순수 정적 비용(`estimated_cost_usd`)만 보고 과거
+  성공/실패 이력을 전혀 반영하지 않았다 — 계속 실패하는 엔진이라도
+  비용이 가장 싸면 계속 선택되는 문제가 있었다(Dashboard의
+  `ReliabilityStats`도 워크스페이스 전체 집계일 뿐 엔진별로 분리돼
+  있지 않아 재사용할 수 없었다). `InMemoryEngineRuntime`/
+  `ManagedEngineRuntime`이 `run()`/`run_parallel()`/`run_ensemble()`이
+  실제로 실행한 엔진의 성공/실패를 엔진 이름별로 in-process 누적한다
+  (`domain.engine_reliability.EngineReliabilityStat` — `total`/
+  `success_count`/`failure_count`, M49의 `ExperienceStat`과 동일한 필드
+  구성을 계층만 바꿔 재사용). `engine_selection_policy`가 주입된 경로
+  (M64)에서만 `EngineReliabilityStat.is_unreliable()`(M49/ADR-0066과
+  동일한 "성공 0건 + 표본 3건 이상" 임계값 규칙을 그대로 재사용)에
+  해당하는 엔진을 `EngineCandidate` 목록에서 제외한 뒤 비용 기반
+  선택을 적용한다 — policy 미주입 시(M64 이전 동작)에는 신뢰도 추적만
+  계속되고 제외는 적용되지 않는다(100% 하위 호환). Cancel된 실행은
+  엔진 신뢰도에 반영하지 않는다(사용자 취소는 엔진 자체의 신뢰성
+  문제가 아니므로). 영속 저장소는 M49/M50과 동일하게 이번 범위 밖(in
+  -process 한정, YAGNI).
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 

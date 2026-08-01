@@ -5785,3 +5785,73 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   TASKS.md` Milestone 64 절 신규 추가. `docs/ARCHITECTURE.md` §3.9
   Engine Runtime 절에 Cost & Routing Optimization 서술 추가(기존
   "우선순위 정책 도입하지 않음" 문구 갱신).
+
+## ADR-0083: Engine Learning & Adaptive Routing — 엔진별 신뢰도 추적 (Milestone 65)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion으로 "EngineRuntime에
+  엔진별 신뢰도 추적 + 실패 엔진 제외" 범위 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M65 engine learning & adaptive routing"으로 착수를
+  요청했다. 조사 결과 M49(Learning Engine)는 Recommendation/Adaptation
+  파이프라인의 학습만 다뤘고, M64에서 새로 생긴 `EngineRuntime`의 비용
+  기반 선택(`EngineSelectionPolicy`)은 순수 정적 비용
+  (`estimated_cost_usd`)만 보고 과거 성공/실패 이력을 전혀 반영하지
+  않았다 — 계속 실패하는 엔진이라도 비용이 가장 싸면 계속 선택되는
+  문제가 실제로 존재했다(추측 아님, 코드 확인). Dashboard의
+  `ReliabilityStats`도 워크스페이스 전체 집계일 뿐 엔진별로 분리돼
+  있지 않아 재사용할 수 없었다.
+- 결정:
+  1. `domain/engine_reliability.py`에 `EngineReliabilityStat`(total/
+     success_count/failure_count)를 신설한다 — M40 `ExperienceStat`과
+     동일한 필드 구성을 의도적으로 재사용하되, `runtime/engine/`이
+     `intelligence/`를 참조하면 계층 위반이므로 별도 domain 타입으로
+     분리한다.
+  2. `is_unreliable()` 판정 규칙은 M49/ADR-0066의 Recommendation
+     Adaptation 임계값(`success_count == 0 and total >= 3`)을 그대로
+     재사용한다 — 새 규칙을 설계하지 않고 이미 검증된 "표본 부족 시
+     성급하게 판단하지 않는다"는 원칙을 그대로 이식한다.
+  3. `InMemoryEngineRuntime`/`ManagedEngineRuntime`이 `run()`/
+     `run_parallel()`/`run_ensemble()`이 실제로 실행한 엔진의
+     성공/실패를 이름별로 in-process 누적한다.
+  4. `engine_selection_policy`가 주입된 경로(M64)에서만
+     `EngineCandidate` 목록을 만들 때 `is_unreliable()`인 엔진을
+     미리 제외한 뒤 비용 기반 선택을 적용한다. `EngineSelectionPolicy`
+     인터페이스 자체(`select()` 시그니처)는 변경하지 않는다 — 후보
+     필터링은 `EngineRuntime`의 책임으로 남기고, M17의 "Decision
+     Only" 계약을 그대로 유지한다.
+  5. policy 미주입 시(M64 이전 동작)에는 신뢰도 추적만 계속되고 제외는
+     적용되지 않는다 — 100% 하위 호환.
+  6. Cancel된 실행(`EngineResult.error == "cancelled"` sentinel)은
+     신뢰도에 반영하지 않는다 — 사용자 취소는 엔진 자체의 신뢰성
+     문제가 아니다.
+  7. 영속 저장소는 M49/M50과 동일하게 이번 범위 밖으로 유지한다(in
+     -process 한정, YAGNI).
+- 대안:
+  1. `EngineSelectionPolicy.select()` 시그니처에 신뢰도 데이터를 정식
+     파라미터로 추가 — 기각: 기존 M17 Decision Only 계약을 바꾸는 더
+     큰 변경이며, 가중치 산정 방식(비용 vs 신뢰도)까지 새로 설계해야
+     한다. 후보 목록에서 미리 걸러내는 편이 더 작은 변경이다.
+  2. Guardian 위반 이력처럼 신뢰도 이력도 영속 저장 — 기각: 사용자가
+     AskUserQuestion에서 명시적으로 배제. M49/M50이 이미 "in-process
+     범위로 한정 → 이후 별도 Milestone에서 영속화"로 단계를 나눈
+     전례를 그대로 따른다.
+  3. `ExperienceStat`(intelligence 계층)을 직접 재사용 — 기각:
+     `runtime/engine/`이 `intelligence/`를 참조하면 §8 의존성 규칙
+     위반(Guardian이 이미 검사하는 계층 경계)이다. 같은 필드 구성만
+     별도 domain 타입으로 복제하는 편이 계층을 지킨다.
+- 이유: M49가 이미 "성공 0건 + 표본 3건 이상"이라는 임계값 규칙을
+  검증된 형태로 남겨 두었으므로, 같은 규칙을 엔진 이름 단위로
+  재사용하면 새 알고리즘 설계 없이 M64가 남긴 "계속 실패해도 계속
+  선택됨" 공백을 메울 수 있었다. `EngineRuntime` 내부 상태만 추가하고
+  기존 Interface는 전혀 건드리지 않아 하위 호환이 자동으로 보장된다.
+- 결과/영향: `domain/engine_reliability.py`(신규),
+  `runtime/engine/engine_runtime.py`(`InMemoryEngineRuntime`),
+  `runtime/engine/managed_engine_runtime.py`(`ManagedEngineRuntime`)
+  수정 — `_select`/`_require_adapter`가 `(이름, adapter)` 튜플을
+  반환하도록 변경, 실행 후 결과를 신뢰도에 기록. 새 Core Domain
+  Interface 없음(`EngineReliabilityStat`은 domain 값 객체, 30종
+  유지). 신규 테스트 12건(`domain` 6건, `InMemoryEngineRuntime` 3건,
+  `ManagedEngineRuntime` 3건). `pytest` 1234개(신규 12개, 회귀 없음)/
+  `ruff`/`mypy`(229 source files) 전부 통과. `.ai/TASKS.md` Milestone
+  65 절 신규 추가. `docs/ARCHITECTURE.md` §3.9 Engine Runtime 절에
+  Engine Learning & Adaptive Routing 서술 추가.
