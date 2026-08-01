@@ -13993,7 +13993,7 @@ PR #48(Vault Index 반영) 병합(`1db0b7a`), `main` 반영 확인.
 
 ---
 
-## Milestone 52 — Learning Weighting (T03 완료, 사용자 승인 대기)
+## Milestone 52 — Learning Weighting (완료)
 
 **배경**: M51 승인 코멘트에서 사용자가 예고한 "이후 M52(가중치),
 M53(Decay)로도 확장하기 쉬운 구조" 중 M52를 착수. 착수 전 사용자가
@@ -14052,9 +14052,12 @@ M53(Decay)로도 확장하기 쉬운 구조" 중 M52를 착수. 착수 전 사�
 | 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음(값 조정 1건 제외) | ✅ |
 
 `pytest` 1145개(신규 2개, 수정 1개, 회귀 없음)/`ruff`/`mypy`(221
-source files) 전부 통과. ADR-0070. PR 생성·CI 확인·Merge·`main`
-반영·Vault Index 갱신 후 최종 완료 선언 예정(이전 Milestone과 동일한
-절차).
+source files) 전부 통과. ADR-0070.
+
+**사용자 승인(2026-08-01)**: 위 6개 항목을 확인해 **Milestone 52
+Learning Weighting 공식 완료(Approved)**. PR #53(코드) 병합
+(`4af8498`), PR #54(Vault Index 반영) 병합(`e9895e9`), `main` 반영
+확인.
 
 ---
 
