@@ -4813,3 +4813,78 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   추가. `pytest` 1137개(신규 7개, 회귀 없음)/`ruff`/`mypy`(221 source
   files) 전부 통과. `.ai/TASKS.md` Milestone 51 절(T01~T03) 신규
   추가.
+
+## ADR-0069: StatusLine Integration Fix — import 순서를 바로잡아 조용한 크래시를 제거 (M45-1)
+
+- 상태: 승인됨 (2026-08-01, 사용자가 "M45 구현은 완료됐지만 Claude
+  Code UI에서 StatusLine이 표시되지 않는다"는 문제와 함께 추측 대신
+  실제 환경 검증을 전제 조건으로 조사를 요청)
+- 날짜: 2026-08-01
+- 배경: M45(ADR-0062)로 StatusLine 진입점(`statusline_main.py`)이
+  구현되고 `pytest`/`ruff`/`mypy`는 모두 통과했지만, 실제 Claude
+  Code UI에서는 한 줄도 표시되지 않는다는 사용자 보고가 있었다.
+  구현을 추측으로 고치기 전에 공식 문서(`code.claude.com/docs/en/
+  statusline`)를 직접 조회해 StatusLine stdin JSON 스키마와 설정
+  형식, 공식 Troubleshooting 절을 확인했다.
+- 조사 결과(공식 문서 확인, 이번 세션에서 실행한 검증):
+  1. `.claude/settings.json`의 `{"statusLine": {"type": "command",
+     "command": "..."}}` 형식은 공식 문서 예시와 동일 — 설정 형식
+     자체는 문제 없음.
+  2. `ClaudeRuntimeAnalyzer`가 읽는 `model.display_name`/
+     `effort.level`/`context_window.*` 필드는 모두 공식 문서에 실제
+     문서화된 필드다(추측이 아님) — 공식 Mock Input 예시로 실행해
+     정상 동작을 확인했다.
+  3. **실제 버그 발견**: `statusline_main.py`의 `ai_workspace.*`
+     import 3개가 `try/except` **바깥**(모듈 최상단)에 있었다.
+     import 자체가 실패하면(예: `PYTHONPATH` 미설정, 의존성이 없는
+     `python3` 사용) 어떤 출력도 없이 프로세스가 죽는다 — 공식
+     문서의 "Status line not appearing" Troubleshooting 절이 말하는
+     "스크립트가 아무 출력도 내지 않으면 StatusLine이 빈 줄로
+     사라진다"는 실패 모드와 정확히 일치한다.
+  4. 공식 문서는 그 외에도 **Workspace Trust 미승인**(폴더에 대한
+     신뢰 대화상자를 수락하지 않으면 StatusLine이 아예 실행되지
+     않고 `claude --debug`가 "Status line command skipped:
+     workspace trust not accepted"를 로그로 남김)을 별도
+     Troubleshooting 항목으로 명시한다 — 이는 코드가 아니라 사용자
+     환경의 설정 상태이므로 이번 Milestone에서 코드로 고칠 수 없고,
+     사용자가 직접 `claude --debug`로 확인해야 한다(추측 금지
+     원칙에 따라 코드 수정 대상에서 제외).
+- 결정:
+  1. `ai_workspace.*` import를 `main()` 내부 `try` 블록 안으로
+     이동해, import 실패를 포함한 모든 예외가 항상 사람이 읽을 수
+     있는 한 줄로 대체된다(공식 문서 권고와 완전히 일치하도록
+     수정).
+  2. 디버그 로그(`/tmp/statusline.log`)는 실패했을 때만 남긴다
+     (정상 동작 시 로그 없음 — 사용자 요청 원칙). 실제 Runtime
+     JSON Schema를 검증하고 싶을 때는 `AI_WORKSPACE_STATUSLINE_
+     DEBUG=1` 환경 변수로 원본 stdin을 강제로 기록할 수 있게 했다
+     (추측 대신 실제 payload로 검증하기 위한 opt-in 수단).
+  3. 새 Domain/Interface/Service를 추가하지 않는다 — 기존
+     `observability/statusline_main.py` 1개 파일의 제어 흐름만
+     수정한다(YAGNI, Reuse-First).
+- 대안:
+  1. `.claude/settings.json`의 `command`를 `poetry run python -m ...`
+     로 바꿔 의존성 환경을 강제 — 기각: 이번 세션에서 실제로
+     재현해보니 현재 의존성(`pyyaml`/`fastapi`/`uvicorn`)은
+     StatusLine 경로에서 전혀 import되지 않아(순수 stdlib만 사용)
+     `python3` 단독 실행이 이미 정상 동작했다 — 근거 없는 변경을
+     피했다(추측 금지 원칙).
+  2. Workspace Trust 문제를 코드로 우회 — 기각: 공식 문서상 Trust
+     승인은 셸 명령을 실행하는 모든 설정(hooks 포함)에 적용되는
+     보안 경계이며 코드로 우회할 수 없다. 사용자가 직접 Trust
+     대화상자를 수락해야 한다.
+- 이유: 코드·테스트 통과만으로는 "빈 줄로 사라짐" 실패 모드를 잡을
+  수 없다는 것이 이번 조사의 핵심 확인 사항이다 — import를 try 안
+  으로 옮기는 것은 공식 문서가 명시한 실패 모드를 코드 레벨에서
+  구조적으로 차단하는 가장 낮은 위험의 수정이다.
+- 결과/영향: `observability/statusline_main.py` 수정(import 이동,
+  실패 시에만 기록하는 디버그 로그 추가). `tests/observability/
+  test_statusline_main.py`(신규 6건: 정상/JSON 파싱 실패/빈 stdin
+  각각 크래시 없이 한 줄 출력 보장, 디버그 로그는 실패 시에만 기록,
+  `AI_WORKSPACE_STATUSLINE_DEBUG=1`로 강제 기록). `pytest` 1143개
+  (신규 6개, 회귀 없음)/`ruff`/`mypy`(221 source files) 전부 통과.
+  **DoD 미충족 항목(사용자 확인 필요)**: 이 세션은 헤드리스 원격
+  자동화 환경이라 실제 Claude Code 데스크톱/터미널 UI에 접근할 수
+  없다 — "UI에서 실제로 표시되는 스크린샷 또는 실행 결과" 검증은
+  사용자가 실제 Claude Code 세션에서 `claude --debug`로 직접
+  확인해야 완료된다(특히 Workspace Trust 승인 여부).
