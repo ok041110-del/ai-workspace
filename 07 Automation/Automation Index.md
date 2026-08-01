@@ -99,6 +99,25 @@ Observability 배선은 이번 Scope 밖(향후 별도 Milestone 대상).
 "(M51 규칙)"/"(M49+M51 규칙)"로 태깅돼 Explainability(M44)가 그대로
 노출한다.
 
+**StatusLine Integration Fix(Milestone 45-1, ADR-0069)**: M45
+StatusLine이 실제 Claude Code UI에서 표시되지 않는다는 보고를,
+추측 대신 공식 문서(`code.claude.com/docs/en/statusline`) 대조로
+조사했다. `.claude/settings.json` 형식과 stdin JSON 필드
+(`model.display_name`/`effort.level`/`context_window.*`)는 모두
+공식 문서와 일치함을 확인했다. 실제 원인은 `statusline_main.py`의
+`ai_workspace.*` import 3개가 `try/except` 바깥에 있어, import
+자체가 실패하면 아무 출력 없이 프로세스가 죽는 것이었다 — 공식
+Troubleshooting("Status line not appearing")이 말하는 실패 모드와
+정확히 일치. import를 `main()` 내부로 옮겨 모든 예외(import 실패
+포함)가 항상 한 줄 출력으로 대체되도록 고쳤고, 실패 시에만
+`/tmp/statusline.log`를 남기는 디버그 로그를 추가했다(정상 동작
+시 로그 없음, `AI_WORKSPACE_STATUSLINE_DEBUG=1`로 실제 payload를
+opt-in 캡처 가능). 공식 문서는 Workspace Trust 미승인 시에도
+StatusLine이 아예 실행되지 않는다고 별도로 명시하는데, 이는 코드가
+아닌 사용자 환경 설정이라 이번 Milestone에서 고칠 수 없어 DoD에
+사용자 확인 항목으로 남겼다(`claude --debug` 로그 확인 필요,
+헤드리스 원격 세션이라 실제 UI 접근 불가).
+
 ## 관련 GitHub 문서
 
 - `docs/ARCHITECTURE.md` §3.19

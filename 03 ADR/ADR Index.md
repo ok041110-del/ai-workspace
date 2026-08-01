@@ -421,6 +421,12 @@ M46이 Phase 0까지만 실행하고 Deferred로 남긴 Metadata Backfill/Wiki L
 - 결정: `ExperienceStat`에 `recent_failure_streak`(가장 최근 기록부터 거슬러 올라간 연속 실패 횟수) 필드 신설. 최근 5건이 모두 실패면(사용자 승인 N=5) 전체 이력에 성공이 섞여 있어도 추천을 보류 — 기존 M49/M50 규칙은 무변경(OR 병존, 대체 아님). 어느 규칙이 발동했는지 기존 prose `reason` 채널에 "(M49 규칙)"/"(M51 규칙)"/"(M49+M51 규칙)"로 태깅(사용자 추가 요청 반영)
 - 영향: `intelligence/experience_rules.py`/`intelligence/recommendation_adjustment.py` 2개 파일만 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음. `pytest` 1137개(신규 7개, 회귀 없음)/ruff/mypy(221 source files) 전부 통과. 상세는 [[Automation Index]]
 
+## ADR-0069: StatusLine Integration Fix — import 순서를 바로잡아 조용한 크래시를 제거 (M45-1)
+
+- 목적: M45(ADR-0062) StatusLine 구현·테스트는 통과했지만 실제 Claude Code UI에서 표시되지 않는다는 보고를 공식 문서 대조로 조사·해결
+- 결정: 공식 문서(`code.claude.com/docs/en/statusline`) 확인 결과 `.claude/settings.json` 형식과 stdin JSON 필드(`model.display_name`/`effort.level`/`context_window.*`)는 문제 없음을 확인. 실제 원인은 `statusline_main.py`의 `ai_workspace.*` import가 `try/except` 바깥에 있어 import 실패 시 아무 출력 없이 프로세스가 죽는 것 — 공식 Troubleshooting("Status line not appearing")과 일치. import를 `main()` 내부로 이동해 모든 예외가 항상 한 줄 출력으로 대체되도록 수정, 실패 시에만 남기는 디버그 로그(`/tmp/statusline.log`) 추가
+- 영향: `observability/statusline_main.py` 1개 파일만 수정. 새 Core Domain Interface/Service 없음. `pytest` 1143개(신규 6개, 회귀 없음)/ruff/mypy(221 source files) 전부 통과. Workspace Trust 미승인 등 사용자 환경 문제는 코드로 고칠 수 없어 DoD에 사용자 확인 항목으로 남김(헤드리스 원격 세션이라 실제 UI 접근 불가). 상세는 [[Automation Index]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
