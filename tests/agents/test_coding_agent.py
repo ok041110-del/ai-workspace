@@ -284,6 +284,49 @@ def test_coding_agent_ignores_mission_planned_when_not_selected_by_scheduler() -
     assert task_engine.get_task(task.task_id).status == TaskStatus.REVIEW
 
 
+def test_coding_agent_both_instances_run_when_max_parallel_agents_is_two() -> None:
+    """M58-T03: max_parallel_agents=2를 두 인스턴스 모두에 주면, Scheduler
+    우선순위 상위 2개 안에 둘 다 들어 같은 Event를 병렬로 처리한다."""
+    shared_registry = FakeAgentRegistry()
+    shared_manager = FakeAgentManager()
+    shared_scheduler = FakeAgentScheduler()
+    event_bus = InMemoryEventBus()
+    task_engine = FakeTaskEngine()
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="완료"))
+
+    first_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    CodingAgent(
+        agent_runtime=first_agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
+        engine_runtime=engine_runtime,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+        max_parallel_agents=2,
+    )
+    second_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    CodingAgent(
+        agent_runtime=second_agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
+        engine_runtime=engine_runtime,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+        max_parallel_agents=2,
+    )
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+
+    event_bus.publish(
+        Event(event_id="e1", event_type=MISSION_PLANNED, payload={"task_id": task.task_id})
+    )
+
+    assert len(engine_runtime.received_tasks) == 2
+
+
 def test_coding_agent_runs_when_no_budget_policy_engine() -> None:
     """M15-T02: budget_policy_engine을 주입하지 않으면(기존 모든 조립
     코드) 예산 확인 자체를 건너뛰어 기존 동작과 완전히 하위 호환된다."""

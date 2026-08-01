@@ -39,7 +39,11 @@ class ShellAgent:
     같은 SHELL Capability의 다른 `ShellAgent` 인스턴스가 함께 등록돼
     있어도 `AgentScheduler`가 선택한 인스턴스만 실제로 처리한다
     (`is_agent_selected()`). 둘 중 하나라도 주어지지 않으면(기본값
-    `None`) 이 확인을 건너뛰어 기존 동작과 완전히 동일하다."""
+    `None`) 이 확인을 건너뛰어 기존 동작과 완전히 동일하다.
+
+    **병렬 실행(M58, ADR-0076)**: `max_parallel_agents`(기본값 1)를
+    `is_agent_selected()`의 `max_parallel`로 전달한다 — `CodingAgent`와
+    동일한 패턴(상세 설명은 `coding_agent.py` 참고)."""
 
     def __init__(
         self,
@@ -50,6 +54,7 @@ class ShellAgent:
         process_runner: ProcessRunner | None = None,
         agent_registry: AgentRegistry | None = None,
         agent_scheduler: AgentScheduler | None = None,
+        max_parallel_agents: int = 1,
     ) -> None:
         if command_kind not in _WHITELISTED_COMMANDS:
             raise UnknownShellCommandKindError(command_kind)
@@ -58,6 +63,7 @@ class ShellAgent:
         self._process_runner = process_runner if process_runner is not None else ProcessRunner()
         self._agent_registry = agent_registry
         self._agent_scheduler = agent_scheduler
+        self._max_parallel_agents = max_parallel_agents
         self._session = agent_runtime.start_agent(
             AgentRole.SHELL, frozenset({AgentCapability.SHELL})
         )
@@ -72,6 +78,7 @@ class ShellAgent:
                 self._agent_scheduler,
                 AgentCapability.SHELL,
                 self._session.agent_id,
+                max_parallel=self._max_parallel_agents,
             ):
                 return
         task_id = event.payload["task_id"]

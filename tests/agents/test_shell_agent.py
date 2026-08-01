@@ -144,6 +144,45 @@ def test_ignores_unrelated_event_types() -> None:
     assert process_runner.received_commands == []
 
 
+def test_both_instances_run_when_max_parallel_agents_is_two() -> None:
+    """M58(ADR-0076) — max_parallel_agents=2를 두 인스턴스 모두에 주면
+    같은 Event를 병렬로 처리한다."""
+    shared_registry = FakeAgentRegistry()
+    shared_manager = FakeAgentManager()
+    shared_scheduler = FakeAgentScheduler()
+    event_bus = InMemoryEventBus()
+    process_runner = FakeProcessRunner(ProcessResult(returncode=0, stdout="ok", stderr=""))
+
+    first_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    ShellAgent(
+        agent_runtime=first_agent_runtime,
+        event_bus=event_bus,
+        command_kind="test",
+        process_runner=process_runner,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+        max_parallel_agents=2,
+    )
+    second_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    ShellAgent(
+        agent_runtime=second_agent_runtime,
+        event_bus=event_bus,
+        command_kind="test",
+        process_runner=process_runner,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+        max_parallel_agents=2,
+    )
+
+    event_bus.publish(Event(event_id="e1", event_type=CODE_COMPLETED, payload={"task_id": "t1"}))
+
+    assert process_runner.received_commands == [["pytest"], ["pytest"]]
+
+
 def test_ignores_code_completed_when_not_selected_by_scheduler() -> None:
     """M56(ADR-0074) — CodingAgent(M13)와 동일한 패턴: 같은 SHELL
     Capability를 가진 다른 ShellAgent 인스턴스가 Scheduler에게

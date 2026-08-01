@@ -51,3 +51,47 @@ def test_is_agent_selected_true_for_sole_registered_agent() -> None:
     scheduler = FakeAgentScheduler()
 
     assert is_agent_selected(registry, scheduler, AgentCapability.CODING, "agent-1") is True
+
+
+def test_is_agent_selected_max_parallel_default_still_picks_only_one() -> None:
+    registry = FakeAgentRegistry()
+    _register(registry, "agent-1")
+    _register(registry, "agent-2")
+    scheduler = FakeAgentScheduler()
+
+    assert is_agent_selected(registry, scheduler, AgentCapability.CODING, "agent-2") is False
+
+
+def test_is_agent_selected_max_parallel_two_picks_both_top_candidates() -> None:
+    registry = FakeAgentRegistry()
+    _register(registry, "agent-1")
+    _register(registry, "agent-2")
+    scheduler = FakeAgentScheduler()
+
+    assert (
+        is_agent_selected(
+            registry, scheduler, AgentCapability.CODING, "agent-1", max_parallel=2
+        )
+        is True
+    )
+    assert (
+        is_agent_selected(
+            registry, scheduler, AgentCapability.CODING, "agent-2", max_parallel=2
+        )
+        is True
+    )
+
+
+def test_is_agent_selected_max_parallel_excludes_agent_beyond_the_limit() -> None:
+    registry = FakeAgentRegistry()
+    _register(registry, "agent-1")
+    _register(registry, "agent-2")
+    _register(registry, "agent-3")
+    scheduler = FakeAgentScheduler()
+
+    assert (
+        is_agent_selected(
+            registry, scheduler, AgentCapability.CODING, "agent-3", max_parallel=2
+        )
+        is False
+    )

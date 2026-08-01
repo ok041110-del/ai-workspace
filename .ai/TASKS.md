@@ -14356,6 +14356,65 @@ Scheduler 고도화 공식 완료(Approved)**. PR #68(코드) 병합
 
 ---
 
+## Milestone 58 — Agent 병렬 실행 (완료)
+
+**배경**: M13 Review(T2-08 이후)가 "M13 범위 밖으로 명시적으로 제외한
+것" 3항목으로 남긴 병렬 실행 / Scheduler 정책 고도화(M57 해소) /
+다른 Agent로의 확장(M56 해소) 중 마지막으로 남은 항목. 사용자가
+"이어서 구현"으로 착수 요청.
+
+**T01 Domain Analysis(코드 조사로 확정)**: `AgentScheduler.select()`
+의 `max_count`는 T2-02(Milestone 1)부터 존재했고 ARCHITECTURE.md
+§3.4가 "동시에 활동할 Agent 후보를 최대 max_count개 선택"이라고 이미
+문서화해 뒀지만, 유일한 호출부인 `agents/scheduling.py`의
+`is_agent_selected()`가 내부적으로 `max_count=1`을 고정 전달해 실제
+협업 흐름에서 한 번도 1을 넘겨 쓰인 적이 없음을 `grep`으로 확인.
+새 스레드/프로세스 실행 메커니즘(§3.9 `EngineRuntime.run_parallel()`
+책임)은 범위 밖으로 확정 — M58은 순수하게 이미 있는 `max_count` 축을
+실제로 연결하는 배선 작업으로 한정.
+
+**T02 설계**: `is_agent_selected()`에 `max_parallel: int = 1` 매개변수
+추가 → `agent_scheduler.select(candidates, capability, max_parallel)`
+로 전달, 판정을 `selected.agent_id == agent_id`(단일 비교)에서
+`any(agent.agent_id == agent_id for agent in selected)`(집합 소속
+여부)로 일반화. 기본값 1이면 M13/M56/M57과 100% 동일. 5개 Agent
+(`CodingAgent`/`ReviewAgent`/`DocumentationAgent`/`ShellAgent`/
+`CoordinatorAgent`) 전부에 M56과 동일한 반복 패턴으로 선택적 생성자
+인자 `max_parallel_agents: int = 1` 추가(새 중앙 디스패처·Base Class
+없음, YAGNI).
+
+**T03 구현**:
+- `src/ai_workspace/agents/scheduling.py` — `is_agent_selected()`에
+  `max_parallel` 매개변수 추가, 판정 로직을 집합 소속 여부로 일반화.
+- `src/ai_workspace/agents/coding_agent.py`/`review_agent.py`/
+  `documentation_agent.py`/`shell_agent.py`/`coordinator_agent.py` —
+  각각 `max_parallel_agents: int = 1` 생성자 인자 추가, `is_agent_
+  selected()` 호출부에 전달.
+- `tests/agents/test_scheduling.py` — 신규 3건(기본값 1 하위 호환,
+  max_parallel=2로 상위 2개 모두 선택, 초과분 제외).
+- `tests/agents/test_coding_agent.py`/`test_review_agent.py`/
+  `test_documentation_agent.py`/`test_shell_agent.py`/
+  `test_coordinator_agent.py` — 각 1건(두 인스턴스에 `max_parallel_
+  agents=2`를 주면 같은 Event를 병렬로 처리함을 증명).
+- `docs/ARCHITECTURE.md` §2(변경 이력)/§3.4(Agent Scheduler 절)
+  갱신.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 새 Domain/Interface 없이 기존 `AgentScheduler`/`is_agent_selected()` 확장 | ✅ |
+| 2 | 실제 스레드/프로세스 병렬성은 범위 밖(`run_parallel()`과 명확히 구분) | ✅ |
+| 3 | `max_parallel_agents` 미지정 시(기본값 1) 5개 Agent 전부 기존 동작과 100% 동일 | ✅ |
+| 4 | 2 이상 지정 시 우선순위 상위 N개 인스턴스가 실제로 같은 Event를 처리함을 테스트로 증명 | ✅ |
+| 5 | 새 중앙 디스패처/Base Class 없음(M56 패턴 재사용, YAGNI) | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1176개(신규 8개, 회귀 없음)/`ruff`/`mypy`(222 source files)
+전부 통과. ADR-0076.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

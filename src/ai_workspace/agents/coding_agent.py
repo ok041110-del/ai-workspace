@@ -50,6 +50,13 @@ class CodingAgent:
     같은 질문에 같은 답을 얻는다. 둘 중 하나라도 주어지지 않으면(기본값
     `None`) 이 확인을 건너뛰어 기존 동작과 완전히 동일하다.
 
+    **병렬 실행(M58, ADR-0076)**: `max_parallel_agents`(기본값 1)를
+    `is_agent_selected()`의 `max_parallel`로 그대로 전달한다. 기본값이면
+    M13과 완전히 동일하게 우선순위 1위 인스턴스만 처리하지만, 2 이상을
+    주면 우선순위 상위 N개 인스턴스가 모두 같은 Event를 동시에 처리해
+    동일 Capability를 가진 여러 `CodingAgent`가 실제로 병렬 처리량을
+    나눠 갖는다.
+
     **Token & Cost Optimization(M15)**: `budget_policy_engine`을
     주입하면, 실제로 실행(`engine_runtime.run()`)하기 전에
     `engine_runtime.estimate_cost()`로 예상 비용을 조회하고
@@ -74,6 +81,7 @@ class CodingAgent:
         engine_runtime: EngineRuntime,
         agent_registry: AgentRegistry | None = None,
         agent_scheduler: AgentScheduler | None = None,
+        max_parallel_agents: int = 1,
         budget_policy_engine: BudgetPolicyEngine | None = None,
         knowledge_provider: KnowledgeProvider | None = None,
     ) -> None:
@@ -82,6 +90,7 @@ class CodingAgent:
         self._engine_runtime = engine_runtime
         self._agent_registry = agent_registry
         self._agent_scheduler = agent_scheduler
+        self._max_parallel_agents = max_parallel_agents
         self._budget_policy_engine = budget_policy_engine
         self._knowledge_provider = knowledge_provider
         self._session = agent_runtime.start_agent(
@@ -98,6 +107,7 @@ class CodingAgent:
                 self._agent_scheduler,
                 AgentCapability.CODING,
                 self._session.agent_id,
+                max_parallel=self._max_parallel_agents,
             ):
                 return
         task_id = event.payload["task_id"]
