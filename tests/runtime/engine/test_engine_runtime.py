@@ -517,3 +517,114 @@ def test_record_consensus_outcome_only_updates_named_engines() -> None:
     assert runtime.consensus_weight(caps, "claude") == 1.0
     assert runtime.consensus_weight(caps, "codex") == 0.0
     assert runtime.consensus_weight(caps, "gemini") == 0.5
+
+
+class ReentrantEngineAdapter(MockEngineAdapter):
+    """M74(ADR-0092) 테스트용 — `run()` 도중 같은 `EngineRuntime.run()`을
+    한 번 더 호출해(재진입) 바깥 호출이 아직 세션을 정리하지 않은
+    상태(동시 실행 중인 것처럼)를 동기적으로 재현한다. `InMemoryEngineRuntime`
+    은 실제 스레드를 쓰지 않으므로, 이 재진입 트릭이 "이 엔진이 이미
+    사용 중일 때 다음 선택이 어떻게 되는지"를 결정적으로 테스트하는
+    유일한 방법이다."""
+
+    def __init__(self, runtime: InMemoryEngineRuntime, nested_task: Task) -> None:
+        super().__init__()
+        self._runtime = runtime
+        self._nested_task = nested_task
+        self.nested_result: EngineResult | None = None
+        self.nested_error: Exception | None = None
+
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
+        if task.task_id != self._nested_task.task_id:
+            try:
+                self.nested_result = self._runtime.run(self._nested_task)
+            except NoSuitableEngineError as exc:
+                self.nested_error = exc
+        return super().run(session_id, task, model=model)
+
+
+def test_run_uses_engine_normally_when_capacity_available() -> None:
+    """M74(ADR-0092): 여유(capacity)가 있으면 `max_concurrency`를 지정해도
+    기존과 동일하게 그 엔진이 선택된다(재진입 호출도 같은 엔진을 쓴다)."""
+    runtime = InMemoryEngineRuntime()
+    outer_task = make_task("outer")
+    nested_task = make_task("nested")
+    adapter = ReentrantEngineAdapter(runtime, nested_task)
+    runtime.register_engine("engine-a", adapter, max_concurrency=2)
+
+    result = runtime.run(outer_task)
+
+    assert result.success is True
+    assert adapter.nested_error is None
+    assert adapter.nested_result is not None
+    assert adapter.nested_result.success is True
+
+
+def test_run_falls_back_to_other_engine_when_provider_at_capacity() -> None:
+    """M74(ADR-0092): engine-a가 `max_concurrency=1`에 도달한 상태(바깥
+    호출이 아직 세션을 점유 중)에서 재진입 호출이 들어오면, engine-a를
+    건너뛰고 다른 등록된 후보(engine-b)로 자동 fallback한다."""
+    runtime = InMemoryEngineRuntime()
+    outer_task = make_task("outer")
+    nested_task = make_task("nested")
+    adapter_a = ReentrantEngineAdapter(runtime, nested_task)
+    adapter_b = MockEngineAdapter()
+    runtime.register_engine("engine-a", adapter_a, max_concurrency=1)
+    runtime.register_engine("engine-b", adapter_b)
+
+    result = runtime.run(outer_task)
+
+    assert result.success is True
+    assert adapter_a.nested_error is None
+    assert adapter_a.nested_result is not None
+    assert adapter_a.nested_result.success is True
+
+
+def test_run_raises_when_all_providers_at_capacity() -> None:
+    """M74(ADR-0092): capacity를 초과한 엔진 하나뿐이고 대체 후보가 없으면,
+    기존과 동일한 예외 정책(`NoSuitableEngineError`)을 그대로 따른다."""
+    runtime = InMemoryEngineRuntime()
+    outer_task = make_task("outer")
+    nested_task = make_task("nested")
+    adapter = ReentrantEngineAdapter(runtime, nested_task)
+    runtime.register_engine("engine-a", adapter, max_concurrency=1)
+
+    runtime.run(outer_task)
+
+    assert isinstance(adapter.nested_error, NoSuitableEngineError)
+    assert adapter.nested_result is None
+
+
+def test_run_releases_capacity_after_completion() -> None:
+    """M74(ADR-0092): 실행이 끝나면(release) 같은 엔진을 다시 선택할 수
+    있다 — `max_concurrency`는 순간적인 동시 실행 수만 제한하지, 누적
+    호출 횟수를 제한하지 않는다."""
+    runtime = InMemoryEngineRuntime()
+    adapter = MockEngineAdapter()
+    runtime.register_engine("engine-a", adapter, max_concurrency=1)
+
+    first = runtime.run(make_task("t1"))
+    second = runtime.run(make_task("t2"))
+
+    assert first.success is True
+    assert second.success is True
+
+
+def test_run_respects_capacity_with_engine_selection_policy() -> None:
+    """M74(ADR-0092): `engine_selection_policy`가 주입된 비용 기반 선택
+    경로(`_build_candidates()`)에서도 capacity 필터가 동일하게 적용된다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    outer_task = make_task("outer")
+    nested_task = make_task("nested")
+    adapter_a = ReentrantEngineAdapter(runtime, nested_task)
+    adapter_b = CostedEngineAdapter(estimated_cost_usd=0.5)
+    runtime.register_engine("engine-a", adapter_a, max_concurrency=1)
+    runtime.register_engine("engine-b", adapter_b)
+
+    result = runtime.run(outer_task)
+
+    assert result.success is True
+    assert adapter_a.nested_error is None
+    assert adapter_a.nested_result is not None
+    assert adapter_a.nested_result.success is True
+    assert adapter_b.run_count == 1

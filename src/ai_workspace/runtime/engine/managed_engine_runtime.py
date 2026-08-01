@@ -114,6 +114,18 @@ class ManagedEngineRuntime(EngineRuntime):
     `EngineRuntime`은 `ResultAggregator`를 호출하거나 알지 못하며, 이
     두 메서드로만 연결된다(YAGNI, 기존 ADR-0080/0081의 결합 방지 원칙
     유지).
+
+    **Provider Concurrency Management(Milestone 74, ADR-0092)**:
+    `register_engine()`에 `max_concurrency`를 지정한 엔진은 동시에 실행
+    중인 세션 수(`run()`이 세션을 만든 시점부터 완료/실패/타임아웃으로
+    정리될 때까지 — `ThreadPoolExecutor`로 실제 동시 실행되는
+    `run_parallel()`도 각 Task가 내부적으로 `run()`을 호출하므로 그대로
+    적용된다)를 in-process로 카운트한다. 한도에 도달한 엔진은 후보에서
+    제외되어 다른 후보로 자동 fallback하고, 후보 전체가 busy면 기존과
+    동일하게 `NoSuitableEngineError`를 던진다. `run_ensemble()`/
+    `run_ensemble_auto()`는 `InMemoryEngineRuntime`과 동일한 이유(M62/M68)
+    로 이 범위에서 제외했다(YAGNI). `max_concurrency`를 지정하지 않으면
+    이전 동작과 100% 동일하다.
     """
 
     def __init__(
@@ -135,11 +147,37 @@ class ManagedEngineRuntime(EngineRuntime):
         self._engine_reliability: dict[str, EngineReliabilityStat] = {}
         self._execution_memory: dict[tuple[frozenset[str], str], EngineExecutionMemoryStat] = {}
         self._consensus_agreement: dict[tuple[frozenset[str], str], ConsensusAgreementStat] = {}
+        self._max_concurrency: dict[str, int] = {}
+        self._in_flight: dict[str, int] = {}
+        self._concurrency_lock = threading.Lock()
 
-    def register_engine(self, name: str, adapter: EngineAdapter) -> None:
+    def register_engine(
+        self, name: str, adapter: EngineAdapter, *, max_concurrency: int | None = None
+    ) -> None:
         if name in self._engines:
             raise DuplicateEngineError(name)
         self._engines[name] = adapter
+        if max_concurrency is not None:
+            self._max_concurrency[name] = max_concurrency
+
+    def _has_capacity(self, name: str) -> bool:
+        limit = self._max_concurrency.get(name)
+        if limit is None:
+            return True
+        return self._in_flight.get(name, 0) < limit
+
+    def _try_acquire(self, name: str) -> bool:
+        with self._concurrency_lock:
+            limit = self._max_concurrency.get(name)
+            current = self._in_flight.get(name, 0)
+            if limit is not None and current >= limit:
+                return False
+            self._in_flight[name] = current + 1
+            return True
+
+    def _release(self, name: str) -> None:
+        with self._concurrency_lock:
+            self._in_flight[name] = max(0, self._in_flight.get(name, 0) - 1)
 
     def _record_engine_outcome(self, name: str, success: bool) -> None:
         stat = self._engine_reliability.get(name, EngineReliabilityStat())
@@ -188,48 +226,53 @@ class ManagedEngineRuntime(EngineRuntime):
         *,
         model: str | None = None,
     ) -> EngineResult:
-        name, adapter = self._require_adapter(required_capabilities, task)
-        session_id = adapter.create_session()
-        self._task_sessions[task.task_id] = session_id
-        self._task_adapters[task.task_id] = adapter
-        self._task_status[task.task_id] = EngineSessionStatus.RUNNING
-        self._publish("engine_task_started", task.task_id, session_id)
+        name, adapter = self._require_adapter_and_acquire(required_capabilities, task)
+        try:
+            session_id = adapter.create_session()
+            self._task_sessions[task.task_id] = session_id
+            self._task_adapters[task.task_id] = adapter
+            self._task_status[task.task_id] = EngineSessionStatus.RUNNING
+            self._publish("engine_task_started", task.task_id, session_id)
 
-        result_box: dict[str, EngineResult] = {}
-        error_box: dict[str, BaseException] = {}
+            result_box: dict[str, EngineResult] = {}
+            error_box: dict[str, BaseException] = {}
 
-        def _execute() -> None:
-            try:
-                result_box["result"] = adapter.run(session_id, task, model=model)
-            except BaseException as exc:
-                error_box["error"] = exc
+            def _execute() -> None:
+                try:
+                    result_box["result"] = adapter.run(session_id, task, model=model)
+                except BaseException as exc:
+                    error_box["error"] = exc
 
-        thread = threading.Thread(target=_execute, daemon=True)
-        started = time.monotonic()
-        thread.start()
-        effective_timeout = (
-            timeout_seconds if timeout_seconds is not None else self._default_timeout_seconds
-        )
-        thread.join(effective_timeout)
-        latency = time.monotonic() - started
+            thread = threading.Thread(target=_execute, daemon=True)
+            started = time.monotonic()
+            thread.start()
+            effective_timeout = (
+                timeout_seconds if timeout_seconds is not None else self._default_timeout_seconds
+            )
+            thread.join(effective_timeout)
+            latency = time.monotonic() - started
 
-        if thread.is_alive():
-            self._record_engine_outcome(name, success=False)
-            self._record_execution_memory(required_capabilities, name, False, latency)
-            return self._finish_as_timeout(task.task_id, session_id, adapter)
+            if thread.is_alive():
+                self._record_engine_outcome(name, success=False)
+                self._record_execution_memory(required_capabilities, name, False, latency)
+                return self._finish_as_timeout(task.task_id, session_id, adapter)
 
-        if "error" in error_box:
-            adapter.destroy_session(session_id)
-            self._task_status[task.task_id] = EngineSessionStatus.FAILED
-            self._record_engine_outcome(name, success=False)
-            self._record_execution_memory(required_capabilities, name, False, latency)
-            raise error_box["error"]
+            if "error" in error_box:
+                adapter.destroy_session(session_id)
+                self._task_status[task.task_id] = EngineSessionStatus.FAILED
+                self._record_engine_outcome(name, success=False)
+                self._record_execution_memory(required_capabilities, name, False, latency)
+                raise error_box["error"]
 
-        result = self._finish_as_completed(task.task_id, session_id, adapter, result_box["result"])
-        if result.error != "cancelled":
-            self._record_engine_outcome(name, result.success)
-            self._record_execution_memory(required_capabilities, name, result.success, latency)
-        return result
+            result = self._finish_as_completed(
+                task.task_id, session_id, adapter, result_box["result"]
+            )
+            if result.error != "cancelled":
+                self._record_engine_outcome(name, result.success)
+                self._record_execution_memory(required_capabilities, name, result.success, latency)
+            return result
+        finally:
+            self._release(name)
 
     def run_parallel(
         self,
@@ -335,15 +378,23 @@ class ManagedEngineRuntime(EngineRuntime):
         return self._task_status[task_id]
 
     def _require_adapter(
-        self, required_capabilities: frozenset[str], task: Task
+        self,
+        required_capabilities: frozenset[str],
+        task: Task,
+        excluded: frozenset[str] = frozenset(),
     ) -> tuple[str, EngineAdapter]:
         if self._engine_selection_policy is None:
             for name, adapter in self._engines.items():
-                if required_capabilities.issubset(adapter.capabilities()):
-                    return name, adapter
+                if name in excluded:
+                    continue
+                if not required_capabilities.issubset(adapter.capabilities()):
+                    continue
+                if not self._has_capacity(name):
+                    continue
+                return name, adapter
             raise NoSuitableEngineError(required_capabilities)
 
-        candidates = self._build_candidates(task, required_capabilities)
+        candidates = self._build_candidates(task, required_capabilities, excluded)
         decision = self._engine_selection_policy.select(
             task, candidates, budget_policy_engine=self._budget_policy_engine
         )
@@ -351,12 +402,34 @@ class ManagedEngineRuntime(EngineRuntime):
             raise NoSuitableEngineError(required_capabilities)
         return decision.engine_name, self._engines[decision.engine_name]
 
+    def _require_adapter_and_acquire(
+        self, required_capabilities: frozenset[str], task: Task
+    ) -> tuple[str, EngineAdapter]:
+        """`_has_capacity()` 필터링은 읽기 전용 스냅샷이라, 동시에 여러
+        호출이 같은 엔진을 고른 뒤 실제 슬롯 획득(`_try_acquire()`)에서
+        경쟁할 수 있다. 획득에 실패하면 그 엔진을 제외하고 다시 선택해
+        남은 후보로 안전하게 fallback한다(`InMemoryEngineRuntime.
+        _select_and_acquire()`와 동일한 패턴)."""
+        excluded: set[str] = set()
+        while True:
+            name, adapter = self._require_adapter(required_capabilities, task, frozenset(excluded))
+            if self._try_acquire(name):
+                return name, adapter
+            excluded.add(name)
+
     def _build_candidates(
-        self, task: Task, required_capabilities: frozenset[str]
+        self,
+        task: Task,
+        required_capabilities: frozenset[str],
+        excluded: frozenset[str] = frozenset(),
     ) -> list[EngineCandidate]:
         candidates: list[EngineCandidate] = []
         for name, adapter in self._engines.items():
+            if name in excluded:
+                continue
             if not required_capabilities.issubset(adapter.capabilities()):
+                continue
+            if not self._has_capacity(name):
                 continue
             stat = self._engine_reliability.get(name, EngineReliabilityStat())
             if stat.is_unreliable() and not stat.is_probe_eligible():

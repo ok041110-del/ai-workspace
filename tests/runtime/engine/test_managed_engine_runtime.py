@@ -965,3 +965,74 @@ def test_record_consensus_outcome_only_updates_named_engines() -> None:
     assert runtime.consensus_weight(caps, "claude") == 1.0
     assert runtime.consensus_weight(caps, "codex") == 0.0
     assert runtime.consensus_weight(caps, "gemini") == 0.5
+
+
+class CountingSlowEngineAdapter(SlowParallelEngineAdapter):
+    """M74(ADR-0092) 테스트용 — `SlowParallelEngineAdapter`에 호출 횟수
+    카운터를 더한다. `run_parallel()`은 각 Task마다 별도 스레드에서
+    `run()`을 호출하므로 카운터 증가도 Lock으로 보호한다."""
+
+    def __init__(self, delay_seconds: float) -> None:
+        super().__init__(delay_seconds)
+        self._count_lock = threading.Lock()
+        self.run_count = 0
+
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
+        with self._count_lock:
+            self.run_count += 1
+        return super().run(session_id, task, model=model)
+
+
+def test_run_parallel_falls_back_to_other_engine_when_provider_at_capacity() -> None:
+    """M74(ADR-0092): engine-a에 `max_concurrency=1`을 지정하면, 실제
+    `ThreadPoolExecutor`로 동시에 제출된 두 Task 중 하나만 engine-a를
+    쓰고 나머지는 자동으로 engine-b로 fallback한다 — 둘 다 실패 없이
+    완료된다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    engine_a = CountingSlowEngineAdapter(delay_seconds=0.2)
+    engine_b = CountingSlowEngineAdapter(delay_seconds=0.05)
+    runtime.register_engine("engine-a", engine_a, max_concurrency=1)
+    runtime.register_engine("engine-b", engine_b)
+    tasks = [make_task("t1"), make_task("t2")]
+
+    results = runtime.run_parallel(tasks)
+
+    assert [result.success for result in results] == [True, True]
+    assert engine_a.run_count == 1
+    assert engine_b.run_count == 1
+
+
+def test_run_parallel_uses_only_engine_when_capacity_allows_both() -> None:
+    """M74 이전과 100% 동일 동작(회귀 확인): `max_concurrency`가 두 Task를
+    모두 수용할 만큼 넉넉하면(또는 지정하지 않으면), 등록 순서상 첫
+    후보가 그대로 두 Task 모두에 선택된다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    engine_a = CountingSlowEngineAdapter(delay_seconds=0.05)
+    engine_b = CountingSlowEngineAdapter(delay_seconds=0.05)
+    runtime.register_engine("engine-a", engine_a, max_concurrency=2)
+    runtime.register_engine("engine-b", engine_b)
+    tasks = [make_task("t1"), make_task("t2")]
+
+    results = runtime.run_parallel(tasks)
+
+    assert [result.success for result in results] == [True, True]
+    assert engine_a.run_count == 2
+    assert engine_b.run_count == 0
+
+
+def test_run_parallel_fails_individual_task_when_all_providers_at_capacity() -> None:
+    """M74(ADR-0092): 대체 후보가 전혀 없고 유일한 엔진마저 capacity를
+    초과하면, 기존 개별 Task 실패 격리 정책(M10-T01/T02)대로 그 Task만
+    `EngineResult(success=False)`가 되고 다른 Task의 결과에는 영향이
+    없다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    engine_a = CountingSlowEngineAdapter(delay_seconds=0.2)
+    runtime.register_engine("engine-a", engine_a, max_concurrency=1)
+    tasks = [make_task("t1"), make_task("t2")]
+
+    results = runtime.run_parallel(tasks)
+
+    successes = [result.success for result in results]
+    assert successes.count(True) == 1
+    assert successes.count(False) == 1
+    assert engine_a.run_count == 1
