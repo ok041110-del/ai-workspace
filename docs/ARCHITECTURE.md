@@ -715,6 +715,27 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   은 `run_ensemble()`과 동일한 이유로 재시도 없이 내부 Runtime에 위임한다.
   새 Core Domain Interface 없음 — 기존 `EngineRuntime`의 메서드 1개
   확장뿐(30종 유지).
+- **Execution Memory & Context Routing(Milestone 69, ADR-0087)**: M68까지
+  `EngineSelectionPolicy`/`EngineReliabilityStat`은 "이 엔진이 전반적으로
+  신뢰할 만한가"만 판단할 뿐, "이 종류의 Task(`required_capabilities`
+  조합)에서 어떤 엔진이 더 잘 수행했는가"를 기억해 다음 실행에 반영하지
+  않았다. `domain.engine_execution_memory.EngineExecutionMemoryStat`
+  (M65 `EngineReliabilityStat`과 필드 구성은 같지만 집계 키가
+  `(required_capabilities, engine_name)` 조합)로 `run()`(Managed는
+  Cancel된 경우 제외)/`run_ensemble_auto()`의 실행 결과+latency를
+  in-process 누적한다. `_build_candidates()`가 (기존 신뢰도 제외 이후)
+  `_reorder_by_execution_memory()`로 같은 `required_capabilities`
+  조합에서 표본이 충분한 엔진을 성공률 내림차순으로 재정렬한다 —
+  `EngineSelectionPolicy`의 비용 기준 `min()`은 비용이 다르면 항상 진짜
+  최저 비용을 그대로 고르므로, 이 재정렬은 **비용이 동률인 후보끼리의
+  tie-break로만** 작동한다(M65/M66의 "복구 즉시 완전 신뢰" 판정과
+  충돌하지 않도록 구현 중 발견해 의도적으로 이렇게 범위를 좁혔다).
+  표본 부족(미검증) 엔진은 가장 나쁜 값이 아니라 중립값(0.5)으로 취급해
+  이미 확인된 저성능 엔진보다는 우선한다. latency는 기록만 하고 랭킹에는
+  반영하지 않는다(YAGNI). 신뢰도 제외와 동일하게 `engine_selection_policy`
+  주입 경로에서만 적용된다(100% 하위 호환). `RecoveringEngineRuntime`은
+  무변경(순수 위임). 새 Core Domain Interface 없음 — 기존 `EngineRuntime`
+  의 내부 구현만 확장(30종 유지).
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 

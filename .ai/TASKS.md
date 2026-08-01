@@ -15140,6 +15140,87 @@ model=None) -> dict[str, EngineResult]` abstract method 하나만 추가한다.
 
 ---
 
+## Milestone 69 — Execution Memory & Context Routing: 실행 결과 기반 Engine 추천 (완료)
+
+**배경**: 사용자가 "M69 Execution Memory & Context Routing"으로 명확한
+범위를 담아 착수를 요청했다 — M68까지는 Engine 선택이 (비용/신뢰도로)
+학습은 하지만, Task의 종류별로 "어떤 Engine 조합이 더 좋았는지"를
+기억해 다음 실행에 반영하는 메커니즘은 없었다.
+
+**사용자 승인(AskUserQuestion, 4회)**:
+1. 유사도 기준 — domain.Task에 TaskType/난이도 필드가 없어 **required_
+   capabilities 조합만 사용(권장)**으로 확정. Role까지 포함하려면
+   `EngineRuntime` 전체 시그니처에 새 파라미터가 필요해 범위가 커진다.
+2. 저장 위치 — **새 domain 값 객체 + EngineRuntime in-process 상태
+   (권장)**로 확정. 기존 `ExecutionMemoryStore`(M39)는 Agent 실행 경로와
+   완전히 분리된 별도 통로(ADR-0053, §8 규칙 14)라 재사용 시 계층 경계가
+   깨진다.
+3. 반영 방식 — **후보 랭킹에 성공률을 반영해 재정렬(권장)**으로 확정.
+4. 지표 범위 — **성공/실패만 랭킹에 반영, latency는 기록만(권장)**으로
+   확정.
+
+**설계상 발견한 충돌과 해결**: 최초 구현("표본 충분 + 최고 성공률
+엔진으로 후보를 좁힘")은 M65 `test_run_with_policy_recovers_after_
+successful_probe` 테스트를 깨뜨렸다 — Probe가 성공해 `is_unreliable()`
+이 즉시 거짓이 되어도(M66의 "복구 즉시 완전 신뢰"), 과거 실패 이력이
+여전히 남아 있는 실행 메모리 성공률이 다른 엔진보다 낮으면 후보에서
+계속 밀려나 M65/M66이 이미 보장한 동작이 깨졌다. 이를 해결하기 위해
+"후보 제외/좁히기"가 아니라 **비용이 동률(tie)인 후보끼리만 성공률로
+재정렬**하는 방식으로 범위를 좁혔다 — `EngineSelectionPolicy`의 `min()`
+은 비용이 다르면 항상 진짜 최저 비용을 그대로 고르므로, 비용이 다른
+기존 모든 M64/M65/M66/M68 테스트는 전혀 영향받지 않는다. 또한 재정렬
+자체도 "표본 부족(미검증)"을 가장 나쁜 값이 아니라 중립값(0.5)으로
+취급한다 — 그렇지 않으면 아직 검증되지 않았을 뿐인 엔진이 이미 확인된
+저성능 엔진보다 부당하게 밀리는 새 버그가 생긴다.
+
+**구현**:
+- `src/ai_workspace/domain/engine_execution_memory.py`(신규) —
+  `EngineExecutionMemoryStat`(total/success_count/failure_count/
+  total_latency_seconds, M65 `EngineReliabilityStat`과 필드 구성은
+  같지만 집계 키가 `(required_capabilities, engine_name)` 조합이라는
+  점이 다르다). `success_rate()`는 표본 3건 미만이면 `None`(M49/M65와
+  동일한 임계값), `average_latency_seconds()`는 기록만 하고 랭킹에는
+  반영하지 않는다.
+- `src/ai_workspace/runtime/engine/engine_runtime.py`
+  (`InMemoryEngineRuntime`), `src/ai_workspace/runtime/engine/
+  managed_engine_runtime.py`(`ManagedEngineRuntime`) — `run()`(Managed는
+  Cancel 제외)/`run_ensemble_auto()`가 실행 결과+latency를
+  `_record_execution_memory()`로 누적. `_build_candidates()`가 (기존
+  신뢰도 제외 이후) `_reorder_by_execution_memory()`로 후보를 성공률
+  내림차순 재정렬(표본 부족/미검증 엔진은 중립값 0.5) — `engine_
+  selection_policy` 주입 경로에서만 적용, 비용이 다른 경우 결과에
+  영향 없음(100% 하위 호환).
+- `RecoveringEngineRuntime`은 변경 없음(순수 위임 구조 그대로, `run()`/
+  `run_ensemble_auto()`를 그대로 내부 Runtime에 위임).
+- `tests/domain/test_engine_execution_memory.py`(신규) — 7건(성공/실패
+  기록+latency, 표본 부족 시 `None`, 표본 충분 시 성공률 계산, latency
+  평균 계산).
+- `tests/runtime/engine/test_engine_runtime.py`,
+  `tests/runtime/engine/test_managed_engine_runtime.py` — 각 2건 추가
+  (비용 동률에서 검증된 성공 이력이 미검증 엔진보다 우선, 반대로
+  검증된 "전량 실패" 이력은 미검증 엔진보다 밀림).
+- `docs/ARCHITECTURE.md` §3.9에 Execution Memory & Context Routing(M69)
+  서술 추가. 새 Core Domain Interface 없음(기존 `EngineRuntime`의 내부
+  구현만 확장, 30종 유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | M68까지 Task 종류별 Engine 추천 메커니즘이 없었음을 코드로 확인 | ✅ |
+| 2 | 넓은 "Execution Memory & Context Routing" 주제를 AskUserQuestion 4회로 구체 설계까지 좁힘 | ✅ |
+| 3 | 기존 Learning/Memory 구조(M65 `EngineReliabilityStat` 패턴) 재사용, 새 Core Domain Interface 없음 | ✅ |
+| 4 | 유사한 Task(같은 required_capabilities)에서 성공률이 높은 엔진이 우선 추천됨을 테스트로 증명 | ✅ |
+| 5 | M65/M66의 신뢰도 제외·Probe 복구 회귀 테스트가 전부 그대로 통과(설계 충돌 해결 확인) | ✅ |
+| 6 | 비용이 다른 경우 기존 M64 cost 규칙이 100% 그대로 유지됨(회귀 없음) | ✅ |
+| 7 | latency는 기록만 하고 랭킹에 반영하지 않음을 코드/테스트로 확인 | ✅ |
+| 8 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1286개(신규 12개, 회귀 없음)/`ruff`/`mypy`(231 source files)
+전부 통과. ADR-0087.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

@@ -6106,3 +6106,101 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   회귀 없음)/`ruff`/`mypy`(230 source files) 전부 통과. `.ai/TASKS.md`
   Milestone 68 절 신규 추가. `docs/ARCHITECTURE.md` §3.9 Engine Runtime
   절에 Dynamic Ensemble Routing 서술 추가.
+
+## ADR-0087: Execution Memory & Context Routing — 실행 결과 기반 Engine 추천 (Milestone 69)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion 4회로 유사도 기준·저장
+  위치·반영 방식·지표 범위를 순차 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M69 Execution Memory & Context Routing"으로 착수를
+  요청했다 — M68까지 `EngineSelectionPolicy`(M17)/`EngineReliabilityStat`
+  (M65)는 "이 엔진이 전반적으로 신뢰할 만한가/저렴한가"만 판단할 뿐,
+  "이 종류의 Task에서 어떤 Engine이 더 잘 수행했는가"를 기억해 다음
+  실행에 반영하는 경로는 없었다(코드 확인, 추측 아님).
+- 결정:
+  1. AskUserQuestion으로 유사도 판단 키를 확정: domain.Task에는
+     TaskType/난이도 필드가 없고 `EngineRuntime`은 `required_
+     capabilities`만 받으므로, Role/TaskType까지 포함하려면 `run()`/
+     `run_parallel()`/`run_ensemble_auto()` 전체 시그니처에 새 파라미터가
+     필요해 범위가 커진다 — 사용자가 `required_capabilities` 조합만
+     사용하는 안(권장)을 선택.
+  2. 저장 위치는 새 domain 값 객체 + `EngineRuntime` in-process 상태로
+     확정 — 기존 `ExecutionMemoryStore`(M39, `memory/
+     execution_memory_store.py`)는 `RecommendationExecutionService`
+     (Execution Platform) 전용의 완전히 분리된 경로(ADR-0053,
+     ARCHITECTURE.md §8 규칙 14)라, `EngineRuntime`(Agent 경로)에서
+     직접 재사용하면 이미 확정된 계층 경계가 깨진다. `EngineReliabilityStat`
+     (M65)와 동일한 패턴(도메인 값 객체 + in-process dict)만 재사용한다.
+  3. `domain/engine_execution_memory.py`(신규)에
+     `EngineExecutionMemoryStat`(total/success_count/failure_count/
+     total_latency_seconds)을 신설한다 — `EngineReliabilityStat`과
+     필드 구성은 같지만 집계 키가 `(required_capabilities, engine_name)`
+     조합이라는 점이 다르다(엔진 이름 단독 키인 M65와 달리 "같은 종류의
+     Task에서만" 비교). `success_rate()`는 M49/M65와 동일한 임계값
+     (표본 3건 미만이면 `None`)을 재사용한다.
+  4. `InMemoryEngineRuntime`/`ManagedEngineRuntime`의 `run()`(Managed는
+     Cancel된 경우 제외)/`run_ensemble_auto()`가 실행 결과와 latency를
+     `_record_execution_memory()`로 누적한다.
+  5. 반영 방식은 "후보 랭킹에 성공률을 반영해 재정렬"로 확정 — 다만
+     구현 중 발견한 충돌(아래 참고) 때문에, 문자 그대로 "재정렬"만
+     하고 후보를 제외/좁히지는 않는다. `_build_candidates()`가 (기존
+     신뢰도 제외 이후) `_reorder_by_execution_memory()`로 후보를 성공률
+     내림차순 정렬한다.
+  6. latency는 기록만 하고 랭킹 공식에는 반영하지 않는다(사용자 선택,
+     새 가중치 공식을 설계하지 않는다, YAGNI).
+  7. **설계 충돌과 해결**: 최초 구현("표본 충분 + 최고 성공률 엔진으로
+     후보를 좁힘")은 M65 `test_run_with_policy_recovers_after_
+     successful_probe`를 깨뜨렸다 — Probe가 성공해 `is_unreliable()`이
+     즉시 거짓이 되어도(M66의 "복구 즉시 완전 신뢰" 보장), 과거 실패
+     이력이 남아 있는 실행 메모리 성공률이 다른 엔진보다 낮으면 그
+     보장이 깨졌다. `EngineSelectionPolicy.select()`가 비용 기준
+     `min()`으로 항상 진짜 최저 비용을 고르고, 동률일 때만 순서가
+     결과에 영향을 준다는 성질을 이용해, **"후보 제외"가 아니라 "비용
+     동률 tie-break로만" 범위를 좁혔다** — 비용이 다른 모든 기존
+     M64/M65/M66/M68 테스트는 정렬 순서와 무관하게 그대로 통과한다.
+  8. 재정렬 자체도 "표본 부족(미검증)"을 가장 나쁜 값이 아니라
+     중립값(`_NEUTRAL_RATE = 0.5`)으로 취급한다 — 그렇지 않으면 아직
+     검증되지 않았을 뿐인 엔진이 이미 확인된 저성능(성공률 0.0) 엔진
+     보다 부당하게 밀리는 새 버그가 생긴다(구현 중 테스트로 발견해
+     즉시 수정).
+  9. 신뢰도 제외와 동일하게 `engine_selection_policy` 주입 경로에서만
+     적용된다 — 미주입 시(M64 이전 동작) 100% 하위 호환.
+  10. `RecoveringEngineRuntime`은 변경 없음(순수 위임 구조 그대로).
+  11. 영속 저장소는 M49/M50/M65와 동일하게 이번 범위 밖(in-process
+      한정, YAGNI).
+- 대안:
+  1. 기존 `ExecutionMemoryStore`/`MemoryEngine`(M39) 재사용 — 기각:
+     ARCHITECTURE.md §8 규칙 14가 이미 "완전히 별도의 경로"로 분리해
+     둔 Agent 경로와 Execution Platform 경로를 다시 합치게 된다.
+  2. Role까지 포함한 유사도 키 — 기각: `EngineRuntime`의 `run()`/
+     `run_parallel()`/`run_ensemble_auto()` 전체에 새 `role` 파라미터를
+     추가해야 해 인터페이스 변경 범위가 M69의 "최소 확장" 취지를
+     벗어난다.
+  3. 조회 전용 `recommend_engine()` 메서드만 추가하고 실제 선택 로직은
+     바꾸지 않음 — 기각: 사용자가 "다음 실행에 반영"을 명시적으로
+     요구했고, 단순 조회 API는 그 요구를 충족하지 못한다.
+  4. 성공률+평균 latency 가중 합산 랭킹 — 기각: 사용자가 성공/실패만
+     반영하는 안을 선택. 가중치 공식(합산 비율)을 새로 설계해야 해
+     범위가 커진다.
+  5. 표본 충분 시 최고 성공률 엔진으로 후보를 제외/좁힘(최초 구현) —
+     기각(구현 중 회귀 발견 후 철회): M65/M66의 "복구 즉시 완전 신뢰"
+     보장과 충돌해 기존 통과 테스트가 깨졌다. tie-break 재정렬로
+     범위를 좁혀 이 충돌을 해소했다.
+- 이유: `EngineReliabilityStat`(M65)이 이미 "표본 부족 시 성급하게
+  판단하지 않는다"는 임계값 규칙을 검증된 형태로 갖고 있었으므로, 같은
+  패턴을 `(required_capabilities, engine_name)` 키로 재사용하면 새
+  알고리즘 없이 "Task 종류별 Engine 성과 기억"이라는 공백을 메울 수
+  있었다. `EngineSelectionPolicy`의 비용 `min()`이 동률에서만 순서에
+  의존한다는 성질을 활용해 재정렬 범위를 tie-break로 좁힘으로써, 기존
+  M64~M68의 모든 확정된 동작(비용 우선, 신뢰도 제외, Probe 복구)을
+  전혀 건드리지 않고 새 신호를 안전하게 추가할 수 있었다.
+- 결과/영향: `domain/engine_execution_memory.py`(신규),
+  `runtime/engine/engine_runtime.py`(`InMemoryEngineRuntime`),
+  `runtime/engine/managed_engine_runtime.py`(`ManagedEngineRuntime`)
+  수정. `RecoveringEngineRuntime` 무변경. 새 Core Domain Interface 없음
+  (기존 `EngineRuntime`의 내부 구현만 확장, 30종 유지). 신규 테스트
+  12건(`domain` 7건, `InMemoryEngineRuntime` 2건, `ManagedEngineRuntime`
+  2건 — 정확한 분해는 `.ai/TASKS.md` Milestone 69 참고). `pytest` 1286개
+  (신규 12개, 회귀 없음)/`ruff`/`mypy`(231 source files) 전부 통과.
+  `.ai/TASKS.md` Milestone 69 절 신규 추가. `docs/ARCHITECTURE.md`
+  §3.9 Engine Runtime 절에 Execution Memory & Context Routing 서술 추가.

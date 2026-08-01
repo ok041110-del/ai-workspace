@@ -890,3 +890,49 @@ def test_run_ensemble_auto_excludes_unreliable_engine_with_policy() -> None:
     results = runtime.run_ensemble_auto(make_task("after"), top_n=2)
 
     assert set(results) == {"reliable_expensive"}
+
+
+def test_run_with_policy_prefers_proven_success_over_untested_on_cost_tie() -> None:
+    """M69(ADR-0087): 같은 비용(tie)에서, 이미 같은 required_capabilities
+    조합으로 3회 이상 성공한 "검증된" 엔진이 아직 한 번도 실행된 적
+    없는 "미검증" 엔진보다 tie-break에서 우선한다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    proven = CostedEngineAdapter(1.0)
+    runtime.register_engine("proven", proven)
+    for i in range(3):
+        runtime.run(make_task(f"seed-{i}"))
+    assert proven.run_count == 3
+
+    untested = CostedEngineAdapter(1.0)
+    runtime.register_engine("untested", untested)
+
+    runtime.run(make_task("tie"))
+
+    assert proven.run_count == 4
+    assert untested.run_count == 0
+
+
+def test_run_with_policy_prefers_untested_over_proven_failure_on_cost_tie() -> None:
+    """M69(ADR-0087): 반대로, 같은 비용(tie)에서 검증된 이력이 "전량
+    실패"라면 아직 미검증인 엔진이 오히려 우선한다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    proven_bad = CostedEngineAdapter(1.0, succeed=False)
+    runtime.register_engine("proven_bad", proven_bad)
+    for i in range(2):
+        runtime.run(make_task(f"seed-{i}"))
+    assert proven_bad.run_count == 2
+
+    untested = CostedEngineAdapter(1.0)
+    runtime.register_engine("untested", untested)
+
+    runtime.run(make_task("still-unknown"))
+    assert proven_bad.run_count == 3
+    assert untested.run_count == 0
+
+    runtime.run(make_task("now-known-bad"))
+    assert proven_bad.run_count == 3
+    assert untested.run_count == 1
