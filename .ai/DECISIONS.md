@@ -6204,3 +6204,106 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   (신규 12개, 회귀 없음)/`ruff`/`mypy`(231 source files) 전부 통과.
   `.ai/TASKS.md` Milestone 69 절 신규 추가. `docs/ARCHITECTURE.md`
   §3.9 Engine Runtime 절에 Execution Memory & Context Routing 서술 추가.
+
+## ADR-0088: Adaptive Consensus — Consensus 합의 이력 기반 가중 투표 (Milestone 70)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion 4회로 이력 의미·저장 위치·
+  반영 방식·인터페이스 변경 범위를 순차 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M70 Adaptive Consensus"로 착수를 요청했다 — M69까지는
+  과거 실행 이력을 바탕으로 Engine/Ensemble 선택 자체는 학습하지만,
+  `run_ensemble()`(M62) 결과를 합치는 `ResultAggregator`(M63,
+  `MajorityVoteAggregator`)는 `EngineResult.output`의 정확한 문자열
+  일치 다수결(표 개수)만 본다 — 어떤 엔진의 표가 과거에 실제 합의와
+  자주 일치했는지는 전혀 반영하지 않는다(코드 확인, 추측 아님).
+- 결정:
+  1. AskUserQuestion으로 "Consensus 성공 이력"의 의미를 확정: M69의
+     `EngineExecutionMemoryStat`(태스크 실행 성공/실패)을 그대로
+     재사용하는 안과, 엔진의 투표가 최종 합의와 일치했는지를 추적하는
+     새 이력을 만드는 안 중 사용자가 후자(권장)를 선택했다 — "실행
+     성공"과 "투표가 다수 의견에 속함"은 서로 다른 신호이기 때문이다
+     (실행은 성공했지만 소수 의견일 수 있다).
+  2. 저장 위치는 M65/M69와 동일한 패턴(`EngineRuntime` in-process
+     상태)으로 확정 — 새 `domain/consensus_agreement.py`에
+     `ConsensusAgreementStat`(total/agree_count/disagree_count,
+     `agreement_rate()`는 M49/M65/M69와 동일한 최소 표본 3건 임계값)을
+     신설하고, `InMemoryEngineRuntime`/`ManagedEngineRuntime`에
+     `(required_capabilities, engine_name)` 키의 `_consensus_agreement`
+     dict로 누적한다.
+  3. `EngineRuntime`에 `record_consensus_outcome(required_capabilities,
+     agreeing_engines, dissenting_engines)`(기록, side-effect)와
+     `consensus_weight(required_capabilities, engine_name)`(조회,
+     read-only — 표본 부족/기록 없음이면 중립값 0.5)을 최소 확장한다.
+     `EngineRuntime`은 `ResultAggregator`의 존재를 모른 채로 남는다
+     (ADR-0080/0081이 이미 명시한 두 계약 간 결합 방지 원칙 유지) — 이
+     두 메서드만이 유일한 접점이다.
+  4. 반영 방식은 "가중치 합계 비교"로 확정 — 새 `ResultAggregator`
+     구현체 `AdaptiveConsensusAggregator`(생성자로 `EngineRuntime`과
+     `required_capabilities`를 주입받음)가 `votes`를 표 개수 대신
+     `consensus_weight()` 합계로 비교해 승자를 정하고, 동률이면(M63과
+     동일하게) 표 개수 → 입력 순서로 2차 tie-break한다. 신뢰도 낮은
+     엔진의 표를 아예 제외하는 필터링 방식은 채택하지 않았다 — M69에서
+     "제외/필터링" 방식이 M65/M66 회귀를 일으켰던 전례를 반복하지
+     않기 위해서다.
+  5. 기존 `ResultAggregator` 인터페이스는 무변경으로 확정 — `aggregate()`
+     시그니처·반환 타입에 손대지 않고 새 클래스만 추가한다.
+     `MajorityVoteAggregator`를 포함한 기존 구현체·호출자는 전혀
+     영향받지 않는다(100% 하위 호환).
+  6. `AdaptiveConsensusAggregator.aggregate()`는 승자를 정한 직후 자신이
+     계산한 `agreeing_engines`/`dissenting_engines`를
+     `record_consensus_outcome()`으로 그대로 되돌려준다 — 호출자가
+     별도로 기록을 챙기지 않아도 다음 호출부터 자동으로 학습이
+     누적된다. `failed_engines`(성공하지 못해 애초에 투표하지 못한
+     엔진)는 기록 대상에서 제외한다 — 합의 자체에 참여하지 않았기
+     때문이다.
+  7. `RecoveringEngineRuntime`은 두 메서드 모두 내부 Runtime에 순수
+     위임한다 — 재시도와 무관한 read/write 상태이기 때문이다(M62/M68과
+     동일한 근거).
+  8. 영속 저장소는 M49/M50/M65/M69와 동일하게 이번 범위 밖(in-process
+     한정, YAGNI).
+- 대안:
+  1. M69 `EngineExecutionMemoryStat`(태스크 실행 성공률)을 그대로 투표
+     가중치로 재사용 — 기각: 사용자가 "Consensus 성공 이력을 재사용"을
+     명시적으로 요구했고, "실행 성공"과 "투표가 합의와 일치"는 의미가
+     다른 신호라 재사용 시 혼란을 야기할 수 있어 별도 값 객체로
+     분리하는 안(권장)을 선택했다.
+  2. `ResultAggregator` 인스턴스 자체가 상태를 들고 다님(EngineRuntime과
+     완전 독립) — 기각: 여러 aggregator 인스턴스 간 이력 공유가 안
+     되고, M65/M69가 이미 확립한 "EngineRuntime이 상태를 갖고 조회
+     메서드를 노출" 패턴과 어긋난다.
+  3. 신뢰도 낮은 엔진 표를 집계에서 아예 제외(필터링) — 기각: M69의
+     "narrow candidates" 최초 시도가 M65/M66 회귀를 일으켰던 전례가
+     있어, 위험이 검증된 tie-break/가중합 방식(권장안)만 채택했다.
+  4. `aggregate()`에 optional `weights` 매개변수 추가 — 기각: 사용자가
+     "무변경, 새 클래스만 추가"를 선택했다. 기존 시그니처를 건드리면
+     `ResultAggregator`를 구현하는 모든 클래스(현재와 향후)가 새
+     매개변수를 알아야 해 계약 변경 범위가 M70의 "최소 확장" 취지를
+     벗어난다.
+- 이유: `EngineReliabilityStat`(M65)/`EngineExecutionMemoryStat`(M69)이
+  이미 검증한 "in-process dict + 최소 표본 임계값 + 중립값 처리" 패턴을
+  그대로 재사용하면, `ResultAggregator`/`EngineRuntime` 두 계약의
+  시그니처를 전혀 바꾸지 않고도 "과거 합의에 자주 참여한 엔진의 표를
+  더 무겁게 반영"이라는 새 요구를 안전하게 추가할 수 있었다. `EngineRuntime`
+  이 `ResultAggregator`를 모르는 기존 결합 방지 원칙(ADR-0080/0081)도
+  "기록/조회 메서드 2개"로만 접점을 좁혀 그대로 유지했다.
+- 결과/영향: `domain/consensus_agreement.py`(신규),
+  `interfaces/engine_runtime.py`(`record_consensus_outcome()`/
+  `consensus_weight()` abstract method 2개 추가),
+  `runtime/engine/engine_runtime.py`(`InMemoryEngineRuntime`),
+  `runtime/engine/managed_engine_runtime.py`(`ManagedEngineRuntime`),
+  `runtime/engine/recovering_engine_runtime.py`(순수 위임 2개 추가),
+  `runtime/engine/result_aggregator.py`(`AdaptiveConsensusAggregator`
+  신규 클래스) 수정. 테스트 더블(`tests/interfaces/fakes.py`
+  `FakeEngineRuntime`, `tests/core/test_workspace_core.py`
+  `SpyEngineRuntime`, `tests/agents/test_coding_agent.py`
+  `RecordingEngineRuntime`, `tests/runtime/engine/
+  test_recovering_engine_runtime.py` `ScriptedEngineRuntime`) 모두
+  새 abstract method 2개에 대한 최소 구현/스텁 추가. 새 Core Domain
+  Interface 없음(기존 `EngineRuntime`의 메서드 2개 확장 + 기존
+  `ResultAggregator` 계약 재사용, 30종 유지). 신규 테스트 18건(`domain`
+  5건, `InMemoryEngineRuntime` 5건, `ManagedEngineRuntime` 3건,
+  `ResultAggregator` 4건, `RecoveringEngineRuntime` 1건). `pytest`
+  1304개(신규 18개, 회귀 없음)/`ruff`/`mypy`(232 source files) 전부
+  통과. `.ai/TASKS.md` Milestone 70 절 신규 추가. `docs/ARCHITECTURE.md`
+  §3.9 Engine Runtime 절 및 §7 인터페이스 표(`EngineRuntime`/
+  `ResultAggregator`)에 Adaptive Consensus 서술 추가.

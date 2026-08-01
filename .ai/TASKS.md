@@ -15221,6 +15221,99 @@ successful_probe` 테스트를 깨뜨렸다 — Probe가 성공해 `is_unreliabl
 
 ---
 
+## Milestone 70 — Adaptive Consensus: Consensus 합의 이력 기반 가중 투표 (완료)
+
+**배경**: 사용자가 "M70 Adaptive Consensus"로 명확한 범위를 담아 착수를
+요청했다 — M69까지는 과거 실행 이력을 바탕으로 Engine/Ensemble 선택
+자체는 학습하지만, `run_ensemble()`(M62) 결과를 합치는
+`ResultAggregator`(M63, `MajorityVoteAggregator`)는 정확한 문자열 일치
+다수결(표 개수)에만 머물러 있었다 — 어떤 엔진의 표가 과거에 실제
+합의와 자주 일치했는지는 전혀 반영하지 않았다.
+
+**사용자 승인(AskUserQuestion, 4회)**:
+1. 이력 정의 — M69 `EngineExecutionMemoryStat`(실행 성공률) 재사용 안과
+   새 Consensus 전용 이력(투표가 합의와 일치했는지) 안 중 **새
+   Consensus 합의 이력(권장)**으로 확정. "실행 성공"과 "투표가 다수
+   의견에 속함"은 서로 다른 신호이기 때문이다.
+2. 저장 위치 — **EngineRuntime in-process 상태(권장)**로 확정.
+   M65/M69와 동일한 패턴을 재사용한다.
+3. 반영 방식 — **가중치 합계 비교(권장)**로 확정. 신뢰도 낮은 엔진의
+   표를 아예 제외하는 필터링 방식은 M69에서 겪은 회귀 전례 때문에
+   기각했다.
+4. 인터페이스 변경 범위 — **무변경, 새 클래스만 추가(권장)**로 확정.
+   `ResultAggregator.aggregate()` 시그니처는 그대로 두고 새
+   `AdaptiveConsensusAggregator` 클래스만 추가한다.
+
+**구현**:
+- `src/ai_workspace/domain/consensus_agreement.py`(신규) —
+  `ConsensusAgreementStat`(total/agree_count/disagree_count).
+  `agreement_rate()`는 표본 3건 미만이면 `None`(M49/M65/M69와 동일한
+  임계값). M69의 `EngineExecutionMemoryStat`과 필드 구성은 비슷하지만
+  "실행 성공/실패"가 아니라 "투표가 합의와 일치했는지"를 추적하는
+  별개 신호라 별도 값 객체로 분리했다.
+- `src/ai_workspace/interfaces/engine_runtime.py` — `EngineRuntime`에
+  `record_consensus_outcome(required_capabilities, agreeing_engines,
+  dissenting_engines)`(기록)/`consensus_weight(required_capabilities,
+  engine_name)`(조회, 표본 부족 시 중립값 0.5) 두 abstract method를
+  최소 확장. `EngineRuntime`은 `ResultAggregator`를 전혀 알지 못하며
+  (ADR-0080/0081의 결합 방지 원칙 유지) 이 두 메서드로만 연결된다.
+- `src/ai_workspace/runtime/engine/engine_runtime.py`
+  (`InMemoryEngineRuntime`), `src/ai_workspace/runtime/engine/
+  managed_engine_runtime.py`(`ManagedEngineRuntime`) — 위 두 메서드
+  구현, `(required_capabilities, engine_name)` 키의 `_consensus_agreement`
+  dict로 누적.
+- `src/ai_workspace/runtime/engine/recovering_engine_runtime.py` — 두
+  메서드 모두 내부 Runtime에 순수 위임(재시도와 무관한 상태).
+- `src/ai_workspace/runtime/engine/result_aggregator.py` —
+  `AdaptiveConsensusAggregator`(신규, `ResultAggregator` 구현체) 추가.
+  생성자로 `EngineRuntime`과 `required_capabilities`를 주입받아,
+  `consensus_weight()` 가중치 합계로 승자를 정하고(동률이면 표
+  개수 → 입력 순서로 2차 tie-break), 집계 직후 자신이 계산한
+  `agreeing_engines`/`dissenting_engines`를 `record_consensus_outcome()`
+  으로 되돌려준다. `aggregate()`의 기존 계약(시그니처·반환 타입·빈
+  입력/전원 실패 처리)은 전혀 바꾸지 않아 `MajorityVoteAggregator`는
+  영향받지 않는다(100% 하위 호환).
+- 테스트 더블(`tests/interfaces/fakes.py` `FakeEngineRuntime`,
+  `tests/core/test_workspace_core.py` `SpyEngineRuntime`,
+  `tests/agents/test_coding_agent.py` `RecordingEngineRuntime`,
+  `tests/runtime/engine/test_recovering_engine_runtime.py`
+  `ScriptedEngineRuntime`) 모두 새 abstract method 2개에 대한 최소
+  구현/스텁 추가.
+- `tests/domain/test_consensus_agreement.py`(신규) — 5건(합의/불합치
+  기록, 표본 부족 시 `None`, 표본 충분 시 비율 계산).
+- `tests/runtime/engine/test_engine_runtime.py`,
+  `tests/runtime/engine/test_managed_engine_runtime.py` — 각각
+  `consensus_weight()`/`record_consensus_outcome()` 기본값·표본
+  임계값·capability별 분리·엔진별 독립 기록을 검증하는 테스트 추가.
+- `tests/runtime/engine/test_result_aggregator.py` — 4건 추가(이력
+  없을 때 순수 다수결과 동일, 표는 적어도 과거 합의 일치율이 높은
+  엔진이 표가 많은 소수 의견 그룹을 이기는 핵심 시나리오, 집계 후
+  이력이 자동 기록됨, 전원 실패 시 이력 기록 없음).
+- `tests/runtime/engine/test_recovering_engine_runtime.py` — 1건 추가
+  (두 메서드 모두 내부 Runtime에 위임됨을 확인).
+- `docs/ARCHITECTURE.md` §3.9에 Adaptive Consensus(M70) 서술 추가,
+  §7 인터페이스 표 `EngineRuntime`/`ResultAggregator` 행 갱신. 새 Core
+  Domain Interface 없음(기존 `EngineRuntime`의 메서드 2개 확장 + 기존
+  `ResultAggregator` 계약 재사용, 30종 유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | M69까지 Consensus 결과 자체가 단순 다수결에 머물렀음을 코드로 확인 | ✅ |
+| 2 | 넓은 "Adaptive Consensus" 주제를 AskUserQuestion 4회로 구체 설계까지 좁힘 | ✅ |
+| 3 | 기존 Learning/Memory/EngineSelection 구조(M65/M69 패턴) 재사용, 새 Core Domain Interface 없음 | ✅ |
+| 4 | 기존 Majority Voting(`MajorityVoteAggregator`)과 100% 하위 호환(계약 무변경, 회귀 없음) | ✅ |
+| 5 | 표는 적어도 과거 합의 일치율이 높은 엔진의 표가 표는 많지만 이력이 나쁜 그룹을 이김을 테스트로 증명 | ✅ |
+| 6 | 이력이 없을 때(중립값) 순수 다수결과 동일하게 동작함을 테스트로 확인 | ✅ |
+| 7 | `EngineRuntime`이 `ResultAggregator`를 모르는 기존 결합 방지 원칙 유지(기록/조회 메서드 2개로만 연결) | ✅ |
+| 8 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1304개(신규 18개, 회귀 없음)/`ruff`/`mypy`(232 source files)
+전부 통과. ADR-0088.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

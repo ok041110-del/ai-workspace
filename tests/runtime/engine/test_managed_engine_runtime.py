@@ -936,3 +936,32 @@ def test_run_with_policy_prefers_untested_over_proven_failure_on_cost_tie() -> N
     runtime.run(make_task("now-known-bad"))
     assert proven_bad.run_count == 3
     assert untested.run_count == 1
+
+
+def test_consensus_weight_defaults_to_neutral_when_no_history() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+
+    assert runtime.consensus_weight(frozenset({"code"}), "claude") == 0.5
+
+
+def test_consensus_weight_reflects_agreement_rate_once_sample_sufficient() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    caps = frozenset({"code"})
+
+    for _ in range(3):
+        runtime.record_consensus_outcome(caps, ("claude",), ())
+    runtime.record_consensus_outcome(caps, (), ("claude",))
+
+    assert runtime.consensus_weight(caps, "claude") == 0.75
+
+
+def test_record_consensus_outcome_only_updates_named_engines() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    caps = frozenset({"code"})
+
+    for _ in range(3):
+        runtime.record_consensus_outcome(caps, ("claude",), ("codex",))
+
+    assert runtime.consensus_weight(caps, "claude") == 1.0
+    assert runtime.consensus_weight(caps, "codex") == 0.0
+    assert runtime.consensus_weight(caps, "gemini") == 0.5

@@ -359,6 +359,7 @@ class FakeEngineRuntime(EngineRuntime):
     def __init__(self) -> None:
         self._engines: dict[str, EngineAdapter] = {}
         self._task_status: dict[str, EngineSessionStatus] = {}
+        self._consensus_agreement: dict[tuple[frozenset[str], str], tuple[int, int]] = {}
 
     def register_engine(self, name: str, adapter: EngineAdapter) -> None:
         if name in self._engines:
@@ -458,6 +459,27 @@ class FakeEngineRuntime(EngineRuntime):
         if not names:
             raise NoSuitableEngineError(required_capabilities)
         return self.run_ensemble(task, names, model=model)
+
+    def record_consensus_outcome(
+        self,
+        required_capabilities: frozenset[str],
+        agreeing_engines: tuple[str, ...],
+        dissenting_engines: tuple[str, ...],
+    ) -> None:
+        for name in agreeing_engines:
+            key = (required_capabilities, name)
+            total, agree = self._consensus_agreement.get(key, (0, 0))
+            self._consensus_agreement[key] = (total + 1, agree + 1)
+        for name in dissenting_engines:
+            key = (required_capabilities, name)
+            total, agree = self._consensus_agreement.get(key, (0, 0))
+            self._consensus_agreement[key] = (total + 1, agree)
+
+    def consensus_weight(self, required_capabilities: frozenset[str], engine_name: str) -> float:
+        total, agree = self._consensus_agreement.get((required_capabilities, engine_name), (0, 0))
+        if total < 3:
+            return 0.5
+        return agree / total
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

@@ -5,6 +5,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
+from ai_workspace.domain.consensus_agreement import ConsensusAgreementStat
 from ai_workspace.domain.engine_execution_memory import EngineExecutionMemoryStat
 from ai_workspace.domain.engine_reliability import EngineReliabilityStat
 from ai_workspace.domain.engine_selection import EngineCandidate
@@ -103,6 +104,16 @@ class ManagedEngineRuntime(EngineRuntime):
     호환). M65/M66의 "복구 즉시 완전 신뢰" 판정과 충돌하지 않도록
     의도적으로 이렇게 범위를 좁혔다. 신뢰도 제외와 동일하게
     `engine_selection_policy` 주입 경로에서만 적용된다.
+
+    **Adaptive Consensus(Milestone 70, ADR-0088)**: `run_ensemble()`(M62)
+    결과를 `ResultAggregator`(M63)로 다수결한 뒤, 호출자(주로
+    `AdaptiveConsensusAggregator`)가 `record_consensus_outcome()`으로 어떤
+    엔진의 투표가 합의와 일치했는지 알려주면 `(required_capabilities,
+    engine_name)` 키로 `ConsensusAgreementStat`에 누적한다.
+    `consensus_weight()`는 이 기록을 조회하는 read-only 메서드다 —
+    `EngineRuntime`은 `ResultAggregator`를 호출하거나 알지 못하며, 이
+    두 메서드로만 연결된다(YAGNI, 기존 ADR-0080/0081의 결합 방지 원칙
+    유지).
     """
 
     def __init__(
@@ -123,6 +134,7 @@ class ManagedEngineRuntime(EngineRuntime):
         self._budget_policy_engine = budget_policy_engine
         self._engine_reliability: dict[str, EngineReliabilityStat] = {}
         self._execution_memory: dict[tuple[frozenset[str], str], EngineExecutionMemoryStat] = {}
+        self._consensus_agreement: dict[tuple[frozenset[str], str], ConsensusAgreementStat] = {}
 
     def register_engine(self, name: str, adapter: EngineAdapter) -> None:
         if name in self._engines:
@@ -278,6 +290,26 @@ class ManagedEngineRuntime(EngineRuntime):
             result = EngineResult(success=False, output="", error=str(exc))
         self._record_engine_outcome(name, result.success)
         return result
+
+    def record_consensus_outcome(
+        self,
+        required_capabilities: frozenset[str],
+        agreeing_engines: tuple[str, ...],
+        dissenting_engines: tuple[str, ...],
+    ) -> None:
+        for name in agreeing_engines:
+            key = (required_capabilities, name)
+            stat = self._consensus_agreement.get(key, ConsensusAgreementStat())
+            self._consensus_agreement[key] = stat.record(True)
+        for name in dissenting_engines:
+            key = (required_capabilities, name)
+            stat = self._consensus_agreement.get(key, ConsensusAgreementStat())
+            self._consensus_agreement[key] = stat.record(False)
+
+    def consensus_weight(self, required_capabilities: frozenset[str], engine_name: str) -> float:
+        stat = self._consensus_agreement.get((required_capabilities, engine_name))
+        rate = stat.agreement_rate() if stat is not None else None
+        return rate if rate is not None else _NEUTRAL_RATE
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

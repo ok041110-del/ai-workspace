@@ -468,3 +468,52 @@ def test_run_without_policy_is_unaffected_by_execution_memory() -> None:
 
     assert first.run_count == 5
     assert second.run_count == 0
+
+
+def test_consensus_weight_defaults_to_neutral_when_no_history() -> None:
+    runtime = InMemoryEngineRuntime()
+
+    assert runtime.consensus_weight(frozenset({"code"}), "claude") == 0.5
+
+
+def test_consensus_weight_neutral_when_sample_size_insufficient() -> None:
+    runtime = InMemoryEngineRuntime()
+    caps = frozenset({"code"})
+
+    runtime.record_consensus_outcome(caps, ("claude",), ())
+    runtime.record_consensus_outcome(caps, ("claude",), ())
+
+    assert runtime.consensus_weight(caps, "claude") == 0.5
+
+
+def test_consensus_weight_reflects_agreement_rate_once_sample_sufficient() -> None:
+    runtime = InMemoryEngineRuntime()
+    caps = frozenset({"code"})
+
+    for _ in range(3):
+        runtime.record_consensus_outcome(caps, ("claude",), ())
+    runtime.record_consensus_outcome(caps, (), ("claude",))
+
+    assert runtime.consensus_weight(caps, "claude") == 0.75
+
+
+def test_consensus_weight_is_scoped_per_required_capabilities() -> None:
+    runtime = InMemoryEngineRuntime()
+
+    for _ in range(3):
+        runtime.record_consensus_outcome(frozenset({"code"}), ("claude",), ())
+
+    assert runtime.consensus_weight(frozenset({"code"}), "claude") == 1.0
+    assert runtime.consensus_weight(frozenset({"docs"}), "claude") == 0.5
+
+
+def test_record_consensus_outcome_only_updates_named_engines() -> None:
+    runtime = InMemoryEngineRuntime()
+    caps = frozenset({"code"})
+
+    for _ in range(3):
+        runtime.record_consensus_outcome(caps, ("claude",), ("codex",))
+
+    assert runtime.consensus_weight(caps, "claude") == 1.0
+    assert runtime.consensus_weight(caps, "codex") == 0.0
+    assert runtime.consensus_weight(caps, "gemini") == 0.5

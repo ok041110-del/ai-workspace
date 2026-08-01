@@ -736,6 +736,28 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   주입 경로에서만 적용된다(100% 하위 호환). `RecoveringEngineRuntime`은
   무변경(순수 위임). 새 Core Domain Interface 없음 — 기존 `EngineRuntime`
   의 내부 구현만 확장(30종 유지).
+- **Adaptive Consensus(Milestone 70, ADR-0088)**: M63의 `MajorityVoteAggregator`
+  는 `run_ensemble()`(M62) 결과를 정확한 문자열 일치 다수결(표 개수)로만
+  집계했다 — 어떤 엔진의 표가 과거에 실제 합의와 자주 일치했는지는
+  전혀 반영하지 않았다. `EngineRuntime`에 `record_consensus_outcome(
+  required_capabilities, agreeing_engines, dissenting_engines)`(기록)/
+  `consensus_weight(required_capabilities, engine_name)`(조회) 두
+  메서드를 최소 확장하고, `(required_capabilities, engine_name)` 키로
+  새 도메인 값 객체 `domain.consensus_agreement.ConsensusAgreementStat`
+  (M69 `EngineExecutionMemoryStat`과 필드 구성은 비슷하지만 "태스크
+  실행 성공/실패"가 아니라 "투표가 합의와 일치했는지"를 추적하는 별개
+  신호이므로 분리)에 in-process 누적한다. 새 `ResultAggregator`(M63)
+  구현체 `AdaptiveConsensusAggregator`(생성자로 `EngineRuntime`과
+  `required_capabilities`를 주입받음)는 표 개수 대신 `consensus_weight()`
+  가중치 합계로 승자를 정하고(동률이면 표 개수로 2차 tie-break), 집계
+  직후 자신이 계산한 합의 결과를 `record_consensus_outcome()`으로 다시
+  알려준다 — `EngineRuntime`은 `ResultAggregator`를 호출하거나 알지
+  못하며(ADR-0080/0081의 결합 방지 원칙 유지) 이 두 메서드로만
+  연결된다. `ResultAggregator.aggregate()`의 기존 시그니처·반환 타입은
+  무변경이라 `MajorityVoteAggregator`는 전혀 영향받지 않는다(100% 하위
+  호환). 표본 부족(미검증) 엔진은 M65/M69와 동일하게 중립값(0.5)으로
+  취급한다. 새 Core Domain Interface 없음 — 기존 `EngineRuntime`의
+  메서드 2개 확장뿐, 기존 `ResultAggregator` 계약 재사용(30종 유지).
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -2599,12 +2621,12 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `InteractionEngine` | 입력 표면 정규화/응답 변환 (기존 ConversationEngine 대체) | Milestone 1 (T1-21) 계약, Milestone 3 구현 | **완료(계약)** |
 | `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료(계약)** |
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
-| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장 | **완료(계약)** |
+| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장 | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 | `WorkflowRepository` | `Workflow` 조회/저장(`AutomationActionExecutor`의 RUN_WORKFLOW가 `workflow_id`로 실제 Workflow를 찾는 유일한 통로) | Milestone 59 (계약+`InMemoryWorkflowRepository` 구현) | **완료(계약+구현)** |
 | `RemoteAgentDispatcher` | `Agent.location`이 가리키는 위치로 Event 전달(Agent Runtime 레벨의 원격 실행 경계) | Milestone 61 (계약+`LoopbackAgentDispatcher` 구현) | **완료(계약+구현)** |
-| `ResultAggregator` | `run_ensemble()`의 `dict[str, EngineResult]`를 정확한 문자열 일치 다수결로 대표 결과 하나로 집계(투표) | Milestone 63 (계약+`MajorityVoteAggregator` 구현) | **완료(계약+구현)** |
+| `ResultAggregator` | `run_ensemble()`의 `dict[str, EngineResult]`를 대표 결과 하나로 집계(투표) — 정확한 문자열 일치 다수결(M63) 또는 과거 Consensus 이력 기반 가중 투표(M70) | Milestone 63 (계약+`MajorityVoteAggregator` 구현), M70(ADR-0088) `AdaptiveConsensusAggregator` 구현 추가(계약 무변경) | **완료(계약+구현)** |
 
 > **참고**: "완료(계약)"은 Interface 정의와 Fake 기반 계약 테스트만 존재하고
 > 실제 서비스에 쓰일 구체 구현체는 아직 없다는 뜻이다(각 컴포넌트의 계획된

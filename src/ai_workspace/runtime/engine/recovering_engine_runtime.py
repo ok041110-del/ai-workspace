@@ -117,6 +117,21 @@ class RecoveringEngineRuntime(EngineRuntime):
             task, required_capabilities, top_n=top_n, model=model
         )
 
+    def record_consensus_outcome(
+        self,
+        required_capabilities: frozenset[str],
+        agreeing_engines: tuple[str, ...],
+        dissenting_engines: tuple[str, ...],
+    ) -> None:
+        """재시도와 무관한 read/write 상태이므로(Milestone 70, ADR-0088)
+        내부 Runtime에 그대로 위임한다."""
+        self._inner.record_consensus_outcome(
+            required_capabilities, agreeing_engines, dissenting_engines
+        )
+
+    def consensus_weight(self, required_capabilities: frozenset[str], engine_name: str) -> float:
+        return self._inner.consensus_weight(required_capabilities, engine_name)
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

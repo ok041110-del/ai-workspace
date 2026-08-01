@@ -162,6 +162,17 @@ class ScriptedEngineRuntime(EngineRuntime):
     ) -> dict[str, EngineResult]:
         raise NotImplementedError
 
+    def record_consensus_outcome(
+        self,
+        required_capabilities: frozenset[str],
+        agreeing_engines: tuple[str, ...],
+        dissenting_engines: tuple[str, ...],
+    ) -> None:
+        raise NotImplementedError
+
+    def consensus_weight(self, required_capabilities: frozenset[str], engine_name: str) -> float:
+        raise NotImplementedError
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:
@@ -380,6 +391,20 @@ def test_run_ensemble_auto_delegates_to_inner_runtime_without_retrying() -> None
     results = runtime.run_ensemble_auto(make_task(), top_n=2)
 
     assert set(results) == {"ok"}
+
+
+def test_consensus_outcome_methods_delegate_to_inner_runtime() -> None:
+    """M70(ADR-0088): 재시도와 무관한 read/write 상태이므로 그대로
+    내부 Runtime에 위임한다."""
+    managed = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime = RecoveringEngineRuntime(inner=managed, retry_policy=RetryPolicy())
+    caps = frozenset({"code"})
+
+    for _ in range(3):
+        runtime.record_consensus_outcome(caps, ("claude",), ())
+
+    assert runtime.consensus_weight(caps, "claude") == 1.0
+    assert managed.consensus_weight(caps, "claude") == 1.0
 
 
 def test_retry_policy_defaults_to_three_attempts() -> None:
