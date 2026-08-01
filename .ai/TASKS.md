@@ -14301,6 +14301,57 @@ Multi-Agent 자가 확인 가드 일반화 공식 완료(Approved)**. PR #65
 
 ---
 
+## Milestone 57 — Scheduler 고도화 (T03 완료, 사용자 승인 대기)
+
+**배경**: 사용자가 "우선순위·Capability·의존성 기반 Agent 선택 및
+실행 정책 설계"로 명시적 범위를 제시하며 착수 요청.
+
+**T01 Domain Analysis(사용자 확인, 3회)**: Capability 축은 기존
+필터로 충분해 범위 밖 확정. "의존성"은 Task 도메인에 선행 Task
+개념이 없어 "Agent 가용성"으로 재정의. 우선순위는 Agent에 명시적
+`priority` 필드 신설로 확정.
+
+**T02 MDD Review — 두 차례 실제 버그 발견·재설계(사용자 확인)**:
+1. 1차 설계(가용성=IDLE)를 승인받았으나, 구현 전 코드 조사로
+   `AgentRuntime.start_agent()`가 등록 즉시 Agent를 RUNNING으로
+   전이시키고 이벤트 처리 중 상태를 바꾸지 않는다는 것을 발견 —
+   IDLE만 가용으로 보면 모든 정상 Agent가 걸러지는 회귀가 됨을
+   보고, 사용자가 "RUNNING을 가용으로" 재확정.
+2. RUNNING 기준으로 구현 후 전체 `pytest` 실행 결과 9건 실패 —
+   `AgentRuntime`을 거치지 않고 도메인 기본값(IDLE)으로 `Agent`를
+   직접 생성하는 별도 테스트 계열이 이미 존재함을 발견. 사용자가
+   "STOPPED/ERROR만 제외(나머지 다 가용)"로 최종 재확정 — 두 Agent
+   생성 경로 모두 회귀 없이 통과.
+
+**T03 구현**:
+- `src/ai_workspace/domain/agent.py` — `Agent.priority: int = 0`
+  필드 추가(낮을수록 우선).
+- `src/ai_workspace/runtime/agent/agent_scheduler.py` —
+  `InMemoryAgentScheduler.select()`에 가용성 필터(STOPPED/ERROR만
+  제외) + `priority` 안정 정렬 추가.
+- `src/ai_workspace/interfaces/agent_scheduler.py` — 계약 docstring
+  을 새 가용성·우선순위 규칙으로 갱신.
+- `tests/runtime/agent/test_agent_scheduler.py` — 신규 8건(priority
+  우선순위, 안정 정렬로 동점 시 원래 순서 보존, STOPPED/ERROR 제외
+  2건 파라미터화, IDLE/RUNNING/WAITING/PAUSED 포함 4건 파라미터화).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 새 Domain/Interface 없이 기존 `AgentScheduler`/`Agent` 확장 | ✅ |
+| 2 | Capability 축은 범위 밖(기존 필터 유지, 사용자 확인) | ✅ |
+| 3 | 가용성 정의를 실제 코드 조사로 두 차례 검증·재확정(추측 없음) | ✅ |
+| 4 | priority 안정 정렬로 M13/M56 "첫 매치" 동작 100% 보존(회귀 없음) | ✅ |
+| 5 | 두 Agent 생성 경로(IDLE 기본값/RUNNING 실행) 모두 회귀 없음 | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과 | ✅ |
+
+`pytest` 1168개(신규 8개, 회귀 없음)/`ruff`/`mypy`(222 source files)
+전부 통과. ADR-0075. PR 생성·CI 확인·Merge·`main` 반영·Vault Index
+갱신 후 최종 완료 선언 예정(이전 Milestone과 동일한 절차).
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

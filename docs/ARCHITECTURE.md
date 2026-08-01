@@ -337,6 +337,22 @@ Execution Platform (M36~M38) — 실행·상태 전이·스케줄링
   디스패처·Base Class 없이 M13의 기존 패턴을 5개 사례로 반복
   (YAGNI), 새 Domain/Interface 없음. 프로덕션 Composition Root에는
   M13도 아직 배선되지 않아 이번에도 배선하지 않음(MVP 범위 유지).
+- **M57 Scheduler 고도화 — 완료(2026-08-01, ADR-0075)**: M13/M56의
+  "첫 매치" Scheduler 정책에 우선순위·가용성을 추가했다. `Agent`에
+  `priority: int = 0`(낮을수록 우선) 필드를 신설하고,
+  `InMemoryAgentScheduler.select()`가 capability 필터 후 가용성
+  필터(`AgentStatus.STOPPED`/`ERROR`만 제외)를 거쳐 `priority`로
+  안정 정렬한다. 설계 과정에서 두 차례 실제 버그를 코드 조사·
+  `pytest` 실행으로 발견해 재설계했다 — ①`AgentRuntime.
+  start_agent()`가 등록 즉시 Agent를 RUNNING으로 전이시켜 IDLE만
+  가용으로 보면 모든 정상 Agent가 걸러지는 회귀, ②이 저장소에
+  `AgentRuntime`을 거치지 않고 도메인 기본값(IDLE)으로 Agent를
+  직접 생성하는 별도 테스트 계열이 있어 RUNNING만 가용으로 봐도
+  9건이 깨지는 회귀. 최종적으로 STOPPED/ERROR만 제외하는 것으로
+  두 Agent 생성 경로 모두 회귀 없이 통과시켰다. priority 동점 시
+  안정 정렬이 `candidates` 원래 순서를 보존해 M13/M56 "첫 매치"
+  동작과 100% 동일함을 수학적으로 보장한다. 새 Domain/Interface
+  없이 기존 파일 3개만 수정.
 
 ## 3. 핵심 컴포넌트
 
