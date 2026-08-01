@@ -14624,6 +14624,78 @@ ADR-0025)도 `EngineAdapter` 내부로만 범위를 한정해 Agent 레벨과는
 
 ---
 
+## Milestone 62 — Multi-LLM Orchestrator: run_ensemble() (완료)
+
+**배경**: 사용자가 "M62 Multi-LLM Orchestrator(Claude, GPT, Gemini 등
+혼합)"으로 착수 요청. 조사 결과 `LLMProvider` enum은 이미 OPENAI/
+ANTHROPIC/GOOGLE/XAI 4종을 모델링하고 있고, `CLIEngineAdapter` +
+`CodexProvider`/`GeminiCliProvider`로 Provider별 커맨드 조립 코드까지
+존재했다(단, 이 세션 환경엔 실제 CLI 바이너리가 없어 검증 불가 —
+`.ai/TASKS.md` M6 절 등에 반복 기록됨). 그러나 "Engine 선택"은
+`EngineRuntime.run()`/`run_parallel()` 둘 다 "Task 1개당 Adapter
+1개"만 고르는 라우팅이었다 — `run_parallel()`조차 여러 Task를 각자
+하나의 Adapter로 돌릴 뿐, **하나의 Task를 여러 Provider에 동시에
+보내 결과를 비교/합치는 메커니즘은 어디에도 없었다**(추측 아님, 코드
+경로 직접 확인).
+
+**사용자 승인(AskUserQuestion)**: "동일 Task를 여러 Provider에 병렬
+실행"으로 범위 확정(Codex/Gemini CLI 실제 검증이나 다른 주제는 범위
+밖).
+
+**T02 설계**: `EngineRuntime`에 `run_ensemble(task, engine_names, *,
+model=None) -> dict[str, EngineResult]`를 신설한다. `run()`처럼
+`required_capabilities` 기반 "첫 매칭" 선택을 쓰지 않고
+`register_engine()`에 쓰인 정확한 이름으로 여러 Adapter를 지정한다 —
+여러 Provider를 의도적으로 섞어 돌리는 것이 목적이므로 capability
+매칭 규칙은 맞지 않는다. `ManagedEngineRuntime`은 `run_parallel()`과
+동일한 `ThreadPoolExecutor` 메커니즘을 재사용해 실제로 동시에
+실행한다. `status(task_id)`(task_id당 상태 1개)와는 의미가 충돌해
+(같은 task_id가 여러 엔진에서 동시에 도는데 상태 저장소는 1개뿐)
+`run_ensemble()`은 이 추적에 관여하지 않는다 — 세션 생성→실행→정리만
+독립 수행. 개별 엔진 실패(미등록 이름 포함)는 `run_parallel()`의
+M10-T01/T02 원칙과 동일하게 그 이름의 `EngineResult(success=False)`로
+격리한다. 결과 투표/합치기 로직은 추가하지 않는다(YAGNI) — 호출자가
+비교한다. `RecoveringEngineRuntime`은 재시도 없이 내부 Runtime에
+위임(실패한 개별 결과도 비교 대상이라 재시도로 덮으면 왜곡).
+
+**T03 구현**:
+- `src/ai_workspace/interfaces/engine_runtime.py` — `run_ensemble()`
+  추상 메서드 추가.
+- `src/ai_workspace/runtime/engine/engine_runtime.py`
+  (`InMemoryEngineRuntime`) — 순차 구현.
+- `src/ai_workspace/runtime/engine/managed_engine_runtime.py`
+  (`ManagedEngineRuntime`) — `ThreadPoolExecutor` 기반 실제 병렬 구현.
+- `src/ai_workspace/runtime/engine/recovering_engine_runtime.py`
+  (`RecoveringEngineRuntime`) — 재시도 없이 내부 Runtime에 위임.
+- `EngineRuntime`의 모든 테스트 더블(`tests/interfaces/fakes.py`
+  `FakeEngineRuntime`, `tests/agents/test_coding_agent.py`
+  `RecordingEngineRuntime`, `tests/core/test_workspace_core.py`
+  `SpyEngineRuntime`, `tests/runtime/engine/
+  test_recovering_engine_runtime.py` `ScriptedEngineRuntime`)에
+  `run_ensemble()` 추가(신규 추상 메서드이므로 전부 구현 필요).
+- 신규 테스트 10건: `InMemoryEngineRuntime` 3건, `ManagedEngineRuntime`
+  6건(동시 실행 증명·개별 실패 격리·미등록 이름·빈 목록·`status()`
+  비관여), `RecoveringEngineRuntime` 위임 1건.
+- `docs/ARCHITECTURE.md` §3.9에 Multi-LLM Orchestrator 서술 추가(새
+  Core Domain Interface 없음 — `EngineRuntime`에 메서드만 추가, 29종
+  유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | "Task 1개-Adapter 1개" 라우팅과 "같은 Task-여러 Provider" 오케스트레이션의 실제 공백을 코드 경로로 확인 | ✅ |
+| 2 | 넓은 "Multi-LLM Orchestrator" 주제를 사용자 확인으로 좁은 범위로 확정 | ✅ |
+| 3 | `run_ensemble()`이 실제로 동시 실행됨을 시간 측정으로 증명 | ✅ |
+| 4 | 개별 엔진 실패(미등록 이름 포함)가 다른 결과에 영향 없음을 증명 | ✅ |
+| 5 | 투표/합치기 로직 등 실증되지 않은 확장은 추가하지 않음(YAGNI) | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1207개(신규 10개, 회귀 없음)/`ruff`/`mypy`(226 source files)
+전부 통과. ADR-0080.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

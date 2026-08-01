@@ -5576,3 +5576,82 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   files) 전부 통과. `.ai/TASKS.md` Milestone 61 절 신규 추가. `docs/
   ARCHITECTURE.md` §3.4에 Distributed Multi-Agent 서술 추가, §7
   Interface 표 갱신.
+
+## ADR-0080: Multi-LLM Orchestrator — EngineRuntime.run_ensemble() (Milestone 62)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion으로 "동일 Task를 여러
+  Provider에 병렬 실행" 범위 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M62 Multi-LLM Orchestrator(Claude, GPT, Gemini 등
+  혼합)"으로 착수를 요청했다. 조사 결과 `LLMProvider` enum(OPENAI/
+  ANTHROPIC/GOOGLE/XAI)과 `CLIEngineAdapter`+`CodexProvider`/
+  `GeminiCliProvider`로 Provider별 커맨드 조립 코드는 이미 있었지만
+  (M6, 단 실제 CLI 바이너리 미검증 — 반복 기록된 기존 부채),
+  `EngineRuntime.run()`/`run_parallel()`은 둘 다 "Task 1개당 Adapter
+  1개"만 고르는 라우팅이었다. `run_parallel()`조차 여러 **Task**를
+  각자 하나의 Adapter로 병렬 실행할 뿐, 하나의 **Task**를 여러
+  Provider에 동시에 보내 결과를 비교/합치는 메커니즘은 어디에도
+  없었다 — `EngineSelectionPolicy.select()`(M17)도 단일
+  `EngineSelectionDecision`만 반환한다. consensus/ensemble/vote
+  관련 코드나 문서 언급도 전혀 없었다(추측 아님, 코드 전수 확인).
+- 결정:
+  1. `EngineRuntime`에 `run_ensemble(task, engine_names, *,
+     model=None) -> dict[str, EngineResult]`를 신설한다.
+     `required_capabilities` 기반 "첫 매칭" 선택을 쓰지 않고
+     `register_engine()`에 쓰인 정확한 이름으로 여러 Adapter를
+     지정한다 — 여러 Provider를 의도적으로 섞어 돌리는 것이 목적이라
+     capability 매칭 규칙이 맞지 않기 때문이다.
+  2. `ManagedEngineRuntime`은 `run_parallel()`과 동일한
+     `ThreadPoolExecutor` 메커니즘을 재사용해 실제로 동시에 실행한다
+     — 새 동시성 메커니즘을 만들지 않는다.
+  3. `run_ensemble()`은 `status(task_id)`(task_id당 상태 1개만
+     추적)와 의미가 충돌한다(같은 task_id가 여러 엔진에서 동시에
+     도는데 상태 저장소는 1개) — 이 추적에 전혀 관여하지 않고 세션
+     생성→실행→정리만 독립 수행한다.
+  4. 개별 엔진 실패(미등록 이름 포함)는 `run_parallel()`의
+     M10-T01/T02 원칙과 동일하게 그 이름의
+     `EngineResult(success=False)`로만 격리하고 다른 결과에 영향을
+     주지 않는다.
+  5. **결과를 투표/합치는 로직은 추가하지 않는다**(YAGNI) — 호출자가
+     반환된 이름별 결과를 직접 비교·선택한다.
+  6. `RecoveringEngineRuntime`은 재시도 없이 내부 Runtime에
+     위임한다 — 실패한 개별 엔진 결과도 그 자체로 비교에 필요한
+     정보이므로 재시도로 덮어쓰면 오히려 왜곡된다.
+- 대안:
+  1. 결과를 자동으로 합치거나(예: 다수결) "최선" 하나를 골라 반환 —
+     기각(AskUserQuestion에서 선택되지 않음, 이번 범위에서 근거
+     부족): 무엇을 "최선"으로 볼지(정확도/속도/비용) 정책이 전혀
+     정의되지 않은 상태에서 임의로 하나를 고르면 오히려 정보 손실.
+     필요성이 증명되면 별도 `OrchestrationPolicy` 검토.
+  2. Codex/Gemini CLI를 이 세션에서 실제 바이너리로 검증 — 기각
+     (사용자가 다른 선택지 선택): M62의 목적은 "여러 Provider를
+     동시에 돌리는 메커니즘 신설"이지 기존 CLI 부채 해소가 아니다.
+  3. `EngineSelectionPolicy`에 "여러 후보를 동시에 반환" 옵션 추가 —
+     기각: `EngineSelectionPolicy`는 비용 기반 "최선 하나" 결정
+     책임(M17, ADR-0029)이 이미 명확히 정의돼 있어, 여러 후보 동시
+     반환은 다른 책임(오케스트레이션)이라 별도 메서드로 분리하는
+     것이 응집도상 더 낫다.
+- 이유: `run_parallel()`이 이미 증명한 "여러 실행을 동시에, 개별
+  실패는 격리" 패턴을 "여러 Task"에서 "여러 Provider(같은 Task)"로
+  축만 바꿔 재사용하면 충분했다 — 새 동시성 메커니즘이나 Core Domain
+  Interface 없이 `EngineRuntime`에 메서드 하나만 추가해 실제
+  Multi-LLM 오케스트레이션 능력을 제공한다.
+- 결과/영향: `interfaces/engine_runtime.py`(`run_ensemble()` 추상
+  메서드), `runtime/engine/engine_runtime.py`
+  (`InMemoryEngineRuntime`), `runtime/engine/
+  managed_engine_runtime.py`(`ManagedEngineRuntime`, `ThreadPoolExecutor`
+  기반 실제 구현), `runtime/engine/recovering_engine_runtime.py`
+  (`RecoveringEngineRuntime`, 위임) 수정. `EngineRuntime`의 테스트
+  더블 4곳(`tests/interfaces/fakes.py`
+  `FakeEngineRuntime`/`tests/agents/test_coding_agent.py`
+  `RecordingEngineRuntime`/`tests/core/test_workspace_core.py`
+  `SpyEngineRuntime`/`tests/runtime/engine/
+  test_recovering_engine_runtime.py` `ScriptedEngineRuntime`)에
+  `run_ensemble()` 구현 추가(신규 추상 메서드라 전부 필요). 새 Core
+  Domain Interface 없음(29종 유지 — 기존 `EngineRuntime`에 메서드만
+  추가). 신규 테스트 10건(`InMemoryEngineRuntime` 3건,
+  `ManagedEngineRuntime` 6건, `RecoveringEngineRuntime` 1건). `pytest`
+  1207개(신규 10개, 회귀 없음)/`ruff`/`mypy`(226 source files) 전부
+  통과. `.ai/TASKS.md` Milestone 62 절 신규 추가. `docs/
+  ARCHITECTURE.md` §3.9 Engine Runtime 절에 Multi-LLM Orchestrator
+  서술 추가.

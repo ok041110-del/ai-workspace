@@ -416,6 +416,29 @@ class FakeEngineRuntime(EngineRuntime):
             results.append(result)
         return results
 
+    def run_ensemble(
+        self,
+        task: Task,
+        engine_names: list[str],
+        *,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        results: dict[str, EngineResult] = {}
+        for name in engine_names:
+            adapter = self._engines.get(name)
+            if adapter is None:
+                results[name] = EngineResult(
+                    success=False, output="", error=f"engine '{name}' not registered"
+                )
+                continue
+            try:
+                session_id = adapter.create_session()
+                results[name] = adapter.run(session_id, task, model=model)
+                adapter.destroy_session(session_id)
+            except BaseException as exc:
+                results[name] = EngineResult(success=False, output="", error=str(exc))
+        return results
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

@@ -143,6 +143,15 @@ class ScriptedEngineRuntime(EngineRuntime):
     ) -> list[EngineResult]:
         raise NotImplementedError
 
+    def run_ensemble(
+        self,
+        task: Task,
+        engine_names: list[str],
+        *,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        raise NotImplementedError
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:
@@ -335,6 +344,20 @@ def test_run_parallel_forwards_model_through_inner_runtime_to_the_adapter() -> N
     runtime.run_parallel([make_task("t1"), make_task("t2")], model="opus")
 
     assert adapter.received_models == ["opus", "opus"]
+
+
+def test_run_ensemble_delegates_to_inner_runtime_without_retrying() -> None:
+    """M62(ADR-0080): `run_ensemble()`은 재시도 없이 내부 Runtime에
+    그대로 위임한다 — 실패한 개별 엔진 결과도 비교 대상이므로 재시도로
+    덮어쓰지 않는다."""
+    managed = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    managed.register_engine("ok", MockEngineAdapter())
+    runtime = RecoveringEngineRuntime(inner=managed, retry_policy=RetryPolicy())
+
+    results = runtime.run_ensemble(make_task(), ["ok", "missing"])
+
+    assert results["ok"].success is True
+    assert results["missing"].success is False
 
 
 def test_retry_policy_defaults_to_three_attempts() -> None:
