@@ -5309,3 +5309,63 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   (파라미터화)). `pytest` 1168개(신규 8개, 회귀 없음)/`ruff`/
   `mypy`(222 source files) 전부 통과. `.ai/TASKS.md` Milestone 57
   절(T01~T03) 신규 추가.
+
+## ADR-0076: Agent 병렬 실행 — max_parallel로 자가 확인 가드 일반화 (Milestone 58)
+
+- 상태: 승인됨 (2026-08-01)
+- 날짜: 2026-08-01
+- 배경: M13 Review(T2-08 이후)가 남긴 "M13 범위 밖으로 명시적으로
+  제외한 것" 3항목 — 병렬 실행 / Scheduler 선택 정책 고도화(M57이
+  해소) / `CodingAgent` 외 다른 Agent로의 확장(M56이 해소) — 중 마지막
+  으로 남은 "병렬 실행" 부채를 해소한다. `AgentScheduler.select()`의
+  `max_count` 매개변수는 T2-02(Milestone 1)부터 존재했고 ARCHITECTURE.md
+  §3.4가 "동시에 활동할 Agent 후보를 최대 max_count개 선택"이라고
+  이미 명시했지만, 유일한 호출부인 `agents/scheduling.py`의
+  `is_agent_selected()`가 내부적으로 `max_count=1`을 고정 전달해
+  실제로는 한 번도 1을 넘겨 쓰인 적이 없었다(코드 조사로 확인, 추측
+  아님).
+- 결정:
+  1. **범위 확정**: 새 스레드/프로세스/비동기 실행 메커니즘은 도입하지
+     않는다 — 그 책임은 이미 §3.9 `EngineRuntime.run_parallel()`로
+     문서화돼 있고 M58 범위 밖이다. M58은 순수하게 "이미 있는
+     `max_count` 축을 실제 협업 흐름에 연결하는 배선(wiring)" 작업으로
+     한정한다.
+  2. `is_agent_selected()`에 `max_parallel: int = 1` 매개변수를 추가해
+     `agent_scheduler.select(candidates, capability, max_parallel)`로
+     그대로 전달하고, 판정 로직을 `selected.agent_id == agent_id`(단일
+     비교)에서 `any(agent.agent_id == agent_id for agent in selected)`
+     (선택된 집합 소속 여부)로 바꾼다. 기본값 1이면 `selected`가 항상
+     최대 1개라 M13/M56/M57과 100% 동일한 결론.
+  3. `CodingAgent`/`ReviewAgent`/`DocumentationAgent`/`ShellAgent`/
+     `CoordinatorAgent` 5개 전부에 M56과 같은 패턴으로 선택적 생성자
+     인자 `max_parallel_agents: int = 1`을 추가해 `is_agent_selected()`
+     호출부에 전달한다. 새 중앙 디스패처·Base Class는 두지 않는다
+     (M56이 확립한 "5개 사례 반복" 패턴 재사용, YAGNI).
+- 대안:
+  1. `find_agent_by_capability()`(단일 Agent 반환)도 `max_parallel`을
+     받도록 확장 — 기각: 파이프라인 구성 시 "이 Capability를 가진
+     Agent가 존재하는가"만 확인하는 용도라 다중 반환이 필요 없고,
+     시그니처를 유지해 회귀 위험을 없앤다.
+  2. Scheduler에 새로운 "병렬 실행 정책" Interface 신설 — 기각:
+     `AgentScheduler.select()`가 Milestone 1부터 이미 이 계약을
+     담당하고 있어 새 Interface는 YAGNI 위반.
+- 이유: ARCHITECTURE.md가 이미 예고해 둔 설계(§3.4 `max_count`
+  주석)를 실제로 연결하는 것이므로 새로운 설계 판단이 필요 없었다 —
+  M13/M56이 검증한 "여러 인스턴스가 같은 질문에 각자 답한다"는
+  자가 확인 패턴을 그대로 재사용하면서 판정 기준만 "선택된 하나"에서
+  "선택된 집합"으로 일반화하면 충분했다.
+- 결과/영향: `agents/scheduling.py`(`is_agent_selected()`에
+  `max_parallel` 매개변수 추가), `agents/coding_agent.py`/
+  `review_agent.py`/`documentation_agent.py`/`shell_agent.py`/
+  `coordinator_agent.py`(5개 전부에 `max_parallel_agents: int = 1`
+  생성자 인자 추가) 6개 파일 수정. 새 Core Domain Interface/Adapter/
+  Service/Layer/File 없음(기존 27종 유지, `AgentScheduler.select()`
+  계약도 변경 없음). `tests/agents/test_scheduling.py`(신규 3건 —
+  기본값 1 하위 호환 1건, max_parallel=2로 상위 2개 모두 선택 1건,
+  max_parallel 초과분 제외 1건), `tests/agents/test_coding_agent.py`/
+  `test_review_agent.py`/`test_documentation_agent.py`/
+  `test_shell_agent.py`/`test_coordinator_agent.py`(각 1건 — 두
+  인스턴스에 `max_parallel_agents=2`를 주면 둘 다 같은 Event를
+  처리함을 증명) 신규 8건. `pytest` 1176개(신규 8개, 회귀 없음)/
+  `ruff`/`mypy`(222 source files) 전부 통과. `.ai/TASKS.md` Milestone 58
+  절 신규 추가.

@@ -353,6 +353,21 @@ Execution Platform (M36~M38) — 실행·상태 전이·스케줄링
   안정 정렬이 `candidates` 원래 순서를 보존해 M13/M56 "첫 매치"
   동작과 100% 동일함을 수학적으로 보장한다. 새 Domain/Interface
   없이 기존 파일 3개만 수정.
+- **M58 Agent 병렬 실행 — 완료(2026-08-01, ADR-0076)**: M13이 남긴
+  마지막 이월 부채("병렬 실행")를 해소했다. `AgentScheduler.select()`
+  의 `max_count`는 T2-02(Milestone 1)부터 이미 2 이상을 받을 수
+  있었지만, `agents/scheduling.py`의 `is_agent_selected()`가
+  내부적으로 `max_count=1`을 고정 전달해 실제로는 항상 우선순위
+  1위 Agent 하나만 선택됐다. `is_agent_selected()`에 `max_parallel:
+  int = 1` 매개변수를 추가해 `select()`의 `max_count`로 그대로
+  전달하고, `CodingAgent`/`ReviewAgent`/`DocumentationAgent`/
+  `ShellAgent`/`CoordinatorAgent` 5개 모두에 선택적 생성자 인자
+  `max_parallel_agents: int = 1`을 추가해 배선했다. 기본값 1이면
+  M13/M56/M57과 100% 동일(첫 매치만 처리), 2 이상을 주면 우선순위
+  상위 N개 인스턴스가 같은 Event를 동시에 처리한다. 새 Domain/
+  Interface 없이 기존 `AgentScheduler` 계약과 `is_agent_selected()`
+  패턴만 확장(YAGNI) — 실제 스레드/프로세스 병렬성은 여전히 범위
+  밖이다(그 메커니즘은 3.9 Engine Runtime의 `run_parallel()` 책임).
 
 ## 3. 핵심 컴포넌트
 
@@ -395,13 +410,17 @@ Agent의 실행을 담당하는 계층.
   Agent는 개입하지 않는다"가 실제로 검증된 적이 없었다. 새 중앙
   디스패처를 두지 않고, `agents/scheduling.py`의
   `is_agent_selected(agent_registry, agent_scheduler, capability,
-  agent_id)`로 각 Agent가 처리 직전 스스로 "내가 선택됐나"를 확인하는
-  방식을 택했다 — `select()`가 결정적(같은 candidates에 항상 같은 결과)
-  이라는 전제 하에, 같은 Capability의 Agent가 여러 개 Event를
-  구독하고 있어도 전부 같은 결론에 도달해 실제로는 선택된 하나만
-  일한다. `CodingAgent`가 이 가드를 최초로 채택했다(생성자에
+  agent_id, max_parallel)`로 각 Agent가 처리 직전 스스로 "내가 선택된
+  N개 중 하나인가"를 확인하는 방식을 택했다 — `select()`가
+  결정적(같은 candidates에 항상 같은 결과)이라는 전제 하에, 같은
+  Capability의 Agent가 여러 개 Event를 구독하고 있어도 전부 같은
+  결론에 도달한다. `CodingAgent`가 이 가드를 최초로 채택했다(생성자에
   `agent_registry`/`agent_scheduler`를 **선택적**으로 주입 — 기본값
-  `None`이면 이 확인을 건너뛰어 기존 동작과 완전히 동일).
+  `None`이면 이 확인을 건너뛰어 기존 동작과 완전히 동일). **`max_parallel`
+  (Milestone 58, ADR-0076)**: 기본값 1이면 선택된 하나만 True를 얻지만,
+  2 이상을 주면 우선순위 상위 `max_parallel`개 인스턴스가 전부 True를
+  얻어 같은 Event를 동시에 처리한다 — Milestone 1부터 존재했던
+  `max_count` 매개변수를 실제 협업 흐름에 처음 연결한 것이다.
 - **Agent Manager** (`AgentManager`): Agent 생성/생명주기/상태 관리.
 - **Event Bus** (`EventBus`): Event 발행/구독/Agent 간 통신.
 

@@ -128,6 +128,53 @@ def test_ignores_unrelated_event_types() -> None:
     assert task_engine.get_steps(task.task_id) == []
 
 
+def test_both_instances_run_when_max_parallel_agents_is_two() -> None:
+    """M58(ADR-0076) — max_parallel_agents=2를 두 인스턴스 모두에 주면
+    같은 Event를 병렬로 처리해 각자 CodeVerified를 발행한다."""
+    shared_registry = FakeAgentRegistry()
+    shared_manager = FakeAgentManager()
+    shared_scheduler = FakeAgentScheduler()
+    event_bus = InMemoryEventBus()
+    task_engine = FakeTaskEngine()
+
+    first_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    CoordinatorAgent(
+        agent_runtime=first_agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+        max_parallel_agents=2,
+    )
+    second_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    CoordinatorAgent(
+        agent_runtime=second_agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+        max_parallel_agents=2,
+    )
+    task = task_engine.create_task("p1", "구현하기")
+    received: list[Event] = []
+    event_bus.subscribe(received.append)
+
+    event_bus.publish(
+        Event(
+            event_id="e1",
+            event_type=SHELL_COMPLETED,
+            payload={"task_id": task.task_id, "success": True, "code_output": "def f(): ..."},
+        )
+    )
+
+    verified = [e for e in received if e.event_type == CODE_VERIFIED]
+    assert len(verified) == 2
+
+
 def test_ignores_shell_completed_when_not_selected_by_scheduler() -> None:
     """M56(ADR-0074) — CodingAgent(M13)와 동일한 패턴: 같은 COORDINATION
     Capability를 가진 다른 CoordinatorAgent 인스턴스가 Scheduler에게
