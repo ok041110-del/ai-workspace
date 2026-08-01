@@ -5369,3 +5369,72 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   처리함을 증명) 신규 8건. `pytest` 1176개(신규 8개, 회귀 없음)/
   `ruff`/`mypy`(222 source files) 전부 통과. `.ai/TASKS.md` Milestone 58
   절 신규 추가.
+
+## ADR-0077: Automation — WorkflowRepository 신설로 RUN_WORKFLOW 지원 (Milestone 59)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion으로 새 컴포넌트 신설
+  필요성을 사전 확인받고 "RUN_WORKFLOW 구현"으로 범위 확정)
+- 날짜: 2026-08-01
+- 배경: M21(Milestone 21)부터 `AutomationActionExecutor`가
+  `ActionKind.RUN_WORKFLOW`에 대해 `AutomationActionNotSupportedError`
+  만 던지는 상태가 계속 이월돼 왔고, M48(Automation Foundation)의
+  Domain Analysis(T01)에서도 "Gap 3"으로 재확인만 되고 범위 밖으로
+  남았다. 사용자가 "M59 Automation 진행"으로 착수를 요청해 코드
+  조사(`grep`)로 이 저장소에 `workflow_id`로 실제 `Workflow`를 영속
+  조회하는 통로가 전혀 없다는 사실을 확인 — `WorkflowRunner`
+  (Milestone 12)는 이미 `Workflow` 인스턴스를 받아 실행하는 조율자로
+  존재하지만, Automation Action은 `workflow_id`(문자열)만 갖고 있어
+  둘을 이어줄 조회 계층이 없으면 구현이 불가능했다.
+- 결정:
+  1. **새 Core Domain Interface `WorkflowRepository` 신설**(27종→
+     28종, Milestone 2 이후 최초 증가): `AgentRepository`/
+     `AutomationRepository`와 동일한 `get`/`save`/`list_workflows`
+     스타일, `WorkflowNotFoundError` 포함. `InMemoryWorkflowRepository`
+     로 최소 구현(영속화는 향후 `FileWorkflowRepository` 등으로
+     확장 가능하도록 Interface만 보고 구현).
+  2. `AutomationActionExecutor`에 `workflow_repository`/
+     `workflow_runner` 선택적 생성자 인자를 추가(M38 `recommendation_
+     orchestration_service`와 동일한 선택적 DI 패턴). 둘 다 주입되면
+     `_run_workflow()`가 `workflow_repository.get(action.workflow_id)`
+     → `workflow_runner.run(workflow)`로 위임한다. 하나라도 없으면
+     기본값 `None`이라 여전히 `AutomationActionNotSupportedError` —
+     M21 이후 동작과 100% 동일한 하위 호환.
+  3. **프로덕션 배선(`web/server.py`의 `build_app()`)은 하지 않는다**:
+     `TaskEngine`/`WorkflowEngine`조차 프로덕션 Composition Root에
+     아직 배선돼 있지 않아, 지금 배선하려면 이번 범위를 넘어 그 둘을
+     프로덕션에 처음 들이는 훨씬 큰 작업이 된다 — M56/M57/M58이 반복
+     확인한 "MVP 범위 유지" 판단을 그대로 적용(YAGNI).
+- 대안:
+  1. `AutomationActionExecutor`에 `Workflow`를 직접 전달하도록 Action
+     자체를 재설계(workflow_id 대신 Workflow 객체 보관) — 기각:
+     `AutomationRule`은 직렬화 가능한 Flat 데이터([`domain/
+     automation.py`](../src/ai_workspace/domain/automation.py)의
+     `Trigger`/`Action` 설계 원칙)여야 하는데 `Workflow` 객체 자체를
+     들고 있으면 이 원칙이 깨진다.
+  2. `WorkflowRepository` 없이 `WorkflowEngine`만으로 처리 — 기각:
+     `WorkflowEngine.plan()`은 이미 만들어진 `Workflow` 인스턴스를
+     입력으로만 받을 뿐 `workflow_id`로 조회하는 책임이 없다(계약
+     확인, `interfaces/workflow_engine.py`).
+  3. RUN_WORKFLOW를 계속 Not Supported로 남기고 다른 Automation Gap을
+     다룬다 — 기각: 사용자가 AskUserQuestion에서 "RUN_WORKFLOW 구현"
+     을 명시적으로 선택.
+- 이유: M21부터 4개 Milestone(M21/M38/M48/M59)에 걸쳐 반복적으로
+  재확인만 되고 미뤄져 온 부채였고, 이번에 처음으로 그 이유(조회
+  계층 부재)가 코드 조사로 명확해졌다 — 필요한 컴포넌트가 실증적으로
+  드러난 뒤에 신설했으므로 추측성 설계가 아니다. 기존 `Agent
+  Repository`/`AutomationRepository` 패턴을 그대로 재사용해 새로운
+  설계 언어를 만들지 않았다.
+- 결과/영향: `interfaces/workflow_repository.py`(신규 Interface),
+  `runtime/workflow/workflow_repository.py`(신규
+  `InMemoryWorkflowRepository`), `runtime/automation/
+  automation_action_executor.py`(선택적 DI 2개 추가 + `_run_workflow()`
+  신규), `domain/automation.py`(docstring 갱신) 4개 파일
+  추가/수정. **새 Core Domain Interface 1종 추가(27종→28종)** —
+  Milestone 2 이후 최초. `tests/interfaces/test_workflow_repository.py`
+  (신규 5건), `tests/runtime/automation/test_automation_action_executor.py`
+  (미주입 시 하위 호환 1건 이름 갱신 + 신규 1건 — 주입 시 실제
+  Workflow 조회→WorkflowRunner 실행까지 end-to-end 증명) 신규 6건.
+  `pytest` 1182개(신규 6개, 회귀 없음)/`ruff`/`mypy`(224 source files)
+  전부 통과. `.ai/TASKS.md` Milestone 59 절 신규 추가. `docs/
+  ARCHITECTURE.md` §7 Interface 표(28종 갱신)/§3.19 Automation 절
+  RUN_WORKFLOW 서술 갱신.

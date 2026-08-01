@@ -55,7 +55,8 @@ class Action:
 
     - RUN_TASK: `project_id`/`task_title`(둘 다 필수) — 새 `Task`를
       만들어 `ExecutionDispatcher`로 실행한다.
-    - RUN_WORKFLOW: `workflow_id`(필수).
+    - RUN_WORKFLOW: `workflow_id`(필수) — `WorkflowRepository`로 조회한
+      `Workflow`를 `WorkflowRunner`에 위임해 실행한다(Milestone 59).
     - DASHBOARD_REFRESH: 추가 필드 없음 — `ExecutionDispatcher`를
       거치지 않는다(Task를 실행하지 않으므로).
     - NOTIFICATION: `notification_message`(필수) — 실제 알림 전송은

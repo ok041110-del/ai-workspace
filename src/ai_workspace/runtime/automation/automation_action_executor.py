@@ -6,17 +6,20 @@ from ai_workspace.domain.automation import Action, ActionKind, AutomationRule
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_registry import EngineRegistry
 from ai_workspace.interfaces.engine_selection_policy import EngineSelectionPolicy
+from ai_workspace.interfaces.workflow_repository import WorkflowRepository
 from ai_workspace.runtime.execution.execution_dispatcher import ExecutionDispatcher
 from ai_workspace.runtime.execution.recommendation_orchestration_service import (
     RecommendationOrchestrationService,
 )
+from ai_workspace.runtime.workflow.workflow_runner import WorkflowRunner
 
 
 class AutomationActionNotSupportedError(Exception):
-    """아직 실제로 실행할 수 없는 Action Kind에 대해 발생한다(예:
-    RUN_WORKFLOW — M21은 Task 단위 실행만 다룬다. RUN_RECOMMENDATION은
-    `recommendation_orchestration_service`가 주입되지 않은 경우에도
-    발생한다 — M38)."""
+    """아직 실제로 실행할 수 없는 Action Kind에 대해 발생한다.
+    RUN_WORKFLOW/RUN_RECOMMENDATION은 각각 필요한 협력자
+    (`workflow_repository`+`workflow_runner`/`recommendation_
+    orchestration_service`)가 주입되지 않은 경우에 발생한다(M38,
+    M59)."""
 
 
 class AutomationActionExecutor:
@@ -35,9 +38,17 @@ class AutomationActionExecutor:
     DASHBOARD_REFRESH/NOTIFICATION은 `ExecutionDispatcher`를 거칠
     Task가 없으므로 아무것도 실행하지 않는다(Dashboard는 이미
     `ExecutionDispatcher`가 발행하는 Event로 갱신되고, 실제 알림
-    발송은 Out of Scope). RUN_WORKFLOW는 이번 Milestone이 다루는
-    실행 경로가 Task 단위뿐이라 아직 지원하지 않는다
-    (`AutomationActionNotSupportedError`)."""
+    발송은 Out of Scope).
+
+    **RUN_WORKFLOW(Milestone 59, ADR-0077)**: `workflow_repository`/
+    `workflow_runner`를 둘 다 주입하면 `workflow_id`로 실제 `Workflow`
+    를 조회해 `WorkflowRunner.run()`에 위임한다 — M21부터 이월돼 온
+    "Task 단위 실행만 지원" 제약을 해소했다. 둘 중 하나라도 주어지지
+    않으면(기본값 `None`) `AutomationActionNotSupportedError`를 던져
+    기존 동작과 완전히 동일하다. `Workflow.task_ids`에 해당하는
+    Task들은 호출 전에 이미 생성돼 있어야 한다는 `WorkflowRunner`의
+    전제 조건을 그대로 물려받는다 — 이 클래스는 Task를 새로 만들지
+    않는다."""
 
     def __init__(
         self,
@@ -46,18 +57,22 @@ class AutomationActionExecutor:
         engine_selection_policy: EngineSelectionPolicy,
         execution_dispatcher: ExecutionDispatcher,
         recommendation_orchestration_service: RecommendationOrchestrationService | None = None,
+        workflow_repository: WorkflowRepository | None = None,
+        workflow_runner: WorkflowRunner | None = None,
     ) -> None:
         self._engine_registry = engine_registry
         self._engine_selection_policy = engine_selection_policy
         self._execution_dispatcher = execution_dispatcher
         self._recommendation_orchestration_service = recommendation_orchestration_service
+        self._workflow_repository = workflow_repository
+        self._workflow_runner = workflow_runner
 
     def __call__(self, rule: AutomationRule) -> None:
         action = rule.action
         if action.kind is ActionKind.RUN_TASK:
             self._run_task(action)
         elif action.kind is ActionKind.RUN_WORKFLOW:
-            raise AutomationActionNotSupportedError(action.kind.value)
+            self._run_workflow(action)
         elif action.kind is ActionKind.RUN_RECOMMENDATION:
             self._run_recommendation(action)
         elif action.kind in (ActionKind.DASHBOARD_REFRESH, ActionKind.NOTIFICATION):
@@ -73,6 +88,13 @@ class AutomationActionExecutor:
         candidates = self._engine_registry.list_candidates(task)
         decision = self._engine_selection_policy.select(task, candidates)
         self._execution_dispatcher.dispatch(decision, task)
+
+    def _run_workflow(self, action: Action) -> None:
+        if self._workflow_repository is None or self._workflow_runner is None:
+            raise AutomationActionNotSupportedError(action.kind.value)
+        assert action.workflow_id is not None
+        workflow = self._workflow_repository.get(action.workflow_id)
+        self._workflow_runner.run(workflow)
 
     def _run_recommendation(self, action: Action) -> None:
         """`RecommendationOrchestrationService`(M43)가 Experience

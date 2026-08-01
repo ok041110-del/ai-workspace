@@ -14415,6 +14415,74 @@ Scheduler 고도화 공식 완료(Approved)**. PR #68(코드) 병합
 
 ---
 
+## Milestone 59 — Automation: RUN_WORKFLOW 지원 (완료)
+
+**배경**: 사용자가 "M59 Automation 진행"으로 착수 요청. 코드 조사 결과
+M48(Automation Foundation)이 남긴 유일한 미해결 Gap은 "RUN_WORKFLOW
+미지원"(M21부터 계속 이월 — `AutomationActionExecutor`가 `Action
+Kind.RUN_WORKFLOW`에 대해 `AutomationActionNotSupportedError`만
+던지는 상태). 이를 실제로 구현하려면 이 저장소에 아직 없던 새
+컴포넌트(`workflow_id`로 `Workflow`를 조회할 Repository)가 필요함을
+사용자에게 확인(AskUserQuestion)받고 "RUN_WORKFLOW 구현"으로 범위
+확정.
+
+**T01 Domain Analysis**: `WorkflowRunner`(Milestone 12)가 이미
+`Workflow` 인스턴스를 받아 `WorkflowEngine.plan()` 순서대로 Task를
+순차 실행하는 조율자로 존재하지만, `workflow_id`만 갖고 실제
+`Workflow`를 영속 조회하는 통로가 이 저장소 어디에도 없음을
+`grep`으로 확인(추측 아님). `AgentRepository`/`AutomationRepository`
+와 동일한 `get`/`save`/`list_*` 스타일로 새 Core Domain Interface
+`WorkflowRepository`를 신설하는 것이 최소 범위로 확정(사용자 승인).
+
+**T02 설계**: `AutomationActionExecutor`에 `workflow_repository`/
+`workflow_runner` 선택적 생성자 인자를 추가(M38 `recommendation_
+orchestration_service`와 동일한 패턴). 둘 다 주입되면 `RUN_WORKFLOW`
+Action에서 `workflow_repository.get(action.workflow_id)`로 실제
+Workflow를 조회해 `workflow_runner.run(workflow)`에 위임한다. 둘 중
+하나라도 없으면(기본값 `None`) 여전히
+`AutomationActionNotSupportedError`로 M21 이후 동작과 100% 동일.
+프로덕션 Composition Root(`web/server.py`의 `build_app()`)에는
+`TaskEngine`/`WorkflowEngine`조차 아직 배선돼 있지 않아, 이번에도
+배선하지 않음(M56/M57/M58과 동일한 "MVP 범위 유지" 판단 — 배선하려면
+`TaskEngine`을 프로덕션에 처음 들이는 훨씬 큰 범위가 되어 YAGNI
+위반).
+
+**T03 구현**:
+- `src/ai_workspace/interfaces/workflow_repository.py` — 신규
+  `WorkflowRepository` Interface(`get`/`save`/`list_workflows`),
+  `WorkflowNotFoundError`.
+- `src/ai_workspace/runtime/workflow/workflow_repository.py` — 신규
+  `InMemoryWorkflowRepository`(`InMemoryAutomationRepository`와
+  동일한 최소 구현 패턴).
+- `src/ai_workspace/runtime/automation/automation_action_executor.py`
+  — `workflow_repository`/`workflow_runner` 선택적 생성자 인자 추가,
+  `_run_workflow()` 신규 메서드로 RUN_WORKFLOW 실제 실행.
+- `src/ai_workspace/domain/automation.py` — `Action.workflow_id`
+  docstring을 "Not Supported"에서 실제 동작 설명으로 갱신.
+- `tests/interfaces/test_workflow_repository.py` — 신규 5건(save→get,
+  upsert, 미존재 예외, list, 방어적 복사).
+- `tests/runtime/automation/test_automation_action_executor.py` —
+  미주입 시 하위 호환 테스트(이름 갱신) + 신규 1건(주입 시
+  `WorkflowRunner`로 실제 실행되어 Task가 DONE까지 전이됨을 증명).
+- `docs/ARCHITECTURE.md` §7 Interface 표에 `WorkflowRepository` 추가
+  (27종→28종), §3.19 Automation 절 RUN_WORKFLOW 서술 갱신.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `WorkflowRepository` 신설 필요성을 사용자에게 사전 확인(추측 설계 아님) | ✅ |
+| 2 | `AgentRepository`/`AutomationRepository`와 동일한 스타일로 일관성 유지 | ✅ |
+| 3 | `workflow_repository`/`workflow_runner` 미주입 시 기존 동작과 100% 동일 | ✅ |
+| 4 | 주입 시 실제 Workflow 조회→WorkflowRunner 실행까지 테스트로 증명 | ✅ |
+| 5 | 프로덕션 배선은 YAGNI로 범위 제외(M56~M58 선례와 일관) | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1182개(신규 6개, 회귀 없음)/`ruff`/`mypy`(224 source files)
+전부 통과. ADR-0077.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
