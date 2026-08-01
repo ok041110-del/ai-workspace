@@ -4750,3 +4750,66 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   통과. `.ai/TASKS.md` Milestone 50 절(T01~T03) 신규 추가.
   StatusLine Observability 배선은 향후 별도 Milestone 대상으로
   명시적으로 분리.
+
+## ADR-0068: Learning Evolution — 최근 연속 실패 추세 규칙을 Adaptation에 보완 추가 (Milestone 51)
+
+- 상태: 승인됨 (2026-08-01, 사용자가 T01에서 "보완(두 규칙 병존)" +
+  "최근 N건 슬라이딩 윈도우"를, T02에서 N=5를 선택. T02 승인 시
+  `recent_failure_streak` 정의 명문화 및 Explainability 규칙 구분
+  기록을 조건으로 추가 요청 — 둘 다 T03에 반영)
+- 날짜: 2026-08-01
+- 배경: M49/M50(ADR-0066/0067)이 만든 "실패율 100% + 표본 3건 이상"
+  규칙은 **전체 이력**만 본다 — task가 과거에 여러 번 성공했더라도
+  최근 들어 계속 실패하는 추세 악화를 포착하지 못한다.
+  `RecommendationAdjustmentAnalyzer` 독스트링이 이미 "우선순위
+  재설계·점수화·가중치 학습은 하지 않는다(Non-goal)"고 명시해 뒀는데,
+  이번 Milestone은 이 Non-goal을 최소한으로("추세" 신호 1개) 해제한다.
+  T01 조사로 `ExperienceRecord.timestamp`가 이미 정렬 가능한 원재료로
+  존재해 새 저장소·새 수집 로직이 불필요함을 확인.
+- 결정:
+  1. **`ExperienceStat.recent_failure_streak: int` 신규 필드**: 시간순
+     정렬된 기록을 가장 최근 것부터 거슬러 올라가며 센 연속 실패
+     횟수(성공을 만나면 중단, 최근 기록이 성공이면 0). 특정 윈도우
+     크기에 종속되지 않는 범용 신호 — `recent_failure_streak >= N`은
+     "최근 N건이 모두 실패"와 동치.
+  2. **보류 규칙 — M49/M50과 M51 병존(OR)**: `(success_count == 0 and
+     total >= 3) or recent_failure_streak >= 5`. 기존 규칙은 전혀
+     수정하지 않는다(대체 아님, 회귀 없음). 윈도우 크기 N=5(사용자
+     승인, 오탐 감소를 위해 보수적으로 선택).
+  3. **Explainability 규칙 구분 기록(사용자 추가 요청)**: `reason`
+     텍스트에 어느 규칙이 발동했는지 "(M49 규칙)"/"(M51 규칙, 과거
+     성공 이력 있음)"/"(M49+M51 규칙)"로 명시 태깅. 새 필드나
+     `RecommendationAdjustment`/`RecommendationExplanationService`
+     시그니처 변경 없이, 기존 prose 기반 reason 채널을 그대로
+     재사용해 만족(M44 Explainability 원칙 — "새 판단 없음"과 일관).
+  4. **새 Domain/Service/Interface 없음**: `intelligence/
+     experience_rules.py`, `intelligence/recommendation_adjustment.py`
+     2개 파일만 수정. Analyzer 순수성(외부 상태·시각·난수 미참조)
+     유지.
+- 대안:
+  1. 지수 Decay(exponential weighting) — 기각: 사용자가 슬라이딩
+     윈도우를 선택(구현·설명이 더 단순, N=5로 충분히 표현 가능).
+  2. 기존 M49/M50 규칙을 가중치 점수로 완전히 대체 — 기각: 사용자가
+     "보완(두 규칙 병존)"을 선택해 회귀 위험을 피함.
+  3. `recent_results: tuple[str, ...]`(최근 N건 원시 결과를 통째로
+     저장) — 기각: `recent_failure_streak: int` 하나로 이번 Rule을
+     표현하는 데 충분하고, 원시 리스트를 노출하면 향후 소비처가
+     윈도우 크기를 각자 하드코딩할 위험이 있음(YAGNI).
+  4. 규칙 구분 기록을 위해 `RecommendationAdjustment`에 새 필드(예:
+     `triggered_rule: str`) 추가 — 기각: 기존 prose reason 채널로
+     충분히 표현 가능하고, Explainability가 이미 `reason`을 그대로
+     노출하는 구조라 새 필드는 불필요한 표면적 확장(YAGNI).
+- 이유: `ExperienceRecord.timestamp`라는 이미 존재하는 원재료만으로
+  "추세"라는 새로운 신호 축을 최소 형태(정수 1개)로 추가하고, 기존
+  규칙을 건드리지 않는 순수 보완이라 회귀 위험이 가장 낮다.
+  Reuse-First로 향후 M52(가중치)·M53(Decay) 확장에도 같은 패턴(필드
+  추가 + OR 조건 추가)을 그대로 반복할 수 있는 구조를 남긴다.
+- 결과/영향: `intelligence/experience_rules.py`(`recent_failure_streak`
+  필드 + 헬퍼 함수 추가), `intelligence/recommendation_adjustment.py`
+  (`_RECENT_FAILURE_STREAK_THRESHOLD` 상수, OR 조건, reason 태깅
+  헬퍼 추가)만 수정. 새 Core Domain Interface/Adapter/Service/Layer/
+  File 없음. `tests/intelligence/test_experience_rules.py`(신규 3건),
+  `tests/intelligence/test_recommendation_adjustment.py`(신규 4건)
+  추가. `pytest` 1137개(신규 7개, 회귀 없음)/`ruff`/`mypy`(221 source
+  files) 전부 통과. `.ai/TASKS.md` Milestone 51 절(T01~T03) 신규
+  추가.

@@ -124,6 +124,103 @@ def test_analyze_passes_through_when_only_failures_but_sample_too_small() -> Non
     assert result.adjusted is False
 
 
+def test_analyze_withholds_when_recent_failure_streak_meets_threshold() -> None:
+    """M51-T03(ADR-0068) — 전체 이력에 성공이 섞여 있어도 최근 5회
+    연속 실패면 보류한다."""
+    analyzer = RecommendationAdjustmentAnalyzer()
+    report = ExperienceReport(
+        stats=[
+            ExperienceStat(
+                task_id="M42-T01",
+                total=8,
+                success_count=3,
+                failure_count=5,
+                last_result="failure",
+                last_timestamp="2026-07-30T00:00:00",
+                recent_failure_streak=5,
+            )
+        ]
+    )
+
+    result = analyzer.analyze(_NEXT_ACTION, report)
+
+    assert result.next_action is None
+    assert result.adjusted is True
+    assert result.reason is not None
+    assert "M51" in result.reason
+    assert "M49" not in result.reason
+
+
+def test_analyze_passes_through_when_recent_failure_streak_below_threshold() -> None:
+    analyzer = RecommendationAdjustmentAnalyzer()
+    report = ExperienceReport(
+        stats=[
+            ExperienceStat(
+                task_id="M42-T01",
+                total=8,
+                success_count=4,
+                failure_count=4,
+                last_result="failure",
+                last_timestamp="2026-07-30T00:00:00",
+                recent_failure_streak=4,
+            )
+        ]
+    )
+
+    result = analyzer.analyze(_NEXT_ACTION, report)
+
+    assert result.next_action == _NEXT_ACTION
+    assert result.adjusted is False
+
+
+def test_analyze_reason_tags_both_rules_when_both_triggered() -> None:
+    analyzer = RecommendationAdjustmentAnalyzer()
+    report = ExperienceReport(
+        stats=[
+            ExperienceStat(
+                task_id="M42-T01",
+                total=5,
+                success_count=0,
+                failure_count=5,
+                last_result="failure",
+                last_timestamp="2026-07-30T00:00:00",
+                recent_failure_streak=5,
+            )
+        ]
+    )
+
+    result = analyzer.analyze(_NEXT_ACTION, report)
+
+    assert result.adjusted is True
+    assert result.reason is not None
+    assert "M49" in result.reason
+    assert "M51" in result.reason
+
+
+def test_analyze_reason_tags_m49_only_when_only_overall_rule_triggered() -> None:
+    analyzer = RecommendationAdjustmentAnalyzer()
+    report = ExperienceReport(
+        stats=[
+            ExperienceStat(
+                task_id="M42-T01",
+                total=3,
+                success_count=0,
+                failure_count=3,
+                last_result="failure",
+                last_timestamp="2026-07-30T00:00:00",
+                recent_failure_streak=3,
+            )
+        ]
+    )
+
+    result = analyzer.analyze(_NEXT_ACTION, report)
+
+    assert result.adjusted is True
+    assert result.reason is not None
+    assert "M49" in result.reason
+    assert "M51" not in result.reason
+
+
 def test_analyze_is_deterministic() -> None:
     analyzer = RecommendationAdjustmentAnalyzer()
     report = ExperienceReport(

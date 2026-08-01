@@ -73,6 +73,46 @@ def test_analyze_is_deterministic_for_the_same_input() -> None:
     assert first == second
 
 
+def test_recent_failure_streak_counts_consecutive_failures_from_latest() -> None:
+    """M51(ADR-0068) — 가장 최근 기록부터 거슬러 올라가며 연속 실패를
+    센다. 도중에 성공을 만나면 멈춘다."""
+    analyzer = ExperienceAnalyzer()
+    records = [
+        _record("M40-T01", "success", "2026-07-30T00:00:00+00:00"),
+        _record("M40-T01", "failure", "2026-07-30T01:00:00+00:00"),
+        _record("M40-T01", "failure", "2026-07-30T02:00:00+00:00"),
+    ]
+
+    report = analyzer.analyze(records)
+
+    assert report.stats[0].recent_failure_streak == 2
+
+
+def test_recent_failure_streak_is_zero_when_latest_is_success() -> None:
+    analyzer = ExperienceAnalyzer()
+    records = [
+        _record("M40-T01", "failure", "2026-07-30T00:00:00+00:00"),
+        _record("M40-T01", "success", "2026-07-30T01:00:00+00:00"),
+    ]
+
+    report = analyzer.analyze(records)
+
+    assert report.stats[0].recent_failure_streak == 0
+
+
+def test_recent_failure_streak_ignores_input_order() -> None:
+    analyzer = ExperienceAnalyzer()
+    records = [
+        _record("M40-T01", "failure", "2026-07-30T02:00:00+00:00"),
+        _record("M40-T01", "success", "2026-07-30T00:00:00+00:00"),
+        _record("M40-T01", "failure", "2026-07-30T01:00:00+00:00"),
+    ]
+
+    report = analyzer.analyze(records)
+
+    assert report.stats[0].recent_failure_streak == 2
+
+
 def test_analyze_does_not_mutate_input_list() -> None:
     analyzer = ExperienceAnalyzer()
     records = [

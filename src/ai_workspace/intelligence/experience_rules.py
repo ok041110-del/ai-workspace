@@ -40,7 +40,15 @@ class ExperienceRecord:
 
 @dataclass(frozen=True)
 class ExperienceStat:
-    """task_id 하나에 대한 누적 실행 경험."""
+    """task_id 하나에 대한 누적 실행 경험.
+
+    `recent_failure_streak`(Milestone 51, ADR-0068): 시간순으로 정렬한
+    기록을 **가장 최근 것부터 거슬러 올라가며** 세는 연속 실패 횟수 —
+    가장 최근 기록이 성공이면 0이고, 도중에 성공을 만나면 그 시점에서
+    세기를 멈춘다. 특정 윈도우 크기에 종속되지 않는 값이므로,
+    `recent_failure_streak >= N`은 그대로 "최근 N건이 모두 실패"와
+    동치다(전체 기록이 N건 미만이면 자연히 N 미만이 되어 성립하지
+    않는다)."""
 
     task_id: str
     total: int
@@ -48,6 +56,7 @@ class ExperienceStat:
     failure_count: int
     last_result: str
     last_timestamp: str
+    recent_failure_streak: int = 0
 
 
 @dataclass(frozen=True)
@@ -94,4 +103,14 @@ class ExperienceAnalyzer:
             failure_count=len(entries) - success_count,
             last_result=latest.result,
             last_timestamp=latest.timestamp,
+            recent_failure_streak=_count_recent_failure_streak(ordered),
         )
+
+
+def _count_recent_failure_streak(ordered: list[ExperienceRecord]) -> int:
+    streak = 0
+    for entry in reversed(ordered):
+        if entry.result == _RESULT_SUCCESS:
+            break
+        streak += 1
+    return streak
