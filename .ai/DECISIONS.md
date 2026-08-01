@@ -4888,3 +4888,20 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   없다 — "UI에서 실제로 표시되는 스크린샷 또는 실행 결과" 검증은
   사용자가 실제 Claude Code 세션에서 `claude --debug`로 직접
   확인해야 완료된다(특히 Workspace Trust 승인 여부).
+- 후속(2026-08-01) — 환경 지원 여부 실증: 사용자가 "구현을 바꾸기
+  전에 이 실행 환경 자체가 StatusLine을 지원하는지부터 실증하라"고
+  재요청해, 이 세션의 실제 프로세스 상태를 직접 조회했다.
+  `sys.stdin.isatty()`/`sys.stdout.isatty()` 모두 `False`, `tty`
+  명령도 `not a tty`, `CLAUDE_CODE_ENTRYPOINT=remote_mobile`/
+  `CLAUDE_CODE_REMOTE=true`, 그리고 `ps aux`로 확인한 실제 `claude`
+  프로세스가 `--output-format=stream-json --input-format=stream-json`
+  (비대화형 print 모드)로 구동 중임을 확인했다. `/tmp/statusline.log`
+  가 세션 내내 한 번도 생성되지 않아(수동 테스트 제외)
+  `statusline_main.py`가 이 세션에서 한 번도 호출되지 않았음도
+  확인했다. **결론(실증)**: 이 세션(Claude Code Remote —
+  `remote_mobile`, 비대화형 stream-json 모드)은 대화형 터미널 UI
+  자체가 없어 StatusLine을 아키텍처상 지원하지 않는다 — 코드
+  결함이 아니다. 앞서 고친 import 안전성 버그는 사용자의 로컬
+  대화형 터미널 사용 환경에는 여전히 유효·필요하지만, 그 환경에서
+  실제로 표시되는지는 이 세션이 자체 검증할 수 없어 최종 확인은
+  사용자 몫으로 남는다.

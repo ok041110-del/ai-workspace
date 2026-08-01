@@ -12989,6 +12989,43 @@ Claude Code 데스크톱/터미널 UI에 접근할 수 없다. 코드 레벨에�
 승인 여부(`Status line command skipped: workspace trust not
 accepted` 로그 유무).
 
+### 후속 조사(2026-08-01) — "이 세션 자체가 StatusLine을 지원하는가" 실증 확인
+
+사용자가 "구현을 바꾸기 전에 현재 실행 환경이 실제로 StatusLine을
+지원하는지부터 실증하라"고 재요청. 추측 없이 이 세션의 실제
+프로세스 상태를 직접 조회해 확인:
+
+- `python3 -c "import sys; print(sys.stdout.isatty(), sys.stdin.isatty())"`
+  → 둘 다 `False`. `tty` 명령도 `not a tty`를 반환 — 이 세션은
+  터미널에 연결되어 있지 않다.
+- 환경 변수 `CLAUDE_CODE_ENTRYPOINT=remote_mobile`,
+  `CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
+  cloud_default` — 이 세션이 원격/모바일 진입점에서 시작된 세션임을
+  실행 환경 자체가 명시.
+- `ps aux`로 이 세션을 구동하는 실제 `claude` 프로세스의 커맨드라인을
+  확인한 결과 `--output-format=stream-json --input-format=stream-json
+  --debug-to-stderr`로 실행 중 — `claude --help`가 명시하는 기본
+  동작("starts an interactive session by default, use -p/--print for
+  non-interactive output")과 대조하면, 이 세션은 **비대화형
+  (non-interactive, print/stream-json) 모드**로 구동되고 있다.
+  StatusLine은 공식 문서상 대화형 터미널 UI 하단 바 기능이며, 이
+  모드에는 그 UI 렌더링 루프 자체가 존재하지 않는다.
+- `/tmp/statusline.log`가 세션 전체에서 한 번도 생성되지 않음(수동
+  테스트로 만든 것 외에는 부재) — `statusline_main.py`가 이 세션
+  안에서 단 한 번도 호출된 적이 없다는 증거. "설정 미적용"도 "버전
+  차이"도 아니라, 이 세션 타입 자체가 StatusLine 파이프라인을 아예
+  트리거하지 않는다(호출 시도조차 없음, 조용한 실패조차 아님).
+
+**결론(실증, 추측 아님)**: 현재 이 세션(Claude Code Remote —
+`remote_mobile` 진입점, `--input-format=stream-json
+--output-format=stream-json` 비대화형 모드)에서는 StatusLine이
+아키텍처상 지원되지 않는다 — 코드 결함이 아니라 이 실행 모드에
+대화형 터미널 UI 자체가 없기 때문이다. M45-1에서 수정한 import
+안전성 버그는 사용자가 로컬 대화형 터미널에서 `claude`를 실행하는
+환경에는 여전히 유효하고 필요하지만, 그 환경에서 실제로 표시되는지는
+이 세션이 자체 검증할 수 없다 — 사용자가 로컬 대화형 터미널에서
+직접 확인해야 한다(§ DoD 항목 6, Workspace Trust 승인 포함).
+
 ---
 
 ## Milestone 46 — Vault Information Architecture
