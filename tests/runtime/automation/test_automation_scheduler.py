@@ -227,6 +227,33 @@ def test_action_executor_exception_does_not_break_other_rules() -> None:
     assert repository.get("r1").last_executed_at is not None
 
 
+def test_tick_isolates_broken_trigger_evaluation_from_other_rules() -> None:
+    """M60(ADR-0078): 손상된 time_of_day로 TriggerEvaluator가 ValueError를
+    던지는 Rule이 있어도, 그 Rule만 건너뛰고 다른 Rule은 정상 평가된다 —
+    이 메서드를 감싸는 백그라운드 tick 루프가 예외로 죽어 자동화 전체가
+    멈추는 것을 방지한다."""
+    scheduler, repository, fired = make_scheduler()
+    repository.save(make_rule("broken", Trigger(kind=TriggerKind.TIME, time_of_day="not-a-time")))
+    repository.save(make_rule("r2", Trigger(kind=TriggerKind.TIME, time_of_day="09:00")))
+
+    scheduler.tick(now=datetime(2026, 7, 27, 9, 0))
+
+    assert [rule.rule_id for rule in fired] == ["r2"]
+
+
+def test_tick_recovers_on_next_call_after_broken_rule() -> None:
+    """손상된 Rule을 만나 예외를 삼킨 뒤에도 Scheduler 자체는 계속 살아
+    있어, 다음 tick() 호출에서도 정상 Rule을 평가할 수 있다."""
+    scheduler, repository, fired = make_scheduler()
+    repository.save(make_rule("broken", Trigger(kind=TriggerKind.TIME, time_of_day="not-a-time")))
+
+    scheduler.tick(now=datetime(2026, 7, 27, 9, 0))
+    repository.save(make_rule("r2", Trigger(kind=TriggerKind.TIME, time_of_day="09:00")))
+    scheduler.tick(now=datetime(2026, 7, 27, 9, 1))
+
+    assert [rule.rule_id for rule in fired] == ["r2"]
+
+
 def test_run_now_fires_regardless_of_trigger_schedule() -> None:
     scheduler, repository, fired = make_scheduler()
     repository.save(make_rule("r1", Trigger(kind=TriggerKind.TIME, time_of_day="09:00")))

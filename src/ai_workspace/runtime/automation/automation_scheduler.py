@@ -66,7 +66,18 @@ class AutomationScheduler:
         """Time/Interval Trigger를 주기적으로 평가한다. 실제 주기적
         호출(타이머/백그라운드 루프)은 Server Runtime 기동 시
         연결한다(M21-T05) — 이 메서드 자체는 순수하게 한 번의 평가
-        Pass만 수행해 고정된 `now`로 결정적으로 테스트할 수 있다."""
+        Pass만 수행해 고정된 `now`로 결정적으로 테스트할 수 있다.
+
+        **Trigger 평가 실패 격리(Milestone 60, ADR-0078)**: 손상된
+        `time_of_day`/`last_executed_at` 등으로 `TriggerEvaluator`가
+        예외를 던지면(예: `_parse_time_of_day()`/`_parse_iso()`의
+        `ValueError`), 그 Rule만 건너뛰고 나머지 Rule 평가는 계속한다
+        — 이 메서드를 감싸는 `web/app.py`의 백그라운드 tick 루프가
+        예외로 영구히 죽어 자동화 전체가 멈추는 것을 막기 위함(장시간
+        무인 운영 중 손상된 Rule 하나가 전체를 정지시키면 안 됨).
+        `_fire()`가 이미 지키는 "한 Rule의 실패가 다른 Rule에 영향
+        없음" 원칙을 Action 실행뿐 아니라 Trigger 평가 단계까지
+        확장한다."""
         moment = now or utc_now()
         for rule in self._automation_repository.list_rules():
             if not rule.enabled:
@@ -74,11 +85,14 @@ class AutomationScheduler:
             evaluator_cls = _PERIODIC_EVALUATORS.get(rule.trigger.kind)
             if evaluator_cls is None:
                 continue
-            evaluator = evaluator_cls()
-            if evaluator.should_fire(rule, now=moment):
-                self._fire(rule, moment)
-            rule.next_execution_at = evaluator.compute_next_execution_at(rule, now=moment)
-            self._automation_repository.save(rule)
+            try:
+                evaluator = evaluator_cls()
+                if evaluator.should_fire(rule, now=moment):
+                    self._fire(rule, moment)
+                rule.next_execution_at = evaluator.compute_next_execution_at(rule, now=moment)
+                self._automation_repository.save(rule)
+            except Exception:
+                pass
 
     def run_now(self, rule_id: str, *, now: datetime | None = None) -> None:
         """`POST /api/automation/{id}/run`처럼 Trigger 조건과 무관하게

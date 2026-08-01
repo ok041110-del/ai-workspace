@@ -5438,3 +5438,65 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   전부 통과. `.ai/TASKS.md` Milestone 59 절 신규 추가. `docs/
   ARCHITECTURE.md` §7 Interface 표(28종 갱신)/§3.19 Automation 절
   RUN_WORKFLOW 서술 갱신.
+
+## ADR-0078: Autonomous Workspace — AutomationScheduler.tick()의 Trigger 평가 실패 격리 (Milestone 60)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion으로 넓은 "장시간 자율
+  운영" 주제를 구체적으로 실증된 버그 수정 범위로 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M60 Autonomous Workspace(장시간 자율 운영)"으로
+  착수를 요청했으나 이 주제는 세션 영속화/재시도/Health 등 여러
+  방향으로 해석될 수 있어, 먼저 코드 경로를 직접 추적해 구체적인
+  실제 위험을 찾았다: `web/app.py`의 `_tick_loop()`은
+  `automation_scheduler.tick()`을 30초마다 호출하는 `while True`
+  백그라운드 asyncio Task인데, `tick()` 내부에서 `TimeTriggerEvaluator`
+  /`IntervalTriggerEvaluator`가 `Trigger.time_of_day`/`AutomationRule.
+  last_executed_at`을 파싱하다 `ValueError`를 던지면 이를 감싸는
+  코드가 `tick()` 어디에도 없어 예외가 `_tick_loop()` 밖으로
+  전파된다. asyncio Task가 처리되지 않은 예외로 종료되면 서버
+  프로세스는 계속 살아있지만 자동화 전체가 영구히 멈추고, 기존
+  `HealthMonitor`(M22)는 `automation_scheduler is not None`만 확인할
+  뿐이라 이 상태를 감지하지 못한다 — Rule 하나의 손상된 값만으로
+  재현 가능한 실제 공백(추측 아님).
+- 결정:
+  1. `AutomationScheduler.tick()`의 Rule별 처리(evaluator 생성→
+     `should_fire()`→`_fire()`→`compute_next_execution_at()`→
+     `save()`) 전체를 `try/except Exception: pass`로 감싼다 — `_fire()`
+     가 이미 지키는 "한 Rule의 실패가 다른 Rule에 영향 없음" 원칙
+     (Action 실행 단계)을 Trigger 평가 단계까지 그대로 확장한 것뿐,
+     새로운 원칙을 만들지 않았다.
+  2. **`_on_event()`는 대상에서 제외한다**: `EventTriggerEvaluator.
+     should_fire()`는 파싱 없이 항상 `True`만 반환해 현재 코드로는
+     실제로 던질 수 없다 — 실증되지 않은 경로에 방어 코드를 추가하지
+     않는다(YAGNI, "발생할 수 없는 시나리오에 대한 에러 처리 금지"
+     원칙). 이 경로는 이미 `EventBus.publish()`의 구독자 예외 격리
+     (T2-02 계약)로 보호되고 있어 중복 보호이기도 하다.
+  3. **`run_now()`는 대상에서 제외한다**: REST API `/run`이 직접
+     위임하는 1회성 호출이라 `AutomationRuleNotFoundError` 등을
+     그대로 전파해 호출자가 즉시 알 수 있는 것이 바람직하다 —
+     백그라운드 루프가 아니므로 "루프가 죽는다"는 위험 자체가 없다.
+- 대안:
+  1. `web/app.py`의 `_tick_loop()` 자체를 감싸는 defense-in-depth
+     추가(`while True` 루프 안에서도 예외를 잡아 계속 돎) — 채택하지
+     않음(이번 범위에서 보류): 사용자가 승인한 범위가 `Automation
+     Scheduler` 수정으로 명확히 좁혀졌고, `tick()` 내부에서 이미
+     막으면 이 바깥쪽 방어는 현재로선 실증된 필요가 없다(YAGNI). 향후
+     `list_rules()` 자체가 던지는 등 `tick()` 외부 원인이 실제로
+     발견되면 별도 검토.
+  2. `HealthMonitor`가 "마지막 tick 성공 시각"을 노출하도록 확장 —
+     기각(AskUserQuestion에서 사용자가 선택하지 않음): 이번 수정으로
+     애초에 tick 루프가 죽지 않으므로 관측보다 예방이 우선이라고
+     판단, 필요성이 드러나면 별도 Milestone.
+- 이유: 예방(루프가 죽지 않게)이 관측(죽은 걸 감지)보다 근본적이고
+  구현 비용도 훨씬 작다 — 새 Interface/컴포넌트 없이 기존 `_fire()`
+  가 확립한 예외 격리 원칙을 한 단계 앞(Trigger 평가)으로 옮기기만
+  하면 충분했다.
+- 결과/영향: `runtime/automation/automation_scheduler.py`
+  (`tick()`을 `try/except`로 감쌈, docstring에 근거 기록) 1개 파일
+  수정. 새 Core Domain Interface/Adapter/Service 없음(28종 유지).
+  `tests/runtime/automation/test_automation_scheduler.py`(신규 2건 —
+  손상된 Rule이 있어도 다른 Rule은 정상 발동/손상된 Rule을 만난 뒤에도
+  다음 `tick()` 호출이 정상 동작함을 증명). `pytest` 1184개(신규
+  2개, 회귀 없음)/`ruff`/`mypy`(224 source files) 전부 통과. `.ai/
+  TASKS.md` Milestone 60 절 신규 추가. `docs/ARCHITECTURE.md` §3.19
+  Automation 절에 Trigger 평가 실패 격리 서술 추가.
