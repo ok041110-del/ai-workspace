@@ -90,6 +90,15 @@ Service 없이 기존 `MemoryEngine` 계약을 구현만 했고, `web/server.py`
 Composition Root 1곳만 교체됐다. StatusLine이 이 파일을 읽는
 Observability 배선은 이번 Scope 밖(향후 별도 Milestone 대상).
 
+**Learning Evolution(Milestone 51, ADR-0068)**: M49/M50 규칙(실패율
+100% + 표본 3건 이상, 전체 이력 기반)에 최근 추세 기반 규칙이
+보완으로 추가됐다 — `ExperienceStat.recent_failure_streak`(가장
+최근 기록부터 거슬러 올라간 연속 실패 횟수)가 5 이상이면, 전체
+이력에 성공이 섞여 있어도 추천을 보류한다(기존 규칙 무변경, OR
+병존). 어느 규칙이 발동했는지는 `reason` 텍스트에 "(M49 규칙)"/
+"(M51 규칙)"/"(M49+M51 규칙)"로 태깅돼 Explainability(M44)가 그대로
+노출한다.
+
 ## 관련 GitHub 문서
 
 - `docs/ARCHITECTURE.md` §3.19
