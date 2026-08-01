@@ -6307,3 +6307,107 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   통과. `.ai/TASKS.md` Milestone 70 절 신규 추가. `docs/ARCHITECTURE.md`
   §3.9 Engine Runtime 절 및 §7 인터페이스 표(`EngineRuntime`/
   `ResultAggregator`)에 Adaptive Consensus 서술 추가.
+
+## ADR-0089: Workflow Learning — 성공률 높은 실행 순서(Template) 추천 (Milestone 71)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion 4회로 유사도 기준·반영
+  방식·저장 위치·최소 표본 기준을 순차 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M71 Workflow Learning"으로 착수를 요청했다. 최신 main
+  기준(`origin/main` = `831ef11`)에서 시작했고 이미 그 커밋을 포함하고
+  있어 별도 병합이 필요 없었다. 조사 결과 "Workflow"라는 용어는 이
+  코드베이스에 두 갈래로 존재한다 — (a) `domain.Workflow`/`WorkflowEngine`
+  /`WorkflowRunner`(Milestone 2/12, task_ids+dependencies 기반 DAG와
+  그 위상 정렬·순차 실행), (b) M34(ADR-0048)가 "Workflow"를 `domain.
+  Workflow`가 아니라 Milestone Task 실행 흐름으로 재정의한 Intelligence
+  경로(`intelligence/workflow_flow.py`, `domain.Workflow`/`WorkflowEngine`
+  무변경). 사용자 요청이 "WorkflowEngine"을 명시적으로 지목했으므로
+  (a) 경로가 대상임을 확인했다. `WorkflowEngine.plan()`은 의존관계를
+  만족하는 위상 정렬만 계산하는 순수 계산이었고, 실행 결과(성공/실패)를
+  기억해 다음 계획에 반영하는 경로는 전혀 없었다(코드 확인, 추측 아님).
+  "Learning Engine"(M49~M51, ADR-0066/0067/0068)은 `RecommendationAdjustmentAnalyzer`
+  /`ExperienceStat` 기반의 완전히 다른 경로(Intelligence/Recommendation)
+  라 이번 범위와 무관함을 확인했다.
+- 결정:
+  1. AskUserQuestion으로 "동일하거나 유사한 Workflow"의 식별 기준을
+     확정: `domain.Workflow`에는 이름 있는 템플릿 ID가 없으므로,
+     `frozenset(task_ids)` + 의존관계 간선 집합(`frozenset[tuple[str,
+     str]]`)을 정확히 일치시키는 키(사용자 선택, 권장안)로 확정했다 —
+     M69의 `required_capabilities` 정확 일치 키 패턴을 그대로 재사용해
+     새 그래프 유사도 알고리즘을 설계하지 않는다(YAGNI).
+  2. 반영 방식은 "성공률 높은 전체 순서를 Template로 저장해 그대로
+     추천"으로 확정(사용자 선택, 권장안) — M69/M70의 "tie-break만"
+     방식과 달리, 이번에는 서로 충돌하는 기존 보장(M65/M66의 "복구 즉시
+     완전 신뢰" 같은)이 없어 더 직접적인 "전체 순서 추천"을 채택해도
+     회귀 위험이 없다고 판단했다.
+  3. 저장 위치는 "WorkflowEngine in-process 상태 + WorkflowRunner가
+     자동 기록"으로 확정(사용자 선택, 권장안) — M65/M69/M70과 동일한
+     패턴. `WorkflowEngine`에 `record_run_outcome(workflow, order,
+     success)`(기록)/`recommended_order(workflow)`(조회) 두 메서드를
+     최소 확장한다. `plan()` 시그니처는 무변경 — 학습 상태는 인스턴스
+     내부에서만 조회한다.
+  4. 최소 표본 기준은 "기존과 동일하게 3건 이상"으로 확정(사용자 선택,
+     권장안) — M49/M65/M69/M70과 동일한 임계값 상수를 그대로 재사용,
+     새 임계값을 설계하지 않는다.
+  5. `domain/workflow_order_memory.py`(신규)에 `WorkflowOrderStat`
+     (total/success_count/failure_count, `success_rate()`는 표본 3건
+     미만이면 `None`)을 신설한다 — `EngineReliabilityStat`(M65)/
+     `EngineExecutionMemoryStat`(M69)/`ConsensusAgreementStat`(M70)과
+     동일한 필드 구성·패턴이지만, 키가 "엔진 이름"이 아니라 "실행
+     순서(order tuple) 자체"라는 점이 다르다.
+  6. `InMemoryWorkflowEngine.plan()`은 `recommended_order()`가 값을
+     반환하면 그 순서를 그대로 반환하고, `None`이면(학습 이력 없음)
+     기존 DFS 기반 위상 정렬 그대로 동작한다(100% 하위 호환). 동률이면
+     표본 수가 더 많은 순서, 그마저 같으면 먼저 기록된 순서를 반환한다
+     (dict 삽입 순서 기반 결정적 tie-break).
+  7. `WorkflowRunner.run()`이 완료 직후(성공/실패 모두) 실제로 쓰인
+     `order`와 결과를 `record_run_outcome()`으로 자동 기록한다 —
+     호출자가 별도로 학습을 챙기지 않아도 다음 `plan()` 호출부터
+     반영된다(M70의 `AdaptiveConsensusAggregator` 자동 되먹임과 동일한
+     설계).
+  8. `WorkflowEngine`의 유일한 다른 구현체인 `FakeWorkflowEngine`
+     (`tests/interfaces/fakes.py`)은 두 메서드를 최소 스텁(기록은
+     no-op, 조회는 항상 `None`)으로 구현해 기존 테스트 동작을 그대로
+     유지한다.
+  9. 영속 저장소는 M49/M50/M65/M69/M70과 동일하게 이번 범위 밖
+     (in-process 한정, YAGNI).
+- 대안:
+  1. 구조적 시그니처(task 개수 + 의존관계 그래프 모양, task_id 값 무시)
+     — 기각: 그래프 동형(isomorphism) 비교 로직을 새로 설계해야 해
+     범위가 M71의 "최소 확장" 취지를 벗어난다.
+  2. mission_id 기준 — 기각: Mission이 재실행되는 시나리오에만
+     적용되고, 이름은 다르지만 구조가 반복되는 파이프라인 패턴은
+     학습되지 않는다.
+  3. 위상정렬 동점(tie) 상황에서만 Task별 성공률로 재정렬(M69/M70과
+     동일한 tie-break 방식) — 기각(사용자가 더 직접적인 "전체 순서
+     추천" 방식을 선택): "실행 순서(Workflow Template)를 추천"이라는
+     요구사항을 tie-break보다 더 직접적으로 충족하고, 이번 범위에는
+     tie-break로 좁혀야 할 만한 기존 충돌 사례가 없었다.
+  4. 새 domain 값 객체를 `MemoryEngine`(M1)에 저장 — 기각:
+     `WorkflowEngine`과의 연결고리가 없어 `plan()`이 그 기록을 조회할
+     방법이 없다(추천 자체가 동작하지 않는다).
+  5. 첫 성공 1건부터 즉시 추천 — 기각(사용자가 기존 임계값 재사용을
+     선택): 표본 부족 상태에서 우연한 1회 성공 순서에 과도하게
+     의존하는 위험을 M49/M65/M69/M70과 동일하게 피한다.
+- 이유: `EngineReliabilityStat`(M65)/`EngineExecutionMemoryStat`(M69)/
+  `ConsensusAgreementStat`(M70)이 이미 검증한 "in-process dict + 정확한
+  frozenset 키 + 최소 표본 3건" 패턴을 그대로 `WorkflowEngine`에
+  옮기면, `plan()`/`WorkflowRunner.run()`의 기존 시그니처를 전혀 바꾸지
+  않고도 "성공률 높은 실행 순서를 Template로 기억해 추천"이라는 새
+  요구를 안전하게 추가할 수 있었다. `WorkflowEngine`이 `EventBus`를
+  몰라야 한다는 §8 계층 규칙, `WorkflowRunner`가 Agent가 아니라는
+  ADR-0023의 경계도 전혀 건드리지 않았다.
+- 결과/영향: `domain/workflow_order_memory.py`(신규),
+  `interfaces/workflow_engine.py`(`record_run_outcome()`/
+  `recommended_order()` abstract method 2개 추가),
+  `engines/workflow_engine.py`(`InMemoryWorkflowEngine`),
+  `runtime/workflow/workflow_runner.py`(`WorkflowRunner.run()`이
+  완료 직후 자동 기록) 수정. `tests/interfaces/fakes.py`
+  `FakeWorkflowEngine`에 두 메서드 최소 스텁 추가. 새 Core Domain
+  Interface 없음(기존 `WorkflowEngine`의 메서드 2개 확장, 30종 유지).
+  신규 테스트 12건(`domain` 5건, `InMemoryWorkflowEngine` 6건,
+  `WorkflowRunner` 2건 — 정확한 분해는 `.ai/TASKS.md` Milestone 71
+  참고). `pytest` 1317개(신규 13개, 회귀 없음)/`ruff`/`mypy`(233 source
+  files) 전부 통과. `.ai/TASKS.md` Milestone 71 절 신규 추가.
+  `docs/ARCHITECTURE.md` §3.12 Workflow Runner 절 및 §7 인터페이스 표
+  (`WorkflowEngine`)에 Workflow Learning 서술 추가.

@@ -132,6 +132,12 @@ class FakeWorkflowEngine(WorkflowEngine):
             visit(task_id)
         return order
 
+    def record_run_outcome(self, workflow: Workflow, order: list[str], success: bool) -> None:
+        pass
+
+    def recommended_order(self, workflow: Workflow) -> list[str] | None:
+        return None
+
 
 class FakeTaskEngine(TaskEngine):
     def __init__(self) -> None:

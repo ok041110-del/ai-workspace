@@ -39,7 +39,12 @@ class WorkflowRunner:
 
     `workflow.task_ids`의 모든 Task는 호출 전에 이미 `TaskEngine.
     create_task()`로 생성되어 있어야 한다(전제 조건 — 이 클래스는 Task를
-    새로 만들지 않는다)."""
+    새로 만들지 않는다).
+
+    **Workflow Learning(Milestone 71, ADR-0089)**: `run()`이 끝나면 실제로
+    쓰인 순서(`order`)와 성공 여부를 `WorkflowEngine.record_run_outcome()`
+    으로 자동 기록한다 — 호출자가 별도로 학습을 챙기지 않아도 다음 `plan()`
+    호출부터 반영된다."""
 
     def __init__(
         self, *, workflow_engine: WorkflowEngine, event_bus: EventBus, task_engine: TaskEngine
@@ -54,10 +59,12 @@ class WorkflowRunner:
         for task_id in order:
             self._publish_mission_planned(task_id)
             if self._task_engine.get_task(task_id).status != TaskStatus.DONE:
+                self._workflow_engine.record_run_outcome(workflow, order, success=False)
                 return WorkflowRunResult(
                     completed_task_ids=completed_task_ids, failed_task_id=task_id
                 )
             completed_task_ids.append(task_id)
+        self._workflow_engine.record_run_outcome(workflow, order, success=True)
         return WorkflowRunResult(completed_task_ids=completed_task_ids)
 
     def _publish_mission_planned(self, task_id: str) -> None:

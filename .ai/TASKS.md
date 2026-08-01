@@ -15314,6 +15314,86 @@ successful_probe` 테스트를 깨뜨렸다 — Probe가 성공해 `is_unreliabl
 
 ---
 
+## Milestone 71 — Workflow Learning: 성공률 높은 실행 순서(Template) 추천 (완료)
+
+**배경**: 사용자가 "M71 Workflow Learning"으로 명확한 범위를 담아
+착수를 요청했다 — 최신 main(`831ef11`)은 이미 작업 브랜치에 포함돼
+있어 별도 병합이 필요 없었다. 조사 결과 "Workflow"는 두 갈래로 존재함을
+확인했다: (a) `domain.Workflow`/`WorkflowEngine`/`WorkflowRunner`
+(Milestone 2/12, task_ids+dependencies 기반 DAG 위상 정렬·순차 실행),
+(b) M34(ADR-0048)가 재정의한 Intelligence 경로(Milestone Task 실행
+흐름, `domain.Workflow` 무변경). 사용자가 "WorkflowEngine"을 명시했으므로
+(a)가 대상이다. `WorkflowEngine.plan()`은 의존관계만 만족하면 되는 순수
+계산이었고, 실행 결과를 기억해 다음 계획에 반영하는 경로는 없었다.
+"Learning Engine"(M49~M51)은 Recommendation 경로의 완전히 다른
+기능이라 이번 범위와 무관함을 확인했다.
+
+**사용자 승인(AskUserQuestion, 4회)**:
+1. 유사도 기준 — domain.Workflow에는 템플릿 ID가 없어 **task_ids+
+   dependencies 정확히 일치(권장)**로 확정. M69의 `required_capabilities`
+   정확 일치 키 패턴을 그대로 재사용한다.
+2. 반영 방식 — **성공률 높은 전체 순서를 Template로 저장해 그대로
+   추천(권장)**으로 확정. M69/M70의 tie-break 방식과 달리, 충돌하는
+   기존 보장이 없어 더 직접적인 전체 순서 추천을 채택했다.
+3. 저장/기록 위치 — **WorkflowEngine in-process 상태 + WorkflowRunner가
+   자동 기록(권장)**으로 확정. M65/M69/M70과 동일한 패턴.
+4. 최소 표본 기준 — **기존과 동일하게 3건 이상(권장)**으로 확정.
+
+**구현**:
+- `src/ai_workspace/domain/workflow_order_memory.py`(신규) —
+  `WorkflowOrderStat`(total/success_count/failure_count). `success_rate()`
+  는 표본 3건 미만이면 `None`(M49/M65/M69/M70과 동일한 임계값). 키가
+  "엔진 이름"이 아니라 "실행 순서(order tuple) 자체"라는 점이 M65/M69/
+  M70의 값 객체와 다르다.
+- `src/ai_workspace/interfaces/workflow_engine.py` — `WorkflowEngine`에
+  `record_run_outcome(workflow, order, success)`(기록)/
+  `recommended_order(workflow)`(조회, 표본 부족/이력 없음 시 `None`)
+  두 abstract method를 최소 확장. `plan()` 시그니처는 무변경.
+- `src/ai_workspace/engines/workflow_engine.py`(`InMemoryWorkflowEngine`)
+  — `_signature(workflow)`로 `frozenset(task_ids)` + 의존관계 간선
+  집합을 키로 `_order_stats` dict에 누적. `plan()`은 `recommended_order()`
+  가 값을 반환하면 그대로 쓰고, 없으면(이력 없음) 기존 DFS 기반 위상
+  정렬 그대로 동작(100% 하위 호환). 동률이면 표본 수 → 먼저 기록된
+  순서 순으로 결정적 tie-break.
+- `src/ai_workspace/runtime/workflow/workflow_runner.py`(`WorkflowRunner`)
+  — `run()`이 완료 직후(성공/실패 모두) 실제로 쓰인 `order`와 결과를
+  `record_run_outcome()`으로 자동 기록. 호출자가 별도로 챙기지 않아도
+  다음 `plan()` 호출부터 반영된다.
+- `tests/interfaces/fakes.py`(`FakeWorkflowEngine`) — 두 메서드를 최소
+  스텁(기록은 no-op, 조회는 항상 `None`)으로 구현해 기존 테스트 동작
+  유지.
+- `tests/domain/test_workflow_order_memory.py`(신규) — 5건(성공/실패
+  기록, 표본 부족 시 `None`, 표본 충분 시 성공률 계산).
+- `tests/engines/test_workflow_engine.py` — 6건 추가(이력 없을 때
+  `None`, 표본 부족 시 `None`, 성공률 높은 순서 추천, `plan()`이 학습된
+  순서를 그대로 반환, 이력 없으면 기존 위상정렬과 동일, task_ids/
+  dependencies가 다르면 학습이 섞이지 않음).
+- `tests/runtime/workflow/test_workflow_runner.py` — 2건 추가(`run()`
+  이 자동으로 이력을 기록함, `WorkflowEngine`이 추천한 순서를
+  `WorkflowRunner`가 그대로 따름).
+- `docs/ARCHITECTURE.md` §3.12 Workflow Runner 절에 Workflow
+  Learning(M71) 서술 추가, §7 인터페이스 표 `WorkflowEngine` 행 갱신.
+  새 Core Domain Interface 없음(기존 `WorkflowEngine`의 메서드 2개
+  확장, 30종 유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 최신 main 기준에서 시작(이미 포함돼 있음을 `git merge-base`로 확인) | ✅ |
+| 2 | 기존 ADR/TASKS/ROADMAP과 실제 코드를 조사해 "Workflow"의 두 갈래(도메인 DAG vs Intelligence 재정의)를 구분하고 대상 확정 | ✅ |
+| 3 | 넓은 "Workflow Learning" 주제를 AskUserQuestion 4회로 구체 설계까지 좁힘 | ✅ |
+| 4 | 기존 WorkflowEngine/Learning/Memory 구조(M65/M69/M70 패턴) 재사용, 새 Core Domain Interface 없음 | ✅ |
+| 5 | 동일/유사 Workflow 재실행 시 성공률 높은 순서가 추천됨을 테스트로 증명 | ✅ |
+| 6 | 학습 이력이 없으면 기존 `plan()`과 100% 동일하게 동작함을 테스트로 확인(회귀 없음) | ✅ |
+| 7 | 영속화 없음(in-process 한정)을 코드로 확인 | ✅ |
+| 8 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1317개(신규 13개, 회귀 없음)/`ruff`/`mypy`(233 source files)
+전부 통과. ADR-0089.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

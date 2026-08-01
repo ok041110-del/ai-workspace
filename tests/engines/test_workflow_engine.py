@@ -51,3 +51,75 @@ def test_plan_executes_mission_workflow_task_step_hierarchy() -> None:
 
     assert order == [design_task.task_id, implement_task.task_id]
     assert step.task_id == implement_task.task_id
+
+
+def _workflow(task_ids: list[str], dependencies: dict[str, set[str]] | None = None) -> Workflow:
+    return Workflow(
+        workflow_id="w1", mission_id="m1", task_ids=task_ids, dependencies=dependencies or {}
+    )
+
+
+def test_recommended_order_none_when_no_history() -> None:
+    engine = InMemoryWorkflowEngine()
+
+    assert engine.recommended_order(_workflow(["t1", "t2"])) is None
+
+
+def test_recommended_order_none_when_sample_size_insufficient() -> None:
+    engine = InMemoryWorkflowEngine()
+    workflow = _workflow(["t1", "t2"])
+
+    for _ in range(2):
+        engine.record_run_outcome(workflow, ["t1", "t2"], True)
+
+    assert engine.recommended_order(workflow) is None
+
+
+def test_recommended_order_returns_highest_success_rate_order() -> None:
+    """M71(ADR-0089): 표본이 3건 이상이 되면, 성공률이 더 높았던 순서를
+    추천한다."""
+    engine = InMemoryWorkflowEngine()
+    workflow = _workflow(["t1", "t2"])
+
+    for _ in range(3):
+        engine.record_run_outcome(workflow, ["t2", "t1"], False)
+    for _ in range(3):
+        engine.record_run_outcome(workflow, ["t1", "t2"], True)
+
+    assert engine.recommended_order(workflow) == ["t1", "t2"]
+
+
+def test_plan_returns_recommended_order_once_learned() -> None:
+    """M71(ADR-0089): 학습된 순서가 있으면 `plan()`이 기존 위상정렬 대신
+    그 순서를 그대로 반환한다."""
+    engine = InMemoryWorkflowEngine()
+    workflow = _workflow(["t1", "t2"])
+
+    for _ in range(3):
+        engine.record_run_outcome(workflow, ["t2", "t1"], True)
+
+    assert engine.plan(workflow) == ["t2", "t1"]
+
+
+def test_plan_falls_back_to_dependency_order_without_history() -> None:
+    """M71 이전과 100% 동일 동작(회귀 확인): 학습 이력이 없으면 기존
+    위상정렬 그대로 동작한다."""
+    engine = InMemoryWorkflowEngine()
+    workflow = _workflow(["t1", "t2", "t3"], {"t2": {"t1"}, "t3": {"t2"}})
+
+    order = engine.plan(workflow)
+
+    assert order.index("t1") < order.index("t2") < order.index("t3")
+
+
+def test_learning_is_scoped_to_exact_task_ids_and_dependencies() -> None:
+    """M71(ADR-0089): task_ids/dependencies 조합이 다르면(=다른 Workflow로
+    간주) 학습이 섞이지 않는다."""
+    engine = InMemoryWorkflowEngine()
+    workflow_a = _workflow(["t1", "t2"])
+    workflow_b = _workflow(["t1", "t2", "t3"])
+
+    for _ in range(3):
+        engine.record_run_outcome(workflow_a, ["t2", "t1"], True)
+
+    assert engine.recommended_order(workflow_b) is None
