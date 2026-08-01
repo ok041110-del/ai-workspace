@@ -5655,3 +5655,60 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   통과. `.ai/TASKS.md` Milestone 62 절 신규 추가. `docs/
   ARCHITECTURE.md` §3.9 Engine Runtime 절에 Multi-LLM Orchestrator
   서술 추가.
+
+## ADR-0081: Result Aggregation / Consensus — ResultAggregator + MajorityVoteAggregator (Milestone 63)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion으로 "단순 다수결(exact-match
+  voting) 애그리게이터" 범위 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M63 Result Aggregation / Consensus"로 착수를 요청했다.
+  ADR-0080(M62)은 `run_ensemble()` 결정 시점에 "결과를 투표/합치는
+  로직은 추가하지 않는다(YAGNI) — 호출자가 반환된 이름별 결과를 직접
+  비교·선택한다"고 명시적으로 이 기능을 보류해 두었다. M63은 그
+  보류를 지금 구현하는 요청이며, `EngineResult.output`이 구조화되지
+  않은 문자열이라 정확한 의미(semantic) 비교 자체가 이 프로젝트
+  범위를 넘는 별도 과제임을 재확인했다.
+- 결정:
+  1. 신규 Core Domain Interface `ResultAggregator`를 추가한다 —
+     `aggregate(results: dict[str, EngineResult]) -> AggregatedResult`
+     하나만 정의한다(29종→30종).
+  2. 유일한 구현체 `MajorityVoteAggregator`는 `EngineResult.output`의
+     **정확한 문자열 일치**로만 투표한다 — 의미 비교나 LLM judge 기반
+     심사, 엔진별 가중치 투표는 범위 밖(YAGNI).
+  3. `success=False`인 결과는 투표 대상에서 제외하고
+     `failed_engines`로만 별도 보고한다 — `run_parallel()`의
+     M10-T01/T02 개별 실패 격리 원칙과 동일 정신을 재사용한다.
+  4. 동점 시에는 입력 `results`(=`run_ensemble()`에 넘긴
+     `engine_names`) 순회 순서상 그 출력을 가장 먼저 낸 엔진을
+     대표로 고른다 — 결정적(deterministic) 규칙.
+  5. `EngineRuntime`/`run_ensemble()`은 이 인터페이스를 알지 못한다 —
+     자동으로 연결하지 않는다(M61 `RemoteAgentDispatcher`와 동일하게,
+     Composition Root 배선은 실제 필요 시나리오가 생길 때 별도
+     제안·승인 대상으로 남긴다).
+- 대안:
+  1. `run_ensemble()`이 직접 `AggregatedResult`를 반환하도록 시그니처
+     변경 — 기각: ADR-0080에서 이미 `dict[str, EngineResult]` 계약을
+     확정했고, 그 계약을 깨면 M62에서 작성한 모든 구현체·테스트
+     더블·테스트가 다시 깨진다. 별도 계약으로 분리하면 호출자가
+     원본 결과와 집계 결과 중 필요한 것을 선택할 수 있어 하위 호환도
+     100% 유지된다.
+  2. LLM judge 기반 의미 비교 채택 — 기각: 사용자가 AskUserQuestion에서
+     명시적으로 배제. 별도 API 비용/지연/신뢰성 검증이 필요한 훨씬
+     큰 과제이며 이 프로젝트의 최소 복잡도 원칙과 맞지 않는다.
+  3. 엔진별 가중치 투표 채택 — 기각: 가중치를 어떻게 산정·저장·조정할지
+     자체가 별도 설계가 필요한 신규 메커니즘이라 범위가 커진다 —
+     현재 그런 신뢰도 데이터를 추적하는 메커니즘이 전혀 없다.
+- 이유: exact-match 다수결은 `run_ensemble()`이 이미 반환하는
+  `EngineResult.output`(문자열)만으로 즉시 계산 가능한 가장 단순한
+  집계 규칙이다 — 새 상태·새 저장소·새 외부 호출 없이 순수 함수
+  하나로 구현되며, `run_parallel()`/`run_ensemble()`이 이미 증명한
+  개별 실패 격리 원칙을 그대로 재사용해 일관성을 유지한다.
+- 결과/영향: `interfaces/result_aggregator.py`(신규,
+  `AggregatedResult`/`ResultAggregator`), `runtime/engine/
+  result_aggregator.py`(신규, `MajorityVoteAggregator`) 추가. 새 Core
+  Domain Interface 1건 추가(29종→30종). 신규 테스트 6건(다수결 선택,
+  동점 타이브레이크, 실패 엔진 격리, 전원 실패, 빈 dict, 만장일치).
+  `pytest` 1213개(신규 6개, 회귀 없음)/`ruff`/`mypy`(228 source files)
+  전부 통과. `.ai/TASKS.md` Milestone 63 절 신규 추가. `docs/
+  ARCHITECTURE.md` §3.9 Engine Runtime 절에 Result Aggregation /
+  Consensus 서술 추가, §7 Interface 표에 `ResultAggregator` 행 추가.

@@ -612,6 +612,19 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   1개) 추적과 의미가 충돌해 여기 관여하지 않는다.
   `RecoveringEngineRuntime`은 재시도 없이 내부 Runtime에 위임한다 —
   실패한 개별 결과도 비교 대상이라 재시도로 덮어쓰면 오히려 왜곡된다.
+- **Result Aggregation / Consensus(Milestone 63, ADR-0081)**: ADR-0080이
+  "결과를 투표/합치는 로직은 포함하지 않는다(YAGNI) — 호출자가 직접
+  비교·선택한다"고 명시적으로 보류했던 부분을 별도 계약
+  `ResultAggregator`(§7)로 구현했다. `run_ensemble()`의 반환값
+  `dict[str, EngineResult]`를 입력받아 `EngineResult.output`의 **정확한
+  문자열 일치**로 다수결 투표하는 `MajorityVoteAggregator`가 유일한
+  구현체다 — 의미(semantic) 비교나 LLM 기반 심사는 범위 밖(YAGNI,
+  `EngineResult.output`이 구조화되지 않은 문자열이라 정확한 의미 비교
+  자체가 별도 과제). `EngineRuntime`/`run_ensemble()`은 이 인터페이스의
+  존재를 알지 못한다 — `run_ensemble()`에 자동 연결되지 않고, 호출자가
+  두 단계를 직접 이어 쓴다. 실패한 엔진은 투표 대상에서 제외되고
+  `failed_engines`로만 별도 보고된다(개별 실패 격리 원칙, M10-T01/T02와
+  동일 정신).
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -2447,7 +2460,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentCapability` | Coordination/Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP … |
 | `AgentStatus` | 생명주기 상태 |
 
-## 7. Interfaces (추상 계약, 총 29종)
+## 7. Interfaces (추상 계약, 총 30종)
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
@@ -2480,6 +2493,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 | `WorkflowRepository` | `Workflow` 조회/저장(`AutomationActionExecutor`의 RUN_WORKFLOW가 `workflow_id`로 실제 Workflow를 찾는 유일한 통로) | Milestone 59 (계약+`InMemoryWorkflowRepository` 구현) | **완료(계약+구현)** |
 | `RemoteAgentDispatcher` | `Agent.location`이 가리키는 위치로 Event 전달(Agent Runtime 레벨의 원격 실행 경계) | Milestone 61 (계약+`LoopbackAgentDispatcher` 구현) | **완료(계약+구현)** |
+| `ResultAggregator` | `run_ensemble()`의 `dict[str, EngineResult]`를 정확한 문자열 일치 다수결로 대표 결과 하나로 집계(투표) | Milestone 63 (계약+`MajorityVoteAggregator` 구현) | **완료(계약+구현)** |
 
 > **참고**: "완료(계약)"은 Interface 정의와 Fake 기반 계약 테스트만 존재하고
 > 실제 서비스에 쓰일 구체 구현체는 아직 없다는 뜻이다(각 컴포넌트의 계획된

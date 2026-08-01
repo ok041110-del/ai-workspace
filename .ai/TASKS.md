@@ -14696,6 +14696,61 @@ M10-T01/T02 원칙과 동일하게 그 이름의 `EngineResult(success=False)`�
 
 ---
 
+## Milestone 63 — Result Aggregation / Consensus: ResultAggregator (완료)
+
+**배경**: 사용자가 "M63 Result Aggregation / Consensus"로 착수 요청.
+ADR-0080(M62)이 "결과를 투표/합치는 로직은 추가하지 않는다(YAGNI) —
+호출자가 반환된 이름별 결과를 직접 비교·선택한다"고 명시적으로
+보류해 둔 부분을 지금 구현하는 요청이다.
+
+**사용자 승인(AskUserQuestion)**: "단순 다수결(exact-match voting)
+애그리게이터"로 범위 확정 — `EngineResult.output`의 정확한 문자열
+일치만 비교하고, 의미(semantic) 비교나 LLM judge 기반 심사, 엔진별
+가중치 투표는 범위 밖(`EngineResult.output`이 구조화되지 않은
+문자열이라 정확한 의미 비교 자체가 별도 과제이고, 가중치 산정·조정
+메커니즘도 아직 없음).
+
+**설계**: 신규 Core Domain Interface `ResultAggregator`를 추가한다 —
+`aggregate(results: dict[str, EngineResult]) -> AggregatedResult`
+하나만 정의. `EngineRuntime`/`run_ensemble()`은 이 인터페이스의 존재를
+알지 못한다 — `run_ensemble()`에 자동 연결하지 않고 호출자가 두 단계를
+직접 이어 쓴다(M61 `RemoteAgentDispatcher`와 동일하게, 아직 실제 필요
+시나리오가 없는 Composition Root 배선은 하지 않는다). 실패한
+(`success=False`) 결과는 투표 대상에서 제외하고 `failed_engines`로만
+별도 보고한다 — `run_parallel()`의 M10-T01/T02 개별 실패 격리 원칙과
+동일 정신. 동점 시에는 `results` 순회 순서(=`run_ensemble()`에 넘긴
+`engine_names` 순서)상 그 출력을 가장 먼저 낸 엔진을 대표로 고른다.
+
+**구현**:
+- `src/ai_workspace/interfaces/result_aggregator.py`(신규) —
+  `AggregatedResult`(output, success, agreeing_engines,
+  dissenting_engines, failed_engines, agreement_ratio) +
+  `ResultAggregator(ABC)`.
+- `src/ai_workspace/runtime/engine/result_aggregator.py`(신규) —
+  `MajorityVoteAggregator`: 성공한 결과만 모아 `output` 문자열이 같은
+  것끼리 투표수를 세고 최다 득표 출력을 대표로 선택.
+- `tests/runtime/engine/test_result_aggregator.py`(신규) — 6건: 다수결
+  선택, 동점 시 입력 순서 우선, 실패 엔진 격리, 전원 실패, 빈 dict,
+  만장일치(`agreement_ratio == 1.0`).
+- `docs/ARCHITECTURE.md` §3.9에 Result Aggregation / Consensus 서술
+  추가, §7 Interface 표에 `ResultAggregator` 행 추가(29종→30종).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | ADR-0080이 명시적으로 보류했던 투표/합치기 공백을 이번 범위로 확인 | ✅ |
+| 2 | 넓은 "Result Aggregation / Consensus" 주제를 사용자 확인으로 exact-match 다수결로 좁힘(semantic/LLM judge/가중치는 범위 밖) | ✅ |
+| 3 | 개별 엔진 실패가 투표에 영향 없이 격리됨을 테스트로 증명 | ✅ |
+| 4 | 동점 상황의 결정적(deterministic) 타이브레이크 규칙을 테스트로 증명 | ✅ |
+| 5 | `run_ensemble()`/`EngineRuntime`에 자동 배선하지 않음(YAGNI, Composition Root 무변경) | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1213개(신규 6개, 회귀 없음)/`ruff`/`mypy`(228 source files)
+전부 통과. ADR-0081.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
