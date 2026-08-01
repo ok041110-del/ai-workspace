@@ -4,6 +4,7 @@ import threading
 import time
 
 from ai_workspace.domain.consensus_agreement import ConsensusAgreementStat
+from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.engine_execution_memory import EngineExecutionMemoryStat
 from ai_workspace.domain.engine_reliability import EngineReliabilityStat
 from ai_workspace.domain.engine_selection import EngineCandidate
@@ -114,7 +115,16 @@ class InMemoryEngineRuntime(EngineRuntime):
     선택된다 — 실제 동시 실행 상한이 없으므로 병목 위험이 없다는
     사실을 그대로 반영한다. `_reorder_by_diversity()`가 호출되는
     위치·정렬 안정성·tie-break 전용 범위는 M75와 완전히 동일하게
-    유지된다."""
+    유지된다.
+
+    **Engine Benchmark & Capability Profiling(Milestone 77, ADR-0095)**:
+    `benchmark_profile(engine_name)`은 M65 `_engine_reliability`(모든
+    실행 경로의 성공/실패 누적)와 M69 `_execution_memory`(latency 기록
+    경로만 반영)를 새 측정 없이 읽기 전용으로 조합해 `EngineBenchmarkProfile`
+    (execution_count/success_rate()/failure_rate()/average_latency_
+    seconds())로 반환한다. Routing 로직(`_select()`/`_build_candidates()`/
+    `_reorder_by_diversity()`/`_reorder_by_execution_memory()`)은 전혀
+    수정하지 않는다 — 순수 조회 전용 신규 public 메서드 하나만 추가했다."""
 
     def __init__(
         self,
@@ -461,6 +471,30 @@ class InMemoryEngineRuntime(EngineRuntime):
         stat = self._consensus_agreement.get((required_capabilities, engine_name))
         rate = stat.agreement_rate() if stat is not None else None
         return rate if rate is not None else _NEUTRAL_RATE
+
+    def benchmark_profile(self, engine_name: str) -> EngineBenchmarkProfile:
+        """**Engine Benchmark & Capability Profiling(Milestone 77,
+        ADR-0095)**: M65 `_engine_reliability`(전체 실행 경로 반영)와
+        M69 `_execution_memory`(latency 기록 경로만 반영, `(required_
+        capabilities, engine_name)` 키를 `engine_name`으로 필터링해
+        합산)를 새 상태 없이 읽기 전용으로 조합한다."""
+
+        reliability = self._engine_reliability.get(engine_name, EngineReliabilityStat())
+        latency_sample_count = 0
+        total_latency_seconds = 0.0
+        for (_required_capabilities, name), stat in self._execution_memory.items():
+            if name != engine_name:
+                continue
+            latency_sample_count += stat.total
+            total_latency_seconds += stat.total_latency_seconds
+        return EngineBenchmarkProfile(
+            engine_name=engine_name,
+            execution_count=reliability.total,
+            success_count=reliability.success_count,
+            failure_count=reliability.failure_count,
+            latency_sample_count=latency_sample_count,
+            total_latency_seconds=total_latency_seconds,
+        )
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

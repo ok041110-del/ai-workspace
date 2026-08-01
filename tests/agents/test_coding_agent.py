@@ -78,6 +78,9 @@ class RecordingEngineRuntime(EngineRuntime):
     def consensus_weight(self, required_capabilities, engine_name) -> float:
         raise NotImplementedError
 
+    def benchmark_profile(self, engine_name: str):
+        raise NotImplementedError
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:
