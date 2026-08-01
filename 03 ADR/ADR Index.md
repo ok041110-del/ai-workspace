@@ -457,6 +457,12 @@ M46이 Phase 0까지만 실행하고 Deferred로 남긴 Metadata Backfill/Wiki L
 - 결정: `ReviewAgent`/`DocumentationAgent`/`ShellAgent`/`CoordinatorAgent` 4개에 `CodingAgent`와 정확히 같은 패턴(선택적 `agent_registry`/`agent_scheduler` 키워드 인자, 기본값 `None`이면 기존 동작과 100% 동일) 적용. `PlanningAgent`는 Event를 구독하지 않고 직접 호출되는 진입점이라 이 가드의 전제(여러 인스턴스가 같은 broadcast Event에 반응)가 성립하지 않아 구조적 이유로 제외
 - 영향: `agents/` 4개 파일 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음(기존 27종 유지). 새 중앙 디스패처·Base Class 없이 M13의 기존 패턴만 반복(YAGNI). `pytest` 1160개(신규 4개, 회귀 없음)/ruff/mypy(222 source files) 전부 통과. 프로덕션 Composition Root에는 M13도 아직 배선되지 않아 이번에도 배선하지 않음
 
+## ADR-0075: Scheduler 고도화 — 우선순위·가용성 기반 Agent 선택 (Milestone 57)
+
+- 목적: M13/M56의 "첫 매치" Scheduler 정책에 우선순위·가용성을 추가
+- 결정: `Agent`에 `priority: int = 0`(낮을수록 우선) 필드 신설. `InMemoryAgentScheduler.select()`가 capability 필터 → 가용성 필터(`AgentStatus.STOPPED`/`ERROR`만 제외) → `priority` 안정 정렬 순으로 동작. 설계 중 두 차례 실제 버그를 발견해 재설계(①IDLE만 가용으로 보면 `AgentRuntime.start_agent()` 직후 RUNNING인 모든 정상 Agent가 걸러짐, ②RUNNING만 가용으로 봐도 도메인 기본값(IDLE)으로 Agent를 직접 생성하는 별도 테스트 계열 9건이 깨짐) — 최종적으로 STOPPED/ERROR만 제외하는 것으로 두 Agent 생성 경로 모두 회귀 없이 통과. Capability 축은 기존 필터로 충분(범위 밖), "의존성"은 Task 도메인에 선행 Task 개념이 없어 "Agent 가용성"으로 재정의
+- 영향: `domain/agent.py`/`runtime/agent/agent_scheduler.py`/`interfaces/agent_scheduler.py` 3개 파일 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음. `pytest` 1168개(신규 8개, 회귀 없음)/ruff/mypy(222 source files) 전부 통과
+
 ## 관련 문서
 
 - [[Architecture Overview]]
