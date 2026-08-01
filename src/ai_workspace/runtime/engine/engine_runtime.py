@@ -36,7 +36,13 @@ class InMemoryEngineRuntime(EngineRuntime):
     경로(`engine_selection_policy` 주입 시)에서만 이 기록을 활용해
     `EngineReliabilityStat.is_unreliable()`(M49와 동일한 "성공 0건 + 표본
     3건 이상" 규칙)에 해당하는 엔진을 후보에서 제외한다 — 비용이 가장
-    싸도 계속 실패하는 엔진은 더 이상 선택되지 않는다."""
+    싸도 계속 실패하는 엔진은 더 이상 선택되지 않는다.
+
+    **제외 엔진 자동 복구(Milestone 66, ADR-0084)**: `is_unreliable()`이
+    한번 참이 되면 성공 기록 없이는 다시 후보가 될 수 없었던 M65의 공백을
+    메운다 — `_build_candidates()`가 제외된 엔진을 `_PROBE_INTERVAL`번
+    연속으로 건너뛰면 다음 선택에서 한 번 더 후보로 포함해(probe) 복구
+    여부를 다시 확인할 기회를 준다."""
 
     def __init__(
         self,
@@ -91,7 +97,9 @@ class InMemoryEngineRuntime(EngineRuntime):
                 continue
             if require_parallel and not adapter.supports_parallel():
                 continue
-            if self._engine_reliability.get(name, EngineReliabilityStat()).is_unreliable():
+            stat = self._engine_reliability.get(name, EngineReliabilityStat())
+            if stat.is_unreliable() and not stat.is_probe_eligible():
+                self._engine_reliability[name] = stat.skip()
                 continue
             estimate = adapter.estimate_cost(task)
             candidates.append(

@@ -663,6 +663,20 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   엔진 신뢰도에 반영하지 않는다(사용자 취소는 엔진 자체의 신뢰성
   문제가 아니므로). 영속 저장소는 M49/M50과 동일하게 이번 범위 밖(in
   -process 한정, YAGNI).
+- **Self Optimization — 제외 엔진 자동 복구(Milestone 66, ADR-0084)**: M65의
+  `is_unreliable()`은 한번 참이 되면 영구히 제외였다 — `success_count`는
+  후보에서 빠진 엔진에 대해 다시 늘어날 방법이 없으므로(선택되지 않으면
+  `record()` 자체가 호출되지 않는다), 근본 원인이 고쳐진 엔진도 재선택될
+  길이 없는 공백이 있었다(코드 확인, 추측 아님). `EngineReliabilityStat`에
+  `skip_count` 필드와 `skip()`/`is_probe_eligible()` 메서드를 추가했다 —
+  `_build_candidates()`/`_require_adapter()`가 제외된 엔진을 후보에서
+  건너뛸 때마다 `skip()`으로 카운트하고, `_PROBE_INTERVAL`(5)번 연속
+  건너뛰면 다음 선택에서 한 번 더 후보로 포함해(probe) 복구 여부를
+  재확인한다. probe 실행 결과는 성공/실패와 무관하게 `record()`가
+  `skip_count`를 0으로 되돌린다 — 성공하면 `is_unreliable()`이 거짓이
+  되어 정상 복귀하고, 다시 실패하면 다음 probe까지 또 5번의 쿨다운을
+  거친다. 새 Core Domain Interface 없음 — 기존 `EngineReliabilityStat`
+  확장뿐이며, `EngineSelectionPolicy`(M17) 계약도 무변경이다.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 

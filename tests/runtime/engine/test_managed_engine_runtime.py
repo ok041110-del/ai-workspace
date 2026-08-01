@@ -742,6 +742,60 @@ def test_run_with_policy_does_not_exclude_engine_with_insufficient_sample() -> N
     assert reliable_expensive.run_count == 0
 
 
+def test_run_with_policy_reprobes_excluded_engine_after_probe_interval() -> None:
+    """M66(ADR-0084): 제외된 엔진도 `_PROBE_INTERVAL`(5)번 연속 건너뛰면
+    다음 선택에서 다시 후보로 포함되어 복구 여부를 재확인한다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(),
+        engine_selection_policy=InMemoryEngineSelectionPolicy(),
+    )
+    failing_cheap = CostedEngineAdapter(1.0, succeed=False)
+    reliable_expensive = CostedEngineAdapter(10.0)
+    runtime.register_engine("failing_cheap", failing_cheap)
+    runtime.register_engine("reliable_expensive", reliable_expensive)
+
+    for i in range(3):
+        runtime.run(make_task(f"warmup-{i}"))
+    assert failing_cheap.run_count == 3
+
+    for i in range(5):
+        runtime.run(make_task(f"skip-{i}"))
+    assert failing_cheap.run_count == 3
+    assert reliable_expensive.run_count == 5
+
+    runtime.run(make_task("probe"))
+
+    assert failing_cheap.run_count == 4
+
+
+def test_run_with_policy_recovers_after_successful_probe() -> None:
+    """M66: probe 실행이 성공하면 `is_unreliable()`이 거짓이 되어 이후
+    다시 정상적으로 선택된다(비용이 가장 싸므로)."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(),
+        engine_selection_policy=InMemoryEngineSelectionPolicy(),
+    )
+    recovering_cheap = CostedEngineAdapter(1.0, succeed=False)
+    reliable_expensive = CostedEngineAdapter(10.0)
+    runtime.register_engine("recovering_cheap", recovering_cheap)
+    runtime.register_engine("reliable_expensive", reliable_expensive)
+
+    for i in range(3):
+        runtime.run(make_task(f"warmup-{i}"))
+    for i in range(5):
+        runtime.run(make_task(f"skip-{i}"))
+
+    recovering_cheap._succeed = True
+    runtime.run(make_task("probe"))
+
+    assert recovering_cheap.run_count == 4
+
+    runtime.run(make_task("after-recovery"))
+
+    assert recovering_cheap.run_count == 5
+    assert reliable_expensive.run_count == 5
+
+
 def test_run_without_policy_does_not_apply_reliability_exclusion() -> None:
     """M65 이전과 100% 동일 동작(회귀 확인): policy 미주입 시 계속 실패하는
     엔진도 그대로 계속 선택된다."""

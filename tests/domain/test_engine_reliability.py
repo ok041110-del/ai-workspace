@@ -40,3 +40,37 @@ def test_is_unreliable_false_when_at_least_one_success() -> None:
         stat = stat.record(False)
 
     assert stat.is_unreliable() is False
+
+
+def test_is_probe_eligible_false_before_probe_interval_reached() -> None:
+    stat = EngineReliabilityStat()
+    for _ in range(4):
+        stat = stat.skip()
+
+    assert stat.is_probe_eligible() is False
+
+
+def test_is_probe_eligible_true_once_probe_interval_reached() -> None:
+    stat = EngineReliabilityStat()
+    for _ in range(5):
+        stat = stat.skip()
+
+    assert stat.is_probe_eligible() is True
+
+
+def test_skip_does_not_affect_reliability_counts() -> None:
+    stat = EngineReliabilityStat(total=3, success_count=0, failure_count=3)
+
+    stat = stat.skip()
+
+    assert stat == EngineReliabilityStat(total=3, success_count=0, failure_count=3, skip_count=1)
+
+
+def test_record_resets_skip_count() -> None:
+    stat = EngineReliabilityStat()
+    for _ in range(5):
+        stat = stat.skip()
+
+    stat = stat.record(False)
+
+    assert stat.skip_count == 0

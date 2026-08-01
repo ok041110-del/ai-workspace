@@ -74,6 +74,11 @@ class ManagedEngineRuntime(EngineRuntime):
     (`EngineReliabilityStat`). 비용 기반 선택 경로(`engine_selection_policy`
     주입 시)에서만 이 기록을 활용해 `is_unreliable()`(M49와 동일한 "성공
     0건 + 표본 3건 이상" 규칙)에 해당하는 엔진을 후보에서 제외한다.
+
+    **제외 엔진 자동 복구(Milestone 66, ADR-0084)**: `_require_adapter()`가
+    제외된 엔진을 `_PROBE_INTERVAL`번 연속으로 건너뛰면 다음 선택에서 한
+    번 더 후보로 포함해(probe) 복구 여부를 다시 확인한다 — `EngineRuntime`과
+    동일한 규칙(`EngineReliabilityStat.is_probe_eligible()`)이다.
     """
 
     def __init__(
@@ -245,7 +250,9 @@ class ManagedEngineRuntime(EngineRuntime):
         for name, adapter in self._engines.items():
             if not required_capabilities.issubset(adapter.capabilities()):
                 continue
-            if self._engine_reliability.get(name, EngineReliabilityStat()).is_unreliable():
+            stat = self._engine_reliability.get(name, EngineReliabilityStat())
+            if stat.is_unreliable() and not stat.is_probe_eligible():
+                self._engine_reliability[name] = stat.skip()
                 continue
             estimate = adapter.estimate_cost(task)
             candidates.append(
