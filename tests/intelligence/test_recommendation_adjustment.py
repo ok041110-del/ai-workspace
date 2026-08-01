@@ -151,7 +151,36 @@ def test_analyze_withholds_when_recent_failure_streak_meets_threshold() -> None:
     assert "M49" not in result.reason
 
 
-def test_analyze_passes_through_when_recent_failure_streak_below_threshold() -> None:
+def test_analyze_passes_through_when_combined_score_below_threshold() -> None:
+    """M52-T03(ADR-0070) — 두 신호 모두 낮으면(실패율 1/8, 최근 연속
+    실패 1회) 가중치 결합 점수가 threshold(0.6) 미만이라 보류하지
+    않는다."""
+    analyzer = RecommendationAdjustmentAnalyzer()
+    report = ExperienceReport(
+        stats=[
+            ExperienceStat(
+                task_id="M42-T01",
+                total=8,
+                success_count=7,
+                failure_count=1,
+                last_result="failure",
+                last_timestamp="2026-07-30T00:00:00",
+                recent_failure_streak=1,
+            )
+        ]
+    )
+
+    result = analyzer.analyze(_NEXT_ACTION, report)
+
+    assert result.next_action == _NEXT_ACTION
+    assert result.adjusted is False
+
+
+def test_analyze_withholds_on_combined_signals_below_individual_thresholds() -> None:
+    """M52-T03(ADR-0070) — 실패율 50%(표본 8건) + 최근 4회 연속 실패는
+    개별 규칙(M49 실패율 100%, M51 연속 5회)은 어느 쪽도 충족하지
+    않지만, 가중치 결합 점수(0.6*0.5 + 0.6*0.8=0.78)가 threshold(0.6)
+    이상이라 보류한다."""
     analyzer = RecommendationAdjustmentAnalyzer()
     report = ExperienceReport(
         stats=[
@@ -169,8 +198,12 @@ def test_analyze_passes_through_when_recent_failure_streak_below_threshold() -> 
 
     result = analyzer.analyze(_NEXT_ACTION, report)
 
-    assert result.next_action == _NEXT_ACTION
-    assert result.adjusted is False
+    assert result.next_action is None
+    assert result.adjusted is True
+    assert result.reason is not None
+    assert "M52" in result.reason
+    assert "M49" not in result.reason
+    assert "M51" not in result.reason
 
 
 def test_analyze_reason_tags_both_rules_when_both_triggered() -> None:
@@ -219,6 +252,34 @@ def test_analyze_reason_tags_m49_only_when_only_overall_rule_triggered() -> None
     assert result.reason is not None
     assert "M49" in result.reason
     assert "M51" not in result.reason
+
+
+def test_analyze_withholds_when_only_overall_signal_is_full_and_recent_streak_zero() -> None:
+    """M52-T03(ADR-0070) — 회귀 없음 증명: recent_failure_streak=0이라
+    최근 신호가 전혀 없어도, 전체 실패율 신호 하나만으로
+    score=0.6*1.0+0.6*0.0=0.6이 threshold(0.6)를 정확히 충족해 여전히
+    보류한다(기존 M49 단일 규칙이 그대로 보존됨)."""
+    analyzer = RecommendationAdjustmentAnalyzer()
+    report = ExperienceReport(
+        stats=[
+            ExperienceStat(
+                task_id="M42-T01",
+                total=3,
+                success_count=0,
+                failure_count=3,
+                last_result="failure",
+                last_timestamp="2026-07-30T00:00:00",
+                recent_failure_streak=0,
+            )
+        ]
+    )
+
+    result = analyzer.analyze(_NEXT_ACTION, report)
+
+    assert result.next_action is None
+    assert result.adjusted is True
+    assert result.reason is not None
+    assert "M49" in result.reason
 
 
 def test_analyze_is_deterministic() -> None:
