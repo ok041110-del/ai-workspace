@@ -238,6 +238,15 @@ Execution Platform (M36~M38) — 실행·상태 전이·스케줄링
   StatusLine에 `AutomationGateStatus`(PASS/BLOCKED/UNKNOWN)를
   노출했다. Learning Engine만 남아 "Automation Core" 명명 여부는
   여전히 논의 대상이다(M49 이후).
+- **M49 Learning Engine — 완료(2026-08-01, ADR-0066)**: §2.1 원안의
+  "Learning Engine 구현"을 그대로 따르지 않고, T01 Domain Analysis로
+  Guardian 다건 이력·영속 저장소가 아직 없다는 것을 재확인한 뒤
+  사용자가 Scope를 "기존 `RecommendationAdjustmentAnalyzer`(M42)
+  규칙 정교화"로 좁혔다. 새 Domain/Service/Interface 없이, "실패율
+  100% + 표본 3건 이상"일 때만 추천을 보류하도록 기존 이진 규칙(표본
+  1건부터 보류)을 상위 집합으로 확장했다 — 표본 부족으로 성급하게
+  보류하던 한계를 최소로 고쳤다. Guardian 다건 이력 축적·영속
+  저장소 도입은 향후 별도 Milestone 대상으로 명시적으로 분리했다.
 
 ## 3. 핵심 컴포넌트
 

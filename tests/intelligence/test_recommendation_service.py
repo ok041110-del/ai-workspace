@@ -175,9 +175,9 @@ def test_generate_withholds_next_action_when_experience_shows_only_failures(
         stats=[
             ExperienceStat(
                 task_id=target,
-                total=1,
+                total=3,
                 success_count=0,
-                failure_count=1,
+                failure_count=3,
                 last_result="failure",
                 last_timestamp="2026-07-30T00:00:00",
             )

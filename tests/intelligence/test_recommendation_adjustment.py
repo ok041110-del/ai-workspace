@@ -84,9 +84,9 @@ def test_analyze_withholds_recommendation_when_target_has_only_failures() -> Non
         stats=[
             ExperienceStat(
                 task_id="M42-T01",
-                total=2,
+                total=3,
                 success_count=0,
-                failure_count=2,
+                failure_count=3,
                 last_result="failure",
                 last_timestamp="2026-07-30T00:00:00",
             )
@@ -99,6 +99,29 @@ def test_analyze_withholds_recommendation_when_target_has_only_failures() -> Non
     assert result.adjusted is True
     assert result.reason is not None
     assert "M42-T01" in result.reason
+
+
+def test_analyze_passes_through_when_only_failures_but_sample_too_small() -> None:
+    """M49-T03(ADR-0066) — 실패 1~2건만으로는 표본이 부족해 보류하지
+    않는다(최소 표본 3건 미만)."""
+    analyzer = RecommendationAdjustmentAnalyzer()
+    report = ExperienceReport(
+        stats=[
+            ExperienceStat(
+                task_id="M42-T01",
+                total=2,
+                success_count=0,
+                failure_count=2,
+                last_result="failure",
+                last_timestamp="2026-07-30T00:00:00",
+            )
+        ]
+    )
+
+    result = analyzer.analyze(_NEXT_ACTION, report)
+
+    assert result.next_action == _NEXT_ACTION
+    assert result.adjusted is False
 
 
 def test_analyze_is_deterministic() -> None:

@@ -178,15 +178,16 @@ def test_execute_withholds_recommendation_when_target_has_only_failed_before(
         updated="2026-07-31",
     )
     execution_memory_store = ExecutionMemoryStore(InMemoryMemoryEngine())
-    execution_memory_store.record(
-        ExecutionMemory(
-            task_id="M43-T02",
-            action="Gate",
-            result="failure",
-            timestamp="2026-07-31T00:00:00",
-            reason="boom",
+    for i in range(3):
+        execution_memory_store.record(
+            ExecutionMemory(
+                task_id="M43-T02",
+                action="Gate",
+                result="failure",
+                timestamp=f"2026-07-31T0{i}:00:00",
+                reason="boom",
+            )
         )
-    )
     service, execution_environment = _make_orchestration_service(tmp_path, execution_memory_store)
 
     outcome = service.execute(manual_trigger=True)
