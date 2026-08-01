@@ -247,6 +247,16 @@ Execution Platform (M36~M38) — 실행·상태 전이·스케줄링
   1건부터 보류)을 상위 집합으로 확장했다 — 표본 부족으로 성급하게
   보류하던 한계를 최소로 고쳤다. Guardian 다건 이력 축적·영속
   저장소 도입은 향후 별도 Milestone 대상으로 명시적으로 분리했다.
+- **M50 Learning Persistence — 완료(2026-08-01, ADR-0067)**: M49가
+  in-process로 한정했던 `ExecutionMemoryStore`의 저장 엔진을
+  교체했다. 새 Interface/Service 없이, 기존 `MemoryEngine`
+  Interface를 구현하는 `FileMemoryEngine`(`storage/`)을 신설해
+  `<vault_root>/.ai-workspace-data/`에 단일 JSON 파일로 key-value를
+  영속화한다 — 기존 `File*Repository` 패턴을 그대로 재사용했다.
+  `web/server.py` Composition Root의 `InMemoryMemoryEngine()` 1곳만
+  교체돼, 서버 재시작 후에도 학습 이력이 유지된다. StatusLine
+  Observability 배선(별도 프로세스에서 이 파일을 읽는 경로)은 이번
+  Scope 밖으로 명시적으로 분리했다.
 
 ## 3. 핵심 컴포넌트
 

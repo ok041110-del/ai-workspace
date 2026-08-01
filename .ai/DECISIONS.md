@@ -4689,3 +4689,64 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   TASKS.md` Milestone 49 절(T01~T03) 신규 추가. Guardian 다건 이력
   축적·영속 저장소 도입은 향후 별도 Milestone 대상으로 명시적으로
   분리.
+
+## ADR-0067: Learning Persistence — FileMemoryEngine으로 ExecutionMemoryStore 영속화 (Milestone 50)
+
+- 상태: 승인됨 (2026-08-01, 사용자가 T01에서 저장 위치를 "vault_root
+  하위 전용 디렉터리"로, T02에서 단일 JSON 파일 설계를 승인)
+- 날짜: 2026-08-01
+- 배경: ADR-0066(M49)이 "`ExecutionMemoryStore`가 여전히 in-process
+  저장소이므로 이번 학습은 서버 1회 구동 세션 내로 한정된다"고 명시,
+  해소를 향후 별도 Milestone 대상으로 남겼다. M50 T01 Domain
+  Analysis(코드 전수 조사)는 다음을 확인했다: `MemoryEngine`
+  Interface(remember/recall/search)는 이미 존재하고 구현체는
+  `InMemoryMemoryEngine` 하나뿐이며, 사용처는 `web/server.py`의
+  `ExecutionMemoryStore(InMemoryMemoryEngine())` 단 한 곳뿐이다.
+  `storage/`에는 이미 `FileAgentRepository`/`FileProjectRepository`/
+  `FileKnowledgeRepository`로 확립된 File 기반 영속화 패턴(JSON
+  직렬화, `base_dir` 생성자 주입)이 존재한다.
+- 결정:
+  1. **`FileMemoryEngine` 신설(`storage/file_memory_engine.py`)**:
+     기존 `MemoryEngine(ABC)`을 구현. 새 Interface/Service 없음.
+  2. **저장 형식 — 단일 JSON 파일**: entry당 파일이 아니라
+     `{key: value}` dict 전체를 파일 하나에 담는다 —
+     `MemoryEngine.search("")`로 전체 키를 얻는 `ExecutionMemory
+     Store`의 현재 사용 패턴에 가장 자연스럽게 맞기 때문.
+  3. **저장 위치 — `<vault_root>/.ai-workspace-data/`**:
+     `ProductionConfig`에 새 필드를 추가하지 않고 기존 `vault_root`
+     만으로 경로를 계산한다. Vault(문서 저장소)와는 분리된 런타임
+     상태 디렉터리이며 `.gitignore`에 추가한다.
+  4. **적용 범위 — `web/server.py` Composition Root 1곳만**:
+     `execution_memory_store = ExecutionMemoryStore(InMemoryMemory
+     Engine())`를 `FileMemoryEngine(...)`로 교체. 테스트 픽스처·
+     `InMemoryContextManager` 등 다른 `InMemoryMemoryEngine` 사용처는
+     그대로 유지(영향 범위 밖).
+  5. **Observability 배선은 이번 Scope 밖**: `pipeline_stage_
+     analyzer.py`(M45)의 Memory 단계는 여전히 `NOT_OBSERVABLE`로
+     남는다 — 이제 영속화는 되지만 StatusLine이 별도 프로세스에서
+     이 파일을 읽는 배선이 아직 없기 때문(note 텍스트만 정확하게
+     갱신, 로직 변경 없음).
+- 대안:
+  1. `ProductionConfig`에 `data_dir` 필드 신규 추가 — 기각: 사용자가
+     T01에서 "vault_root 하위 전용 디렉터리"를 선택.
+  2. `FileAgentRepository`처럼 key당 파일 — 기각: entry 수가 늘어날
+     수록 파일 수가 무한정 증가하고 `search("")` 시 디렉터리 전체를
+     스캔해야 해 단일 JSON dict보다 복잡도가 높음.
+  3. SQLite 등 별도 저장 엔진 도입 — 기각: 현재 규모(단일 프로세스,
+     in-process 대체 목적)에 과함(YAGNI).
+  4. StatusLine 읽기 배선까지 이번에 함께 구현 — 기각: T02 Scope를
+     "영속화"로만 한정, Observability 연동은 별도 판단 필요.
+- 이유: `MemoryEngine` Interface와 `storage/`의 File 구현 패턴이
+  이미 존재하므로, 새 추상화 없이 기존 계약을 구현하는 Adapter
+  하나만 추가하는 것이 Reuse-First/YAGNI에 가장 부합한다. 영향
+  범위가 Composition Root 1곳으로 명확히 한정되어 회귀 위험이 낮다.
+- 결과/영향: `storage/file_memory_engine.py`(신규),
+  `web/server.py`(`InMemoryMemoryEngine()` → `FileMemoryEngine(...)`
+  1곳 교체 + docstring 갱신), `observability/pipeline_stage_
+  analyzer.py`(note 텍스트만 갱신), `.gitignore`(`.ai-workspace-data/`
+  추가). 새 Core Domain Interface/Service 없음.
+  `tests/storage/test_file_memory_engine.py`(신규 7건) 추가. `pytest`
+  1130개(신규 7개, 회귀 없음)/`ruff`/`mypy`(221 source files) 전부
+  통과. `.ai/TASKS.md` Milestone 50 절(T01~T03) 신규 추가.
+  StatusLine Observability 배선은 향후 별도 Milestone 대상으로
+  명시적으로 분리.

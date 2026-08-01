@@ -9,10 +9,12 @@ Orchestration(M43)→Execution(M36)→Memory(M39)→Experience(M40) 7단계
 - Adaptation/Orchestration은 별도 Vault 산출물이 없다(M42/M43
   Domain Analysis에서 이미 확인된 대로, 두 개념 모두 다른 산출물
   안에 구조적으로 포함된다) — `STRUCTURAL_INCLUDED`로 표시한다.
-- Memory(M39, `ExecutionMemoryStore`)는 `InMemoryMemoryEngine`
-  기반이라 프로세스 재시작 시 사라지고 Vault에 영속화되지 않는다
-  — StatusLine은 별도 프로세스로 실행되므로 조회할 방법이 없다.
-  `NOT_OBSERVABLE`로 표시하고 이유를 note에 남긴다(추정 금지)."""
+- Memory(M39, `ExecutionMemoryStore`)는 M50(ADR-0067)부터
+  `FileMemoryEngine`으로 JSON 파일에 영속화되지만, 이 Vault 산출물
+  기반 관측 경로에는 아직 읽기 배선이 없다 — StatusLine은 별도
+  프로세스로 실행되고 이 파일을 조회하는 코드가 없다. `NOT_OBSERVABLE`
+  로 표시하고 이유를 note에 남긴다(추정 금지, 배선 자체는 별도
+  Milestone 대상)."""
 
 from __future__ import annotations
 
@@ -67,8 +69,9 @@ class PipelineStageAnalyzer:
                 name="Memory",
                 status=PipelineStageStatus.NOT_OBSERVABLE,
                 note=(
-                    "ExecutionMemoryStore는 InMemoryMemoryEngine 기반 — 영속화되지 "
-                    "않아 별도 프로세스(StatusLine)에서 조회 불가(Phase 1 한계, ADR-0062)"
+                    "ExecutionMemoryStore는 M50부터 FileMemoryEngine으로 영속화되지만"
+                    "(ADR-0067) 이 관측 경로에 읽기 배선이 없어 별도 프로세스"
+                    "(StatusLine)에서 조회 불가(Phase 1 한계, ADR-0062)"
                 ),
             ),
             _observed_stage("Experience", experience_mtime, "Experience Intelligence.md"),

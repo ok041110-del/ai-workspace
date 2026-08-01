@@ -10,3 +10,7 @@ venv/
 # 작업 환경을 유지하기 위해 저장소에 포함해 관리한다.
 .obsidian/cache/
 .obsidian/workspace-cache/
+
+# Learning Persistence(Milestone 50, ADR-0067) — FileMemoryEngine이
+# 런타임에 쌓는 학습 이력(JSON). 실행 환경별 상태이므로 커밋하지 않는다.
+.ai-workspace-data/

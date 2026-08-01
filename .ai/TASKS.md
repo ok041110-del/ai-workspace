@@ -13443,7 +13443,11 @@ M49 이후 별도 제안·승인 대상으로 확정 분리.
 
 ---
 
-## Milestone 49 — Learning Engine (T03 완료, 사용자 승인 대기)
+## Milestone 49 — Learning Engine (완료)
+
+**완료 처리(2026-08-01)**: PR #43 병합(`b3fdc0d`), Vault/ADR Index 갱신
+누락분 PR #44로 보완(`cfea316`). 사용자 승인 완료 — Milestone 49 공식
+종료.
 
 **목표**: ADR-0065(M48)가 명시적으로 분리해 둔 "Learning Engine"을
 착수한다. ADR-0065 결정 4는 "M49 이후 Learning Engine 제안 시점에
@@ -13657,8 +13661,113 @@ Milestone에는 생기지 않는다 — Milestone 제목은 "Learning Engine"으
 
 `pytest` 1123개(신규 1개, 회귀 없음) 전부 통과.
 
-**사용자 승인 대기**: 위 7개 항목을 확인해 Milestone 49 Learning
-Engine 공식 완료 여부 승인 필요.
+**사용자 승인(2026-08-01)**: 위 7개 항목 확인 완료 — Milestone 49
+Learning Engine 공식 완료 승인됨.
+
+---
+
+## Milestone 50 — Learning Persistence (T03 완료, 사용자 승인 대기)
+
+**목표**: M49가 "in-process 범위로 한정"했던 `ExecutionMemoryStore`의
+학습 데이터를 파일로 영속화해 서버 재시작 후에도 학습 이력이 유지되게
+한다. 사용자가 M50 로드맵에서 명시한 범위: "in-process Learning을
+영속 저장 / 재시작 후에도 학습 유지".
+
+### T01 — Domain Analysis(완료)
+
+*조사 방법*: `interfaces/memory_engine.py`,
+`memory/memory_engine.py`, `memory/execution_memory_store.py`,
+`web/server.py`(Composition Root), `storage/` 하위 기존 File 구현체
+전수 조사.
+
+*발견*:
+1. `MemoryEngine` Interface(remember/recall/search)는 이미 존재 —
+   새 Interface 불필요.
+2. 구현체는 `InMemoryMemoryEngine` 하나뿐이며, 사용처는
+   `web/server.py:125`(`ExecutionMemoryStore(InMemoryMemoryEngine())`)
+   단 한 곳뿐 — 영향 범위가 명확히 한정됨.
+3. `storage/`에 이미 확립된 File 기반 영속화 패턴 존재
+   (`FileAgentRepository`/`FileProjectRepository`/
+   `FileKnowledgeRepository`) — JSON 직렬화, `base_dir` 주입.
+4. 이 갭은 ADR-0053("영속화는 이번 Milestone 범위 밖 — YAGNI")과
+   `observability/pipeline_stage_analyzer.py`(M45)의
+   `Memory: NOT_OBSERVABLE` 상태로 이미 문서화되어 있던 알려진 한계.
+
+*결론*: 새 Domain/Interface/Service 없이, 기존 `MemoryEngine`을
+구현하는 `FileMemoryEngine`(`storage/` 하위) 하나만 추가하고
+`web/server.py`의 `InMemoryMemoryEngine()`을 교체 — Reuse-First 조건
+충족.
+
+**사용자 승인(2026-08-01)**: 영속 파일 위치를 "vault_root 하위 전용
+디렉터리"로 확정(`ProductionConfig`에 새 필드를 추가하지 않고 기존
+`vault_root`만으로 경로 계산).
+
+### T02 — MDD Review(완료)
+
+- **Scope**: `ExecutionMemoryStore`가 쓰는 `MemoryEngine` 구현체
+  하나만 교체. `ExecutionMemoryStore`/`MemoryEngine` Interface 자체는
+  무변경.
+- **Reuse**: `MemoryEngine` Interface, `storage/` 디렉터리의 File 구현
+  패턴(JSON 직렬화 + `base_dir` 생성자 주입)을 그대로 재사용. 새
+  포맷/새 계약을 만들지 않는다.
+- **Interface**: 신규 Interface 없음 — `FileMemoryEngine`은 기존
+  `MemoryEngine(ABC)`을 구현만 한다.
+- **Service**: 신규 Service 없음.
+- **Adapter**: `storage/file_memory_engine.py`에 `FileMemoryEngine`
+  신설. 저장 형식은 `FileAgentRepository`(entry당 파일)가 아니라
+  key-value 전체를 담는 **단일 JSON 파일**(`{key: value}` dict) —
+  `MemoryEngine.search("")`가 전체 키를 얻는 데 쓰이는 현재
+  `ExecutionMemoryStore` 사용 패턴과 가장 자연스럽게 맞는 표현이라
+  entry-per-file보다 적합하다고 판단(YAGNI, 불필요한 파일 수 증가
+  방지).
+- **Layer**: `storage/`는 이미 Infrastructure Layer로 확립된 위치 —
+  새 Layer/디렉터리 불필요.
+- **File**: `web/server.py` Composition Root에서
+  `InMemoryMemoryEngine()` → `FileMemoryEngine(<vault_root>/
+  .ai-workspace-data)`로 1줄 교체.
+
+*기각한 대안*:
+1. `ProductionConfig`에 `data_dir` 필드 신규 추가 — 사용자가
+   "vault_root 하위 전용 디렉터리"를 선택해 불필요.
+2. `FileAgentRepository`처럼 key당 파일 — entry 수가 늘어날수록 파일
+   수가 무한정 증가하고, `search("")` 시 전체 디렉터리를 스캔해야
+   해 단일 JSON dict보다 복잡도가 높음.
+3. SQLite 등 별도 저장 엔진 도입 — 현재 규모(단일 프로세스,
+   in-process 대체 목적)에 과함(YAGNI).
+
+**사용자 승인(2026-08-01)**: 위 T02 설계로 T03 구현 진행 승인됨.
+
+### T03 — Implementation(완료)
+
+*수정 파일*:
+- `src/ai_workspace/storage/file_memory_engine.py`(신규) —
+  `FileMemoryEngine(MemoryEngine)`, 단일 JSON 파일 key-value 영속화.
+- `src/ai_workspace/web/server.py` — `execution_memory_store` 조립
+  부분의 `InMemoryMemoryEngine()`을 `FileMemoryEngine(<vault_root>/
+  .ai-workspace-data)`로 교체, docstring 갱신.
+- `src/ai_workspace/observability/pipeline_stage_analyzer.py` —
+  Memory 단계 `NOT_OBSERVABLE` note 텍스트를 "영속화는 됐지만 읽기
+  배선이 없다"로 정확하게 갱신(로직/상태값 변경 없음).
+- `.gitignore` — `.ai-workspace-data/` 추가(런타임 상태, 커밋 대상
+  아님).
+- `tests/storage/test_file_memory_engine.py`(신규 7건).
+- `.ai/DECISIONS.md`(ADR-0067), `docs/ARCHITECTURE.md`(§2.1).
+
+| # | 완료 조건 | 상태 |
+|---|---|---|
+| 1 | 새 Domain/Service/Interface 없이 기존 `MemoryEngine` 구현만 추가 | ✅ |
+| 2 | 저장 위치 `<vault_root>/.ai-workspace-data/`(사용자 승인) | ✅ |
+| 3 | 단일 JSON 파일 key-value 형식(사용자 승인) | ✅ |
+| 4 | `web/server.py` Composition Root 1곳만 교체, 다른 사용처 무변경 | ✅ |
+| 5 | 재시작 후에도 학습 이력 유지(영속성 회귀 테스트로 검증) | ✅ |
+| 6 | Observability 배선은 Scope 밖으로 명시적 분리 | ✅ |
+| 7 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1130개(신규 7개, 회귀 없음)/`ruff`/`mypy`(221 source files)
+전부 통과.
+
+**사용자 승인 대기**: 위 7개 항목을 확인해 Milestone 50 Learning
+Persistence 공식 완료 여부 승인 필요.
 
 ---
 
