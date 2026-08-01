@@ -433,6 +433,12 @@ M46이 Phase 0까지만 실행하고 Deferred로 남긴 Metadata Backfill/Wiki L
 - 결정: `signal_overall = failure_count/total`(표본 3건 미만이면 0), `signal_recent = min(recent_failure_streak/5, 1.0)`을 각각 0.6 가중치로 합산해 `score >= 0.6`이면 보류. 가중치를 신호의 완전 포화값(1.0)과 같은 0.6으로 설정해, 신호 하나가 완전히 1.0이면 그 신호만으로 `score=0.6`이 성립 — 기존 M49/M51 단일 규칙이 정확히 보존됨(회귀 없음, 경계값으로 증명). 사용자가 처음 제안한 "가중치 0.5/0.5 + threshold 0.6"은 이 보존 조건을 깨는 실제 회귀임을 수학적으로 지적해 0.6/0.6으로 재확정
 - 영향: `intelligence/recommendation_adjustment.py` 1개 파일만 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음. Explainability에 기존 M49/M51/Both 태깅을 보존하고 결합 전용 케이스에 "(M52 가중치 결합 규칙)" 태그 추가. 가중치는 고정 상수, 데이터 기반 학습 아님(Non-goal). `pytest` 1145개(신규 2개, 회귀 없음)/ruff/mypy(221 source files) 전부 통과. 상세는 [[Automation Index]]
 
+## ADR-0071: Learning Decay — signal_overall을 지수 Decay 가중 실패율로 교체 (Milestone 53)
+
+- 목적: M52의 `signal_overall`(단순 평균, 모든 기록을 동등 반영)이 "예전엔 실패했지만 최근엔 성공 중"인 task와 "예전엔 성공했지만 최근 실패가 잦은" task를 구분하지 못하는 한계를 해소
+- 결정: `ExperienceStat`에 `decayed_failure_rate: float` 필드 신설 — `weight(rank) = 0.8**rank`(`rank=0`이 최신 기록), `decayed_failure_rate = Σ(weight×실패 여부)/Σ(weight)`. `signal_overall`을 이 필드로 교체(M52의 가중치·threshold는 그대로 유지). 전체 이력 100% 실패면 가중치와 무관하게 항상 정확히 1.0 — M49/M52의 회귀 없음 증명 체인이 그대로 보존됨. Decay 함수는 지수(사용자 선택), decay_factor=0.8(사용자 선택, 중간 강도)
+- 영향: `intelligence/experience_rules.py`(필드+헬퍼 추가), `intelligence/recommendation_adjustment.py`(signal_overall 교체) 2개 파일만 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음. 구현 중 `ExperienceStat` 수동 생성 테스트 5건이 새 필드 기본값(0.0)으로 인해 M49 트리거가 깨지는 것을 발견해 값 명시 지정으로 수정. `pytest` 1149개(신규 4개, 회귀 없음)/ruff/mypy(221 source files) 전부 통과. 상세는 [[Automation Index]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
