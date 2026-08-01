@@ -13443,6 +13443,98 @@ M49 이후 별도 제안·승인 대상으로 확정 분리.
 
 ---
 
+## Milestone 49 — Learning Engine (T01 진행 중)
+
+**목표**: ADR-0065(M48)가 명시적으로 분리해 둔 "Learning Engine"을
+착수한다. ADR-0065 결정 4는 "M49 이후 Learning Engine 제안 시점에
+이번에 쌓이는 Recommendation Execution.md 이력을 근거 자료로만
+참고한다"고 명시했으므로, T01은 추측이 아니라 **현재 코드에 실제로
+존재하는 신호·데이터를 전수 조사**하는 것에서 시작한다.
+
+### T01 — Domain Analysis(진행 중, 코드 전수 조사 기반)
+
+*조사 방법*: `memory/execution_memory_store.py`,
+`domain/execution_memory.py`, `intelligence/experience_service.py`,
+`intelligence/experience_rules.py`,
+`intelligence/recommendation_service.py`,
+`intelligence/recommendation_adjustment.py`,
+`runtime/execution/recommendation_orchestration_service.py`,
+`observability/guardian_runtime_analyzer.py`,
+`observability/snapshot.py`를 직접 읽고, `.ai/DECISIONS.md` ADR-0065·
+`.ai/TASKS.md` M35~M48(특히 M40, M42, M48 T01) 내 "Learning"/"학습"
+전수 검색으로 과거 판단 이력을 재확인.
+
+*이미 존재하는 신호(재사용 대상)*:
+- **`ExecutionMemoryStore.query()`**(M39,
+  `memory/execution_memory_store.py`) — `task_id/action/result/
+  timestamp/reason` 원시 기록을 시각순 정렬로 제공. 집계 기능 없음
+  (`ADR-0053`: "저장만, 학습 없음"). 다만 저장소 자체가
+  `InMemoryMemoryEngine`(순수 in-process dict, M1)이라 **프로세스
+  재시작 시 소멸** — 영속화 안 됨(M45 ADR-0062에서 `NOT_OBSERVABLE`로
+  이미 확인됨).
+- **`ExperienceIntelligenceService`/`ExperienceAnalyzer`**(M40,
+  `intelligence/experience_rules.py`) — task_id별
+  `total/success_count/failure_count/last_result/last_timestamp`를
+  이미 집계한다. Trend/시간창(windowing)/가중치는 전혀 없음(순수
+  누적 카운트). M49가 재사용할 1차 입력 후보 — `ExecutionMemory
+  Store`를 직접 재집계하면 이 컴포넌트와 중복.
+- **`RecommendationAdjustmentAnalyzer`**(M42, "Adaptation") — 유일한
+  기존 "학습형" 로직: `success_count == 0 and failure_count > 0`이면
+  추천을 보류하는 이진 규칙 1개뿐. 가중치·점수화는 Non-goal로 명시
+  (`recommendation_adjustment.py` 독스트링).
+- **`RecommendationIntelligenceService.generate(experience_report=
+  None)`**(M35/M40/M42) — 이미 `experience_report`를 선택적 파라미터로
+  받아 `RecommendationAdjustmentAnalyzer`에 전달하는 배선이 존재.
+  M38/M39/M42/M44/M48이 반복해 온 "선택적 의존성 주입, 기본값
+  `None`, 미주입 시 기존 동작과 100% 동일" 관용구가 이 지점에도 이미
+  적용돼 있음 — 향후 Learning 신호를 꽂을 자리로 가장 유력한 기존
+  Seam.
+- **`AutomationGateStatus`(PASS/BLOCKED/UNKNOWN)**(M48,
+  `observability/snapshot.py`) — `Recommendation Execution.md`를 매
+  실행마다 통째로 덮어써서 얻는 **가장 최근 1건**의 Guardian Gate
+  결과만 노출. 다건 이력이 전혀 아님.
+
+*Gap(누락 확인, 추측 아님)*:
+- **Gap A — Guardian 위반 다건 이력 없음**: ADR-0065 결정 4가 명시한
+  대로 Guardian 평가 결과는 `ExecutionMemoryStore`에 전혀 기록되지
+  않는다. `Recommendation Execution.md`도 매번 덮어써지므로, 시간에
+  따른 Guardian PASS/BLOCKED 추이를 재구성할 방법이 코드 어디에도
+  없다.
+- **Gap B — 시간창/추세 계산 없음**: `ExperienceStat`은 전체 누적
+  카운트만 제공하고 "최근 N회", "개선/악화 추세" 개념이 전혀 없다.
+- **Gap C — 영속 저장소 없음**: `ExecutionMemoryStore`의 백엔드가
+  in-process dict뿐이라, 프로세스 재시작(예: 서버 재기동)마다 모든
+  실행 이력이 소멸한다. 시간 경과에 따른 "학습"을 하려면 최소한 이
+  데이터가 재시작 후에도 남아야 하는지가 먼저 결정돼야 한다.
+- **Gap D — 가중치/점수화 매커니즘 부재**: Recommendation 경로
+  어디에도 숫자 점수·가중치·파라미터 저장소가 없다. M42의 이진 규칙이
+  유일한 전례.
+
+*"Learning" 명명에 대한 프로젝트 자체 이력*: 이 프로젝트는 이미 두 번
+(M40, M42) "Learning Engine"이라는 이름을 의도적으로 피하고 각각
+"Experience Intelligence"(집계만)와 "Adaptation"(이진 규칙 1개, §13.3
+Behavioral Concept로 축소)으로 범위를 좁혀 왔다. `§13.4` 금지 어휘
+목록에 `Learning`/`Insight`가 이미 예약돼 있다(진짜 Learning Engine
+전용). M49는 그 예약을 실제로 쓰는 첫 Milestone이 된다.
+
+**T01 잠정 결론(사용자 확인 필요)**: 현재 코드에는 "Learning"이 학습할
+1차 재료(`ExperienceStat` 누적 카운트, 최근 1건짜리 Guardian Gate
+상태)는 있지만, (1) Guardian 위반의 다건 이력, (2) 시간창/추세 계산,
+(3) 영속 저장소, (4) 가중치 반영 메커니즘은 전부 없다(Gap A~D). 따라서
+M49 Scope는 이 네 가지 중 실제로 필요한 것만 최소로 채우는 방향이어야
+하며, MDD Review(T02)에서 사용자가 다음을 결정해야 한다:
+1. M49이 실제로 "학습"해서 바꿀 대상은 무엇인가 — Recommendation
+   순위/Adaptation 규칙만인지, Guardian 정책까지 포함하는지(M48이
+   "Guardian 판단 자체는 M49~M50 이후 정책 Gate 확장 대상"이라고 여지를
+   남겨둔 것과 연결).
+2. Gap C(영속 저장소 부재)를 M49에서 함께 해결할지, 아니면 in-process
+   상태로도 "학습"이 의미 있는 범위(예: 서버 1회 구동 세션 내에서만
+   추세 반영)로 M49를 좁힐지.
+3. Gap A(Guardian 다건 이력)를 M49에서 새로 쌓기 시작할지, 아니면
+   ExecutionMemoryStore의 성공/실패 이력만으로 1차 범위를 한정할지.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
