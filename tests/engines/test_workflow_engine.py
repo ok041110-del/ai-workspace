@@ -1,8 +1,18 @@
+from __future__ import annotations
+
+from tests.interfaces.fakes import FakeEngineAdapter
+
+from ai_workspace.domain.engine_selection import EngineCandidate, EngineSelectionDecision
+from ai_workspace.domain.knowledge import KnowledgeDocument
 from ai_workspace.domain.mission import Mission
 from ai_workspace.domain.step import Step
+from ai_workspace.domain.task import Task
 from ai_workspace.domain.workflow import Workflow
+from ai_workspace.engines.engine_selection_policy import InMemoryEngineSelectionPolicy
 from ai_workspace.engines.task_engine import InMemoryTaskEngine
 from ai_workspace.engines.workflow_engine import InMemoryWorkflowEngine
+from ai_workspace.interfaces.budget_policy_engine import BudgetPolicyEngine
+from ai_workspace.runtime.engine.engine_registry import InMemoryEngineRegistry
 
 
 def test_plan_respects_dependencies() -> None:
@@ -152,3 +162,118 @@ def test_recommended_order_survives_dependency_change_when_still_valid() -> None
     order = engine.plan(workflow_with_compatible_dependency)
 
     assert order == ["t1", "t3", "t2"]
+
+
+class _SpyEngineSelectionPolicy(InMemoryEngineSelectionPolicy):
+    """M73(ADR-0091) 테스트용 — `select()`가 실제로 호출됐는지(=비용
+    계산 경로가 실행됐는지) 확인하기 위해 호출 횟수만 센다."""
+
+    def __init__(self) -> None:
+        self.call_count = 0
+
+    def select(
+        self,
+        task: Task,
+        candidates: list[EngineCandidate],
+        *,
+        budget_policy_engine: BudgetPolicyEngine | None = None,
+        knowledge: list[KnowledgeDocument] | None = None,
+    ) -> EngineSelectionDecision | None:
+        self.call_count += 1
+        return super().select(
+            task, candidates, budget_policy_engine=budget_policy_engine, knowledge=knowledge
+        )
+
+
+def _registry_with_one_engine() -> InMemoryEngineRegistry:
+    registry = InMemoryEngineRegistry()
+    registry.register("engine-a", FakeEngineAdapter())
+    return registry
+
+
+def test_recommended_order_first_recorded_wins_on_full_tie_without_cost_deps() -> None:
+    """M73 이전과 100% 동일 동작(회귀 확인): 비용 의존성을 주입하지 않으면
+    성공률·표본 수까지 완전히 동률인 두 순서 중 먼저 기록된 순서가
+    그대로 이긴다(기존 tie-break)."""
+    engine = InMemoryWorkflowEngine()
+    workflow = _workflow(["t1", "t2"])
+
+    for _ in range(3):
+        engine.record_run_outcome(workflow, ["t1", "t2"], True)
+    for _ in range(3):
+        engine.record_run_outcome(workflow, ["t2", "t1"], True)
+
+    assert engine.recommended_order(workflow) == ["t1", "t2"]
+
+
+def test_recommended_order_exercises_cost_tie_break_without_changing_full_tie() -> None:
+    """M73(ADR-0091): task_engine/engine_registry/engine_selection_policy가
+    모두 주입되면 성공률 동률 후보의 비용 계산 경로(`EngineSelectionPolicy.
+    select()`)가 실제로 실행된다. 같은 task_id 집합의 순열은 비용 합이
+    항상 동일하므로(EngineSelectionPolicy는 순서를 모르는 순수함수) 비용
+    비교는 후보를 좁히지 못하고, 최종 결과는 기존 tie-break(먼저 기록된
+    순서)와 동일하다."""
+    task_engine = InMemoryTaskEngine()
+    task1 = task_engine.create_task("p1", "첫 번째 Task")
+    task2 = task_engine.create_task("p1", "두 번째 Task")
+    spy = _SpyEngineSelectionPolicy()
+    engine = InMemoryWorkflowEngine(
+        task_engine=task_engine,
+        engine_registry=_registry_with_one_engine(),
+        engine_selection_policy=spy,
+    )
+    workflow = _workflow([task1.task_id, task2.task_id])
+    order_a = [task1.task_id, task2.task_id]
+    order_b = [task2.task_id, task1.task_id]
+    for _ in range(3):
+        engine.record_run_outcome(workflow, order_a, True)
+    for _ in range(3):
+        engine.record_run_outcome(workflow, order_b, True)
+
+    result = engine.recommended_order(workflow)
+
+    assert result == order_a
+    assert spy.call_count > 0
+
+
+def test_recommended_order_falls_back_when_cost_cannot_be_computed() -> None:
+    """M73(ADR-0091): 비용 의존성은 모두 주입됐지만 Task 조회가 실패하면
+    (예: Workflow의 task_id가 TaskEngine에 없음) 비용 계산을 포기하고
+    기존 tie-break(먼저 기록된 순서)로 즉시 fallback한다."""
+    task_engine = InMemoryTaskEngine()  # task_id를 하나도 만들지 않음 → 조회 실패
+    engine = InMemoryWorkflowEngine(
+        task_engine=task_engine,
+        engine_registry=_registry_with_one_engine(),
+        engine_selection_policy=InMemoryEngineSelectionPolicy(),
+    )
+    workflow = _workflow(["t1", "t2"])
+
+    for _ in range(3):
+        engine.record_run_outcome(workflow, ["t1", "t2"], True)
+    for _ in range(3):
+        engine.record_run_outcome(workflow, ["t2", "t1"], True)
+
+    assert engine.recommended_order(workflow) == ["t1", "t2"]
+
+
+def test_recommended_order_falls_back_when_engine_registry_has_no_candidates() -> None:
+    """M73(ADR-0091): Engine이 하나도 등록돼 있지 않아 후보가 없으면(비용
+    계산 불가) 기존 tie-break로 즉시 fallback한다."""
+    task_engine = InMemoryTaskEngine()
+    task1 = task_engine.create_task("p1", "첫 번째 Task")
+    task2 = task_engine.create_task("p1", "두 번째 Task")
+    engine = InMemoryWorkflowEngine(
+        task_engine=task_engine,
+        engine_registry=InMemoryEngineRegistry(),
+        engine_selection_policy=InMemoryEngineSelectionPolicy(),
+    )
+    workflow = _workflow([task1.task_id, task2.task_id])
+    order_a = [task1.task_id, task2.task_id]
+    order_b = [task2.task_id, task1.task_id]
+
+    for _ in range(3):
+        engine.record_run_outcome(workflow, order_a, True)
+    for _ in range(3):
+        engine.record_run_outcome(workflow, order_b, True)
+
+    assert engine.recommended_order(workflow) == order_a

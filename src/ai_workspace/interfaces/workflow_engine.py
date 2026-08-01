@@ -27,7 +27,15 @@ class WorkflowEngine(ABC):
     `workflow.dependencies`에 대해 검증한 뒤에만 채택하고, 검증에
     실패하면(추천이 없거나 지금 dependency를 어기면) 기존 위상 정렬로
     완전히 동일하게 fallback한다 — 추천이 Workflow 정합성을 깨뜨리는
-    일은 없다."""
+    일은 없다.
+
+    **Workflow Cost Optimization(Milestone 73, ADR-0091)**: `recommended_
+    order()`가 동일한 최고 성공률의 순서 후보 여럿을 만나면, 구현체가
+    M64 `EngineSelectionPolicy` 기반 비용 정보를 알 수 있는 경우에 한해
+    예상 실행 비용이 더 낮은 후보를 추가 tie-break로 우선한다. 이 메서드
+    시그니처는 무변경이다 — 비용 사용 여부는 구현체의 생성 시점 구성
+    (예: 선택적 협력자 주입)에 달려 있고, 비용 정보를 알 수 없으면 기존
+    tie-break(표본 수 → 먼저 기록된 순서)로 즉시 fallback한다."""
 
     @abstractmethod
     def plan(self, workflow: Workflow) -> list[str]:
@@ -82,7 +90,9 @@ class WorkflowEngine(ABC):
         출력: 조건을 만족하는 기록이 있으면 그 순서(`list[str]`), 없으면
               `None`
         예외: 없음
-        보장: side-effect 없음(read-only). 동률이면 표본 수가 더 많은
-              순서, 그마저 같으면 먼저 기록된 순서를 반환한다.
+        보장: side-effect 없음(read-only). 성공률이 동률이면(Milestone 73)
+              구현체가 비용을 계산할 수 있는 경우 예상 비용이 더 낮은 순서를
+              우선하고, 그래도 동률이거나 비용을 알 수 없으면 표본 수가
+              더 많은 순서, 그마저 같으면 먼저 기록된 순서를 반환한다.
         """
         raise NotImplementedError

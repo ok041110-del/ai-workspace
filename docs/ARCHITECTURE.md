@@ -862,6 +862,24 @@ Core Engine도 아닌 별도 컴포넌트다.
   fallback한다 — Workflow 정합성은 학습보다 항상 우선하며, 학습 이력이
   없을 때의 동작은 M71 이전과 100% 동일하다. 새 Core Domain Interface
   없음, `WorkflowEngine` 계약(메서드 시그니처) 무변경.
+- **Workflow Cost Optimization(Milestone 73, ADR-0091)**: `InMemoryWorkflowEngine`
+  생성자에 `task_engine`/`engine_registry`/`engine_selection_policy`
+  (모두 선택, 기본값 `None`)를 추가로 주입할 수 있다. `recommended_order()`
+  가 최고 성공률로 타이가 난 학습된 순서 후보를 여럿 만나면, 셋이 모두
+  주입된 경우에 한해 각 후보의 예상 실행 비용(후보에 속한 모든 task_id를
+  `EngineRegistry.list_candidates()` → M64 `EngineSelectionPolicy.
+  select()`로 판단한 Engine의 `estimated_cost_usd` 합)을 2차 tie-break로
+  쓴다. 셋 중 하나라도 주입되지 않았거나 비용을 계산할 수 없으면(Task
+  조회 실패, 등록된 Engine 없음 등) 비용 비교를 건너뛰고 기존 tie-break
+  (표본 수 → 먼저 기록된 순서)로 즉시 fallback한다. 새 비용 정책을
+  만들지 않고 M64 `EngineSelectionPolicy`를 그대로 재사용했다 — 같은
+  task_id 집합의 순열은 `EngineSelectionPolicy`가 순서를 모르는
+  순수함수라 비용 합이 항상 동일하므로, 실제로는 이 tie-break가 후보를
+  좁히지 못하고 기존 표본 수 tie-break로 넘어가는 경우가 대부분이다.
+  이는 설계상 받아들인 특성이다(사용자 승인) — 그래도 계약상 올바르며,
+  향후 순서에 민감한 `EngineSelectionPolicy` 구현체가 나오면 그대로
+  작동한다. 새 Core Domain Interface 없음, `WorkflowEngine` 계약(추상
+  메서드 시그니처) 무변경 — 생성자 선택적 확장만 추가.
 
 ### 3.13 Budget Policy (BudgetPolicyEngine 인터페이스, Milestone 15, ADR-0027)
 `EngineAdapter.estimate_cost()`가 계산한 예상 비용/토큰을 Workspace
@@ -2631,7 +2649,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `EngineSelectionPolicy` | Task/Budget/Knowledge/후보를 종합해 최적 Engine 판단(Decision Only) | Milestone 17 (M17-T02 계약, `InMemoryEngineSelectionPolicy` 구현) | **완료(계약+구현)** |
 | `AuthenticationManager` | Engine별 실행 가능한 인증 상태 확인(`login`/`logout` 없음) | Milestone 18 (M18-T01 계약, `InMemoryAuthenticationManager` 구현) | **완료(계약+구현)** |
 | `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 (T1-15 계약, T1-23 `FileProjectRepository` 구현) | **완료(계약+구현)** |
-| `WorkflowEngine` | Mission→…→Step 협업 흐름, 의존관계 기반 실행 순서 계획(`plan()`) + 실행 순서 학습(M71) + 학습 순서의 dependency 정합성 검증(M72) | 이후(Milestone 2, T2-03 `plan()` 구현), M71(ADR-0089) `record_run_outcome()`/`recommended_order()` 확장, M72(ADR-0090) `plan()` 내부 검증 로직(계약 무변경) | **완료(계약+구현)** |
+| `WorkflowEngine` | Mission→…→Step 협업 흐름, 의존관계 기반 실행 순서 계획(`plan()`) + 실행 순서 학습(M71) + 학습 순서의 dependency 정합성 검증(M72) + 동률 학습 순서의 비용 기반 tie-break(M73) | 이후(Milestone 2, T2-03 `plan()` 구현), M71(ADR-0089) `record_run_outcome()`/`recommended_order()` 확장, M72(ADR-0090) `plan()` 내부 검증 로직(계약 무변경), M73(ADR-0091) 생성자 선택적 비용 협력자 주입(계약 무변경) | **완료(계약+구현)** |
 | `TaskEngine` | Task 생성/상태 전이 + Step 실행 이력(M5-T06) | 이후 | 기존 |
 | `MemoryEngine` | Memory 저장/검색 (Snapshot 제외) | Milestone 1 (T1-15, T1-20 재확인) | 기존(축소, 변경 없음) |
 | `ApprovalEngine` | 승인 대상 판별/차단 | 이후 | 기존 |
