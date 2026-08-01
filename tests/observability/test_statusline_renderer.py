@@ -5,6 +5,7 @@ from ai_workspace.observability.snapshot import (
     ClaudeRuntimeInfo,
     GitRuntimeInfo,
     GuardianRuntimeInfo,
+    LearningRuntimeInfo,
     McpRuntimeInfo,
     PipelineStageState,
     PipelineStageStatus,
@@ -44,6 +45,12 @@ _MCP_RUNTIME = McpRuntimeInfo(
     last_mcp_call=None,
     last_mcp_error=None,
 )
+_LEARNING_RUNTIME = LearningRuntimeInfo(
+    tracked_task_count=3,
+    highest_risk_task_id="M42-T01",
+    highest_risk_decayed_failure_rate=0.72,
+    highest_risk_recent_failure_streak=3,
+)
 
 _SNAPSHOT = WorkspaceRuntimeSnapshot(
     workspace=WorkspaceInfo(project_name="ai-workspace", milestone="M45 Workspace Observability"),
@@ -69,6 +76,7 @@ _SNAPSHOT = WorkspaceRuntimeSnapshot(
     guardian_runtime=_GUARDIAN_RUNTIME,
     vault_runtime=_VAULT_RUNTIME,
     mcp_runtime=_MCP_RUNTIME,
+    learning_runtime=_LEARNING_RUNTIME,
 )
 
 
@@ -153,6 +161,31 @@ def test_render_includes_mcp_line() -> None:
     assert "Connected [filesystem]" in text
 
 
+def test_render_includes_learning_line() -> None:
+    text = StatusLineRenderer().render(_SNAPSHOT)
+
+    assert "Learning tracked 3 tasks" in text
+    assert "M42-T01" in text
+    assert "0.72" in text
+    assert "연속실패 3" in text
+
+
+def test_render_learning_line_when_no_tasks_tracked() -> None:
+    snapshot = dataclasses.replace(
+        _SNAPSHOT,
+        learning_runtime=LearningRuntimeInfo(
+            tracked_task_count=0,
+            highest_risk_task_id=None,
+            highest_risk_decayed_failure_rate=None,
+            highest_risk_recent_failure_streak=None,
+        ),
+    )
+
+    text = StatusLineRenderer().render(snapshot)
+
+    assert "Learning tracked 0 tasks" in text
+
+
 def test_render_handles_missing_claude_runtime_fields_without_guessing() -> None:
     snapshot = WorkspaceRuntimeSnapshot(
         workspace=WorkspaceInfo(project_name="ai-workspace", milestone="Unknown"),
@@ -195,6 +228,12 @@ def test_render_handles_missing_claude_runtime_fields_without_guessing() -> None
             available_tools=None,
             last_mcp_call=None,
             last_mcp_error=None,
+        ),
+        learning_runtime=LearningRuntimeInfo(
+            tracked_task_count=0,
+            highest_risk_task_id=None,
+            highest_risk_decayed_failure_rate=None,
+            highest_risk_recent_failure_streak=None,
         ),
     )
 

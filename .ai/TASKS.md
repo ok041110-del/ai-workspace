@@ -14122,6 +14122,66 @@ PR #57(Vault Index 반영) 병합(`7639b14`), `main` 반영 확인.
 
 ---
 
+## Milestone 54 — Learning Insight (T03 완료, 사용자 승인 대기)
+
+**배경**: 로드맵에 사전 예고 없던 이름이라 착수 전 범위부터 확인.
+
+**T01 Domain Analysis(사용자 확인)**: M49~M53 학습 신호를 사람이
+볼 수 있게 노출하는 확장으로 확정(새 Domain/Behavioral Concept
+아님, 기존 `Observability`의 확장). 조사 중 `WorkspaceInfo.
+current_task`가 이미 "Phase 1 범위 밖, 항상 `None`"으로 명시돼
+있음을 재확인 — StatusLine은 별도 프로세스라 "지금 어떤 task가
+추천 대상인지"는 알 수 없다(ADR-0063 기존 한계, 이번에도 해소하지
+않음). "현재 추천 대상"이 아니라 "추적 중인 모든 task 중 가장
+위험한 것"으로 범위를 좁힘.
+
+**T02 MDD Review(사용자 승인)**: 새 `LearningRuntimeAnalyzer`가
+`FileMemoryEngine`(M50)+`ExecutionMemoryStore`(M39)+
+`ExperienceIntelligenceService`(M40)를 그대로 조합(새 Domain/
+Interface/Service 없음). `LearningRuntimeInfo`: `tracked_task_count`,
+`highest_risk_*`(decayed_failure_rate 최댓값, 동점이면 task_id
+오름차순 — 새 채점 아니라 표시 로직). Pipeline Stage의 Memory
+단계를 `NOT_OBSERVABLE`에서 `OBSERVED_DONE`/`OBSERVED_NOT_YET`으로
+승격하는 것도 T02에서 함께 승인(M45/M50에서 두 번 미뤄뒀던 gap).
+
+**T03 구현**:
+- `src/ai_workspace/observability/snapshot.py` — `LearningRuntimeInfo`
+  값 객체 추가, `WorkspaceRuntimeSnapshot`에 필드 추가.
+- `src/ai_workspace/observability/learning_runtime_analyzer.py`
+  (신규) — `LearningRuntimeAnalyzer.analyze(project_root)`.
+- `src/ai_workspace/observability/pipeline_stage_analyzer.py` —
+  `analyze()`에 `has_learning_records: bool` 키워드 인자 추가,
+  Memory 단계 판정을 `_memory_stage()` 헬퍼로 교체.
+- `src/ai_workspace/observability/runtime_snapshot_service.py` —
+  8번째 Analyzer로 배선.
+- `src/ai_workspace/observability/statusline_renderer.py` —
+  "Learning" 줄 렌더링 추가.
+- `tests/observability/test_learning_runtime_analyzer.py`(신규
+  3건 — 기록 없음/실제 FileMemoryEngine 데이터 반영/동점 시
+  task_id 오름차순). 기존 `test_pipeline_stage_analyzer.py`(Memory
+  판정 테스트 2건으로 분리)/`test_statusline_renderer.py`/
+  `test_runtime_snapshot_service.py`를 새 필드/파라미터에 맞춰 수정.
+- 실제 `FileMemoryEngine` 데이터로 end-to-end 수동 실행 — Memory
+  단계가 `?`에서 `✓`로 바뀌고 Learning 줄이 실제 위험 task를
+  정확히 보여줌을 확인.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 새 Domain/Service/Interface 없이 기존 컴포넌트만 조합 | ✅ |
+| 2 | `current_task` Phase 1 한계 유지(추정 금지 원칙) | ✅ |
+| 3 | Memory Pipeline Stage NOT_OBSERVABLE → OBSERVED_DONE/NOT_YET 승격 | ✅ |
+| 4 | 실제 FileMemoryEngine 데이터로 end-to-end 수동 검증 | ✅ |
+| 5 | 새 채점 로직 없이 기존 값(decayed_failure_rate) 표시만 | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1155개(신규 3개, 회귀 없음)/`ruff`/`mypy`(222 source files)
+전부 통과. ADR-0072. PR 생성·CI 확인·Merge·`main` 반영·Vault Index
+갱신 후 최종 완료 선언 예정(이전 Milestone과 동일한 절차).
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

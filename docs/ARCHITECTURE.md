@@ -304,6 +304,18 @@ Execution Platform (M36~M38) — 실행·상태 전이·스케줄링
   상수(0.8, 사용자 확정)로 데이터 기반 학습은 하지 않는다
   (Non-goal). 새 Domain/Service/Interface 없이 기존 파일 2개만
   수정.
+- **M54 Learning Insight — 완료(2026-08-01, ADR-0072)**: M49~M53
+  학습 신호를 StatusLine에 노출했다. 새 `LearningRuntimeAnalyzer`가
+  `FileMemoryEngine`(M50)+`ExecutionMemoryStore`(M39)+
+  `ExperienceIntelligenceService`(M40)를 그대로 조합해
+  `ExperienceReport`를 얻고, `tracked_task_count`와 가장 위험한
+  task(`decayed_failure_rate` 최댓값)를 보여준다. `WorkspaceInfo.
+  current_task`가 Phase 1 범위 밖(ADR-0063)이라 "현재 추천 대상"은
+  여전히 알 수 없어, "추적 중인 전체 중 최고 위험"으로 범위를
+  좁혔다. 부수적으로 Pipeline Stage의 Memory 단계가
+  `NOT_OBSERVABLE`에서 `OBSERVED_DONE`/`OBSERVED_NOT_YET`으로
+  승격돼, M45/M50에서 두 번 미뤄뒀던 gap도 함께 해소했다. 새
+  Domain/Interface/Service 없이 기존 컴포넌트 조합만 재사용.
 
 ## 3. 핵심 컴포넌트
 

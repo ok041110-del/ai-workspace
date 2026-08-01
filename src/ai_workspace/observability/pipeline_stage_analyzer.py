@@ -10,11 +10,11 @@ Orchestration(M43)→Execution(M36)→Memory(M39)→Experience(M40) 7단계
   Domain Analysis에서 이미 확인된 대로, 두 개념 모두 다른 산출물
   안에 구조적으로 포함된다) — `STRUCTURAL_INCLUDED`로 표시한다.
 - Memory(M39, `ExecutionMemoryStore`)는 M50(ADR-0067)부터
-  `FileMemoryEngine`으로 JSON 파일에 영속화되지만, 이 Vault 산출물
-  기반 관측 경로에는 아직 읽기 배선이 없다 — StatusLine은 별도
-  프로세스로 실행되고 이 파일을 조회하는 코드가 없다. `NOT_OBSERVABLE`
-  로 표시하고 이유를 note에 남긴다(추정 금지, 배선 자체는 별도
-  Milestone 대상)."""
+  `FileMemoryEngine`으로 JSON 파일에 영속화된다. M54(ADR-0072)에서
+  `LearningRuntimeAnalyzer`가 이 파일을 읽는 배선을 추가해,
+  `NOT_OBSERVABLE`이 `OBSERVED_DONE`/`OBSERVED_NOT_YET`으로
+  승격됐다 — 판정 기준은 다른 단계와 동일하게 "산출물(여기서는
+  추적 중인 학습 기록)이 존재하는가"뿐이다(추정 금지)."""
 
 from __future__ import annotations
 
@@ -28,9 +28,15 @@ _EXPERIENCE_REPORT = ("15 Project Intelligence", "Experience Intelligence.md")
 
 
 class PipelineStageAnalyzer:
-    def analyze(self, vault_adapter: VaultAdapter) -> tuple[PipelineStageState, ...]:
+    def analyze(
+        self, vault_adapter: VaultAdapter, *, has_learning_records: bool
+    ) -> tuple[PipelineStageState, ...]:
         """
-        입력: vault_adapter(읽기 전용 `report_last_modified()`만 사용)
+        입력: vault_adapter(읽기 전용 `report_last_modified()`만 사용),
+              has_learning_records(M54 — `LearningRuntimeAnalyzer`가
+              이미 계산한 `tracked_task_count > 0` 여부. 이 클래스는
+              `FileMemoryEngine`을 직접 읽지 않는다 — 계산 위치를
+              중복시키지 않기 위해 이미 계산된 값만 받는다)
         출력: 7단계 `PipelineStageState`(순서 고정)
         예외: 없음
         보장: Vault에 쓰지 않는다. Adaptation/Orchestration의 판단
@@ -65,15 +71,7 @@ class PipelineStageAnalyzer:
                 ),
             ),
             _observed_stage("Execution", execution_mtime, "Recommendation Execution.md"),
-            PipelineStageState(
-                name="Memory",
-                status=PipelineStageStatus.NOT_OBSERVABLE,
-                note=(
-                    "ExecutionMemoryStore는 M50부터 FileMemoryEngine으로 영속화되지만"
-                    "(ADR-0067) 이 관측 경로에 읽기 배선이 없어 별도 프로세스"
-                    "(StatusLine)에서 조회 불가(Phase 1 한계, ADR-0062)"
-                ),
-            ),
+            _memory_stage(has_learning_records),
             _observed_stage("Experience", experience_mtime, "Experience Intelligence.md"),
         )
 
@@ -89,4 +87,18 @@ def _observed_stage(name: str, mtime: float | None, report_filename: str) -> Pip
         name=name,
         status=PipelineStageStatus.OBSERVED_DONE,
         note=f"{report_filename} 존재",
+    )
+
+
+def _memory_stage(has_learning_records: bool) -> PipelineStageState:
+    if not has_learning_records:
+        return PipelineStageState(
+            name="Memory",
+            status=PipelineStageStatus.OBSERVED_NOT_YET,
+            note="FileMemoryEngine(M50)에 기록된 실행 이력 없음 — 아직 실행된 적 없음",
+        )
+    return PipelineStageState(
+        name="Memory",
+        status=PipelineStageStatus.OBSERVED_DONE,
+        note="FileMemoryEngine(M50)에 실행 이력 존재(M54, LearningRuntimeAnalyzer)",
     )

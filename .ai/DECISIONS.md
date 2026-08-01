@@ -5051,3 +5051,79 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   테스트를 `decayed_failure_rate` 명시 지정으로 수정. `pytest`
   1149개(신규 4개, 회귀 없음)/`ruff`/`mypy`(221 source files) 전부
   통과. `.ai/TASKS.md` Milestone 53 절(T01~T03) 신규 추가.
+
+## ADR-0072: Learning Insight — M39~M53 학습 신호를 StatusLine에 노출 (Milestone 54)
+
+- 상태: 승인됨 (2026-08-01, 사용자가 "M54 Learning Insight" 착수
+  요청 — 로드맵에 사전 예고 없던 이름이라 두 차례 AskUserQuestion
+  으로 범위(학습 신호를 사람이 볼 수 있게 노출)와 경로(StatusLine에
+  줄 추가)를 확정, T02 설계도 별도 승인)
+- 날짜: 2026-08-01
+- 배경: M49~M53으로 쌓인 학습 신호(`decayed_failure_rate`/
+  `recent_failure_streak`/가중치 결합 score)는 지금까지
+  `RecommendationAdjustmentAnalyzer`(Adaptation)의 보류 판단에만
+  내부적으로 쓰였고, 사람이 직접 조회할 수 있는 형태로는 전혀
+  노출되지 않았다. T01 조사 중 `observability/snapshot.py`의
+  `WorkspaceInfo.current_task`가 "Phase 1 범위 밖, 항상 `None`"으로
+  이미 명시돼 있음을 확인 — StatusLine은 별도 프로세스라 "지금 어떤
+  task가 추천 대상인지"는 알 수 없다(ADR-0063에서 이미 확정된 한계,
+  이번 Milestone에서도 해소하지 않음). 대신 M50(ADR-0067)이
+  `<vault_root>/.ai-workspace-data/`에 영속화해 둔 실행 이력
+  전체를 읽어, "현재 추천 대상"이 아니라 "추적 중인 모든 task 중
+  가장 위험한 것"을 보여주는 방향으로 범위를 좁혔다 — 이는 M45/M50
+  에서 이미 "별도 Milestone 대상"으로 명시적으로 남겨뒀던 Pipeline
+  Stage "Memory" 단계의 `NOT_OBSERVABLE` 상태를 해소하는 것과
+  동일한 배선이라, 부수적으로 그 gap도 함께 닫힌다.
+- 결정:
+  1. **Domain Analysis(T01)**: 새 Domain/Behavioral Concept 아님 —
+     기존 `Observability`(§13.3, M45)의 확장. `current_task` Phase 1
+     한계는 그대로 유지(추정 금지 원칙 — 알 수 없는 것을 알아낸
+     척하지 않는다).
+  2. **Architecture Review(T02) — 설계**: 새 `LearningRuntimeAnalyzer`
+     (observability/)가 `FileMemoryEngine`(M50)+`ExecutionMemoryStore`
+     (M39)+`ExperienceIntelligenceService`(M40)를 그대로 조합해
+     `ExperienceReport`를 얻는다 — 새 Domain/Interface/Service
+     없음, 기존 컴포넌트 재사용만. `LearningRuntimeInfo`(값 객체):
+     `tracked_task_count`, `highest_risk_task_id`/
+     `decayed_failure_rate`/`recent_failure_streak`(모든 task_id 중
+     `decayed_failure_rate` 최댓값, 동점이면 `task_id` 오름차순 —
+     새 채점이 아니라 이미 계산된 값 중 최대를 고르는 표시 로직).
+     `PipelineStageAnalyzer.analyze()`에 `has_learning_records: bool`
+     키워드 인자를 추가해 Memory 단계를 `NOT_OBSERVABLE`에서
+     `OBSERVED_DONE`/`OBSERVED_NOT_YET`으로 승격(계산 위치 중복을
+     피하려고 `LearningRuntimeAnalyzer`가 이미 낸 결과만 전달받음).
+  3. **Detailed Design(T03)**: `RuntimeSnapshotService`에
+     `LearningRuntimeAnalyzer` 8번째로 추가, `StatusLineRenderer`에
+     "Learning" 줄 렌더링 추가. 실제 `FileMemoryEngine` 데이터로
+     end-to-end 수동 실행해 Memory 단계가 실제로 `✓`로 바뀌고
+     Learning 줄이 실제 위험 task를 정확히 보여줌을 확인.
+- 대안:
+  1. "현재 추천 대상"의 학습 신호를 보여주기 — 기각: `current_task`
+     Phase 1 한계상 StatusLine이 알 방법이 없음(ADR-0063). 알 수
+     없는 것을 추정하지 않는다는 원칙을 지키기 위해 "추적 중인
+     전체 중 최고 위험"으로 범위를 좁힘.
+  2. Explainability(M44) reason 텍스트를 확장 — 기각: 사용자가
+     StatusLine 경로를 선택. 이미 보류된 케이스에만 보이는 기존
+     방식과 달리, 보류되지 않은 task도 포함해 상시 노출하는 것이
+     "Insight"라는 목표에 더 맞음.
+  3. Memory Pipeline Stage 승격을 별도 Milestone으로 미루기 —
+     기각: 사용자가 T02에서 포함하기로 승인. 어차피 같은 배선
+     (`FileMemoryEngine` 읽기)이라 별도로 미룰 이유가 없음.
+- 이유: M39~M53까지 5개 Milestone에 걸쳐 쌓인 학습 인프라를 코드
+  변경 없이(순수 조합) 사람이 볼 수 있게 만들면서, 동시에 M45/M50
+  에서 두 번이나 "향후 별도 Milestone"으로 명시했던 부채를 정리했다.
+- 결과/영향: `observability/snapshot.py`(`LearningRuntimeInfo` 추가,
+  `WorkspaceRuntimeSnapshot`에 필드 추가), `observability/
+  learning_runtime_analyzer.py`(신규), `observability/
+  pipeline_stage_analyzer.py`(`has_learning_records` 파라미터 추가,
+  Memory 단계 판정 로직 교체), `observability/runtime_snapshot_
+  service.py`(8번째 Analyzer 배선), `observability/statusline_
+  renderer.py`(Learning 줄 렌더링 추가) 5개 파일 수정 + 1개 신규.
+  새 Core Domain Interface/Adapter/Service/Layer/File 없음(모두
+  `observability/` 패키지 내부). `tests/observability/
+  test_learning_runtime_analyzer.py`(신규 3건), 기존 `test_
+  pipeline_stage_analyzer.py`/`test_statusline_renderer.py`/
+  `test_runtime_snapshot_service.py`를 새 필드/파라미터에 맞춰
+  수정. `pytest` 1155개(회귀 없음)/`ruff`/`mypy`(222 source files)
+  전부 통과. 실제 `FileMemoryEngine` 데이터로 end-to-end 수동 검증
+  완료. `.ai/TASKS.md` Milestone 54 절(T01~T03) 신규 추가.

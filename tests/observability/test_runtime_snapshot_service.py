@@ -27,6 +27,7 @@ def test_build_composes_all_analyzers(tmp_path: Path) -> None:
     assert snapshot.guardian_runtime.guardian_all_passed is None
     assert snapshot.vault_runtime.vault_connected is False
     assert snapshot.mcp_runtime.mcp_enabled is False
+    assert snapshot.learning_runtime.tracked_task_count == 0
 
 
 def test_build_does_not_write_to_vault(tmp_path: Path) -> None:

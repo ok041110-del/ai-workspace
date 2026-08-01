@@ -144,6 +144,23 @@ class McpRuntimeInfo:
 
 
 @dataclass(frozen=True)
+class LearningRuntimeInfo:
+    """M39~M53 Learning 신호를 사람이 볼 수 있게 노출한다(Milestone 54,
+    ADR-0072). `ExecutionMemoryStore`(M39)가 `FileMemoryEngine`(M50)에
+    영속화한 기록을 `ExperienceIntelligenceService`(M40)로 집계해
+    얻은 `ExperienceReport`를 그대로 반영할 뿐, 새 판단 기준을 만들지
+    않는다 — `highest_risk_*`는 이미 계산된 `ExperienceStat.
+    decayed_failure_rate`(M53) 중 최댓값을 고르는 표시 로직이지,
+    새로운 채점이 아니다(동점이면 `task_id` 오름차순으로 결정론적
+    선택). 기록이 없으면 모든 필드가 `None`/0이다."""
+
+    tracked_task_count: int
+    highest_risk_task_id: str | None
+    highest_risk_decayed_failure_rate: float | None
+    highest_risk_recent_failure_streak: int | None
+
+
+@dataclass(frozen=True)
 class WorkspaceRuntimeSnapshot:
     """StatusLine(및 향후 Dashboard/CLI/Web UI 재사용 후보)이 표시만
     하는 단일 읽기 전용 Runtime 모델(ADR-0062/ADR-0063). 이 객체
@@ -157,3 +174,4 @@ class WorkspaceRuntimeSnapshot:
     guardian_runtime: GuardianRuntimeInfo
     vault_runtime: VaultRuntimeInfo
     mcp_runtime: McpRuntimeInfo
+    learning_runtime: LearningRuntimeInfo
