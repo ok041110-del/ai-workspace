@@ -5244,3 +5244,68 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   Composition Root(`web/server.py`)에는 M13(CodingAgent)도 아직
   배선되지 않아 이번에도 배선하지 않음(MVP 범위 일관 유지).
   `.ai/TASKS.md` Milestone 56 절(T01~T03) 신규 추가.
+
+## ADR-0075: Scheduler 고도화 — 우선순위·가용성 기반 Agent 선택 (Milestone 57)
+
+- 상태: 승인됨 (2026-08-01, 사용자가 "우선순위·Capability·의존성
+  기반 Agent 선택 및 실행 정책 설계"로 M57 착수 요청 — 세 축을
+  구체화하는 AskUserQuestion 3회, 구현 중 발견한 두 차례의 실제
+  버그를 보고·재설계해 최종 확정)
+- 날짜: 2026-08-01
+- 배경: M13/M56이 확립한 `InMemoryAgentScheduler.select()`는
+  `candidates` 리스트의 첫 매치만 고르는 "첫 매치" 정책이었다(M13
+  Non-goal: "Scheduler 선택 정책 고도화... 후속 Milestone"). 사용자가
+  우선순위/Capability/의존성 3축을 요청했으나, Capability는 이미
+  기존 필터로 충분해 범위 밖(사용자 확인), "의존성"은 Task 도메인에
+  선행 Task 개념이 없어 "Agent 가용성"으로 재정의됐다(사용자 확인).
+- 결정(설계 확정까지 두 차례 실제 버그 발견·수정):
+  1. **Domain Analysis(T01)**: 새 Domain/Interface 아님 — 기존
+     `AgentScheduler`/`Agent` 도메인의 확장.
+  2. **1차 설계(가용성=IDLE) — 기각(실제 버그 발견)**: `AgentRuntime.
+     start_agent()`가 등록 즉시 Agent를 `RUNNING`으로 전이시키고
+     어떤 Agent도 이벤트 처리 중 상태를 다시 바꾸지 않는다는 것을
+     코드 조사로 발견 — `AgentStatus`는 "지금 바쁜지"가 아니라
+     "생명주기(등록됨/중지됨)"를 나타낸다. IDLE만 가용으로 보면
+     정상 동작 중인 모든 Agent가 걸러져 Scheduler가 항상 빈
+     리스트를 반환하는 회귀가 된다는 것을 보고·확인.
+  3. **2차 설계(가용성=RUNNING) — 기각(추가 버그 발견)**: 재정의
+     후 전체 `pytest`를 돌려보니 `test_agent_scheduler.py`/
+     `test_agent_adapter.py`/`test_workflow_agent_link.py`/
+     `test_conversation_connector.py` 9건이 실패 — 이 저장소에
+     `AgentRuntime`을 거치지 않고 도메인 기본값(`AgentStatus.IDLE`)
+     그대로 `Agent`를 직접 생성하는 별도의 테스트 계열이 이미
+     존재함을 발견. RUNNING만 가용으로 보면 이번엔 이 계열이
+     걸러진다.
+  4. **최종 설계(가용성=STOPPED/ERROR만 제외) — 사용자 확정**: IDLE/
+     RUNNING/WAITING/PAUSED 전부 가용으로 취급하고, 명확히 "더 이상
+     일할 수 없는" STOPPED/ERROR만 제외 — 두 Agent 생성 경로 모두
+     회귀 없이 통과.
+  5. **우선순위**: `Agent`에 `priority: int = 0` 필드 신설(낮을수록
+     우선). `select()`가 capability+가용성 필터 후 `priority`로
+     안정(stable) 정렬 — 동점(기본값 0)이면 `candidates` 원래 순서
+     보존, M13/M56의 "첫 매치" 동작과 100% 동일(회귀 없음, 안정
+     정렬의 성질로 보장).
+- 대안:
+  1. Capability 기반 추가 고도화(전문성 우선 등) — 기각: 사용자가
+     "지금 그대로 유지" 선택, 기존 필터로 충분.
+  2. Task 간 선행/후속 의존성(depends_on) — 기각: 범위가 훨씬 커
+     TaskEngine까지 건드려야 하고, 사용자가 Agent 가용성으로 범위를
+     좁힘.
+  3. AgentStatus에 별도 "busy" 개념 신설 — 기각: 사용자가 기존
+     `AgentStatus` 재사용을 선택(새 필드 최소화).
+- 이유: 두 차례의 실제 코드 조사(각각 별도 실패)를 통해 "가용성"의
+  올바른 정의를 실증적으로 좁혀갔다 — 추측이 아니라 `pytest` 실패
+  결과 자체가 근거였다. 우선순위는 안정 정렬 하나로 기존 동작과의
+  100% 하위 호환을 수학적으로 보장하면서 새 능력(명시적 우선순위)
+  을 추가했다.
+- 결과/영향: `domain/agent.py`(`Agent.priority` 필드 추가),
+  `runtime/agent/agent_scheduler.py`(`InMemoryAgentScheduler.
+  select()`에 가용성 필터 + priority 정렬 추가),
+  `interfaces/agent_scheduler.py`(계약 docstring 갱신) 3개 파일
+  수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음
+  (기존 27종 유지). `tests/runtime/agent/test_agent_scheduler.py`
+  (신규 8건 — priority 우선순위 1건, 안정 정렬 1건, STOPPED/ERROR
+  제외 2건(파라미터화), IDLE/RUNNING/WAITING/PAUSED 포함 4건
+  (파라미터화)). `pytest` 1168개(신규 8개, 회귀 없음)/`ruff`/
+  `mypy`(222 source files) 전부 통과. `.ai/TASKS.md` Milestone 57
+  절(T01~T03) 신규 추가.
