@@ -4,7 +4,9 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
+from ai_workspace.domain.engine_selection import EngineCandidate
 from ai_workspace.domain.task import Task
+from ai_workspace.interfaces.budget_policy_engine import BudgetPolicyEngine
 from ai_workspace.interfaces.engine_adapter import (
     CostEstimate,
     EngineAdapter,
@@ -18,6 +20,7 @@ from ai_workspace.interfaces.engine_runtime import (
     EngineTaskNotFoundError,
     NoSuitableEngineError,
 )
+from ai_workspace.interfaces.engine_selection_policy import EngineSelectionPolicy
 from ai_workspace.interfaces.event_bus import Event, EventBus
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
@@ -57,10 +60,21 @@ class ManagedEngineRuntime(EngineRuntime):
     전부 유실됐다(M10 이전 버그, `.ai/TASKS.md` M10-T02 참고). `with` 블록이
     끝날 때 `ThreadPoolExecutor.shutdown(wait=True)`가 호출되므로, 예외
     캐치 시점에는 제출된 모든 Task가 이미 완료된 상태임이 보장된다.
+
+    `engine_selection_policy`(Milestone 64, ADR-0082)를 생성자로 주입하면
+    `_require_adapter()`가 "등록 순서상 첫 매칭" 대신 `EngineSelectionPolicy`
+    (M17)로 비용 기반 선택을 한다 — 이미 Automation 파이프라인이 쓰는 것과
+    같은 선택 규칙을 이 경로에도 적용한다. 생략(기본값 `None`)하면 이전
+    동작과 100% 동일하다.
     """
 
     def __init__(
-        self, *, event_bus: EventBus, default_timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS
+        self,
+        *,
+        event_bus: EventBus,
+        default_timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
+        engine_selection_policy: EngineSelectionPolicy | None = None,
+        budget_policy_engine: BudgetPolicyEngine | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._default_timeout_seconds = default_timeout_seconds
@@ -68,6 +82,8 @@ class ManagedEngineRuntime(EngineRuntime):
         self._task_status: dict[str, EngineSessionStatus] = {}
         self._task_sessions: dict[str, str] = {}
         self._task_adapters: dict[str, EngineAdapter] = {}
+        self._engine_selection_policy = engine_selection_policy
+        self._budget_policy_engine = budget_policy_engine
 
     def register_engine(self, name: str, adapter: EngineAdapter) -> None:
         if name in self._engines:
@@ -82,7 +98,7 @@ class ManagedEngineRuntime(EngineRuntime):
         *,
         model: str | None = None,
     ) -> EngineResult:
-        adapter = self._require_adapter(required_capabilities)
+        adapter = self._require_adapter(required_capabilities, task)
         session_id = adapter.create_session()
         self._task_sessions[task.task_id] = session_id
         self._task_adapters[task.task_id] = adapter
@@ -124,7 +140,7 @@ class ManagedEngineRuntime(EngineRuntime):
     ) -> list[EngineResult]:
         if not tasks:
             return []
-        self._require_adapter(required_capabilities)
+        self._require_adapter(required_capabilities, tasks[0])
         with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
             futures = [
                 executor.submit(self.run, task, required_capabilities, model=model)
@@ -175,7 +191,7 @@ class ManagedEngineRuntime(EngineRuntime):
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:
-        adapter = self._require_adapter(required_capabilities)
+        adapter = self._require_adapter(required_capabilities, task)
         return adapter.estimate_cost(task)
 
     def cancel(self, task_id: str) -> None:
@@ -195,11 +211,33 @@ class ManagedEngineRuntime(EngineRuntime):
             raise EngineTaskNotFoundError(task_id)
         return self._task_status[task_id]
 
-    def _require_adapter(self, required_capabilities: frozenset[str]) -> EngineAdapter:
-        for adapter in self._engines.values():
-            if required_capabilities.issubset(adapter.capabilities()):
-                return adapter
-        raise NoSuitableEngineError(required_capabilities)
+    def _require_adapter(self, required_capabilities: frozenset[str], task: Task) -> EngineAdapter:
+        if self._engine_selection_policy is None:
+            for adapter in self._engines.values():
+                if required_capabilities.issubset(adapter.capabilities()):
+                    return adapter
+            raise NoSuitableEngineError(required_capabilities)
+
+        candidates: list[EngineCandidate] = []
+        for name, adapter in self._engines.items():
+            if not required_capabilities.issubset(adapter.capabilities()):
+                continue
+            estimate = adapter.estimate_cost(task)
+            candidates.append(
+                EngineCandidate(
+                    engine_name=name,
+                    capabilities=adapter.capabilities(),
+                    estimated_tokens=estimate.estimated_tokens,
+                    estimated_cost_usd=estimate.estimated_cost_usd,
+                    supports_parallel=adapter.supports_parallel(),
+                )
+            )
+        decision = self._engine_selection_policy.select(
+            task, candidates, budget_policy_engine=self._budget_policy_engine
+        )
+        if decision is None:
+            raise NoSuitableEngineError(required_capabilities)
+        return self._engines[decision.engine_name]
 
     def _finish_as_completed(
         self, task_id: str, session_id: str, adapter: EngineAdapter, result: EngineResult
