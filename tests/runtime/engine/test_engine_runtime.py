@@ -846,4 +846,105 @@ def test_benchmark_profile_does_not_affect_engine_selection() -> None:
     runtime.run(make_task("second"))
 
     assert engine_a.run_count == 2
+
+
+def test_benchmark_prefers_higher_success_rate_engine_when_execution_memory_ties() -> None:
+    """M78(ADR-0096): 비용이 동률이고 이번 호출의 `required_capabilities`
+    조합에 대한 실행 메모리(M69)가 아직 없어 중립일 때, Provider 전체
+    누적(M65) Benchmark Profile(M77)의 성공률이 더 높은 엔진을 우선한다.
+    `run_ensemble()`(M62)로 엔진 이름을 직접 지정해 성공률만 다르게
+    시딩한다 — `run_ensemble()`은 M69 실행 메모리를 기록하지 않으므로
+    (ADR-0087) 이번 tie-break 호출(`required_capabilities=frozenset()`)의
+    execution_memory는 계속 중립을 유지한다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    engine_a = CostedEngineAdapter(estimated_cost_usd=0.0)
+    engine_b = CostedEngineAdapter(estimated_cost_usd=0.0)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    for i in range(3):
+        runtime.run_ensemble(make_task(f"seed-a-{i}"), ["engine-a"])
+    engine_b._succeed = True
+    runtime.run_ensemble(make_task("seed-b-0"), ["engine-b"])
+    engine_b._succeed = False
+    runtime.run_ensemble(make_task("seed-b-1"), ["engine-b"])
+    runtime.run_ensemble(make_task("seed-b-2"), ["engine-b"])
+    assert engine_a.run_count == 3
+    assert engine_b.run_count == 3
+
+    runtime.run(make_task("tie"))
+
+    assert engine_a.run_count == 4
+    assert engine_b.run_count == 3
+
+
+def test_benchmark_does_not_override_execution_memory_success_rate() -> None:
+    """M78(ADR-0096): 특정 `required_capabilities` 조합의 실행 메모리(M69)
+    가 이미 성공률로 후보를 가른 경우, Provider 전체 Benchmark(M77)가
+    정반대 결과를 보여줘도 M69의 좁지만 정밀한 판단을 절대 뒤집지
+    않는다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    reliable = CostedEngineAdapter(estimated_cost_usd=0.0, capabilities=frozenset({"cap"}))
+    untested = CostedEngineAdapter(estimated_cost_usd=0.0, capabilities=frozenset({"cap"}))
+    runtime.register_engine("reliable", reliable)
+    runtime.register_engine("untested", untested)
+
+    for i in range(3):
+        runtime.run(make_task(f"seed-{i}"), required_capabilities=frozenset({"cap"}))
+    assert reliable.run_count == 3
+    assert untested.run_count == 0
+
+    reliable._succeed = False
+    for i in range(3):
+        runtime.run_ensemble(make_task(f"drag-{i}"), ["reliable"])
+    for i in range(3):
+        runtime.run_ensemble(make_task(f"boost-{i}"), ["untested"])
+
+    assert runtime.benchmark_profile("reliable").success_rate() == 0.5
+    assert runtime.benchmark_profile("untested").success_rate() == 1.0
+
+    runtime.run(make_task("tie"), required_capabilities=frozenset({"cap"}))
+
+    assert reliable.run_count == 7
+    assert untested.run_count == 3
+
+
+def test_benchmark_falls_back_to_diversity_when_sample_insufficient() -> None:
+    """M78(ADR-0096): Benchmark 표본이 `_MIN_BENCHMARK_SAMPLES`(3) 미만이면
+    성공률이 아무리 좋아도 중립으로 처리해 M75/76의 부하 기반 tie-break
+    결과를 그대로 보존한다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    engine_a = SlowCostedEngineAdapter(delay_seconds=0.2)
+    engine_b = SlowCostedEngineAdapter(delay_seconds=0.01)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    runtime.run_ensemble(make_task("seed-0"), ["engine-a"])
+    runtime.run_ensemble(make_task("seed-1"), ["engine-a"])
+
+    thread = threading.Thread(target=runtime.run, args=(make_task("busy"),))
+    thread.start()
+    time.sleep(0.05)  # engine-a가 실행 중(in-flight=1)인 순간을 보장
+    runtime.run(make_task("tie"))
+    thread.join()
+
+    assert engine_a.run_count == 3
+    assert engine_b.run_count == 1
+
+
+def test_benchmark_not_applied_without_engine_selection_policy() -> None:
+    """M78 이전과 100% 동일 동작(회귀 확인): `engine_selection_policy`를
+    주입하지 않으면(첫 매칭 경로) Benchmark tie-break가 전혀 관여하지
+    않는다."""
+    runtime = InMemoryEngineRuntime()
+    engine_a = CostedEngineAdapter(estimated_cost_usd=0.0)
+    engine_b = CostedEngineAdapter(estimated_cost_usd=0.0)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    runtime.run(make_task("first"))
+    runtime.run(make_task("second"))
+
+    assert engine_a.run_count == 2
+    assert engine_b.run_count == 0
     assert engine_b.run_count == 0

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import threading
 import time
 
@@ -25,6 +26,7 @@ from ai_workspace.interfaces.engine_runtime import (
 from ai_workspace.interfaces.engine_selection_policy import EngineSelectionPolicy
 
 _NEUTRAL_RATE = 0.5
+_MIN_BENCHMARK_SAMPLES = 3
 
 
 class InMemoryEngineRuntime(EngineRuntime):
@@ -124,7 +126,20 @@ class InMemoryEngineRuntime(EngineRuntime):
     (execution_count/success_rate()/failure_rate()/average_latency_
     seconds())로 반환한다. Routing 로직(`_select()`/`_build_candidates()`/
     `_reorder_by_diversity()`/`_reorder_by_execution_memory()`)은 전혀
-    수정하지 않는다 — 순수 조회 전용 신규 public 메서드 하나만 추가했다."""
+    수정하지 않는다 — 순수 조회 전용 신규 public 메서드 하나만 추가했다.
+
+    **Adaptive Engine Benchmark Routing(Milestone 78, ADR-0096)**:
+    `_build_candidates()`가 `_reorder_by_diversity()`(부하) 이후,
+    `_reorder_by_execution_memory()`(특정 `required_capabilities` 조합
+    성공률) 이전에 `_reorder_by_benchmark()`를 적용해 M77
+    `benchmark_profile()`(Provider 전체 누적 성공률·평균 레이턴시)로 한
+    번 더 tie-break한다. 안정 정렬 순서상 최종 우선순위는 cost >
+    execution_memory(좁지만 정밀) > benchmark(넓지만 표본 큼) >
+    diversity(부하, 최후순위)이며, 표본이 `_MIN_BENCHMARK_SAMPLES`(3)
+    미만이면 중립값으로 대체해 즉시 기존 순서로 fallback한다 — 새 상태를
+    만들지 않고 M77이 이미 읽기 전용으로 조합해 둔 값만 재사용하며,
+    `engine_selection_policy` 미주입 시(첫 매칭 경로)에는 관여하지
+    않는다(100% 하위 호환)."""
 
     def __init__(
         self,
@@ -237,17 +252,61 @@ class InMemoryEngineRuntime(EngineRuntime):
 
     def _reorder_by_diversity(self, candidates: list[EngineCandidate]) -> list[EngineCandidate]:
         """**Diversity Routing(Milestone 75, ADR-0093) / Adaptive Load
-        Balancing(Milestone 76, ADR-0094)**: 비용과 성공률이 모두 동률인
-        후보끼리는(`_reorder_by_execution_memory()`가 그 동률을 그대로
-        통과시킨 뒤, `EngineSelectionPolicy`의 `min()`이 동률일 때 반환하는
-        첫 원소를 이 순서로 결정) 지금 이 순간의 상대 부하(`_load_rank()`
-        = 부하율 우선, 부하율까지 동률이면 raw `_in_flight`)가 더 낮은
-        (=덜 바쁜) 엔진을 앞세운다. `_reorder_by_execution_memory()`보다
-        먼저 적용해(안정 정렬) 성공률이 갈리는 순간 이 부하 순서는 곧바로
-        덮어써진다 — 비용·신뢰도 우선순위를 전혀 바꾸지 않고 "완전한
-        동률"에서만 개입하는 선택적 최적화다."""
+        Balancing(Milestone 76, ADR-0094)**: 비용·성공률·Benchmark가 모두
+        동률인 후보끼리는(`_reorder_by_benchmark()`와
+        `_reorder_by_execution_memory()`가 그 동률을 그대로 통과시킨 뒤,
+        `EngineSelectionPolicy`의 `min()`이 동률일 때 반환하는 첫 원소를
+        이 순서로 결정) 지금 이 순간의 상대 부하(`_load_rank()` = 부하율
+        우선, 부하율까지 동률이면 raw `_in_flight`)가 더 낮은(=덜 바쁜)
+        엔진을 앞세운다. 세 재정렬 중 가장 먼저 적용해(안정 정렬) 뒤이은
+        재정렬이 조금이라도 갈리면 이 부하 순서는 곧바로 덮어써진다 —
+        비용·신뢰도 우선순위를 전혀 바꾸지 않고 "완전한 동률"에서만
+        개입하는 최후순위 선택적 최적화다."""
 
         return sorted(candidates, key=self._load_rank)
+
+    def _benchmark_rank(self, candidate: EngineCandidate) -> tuple[float, float]:
+        """**Adaptive Engine Benchmark Routing(Milestone 78, ADR-0096)**:
+        M77 `benchmark_profile()`(M65 전체 실행 경로 성공/실패 + M69
+        latency를 읽기 전용 조합한 Provider 단위 리포트)을 재사용해 순위
+        키 `(-success_rate, average_latency_seconds)`를 만든다 — 성공률
+        내림차순이 1순위, 완전히 같은 성공률일 때만 평균 레이턴시
+        오름차순(더 빠른 쪽 우선)으로 2차 tie-break한다. `failure_rate()`
+        는 `success_count`/`failure_count`가 같은 `execution_count`에서
+        나온 보완값이라 별도 정렬 기준으로 쓰지 않는다.
+
+        표본이 `_MIN_BENCHMARK_SAMPLES`(3) 미만이면 아직 신뢰할 수 없는
+        수치이므로 `_NEUTRAL_RATE`(0.5, M69와 동일한 상수)와 `math.inf`
+        (레이턴시 비교에서 유리하지도 불리하지도 않도록 제외)로 대체해
+        기존 재정렬(diversity) 순서를 그대로 보존한다 — 페널티도 우대도
+        주지 않는 순수 fallback이다. 표본은 충분하지만 latency만 기록되지
+        않은 경우(`run_parallel()`/`run_ensemble()`만 거친 엔진, M69 참고)
+        도 동일하게 `math.inf`로 제외한다."""
+
+        profile = self.benchmark_profile(candidate.engine_name)
+        if profile.execution_count < _MIN_BENCHMARK_SAMPLES:
+            return (-_NEUTRAL_RATE, math.inf)
+        rate = profile.success_rate()
+        latency = profile.average_latency_seconds()
+        return (
+            -(rate if rate is not None else _NEUTRAL_RATE),
+            latency if latency is not None else math.inf,
+        )
+
+    def _reorder_by_benchmark(self, candidates: list[EngineCandidate]) -> list[EngineCandidate]:
+        """**Adaptive Engine Benchmark Routing(Milestone 78, ADR-0096)**:
+        비용이 동률인 후보끼리(`_reorder_by_execution_memory()`가 처리하는
+        특정 `required_capabilities` 조합 성공률까지 동률일 때만) M77
+        Benchmark Profile(Provider 전체 누적, `_reorder_by_execution_
+        memory()`보다 넓은 범위·큰 표본)로 한 번 더 tie-break한다.
+        `_reorder_by_diversity()`(부하, 최후순위)보다 먼저·`_reorder_by_
+        execution_memory()`(특정 capability 조합 성공률, 최우선)보다
+        나중에 적용해(안정 정렬) 최종 우선순위는 cost > execution_memory
+        > benchmark > diversity가 된다 — 이미 확립된 M64/M69 우선순위는
+        전혀 바꾸지 않고, 그보다 좁은 신호가 갈리지 않을 때만 개입하는
+        추가 tie-break다."""
+
+        return sorted(candidates, key=self._benchmark_rank)
 
     def _select(
         self,
@@ -330,6 +389,7 @@ class InMemoryEngineRuntime(EngineRuntime):
                 )
             )
         candidates = self._reorder_by_diversity(candidates)
+        candidates = self._reorder_by_benchmark(candidates)
         return self._reorder_by_execution_memory(candidates, required_capabilities)
 
     def run(
