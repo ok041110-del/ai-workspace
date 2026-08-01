@@ -677,6 +677,26 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   되어 정상 복귀하고, 다시 실패하면 다음 probe까지 또 5번의 쿨다운을
   거친다. 새 Core Domain Interface 없음 — 기존 `EngineReliabilityStat`
   확장뿐이며, `EngineSelectionPolicy`(M17) 계약도 무변경이다.
+- **LLMPolicyEngine Self Optimizer(Milestone 67, ADR-0085)**: 위
+  M6-T02 "Policy→Execution 라우팅"이 만드는 `LLMPolicyDecision`은
+  M5-T01 이후 순수 정적 `dict.get()` 결과였다 — `CodingAgent`/
+  `ReviewAgent`/`DocumentationAgent`가 만들어내는 실행 결과
+  (`EngineResult.success`)가 정책으로 되먹여지는 경로가 없었다.
+  `domain.llm_policy_reliability.LLMPolicyReliabilityStat`(M65
+  `EngineReliabilityStat`과 동일한 필드 구성·임계값 규칙을 재사용,
+  Probe 관련 필드는 제외)로 `(AgentRole, LLMModel)` 조합별 성공/실패를
+  누적한다. `LLMPolicyEngine.record_outcome(role, decision, success)`
+  (신규 abstract method, `select()`의 read-only 계약은 무변경)로 3개
+  Agent가 `engine_runtime.run()` 직후 결과를 기록한다 —
+  `LLMPolicyEngine` interface를 직접 참조하지 않고 `AgentRuntime.
+  record_llm_policy_outcome(session_id, success)` 한 곳만 거친다(`
+  llm_policy_engine` 미주입/decision 없음이면 no-op). `InMemoryLLMPolicyEngine`
+  은 활성 Decision의 `(role, model)` 통계가 `is_unreliable()`이면
+  `select()`에서 `INITIAL_MODELS` 순서상 다음 모델로 자동 전환한
+  Decision(effort 유지)을 반환한다 — 이미 마지막 모델이면 더 이상
+  전환하지 않는다. Probe 기반 자동 복구(M66과 동일한 개념)는 이번
+  범위에서 명시적으로 제외하고 별도 Milestone 후보로 남긴다. 새 Core
+  Domain Interface 없음 — 기존 `LLMPolicyEngine`의 메서드 1개 확장뿐.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -2518,7 +2538,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 |---|---|---|---|
 | `AutomationRepository` | `AutomationRule` 저장/조회(CRUD는 `AutomationService`가 유일하게 사용) | Milestone 21 (M21-T01 계약, `InMemoryAutomationRepository` 구현) | **완료(계약+구현)** |
 | `DashboardRepository` | Execution 결과를 Event로 받아 Dashboard Read Model에 기록 + 조회 | Milestone 20 (M20-T01 계약, `InMemoryDashboardRepository` 구현) | **완료(계약+구현)** |
-| `LLMPolicyEngine` | AgentRole별 LLM Provider/Model/Effort Rule 기반 결정 | Milestone 5 (M5-T01) | **완료(계약+구현)** |
+| `LLMPolicyEngine` | AgentRole별 LLM Provider/Model/Effort Rule 기반 결정 + 실행 결과 기반 자동 대체(Self Optimizer, M67) | Milestone 5 (M5-T01), M67(ADR-0085) `record_outcome()` 확장 | **완료(계약+구현)** |
 | `BudgetPolicyEngine` | `CostEstimate` vs `Budget` 대조로 실행 허용 여부 결정 | Milestone 15 (M15-T01 계약, `InMemoryBudgetPolicyEngine` 구현) | **완료(계약+구현)** |
 | `KnowledgeRepository` | 프로젝트 문서를 `KnowledgeDocument`로 조회 | Milestone 16 (M16-T01 계약, `FileKnowledgeRepository` 구현) | **완료(계약+구현)** |
 | `KnowledgeSearch` | `KnowledgeRepository` 문서의 Keyword 검색 | Milestone 16 (M16-T02 계약, `InMemoryKnowledgeSearch` 구현) | **완료(계약+구현)** |

@@ -183,6 +183,44 @@ def test_start_agent_reflects_real_policy_loaded_from_example_yaml() -> None:
     )
 
 
+def test_record_llm_policy_outcome_forwards_to_engine() -> None:
+    decision = LLMPolicyDecision(
+        model=LLMModel(LLMProvider.ANTHROPIC, "opus"), effort=LLMEffort.HIGH
+    )
+    llm_policy_engine = FakeLLMPolicyEngine({AgentRole.CODING: decision})
+    runtime = AgentRuntime(
+        agent_manager=FakeAgentManager(),
+        agent_registry=FakeAgentRegistry(),
+        llm_policy_engine=llm_policy_engine,
+    )
+    session = runtime.start_agent(AgentRole.CODING)
+
+    runtime.record_llm_policy_outcome(session.session_id, True)
+
+    assert llm_policy_engine.recorded_outcomes == [(AgentRole.CODING, decision, True)]
+
+
+def test_record_llm_policy_outcome_without_engine_is_noop() -> None:
+    runtime = make_runtime()
+    session = runtime.start_agent(AgentRole.CODING)
+
+    runtime.record_llm_policy_outcome(session.session_id, True)
+
+
+def test_record_llm_policy_outcome_without_decision_is_noop() -> None:
+    llm_policy_engine = FakeLLMPolicyEngine({})
+    runtime = AgentRuntime(
+        agent_manager=FakeAgentManager(),
+        agent_registry=FakeAgentRegistry(),
+        llm_policy_engine=llm_policy_engine,
+    )
+    session = runtime.start_agent(AgentRole.COORDINATOR)
+
+    runtime.record_llm_policy_outcome(session.session_id, True)
+
+    assert llm_policy_engine.recorded_outcomes == []
+
+
 def test_start_agent_without_location_leaves_agent_location_none() -> None:
     agent_registry = FakeAgentRegistry()
     runtime = make_runtime(agent_registry)

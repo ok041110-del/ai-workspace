@@ -626,9 +626,15 @@ class FakeInteractionEngine(InteractionEngine):
 class FakeLLMPolicyEngine(LLMPolicyEngine):
     def __init__(self, rules: dict[AgentRole, LLMPolicyDecision] | None = None) -> None:
         self._rules = dict(rules) if rules is not None else {}
+        self.recorded_outcomes: list[tuple[AgentRole, LLMPolicyDecision, bool]] = []
 
     def select(self, role: AgentRole) -> LLMPolicyDecision | None:
         return self._rules.get(role)
+
+    def record_outcome(
+        self, role: AgentRole, decision: LLMPolicyDecision, success: bool
+    ) -> None:
+        self.recorded_outcomes.append((role, decision, success))
 
 
 class FakeBudgetPolicyEngine(BudgetPolicyEngine):

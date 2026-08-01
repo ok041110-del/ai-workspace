@@ -17,3 +17,12 @@ def test_select_unknown_role_returns_none() -> None:
     engine = FakeLLMPolicyEngine()
 
     assert engine.select(AgentRole.COORDINATOR) is None
+
+
+def test_record_outcome_is_accepted_without_error() -> None:
+    decision = LLMPolicyDecision(model=LLMModel(LLMProvider.OPENAI, "gpt"), effort=LLMEffort.LOW)
+    engine = FakeLLMPolicyEngine({AgentRole.CODING: decision})
+
+    engine.record_outcome(AgentRole.CODING, decision, True)
+
+    assert engine.recorded_outcomes == [(AgentRole.CODING, decision, True)]

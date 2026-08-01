@@ -5920,3 +5920,106 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   1242개(신규 8개, 회귀 없음)/`ruff`/`mypy`(229 source files) 전부
   통과. `.ai/TASKS.md` Milestone 66 절 신규 추가. `docs/ARCHITECTURE.md`
   §3.9 Engine Runtime 절에 Self Optimization 서술 추가.
+
+## ADR-0085: LLMPolicyEngine Self Optimizer — 실행 결과 기반 정책 자동 대체 (Milestone 67)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion 4회로 범위·집계 단위·대체
+  소스·피드백 경로를 순차 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M67 self optimization"으로 착수를 요청했다. ADR-0084
+  (M66)가 "LLMPolicyEngine Self Optimizer(원래 `.ai/RULES.md` §7 M5
+  개념)"를 명시적으로 범위 밖으로 미루고 별도 Milestone 후보로 남겨
+  두었던 항목이다. 조사 결과 `InMemoryLLMPolicyEngine.select()`는
+  M5-T01 이후 줄곧 순수 정적 `dict.get()`이었고(코드 확인), `AgentSession.
+  llm_policy_decision`은 `CodingAgent`/`ReviewAgent`/`DocumentationAgent`
+  가 `engine_runtime.run()`에 실제로 전달해 실행 결과(`EngineResult.
+  success`)까지 만들어내지만, 그 결과가 정책으로 되먹여지는 경로는
+  전혀 없었다(Role+Decision+Outcome이 한 곳에 모이는 지점은 이 3개
+  Agent의 `engine_runtime.run()` 직후뿐).
+- 결정:
+  1. AskUserQuestion으로 범위를 확정: (a) 관측만, (b) 관측 + 자동 대체,
+     (c) 관측 + 자동 대체 + Probe 복구까지 한 번에 — 사용자가 (b)를
+     선택. M65/M66이 관측→복구를 두 Milestone으로 나눈 전례와 동일하게
+     Probe/자동 복구는 이번 범위에서 제외하고 별도 Milestone 후보로
+     남긴다.
+  2. 집계 단위는 `(AgentRole, LLMModel)` 조합으로 확정 — Role 단독
+     집계는 모델 전환 후에도 이전 모델의 실패 이력과 새 모델의 이력이
+     뒤섞여 "자동 대체"가 의미를 갖지 못한다.
+  3. 대체 소스는 기존 `domain/llm_policy.py`의 `INITIAL_MODELS` 시드
+     목록 순서상 다음 모델로 확정 — 새 설정 파일/로더 확장 없이 이미
+     있는 데이터를 재사용한다(YAGNI).
+  4. 피드백 경로는 `CodingAgent`/`ReviewAgent`/`DocumentationAgent`가
+     `engine_runtime.run()` 직후 명시적으로 호출하는 방식으로 확정 —
+     `EngineRuntime`이 `LLMPolicyEngine`을 주입받아 자동 기록하는
+     대안은 engine 계층이 policy 계층을 알아야 하는 새 계층 의존
+     방향이 생겨 기각.
+  5. `domain/llm_policy_reliability.py`(신규)에 `LLMPolicyReliabilityStat`
+     (total/success_count/failure_count)을 신설한다 — M65
+     `EngineReliabilityStat`과 필드 구성·임계값 규칙(`success_count ==
+     0 and total >= 3`)을 동일하게 재사용하되, 이번 범위에서 제외한
+     `skip_count`/Probe 필드는 가져오지 않는다.
+  6. `LLMPolicyEngine` interface에 `record_outcome(role, decision,
+     success) -> None` abstract method를 추가한다 — `select()`의
+     "side-effect 없음(read-only)" 계약은 그대로 두고, 결과 기록은
+     항상 이 별도 메서드를 통해서만 이루어진다(Interface First, 계약
+     명시).
+  7. `InMemoryLLMPolicyEngine`이 `dict[(AgentRole, LLMModel),
+     LLMPolicyReliabilityStat]`과 role별 "현재 활성 Decision" 재정의를
+     내부 상태로 갖는다. `select(role)`은 활성 Decision의 `(role,
+     model)` 통계가 `is_unreliable()`이면 `INITIAL_MODELS` 순서상 다음
+     모델로 전환한 Decision(effort는 원래 값 유지)을 반환하고 그 값을
+     활성 Decision으로 저장한다. 이미 목록의 마지막 모델이면 더 이상
+     전환하지 않는다(Probe 없이 그대로 유지 — 순환하면 이미 실패한
+     모델을 다시 쓰게 될 뿐이다).
+  8. `AgentRuntime`에 `record_llm_policy_outcome(session_id, success)`을
+     추가한다 — `llm_policy_engine` 미주입이거나 해당 session에 결정된
+     policy가 없으면 no-op. 3개 Agent는 `LLMPolicyEngine` interface를
+     직접 참조하지 않고 이 메서드 하나만 호출한다(M5-T02가 세운 "Agent는
+     LLMPolicyEngine을 모른다" 경계를 그대로 유지, `agent_runtime`을
+     생성자에서 저장하는 필드만 3곳에 추가).
+  9. 영속 저장소는 M49/M50/M65와 동일하게 이번 범위 밖(in-process
+     한정, YAGNI).
+- 대안:
+  1. `LLMPolicyEngine.select()` 시그니처에 실행 결과를 파라미터로
+     추가 — 기각: "규칙 조회는 read-only"라는 M5-T01 계약을 깨고, 모든
+     호출부가 매번 직전 결과를 들고 다녀야 해 더 큰 변경이 된다. 별도
+     `record_outcome()` 메서드가 훨씬 작은 변경이다.
+  2. Role 단독 키로 집계 — 기각: 자동 대체 이후에도 이전/새 모델의
+     실패가 뒤섞여 대체가 무의미해진다(위 결정 2 참고).
+  3. `docs/llm_policy.example.yaml`/`storage/llm_policy_loader.py`를
+     확장해 Role별 명시적 fallback 목록을 설정 가능하게 함 — 기각:
+     로더/스키마 변경이 필요해 범위가 커진다. `INITIAL_MODELS` 재사용만
+     으로 새 설정 없이 동일한 목표를 달성할 수 있다(YAGNI).
+  4. Effort만 단계적으로 낮춤(모델은 유지) — 기각: 사용자가 "다음
+     모델로 전환"을 명시적으로 선택. 초기 실패 원인이 Provider 장애 등
+     모델 자체 문제인 경우 effort만 낮춰서는 회복되지 않는다.
+  5. `EngineRuntime`이 `LLMPolicyEngine`을 주입받아 자동 기록 — 기각:
+     `runtime/engine/`이 정책 계층을 알아야 하는 새 의존 방향이
+     생긴다(M65/ADR-0083이 `intelligence/` 의존을 피하려고 별도 domain
+     타입을 만든 것과 같은 계층 경계 원칙).
+  6. M65/M66처럼 Probe 기반 자동 복구까지 이번 범위에 포함 — 기각:
+     사용자가 AskUserQuestion에서 "관측 + 자동 대체"만 선택. M65/M66이
+     의도적으로 두 Milestone으로 나눈 전례와 일관되게, 복구 메커니즘은
+     별도 Milestone 후보로 남긴다.
+- 이유: `.ai/RULES.md` §7 M5 로드맵이 원래 의도했던 "실행 결과 피드백
+  으로 정책 자체를 개선"을 M65/M66이 엔진 계층에서 이미 검증한 패턴
+  (임계값 재사용, 별도 domain 값 객체, 기존 Interface 무변경)을 정책
+  계층에 그대로 이식해 구현했다. `select()`의 read-only 계약과
+  `LLMPolicyEngine` interface의 최소 확장(메서드 1개 추가)만으로 자동
+  대체를 달성해 하위 호환성을 해치지 않는다.
+- 결과/영향: `domain/llm_policy_reliability.py`(신규),
+  `interfaces/llm_policy_engine.py`(`record_outcome()` abstract method
+  추가), `engines/llm_policy_engine.py`(`InMemoryLLMPolicyEngine`에
+  통계·활성 Decision 상태 + 자동 대체 로직), `runtime/agent/agent_runtime.py`
+  (`record_llm_policy_outcome()` 추가), `agents/coding_agent.py`/
+  `review_agent.py`/`documentation_agent.py`(`engine_runtime.run()`
+  직후 피드백 호출 + `agent_runtime` 필드 저장) 수정.
+  `tests/interfaces/fakes.py`의 `FakeLLMPolicyEngine`에 `record_outcome()`
+  구현 추가. 새 Core Domain Interface 없음(기존 `LLMPolicyEngine`
+  확장, 30종 유지). 신규 테스트 11건(`domain` 5건, `engines` 대체
+  로직 관련 다수 확장, `interfaces` 1건, `AgentRuntime` 3건 — 정확한
+  분해는 `.ai/TASKS.md` Milestone 67 참고). `pytest` 1259개(신규 11개,
+  회귀 없음)/`ruff`/`mypy`(230 source files) 전부 통과. `.ai/TASKS.md`
+  Milestone 67 절 신규 추가. `docs/ARCHITECTURE.md` §3.9에 Self
+  Optimization(정책 계층) 서술 추가, §7 Interface 표의 `LLMPolicyEngine`
+  행에 M67 확장 반영.

@@ -14972,6 +14972,97 @@ candidates()`(`InMemoryEngineRuntime`)/`_require_adapter()`
 
 ---
 
+## Milestone 67 — LLMPolicyEngine Self Optimizer: 실행 결과 기반 정책 자동 대체 (완료)
+
+**배경**: 사용자가 "M67 self optimization"으로 착수 요청. ADR-0084(M66)가
+"`LLMPolicyEngine` Self Optimizer(원래 `.ai/RULES.md` §7 M5 개념)"를
+명시적으로 범위 밖으로 미루고 별도 Milestone 후보로 남겨 두었던 항목이다.
+조사 결과 `InMemoryLLMPolicyEngine.select()`는 M5-T01 이후 줄곧 순수 정적
+`dict.get()`이었고(코드 확인), `AgentSession.llm_policy_decision`은
+`CodingAgent`/`ReviewAgent`/`DocumentationAgent`가 `engine_runtime.run()`에
+실제로 전달해 실행 결과(`EngineResult.success`)까지 만들어내지만, 그 결과가
+정책으로 되먹여지는 경로는 전혀 없었다.
+
+**사용자 승인(AskUserQuestion, 4회)**:
+1. 범위 — (a) 관측만/(b) 관측+자동 대체/(c) 관측+자동 대체+Probe 복구 중
+   **(b, 권장)**으로 확정. M65/M66이 관측→복구를 두 Milestone으로 나눈
+   전례와 동일하게 Probe/자동 복구는 범위 밖.
+2. 집계 단위 — **`(AgentRole, LLMModel)` 조합(권장)**으로 확정.
+3. 대체 소스 — **기존 `INITIAL_MODELS` 목록에서 다음 모델(권장)**로 확정.
+4. 피드백 경로 — **`CodingAgent` 등 호출부가 명시적으로 기록(권장)**으로
+   확정 — `EngineRuntime`이 `LLMPolicyEngine`을 자동 주입받는 대안은
+   engine 계층이 policy 계층을 아는 새 의존 방향이 생겨 기각.
+
+최종 구체 설계(신설 타입/메서드 시그니처/전환 규칙)도 별도 AskUserQuestion
+으로 확인 후 구현 착수.
+
+**설계**: `domain/llm_policy_reliability.py`(신규)에
+`LLMPolicyReliabilityStat`(total/success_count/failure_count, M65
+`EngineReliabilityStat`과 동일한 필드 구성·임계값 규칙 `success_count == 0
+and total >= 3`을 재사용하되 `skip_count`/Probe는 가져오지 않음). `LLMPolicyEngine`
+interface에 `record_outcome(role, decision, success) -> None` abstract method를
+추가한다 — `select()`의 read-only 계약은 그대로 유지하고 결과 기록은 이
+메서드로만 이루어진다. `InMemoryLLMPolicyEngine`이 `dict[(AgentRole,
+LLMModel), LLMPolicyReliabilityStat]`과 role별 활성 Decision 재정의를
+내부 상태로 갖는다 — `select(role)`은 활성 Decision의 `(role, model)`
+통계가 `is_unreliable()`이면 `INITIAL_MODELS` 순서상 다음 모델로 전환한
+Decision(effort는 원래 값 유지)을 반환한다. 이미 마지막 모델이면 더 이상
+전환하지 않는다. `AgentRuntime.record_llm_policy_outcome(session_id,
+success)`가 `llm_policy_engine`/session의 policy decision 유무를 확인해
+`LLMPolicyEngine.record_outcome()`으로 위임한다(둘 중 하나라도 없으면
+no-op) — Agent는 `LLMPolicyEngine` interface를 직접 알지 못하고
+`AgentRuntime` 한 곳만 거친다.
+
+**구현**:
+- `src/ai_workspace/domain/llm_policy_reliability.py`(신규) —
+  `LLMPolicyReliabilityStat`(frozen dataclass) + `record()`/`is_unreliable()`.
+- `src/ai_workspace/interfaces/llm_policy_engine.py` — `record_outcome()`
+  abstract method 추가(계약 docstring 포함).
+- `src/ai_workspace/engines/llm_policy_engine.py`
+  (`InMemoryLLMPolicyEngine`) — 통계 dict + 활성 Decision dict 추가,
+  `select()`가 신뢰 불가 시 `INITIAL_MODELS` 다음 모델로 자동 전환,
+  `record_outcome()` 구현, `_next_model()` 헬퍼.
+- `src/ai_workspace/runtime/agent/agent_runtime.py` —
+  `record_llm_policy_outcome(session_id, success)` 추가.
+- `src/ai_workspace/agents/coding_agent.py`,
+  `review_agent.py`, `documentation_agent.py` — `agent_runtime` 필드
+  저장 + `engine_runtime.run()` 직후 `record_llm_policy_outcome()` 호출.
+- `tests/interfaces/fakes.py` — `FakeLLMPolicyEngine`에 `record_outcome()`
+  구현 + `recorded_outcomes` 기록 리스트 추가.
+- `tests/domain/test_llm_policy_reliability.py`(신규) — 5건(성공/실패
+  기록, 표본 부족 시 미판정, 표본 충분+전량 실패 시 판정, 성공 1건
+  이상이면 미판정).
+- `tests/engines/test_llm_policy_engine.py` — 7건 추가(기록만으로는
+  선택 불변, 신뢰 불가 시 다음 모델로 대체, 표본 부족/성공 1건 이상 시
+  미대체, 연속 대체로 여러 단계 전환, 마지막 모델에서 정지, 다른 Role은
+  영향받지 않음).
+- `tests/interfaces/test_llm_policy_engine.py` — `record_outcome()` 계약
+  테스트 1건.
+- `tests/runtime/agent/test_agent_runtime.py` — `record_llm_policy_outcome()`
+  테스트 3건(정상 위임, engine 미주입 시 no-op, decision 없을 시 no-op).
+- `docs/ARCHITECTURE.md` §3.9에 Self Optimization(정책 계층, M67) 서술
+  추가, §7 Interface 표의 `LLMPolicyEngine` 행 갱신. 새 Core Domain
+  Interface 없음(기존 `LLMPolicyEngine` 확장, 30종 유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `InMemoryLLMPolicyEngine.select()`가 여전히 순수 정적 `dict.get()`임을 코드로 확인 | ✅ |
+| 2 | 넓은 "Self Optimization" 주제를 AskUserQuestion 4회로 "관측 + 자동 대체" + 구체 설계까지 좁힘 | ✅ |
+| 3 | M65/ADR-0083 임계값 규칙을 그대로 재사용(새 규칙 설계 없음) | ✅ |
+| 4 | 반복 실패한 (Role, Model)이 `INITIAL_MODELS` 다음 모델로 자동 대체됨을 테스트로 증명 | ✅ |
+| 5 | 표본 부족/성공 1건 이상이면 대체하지 않음을 테스트로 증명 | ✅ |
+| 6 | 마지막 모델에서는 더 이상 대체하지 않음을 테스트로 증명 | ✅ |
+| 7 | 한 Role의 대체가 다른 Role에 영향을 주지 않음을 테스트로 증명 | ✅ |
+| 8 | `record_outcome()`을 호출하지 않으면 기존 동작과 100% 동일함을 테스트로 증명(회귀 없음) | ✅ |
+| 9 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1259개(신규 11개, 회귀 없음)/`ruff`/`mypy`(230 source files)
+전부 통과. ADR-0085.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

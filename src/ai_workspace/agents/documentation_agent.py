@@ -49,7 +49,12 @@ class DocumentationAgent:
 
     **병렬 실행(M58, ADR-0076)**: `max_parallel_agents`(기본값 1)를
     `is_agent_selected()`의 `max_parallel`로 전달한다 — `CodingAgent`와
-    동일한 패턴(상세 설명은 `coding_agent.py` 참고)."""
+    동일한 패턴(상세 설명은 `coding_agent.py` 참고).
+
+    **Self Optimization 피드백(Milestone 67, ADR-0085)**: `CodingAgent`와
+    동일하게 `engine_runtime.run()` 직후
+    `agent_runtime.record_llm_policy_outcome()`으로 실행 성공/실패를
+    되먹인다."""
 
     def __init__(
         self,
@@ -72,6 +77,7 @@ class DocumentationAgent:
         self._agent_registry = agent_registry
         self._agent_scheduler = agent_scheduler
         self._max_parallel_agents = max_parallel_agents
+        self._agent_runtime = agent_runtime
         self._session = agent_runtime.start_agent(
             AgentRole.DOCUMENTATION, frozenset({AgentCapability.DOCUMENTATION})
         )
@@ -96,6 +102,7 @@ class DocumentationAgent:
             required_capabilities=required_capabilities(self._session.llm_policy_decision),
             model=model_name(self._session.llm_policy_decision),
         )
+        self._agent_runtime.record_llm_policy_outcome(self._session.session_id, result.success)
         self._task_engine.transition(task, TaskStatus.DONE)
         snapshot_id = self._context_manager.create_snapshot(
             self._workspace_session, summary=result.output
