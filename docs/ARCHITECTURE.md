@@ -551,12 +551,12 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
 - **다중 Adapter 등록·선택(M6-T01)**: `ManagedEngineRuntime`은 이름별로
   여러 `EngineAdapter`를 동시에 등록할 수 있다(`register_engine`은 같은
   이름을 재등록할 때만 `DuplicateEngineError`). `run()`/`run_parallel()`은
-  `required_capabilities`를 만족하는 등록된 어댑터 중 하나(등록 순서상 첫
-  매칭)를 선택해 실행한다 — 복수 매칭 시 우선순위 정책(비용 기반 선택
-  등)은 필요성이 증명되지 않아 도입하지 않는다(YAGNI). 이 방식으로
+  기본적으로 `required_capabilities`를 만족하는 등록된 어댑터 중 하나
+  (등록 순서상 첫 매칭)를 선택해 실행한다. 이 방식으로
   `LLMPolicyDecision.model.provider`에 따라 Agent가 서로 다른 등록된
   Adapter(capability 태그 기준 `claude_code`/`codex`/`gemini`)를 실행
-  시점에 고를 수 있는 기반이 마련된다.
+  시점에 고를 수 있는 기반이 마련된다. 복수 매칭 시 우선순위(비용 기반
+  선택)는 M64(아래)에서 선택적으로 도입했다.
 - **Policy→Execution 라우팅(M6-T02)**: `domain/llm_policy.py`의
   `required_capabilities(decision)` 순수 함수가 `LLMProvider`(ANTHROPIC/
   OPENAI/GOOGLE/XAI)를 위 capability 태그로 매핑한다(ANTHROPIC→
@@ -625,6 +625,25 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   두 단계를 직접 이어 쓴다. 실패한 엔진은 투표 대상에서 제외되고
   `failed_engines`로만 별도 보고된다(개별 실패 격리 원칙, M10-T01/T02와
   동일 정신).
+- **Cost & Routing Optimization(Milestone 64, ADR-0082)**: Automation
+  파이프라인(`RecommendationExecutionService`)은 M17부터 이미 비용
+  기반 `EngineSelectionPolicy`(예산 내 최저 예상 비용 후보 선택)를
+  거치지만, Agent가 직접 쓰는 `EngineRuntime.run()`/`run_parallel()`의
+  내부 선택 로직(`_select`/`_require_adapter`)은 등록 순서상 "능력
+  만족하는 첫 매칭"만 고르고 비용을 전혀 보지 않는 별개의 라우팅
+  경로였다(코드 확인, 추측 아님). `InMemoryEngineRuntime`/
+  `ManagedEngineRuntime` 생성자에 `engine_selection_policy: 
+  EngineSelectionPolicy | None = None`(+선택적 `budget_policy_engine`)을
+  추가해, 주입되면 `_select`/`_require_adapter`가 등록된 Adapter들로
+  `EngineCandidate` 목록을 만들어 `EngineSelectionPolicy.select()`(M17
+  로직 그대로 재사용)에 위임하도록 했다 — Agent 실행 경로와 Automation
+  경로가 동일한 비용 기반 라우팅 규칙을 공유한다. 생략(기본값 `None`)
+  하면 이전 동작과 100% 동일하다. `run_parallel()`은 배치 전체에 하나의
+  Adapter를 고르는 기존 설계를 유지하되(`tasks[0]`의 비용으로 사전
+  검사), 실제 각 Task 실행은 `ManagedEngineRuntime.run()`을 그대로
+  거치므로 Task별 비용도 반영된다. 여러 Task에 걸친 **누적** 예산 소비
+  추적(M15 Non-goal)은 이번 범위 밖으로 유지한다(YAGNI) —
+  `BudgetPolicyEngine.check()`는 여전히 매 호출을 독립적으로 평가한다.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 

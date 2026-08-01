@@ -14751,6 +14751,77 @@ ADR-0080(M62)이 "결과를 투표/합치는 로직은 추가하지 않는다(YA
 
 ---
 
+## Milestone 64 — Cost & Routing Optimization: EngineRuntime 비용 기반 선택 (완료)
+
+**배경**: 사용자가 "M64 cost & routing optimization"으로 착수 요청.
+코드 조사 결과 두 갈래 실행 경로가 이미 존재했다: (1) Automation
+파이프라인(`RecommendationExecutionService`)은 M17부터 이미 비용 기반
+`EngineSelectionPolicy`(예산 내 최저 예상 비용 후보 선택)를 거치지만,
+(2) Agent가 직접 쓰는 `EngineRuntime.run()`/`run_parallel()`/
+`run_ensemble()`은 등록 순서상 "능력 만족하는 첫 엔진"만 고르고 비용을
+전혀 보지 않는 완전히 별개의 라우팅 경로였다(`_select`/
+`_require_adapter`, 추측 아님·코드 전수 확인). 또한 `Budget`은 Task
+단위 개별 확인만 하고 여러 Task에 걸친 누적 소비 추적은 M15부터
+명시적 Non-goal이다.
+
+**사용자 승인(AskUserQuestion)**: "EngineRuntime에 비용 기반 선택
+도입"으로 범위 확정 — 누적 예산(Spend Tracking) 추적은 M15 Non-goal을
+그대로 유지하고 범위 밖으로 둔다.
+
+**설계**: `InMemoryEngineRuntime`/`ManagedEngineRuntime` 생성자에
+`engine_selection_policy: EngineSelectionPolicy | None = None`,
+`budget_policy_engine: BudgetPolicyEngine | None = None`을 선택적으로
+추가한다. 주입되면 `_select`/`_require_adapter`가 등록된 Adapter들로
+`EngineCandidate` 목록(M17-T01과 동일 필드)을 만들어
+`EngineSelectionPolicy.select()`에 그대로 위임한다 — 새 선택 로직을
+중복 구현하지 않고 M17 로직을 재사용한다(DRY). 생략(기본값 `None`)하면
+이전 동작(Milestone 64 이전)과 100% 동일하다. `run_parallel()`은 배치
+전체에 하나의 Adapter를 고르는 기존 설계를 유지하되(사전 검사는
+`tasks[0]`의 비용 기준), `ManagedEngineRuntime.run_parallel()`은 각
+Task를 `self.run()`으로 개별 실행하므로 Task별 비용도 자연히 반영된다.
+`run_ensemble()`은 호출자가 이름을 명시적으로 지정하므로 이번 범위에서
+변경하지 않는다. `RecoveringEngineRuntime`은 내부 Runtime에 순수
+위임하므로 변경 없음(생성자 주입도 내부 Runtime 쪽에서 이미 처리됨).
+
+**구현**:
+- `src/ai_workspace/runtime/engine/engine_runtime.py`
+  (`InMemoryEngineRuntime`) — 생성자에 선택적 `engine_selection_policy`/
+  `budget_policy_engine` 추가. `_select()`가 policy 유무에 따라 분기(기존
+  첫 매칭 vs `EngineCandidate` 빌드 + `select()` 위임). `run_parallel()`에
+  빈 tasks 가드 추가(`_select()`가 이제 `task`를 필요로 하므로
+  `tasks[0]`을 사용 — 이전에는 필요하지 않았다).
+- `src/ai_workspace/runtime/engine/managed_engine_runtime.py`
+  (`ManagedEngineRuntime`) — 동일한 생성자 확장, `_require_adapter()`가
+  같은 방식으로 분기.
+- `tests/runtime/engine/test_engine_runtime.py` — `CostedEngineAdapter`
+  (고정 비용 반환 + `run_count` 기록) 신규, 테스트 4건: policy 미주입 시
+  기존 동작 유지(회귀), policy 주입 시 최저 비용 선택, budget과 함께
+  주입 시 예산 초과 후보 제외, 예산 내 후보가 없으면
+  `NoSuitableEngineError`.
+- `tests/runtime/engine/test_managed_engine_runtime.py` — 동일한
+  `CostedEngineAdapter` + 테스트 5건(위 4건 + `run_parallel()`이 배치
+  전체에 비용 기반 선택을 적용하는지 확인).
+- `docs/ARCHITECTURE.md` §3.9에 Cost & Routing Optimization 서술 추가
+  (기존 "복수 매칭 시 우선순위 정책은 도입하지 않는다" 문구를 M64로
+  갱신). 새 Core Domain Interface 없음(기존 `EngineSelectionPolicy`/
+  `BudgetPolicyEngine` 재사용, 30종 유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Agent 직접 실행 경로(`EngineRuntime`)가 비용을 전혀 보지 않는 별도 라우팅이었음을 코드로 확인 | ✅ |
+| 2 | 넓은 "Cost & Routing Optimization" 주제를 사용자 확인으로 "EngineRuntime 비용 기반 선택"으로 좁힘(누적 예산 추적은 범위 밖) | ✅ |
+| 3 | 기존 M17 `EngineSelectionPolicy`/`BudgetPolicyEngine` 로직을 재사용(중복 구현 없음, DRY) | ✅ |
+| 4 | policy 미주입 시 이전 동작과 100% 동일함을 테스트로 증명(회귀 없음) | ✅ |
+| 5 | policy 주입 시 최저 비용 선택 + 예산 초과 후보 제외를 테스트로 증명 | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1222개(신규 9개, 회귀 없음)/`ruff`/`mypy`(228 source files)
+전부 통과. ADR-0082.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

@@ -5712,3 +5712,76 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   전부 통과. `.ai/TASKS.md` Milestone 63 절 신규 추가. `docs/
   ARCHITECTURE.md` §3.9 Engine Runtime 절에 Result Aggregation /
   Consensus 서술 추가, §7 Interface 표에 `ResultAggregator` 행 추가.
+
+## ADR-0082: Cost & Routing Optimization — EngineRuntime 비용 기반 선택 (Milestone 64)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion으로 "EngineRuntime에 비용
+  기반 선택 도입" 범위 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M64 cost & routing optimization"으로 착수를
+  요청했다. 코드 조사 결과 두 갈래 실행 경로가 이미 존재했음을
+  확인했다: Automation 파이프라인(`RecommendationExecutionService`)은
+  M17부터 이미 비용 기반 `EngineSelectionPolicy`(예산 내 최저 예상
+  비용 후보 선택)를 거치지만, Agent가 직접 쓰는
+  `EngineRuntime.run()`/`run_parallel()`의 내부 선택 로직(`_select`/
+  `_require_adapter`)은 등록 순서상 "능력 만족하는 첫 매칭"만 고르고
+  비용을 전혀 보지 않는 완전히 별개의 라우팅 경로였다(추측 아님, 코드
+  경로 직접 확인). `Budget`은 Task 단위 개별 확인만 하고 여러 Task에
+  걸친 누적 소비 추적은 M15부터 명시적 Non-goal이다.
+- 결정:
+  1. `InMemoryEngineRuntime`/`ManagedEngineRuntime` 생성자에
+     `engine_selection_policy: EngineSelectionPolicy | None = None`,
+     `budget_policy_engine: BudgetPolicyEngine | None = None`을
+     선택적으로 추가한다.
+  2. 주입되면 `_select`/`_require_adapter`가 등록된 Adapter들로
+     `EngineCandidate` 목록(M17-T01과 동일 필드)을 만들어
+     `EngineSelectionPolicy.select()`에 그대로 위임한다 — 새 선택
+     로직을 중복 구현하지 않고 M17이 이미 검증한 로직을 재사용한다
+     (DRY). Agent 실행 경로와 Automation 경로가 동일한 비용 기반
+     라우팅 규칙을 공유하게 된다.
+  3. 생략(기본값 `None`)하면 이전 동작(Milestone 64 이전)과 100%
+     동일하다 — 등록 순서상 첫 매칭 규칙 그대로.
+  4. `run_parallel()`은 배치 전체에 하나의 Adapter를 고르는 기존
+     설계를 유지한다(사전 검사는 `tasks[0]`의 비용 기준). 다만
+     `ManagedEngineRuntime.run_parallel()`은 각 Task를 `self.run()`으로
+     개별 실행하는 기존 구조이므로 Task별 비용도 자연히 반영된다.
+  5. `run_ensemble()`은 호출자가 엔진 이름을 명시적으로 지정하는
+     계약(M62)이라 이번 범위에서 변경하지 않는다.
+  6. 여러 Task에 걸친 **누적** 예산 소비 추적(M15 Non-goal)은 이번
+     범위 밖으로 유지한다(YAGNI) — `BudgetPolicyEngine.check()`는
+     여전히 매 호출을 독립적으로 평가하며 상태를 갖지 않는다.
+- 대안:
+  1. `EngineRuntime`에 새 `CostAwareEngineRuntime` 데코레이터/래퍼
+     클래스를 별도로 도입 — 기각: 기존 `EngineRuntime` 구현체를
+     감싸는 새 계층을 추가하면 `RecoveringEngineRuntime`과의 합성
+     순서, `run_ensemble()`/`status()` 등 나머지 메서드의 위임까지
+     전부 다시 설계해야 해서 복잡도가 커진다. 생성자 주입 하나로
+     기존 클래스 내부에서 분기하는 편이 훨씬 작다.
+  2. 누적 예산(Spend Tracking) 컴포넌트를 함께 도입 — 기각:
+     사용자가 AskUserQuestion에서 명시적으로 배제. M15의 명시적
+     Non-goal을 뒤집는 훨씬 큰 범위 변경이며 저장소·조회 API를
+     새로 설계해야 한다.
+  3. `EngineRegistry`를 `EngineRuntime`에 주입해 `list_candidates()`를
+     재사용 — 기각: `EngineRuntime`은 이미 자체 `self._engines` dict로
+     어댑터를 관리하고 있어, `EngineRegistry`까지 추가로 주입하면 같은
+     정보를 두 곳에서 따로 등록·관리해야 하는 이중 관리 문제가
+     생긴다. `EngineCandidate` 빌드 로직(약 10줄)만 인라인으로
+     재사용하는 편이 더 작은 결합도를 유지한다.
+- 이유: `EngineSelectionPolicy`(M17)가 이미 "예산 내 최저 비용" 규칙을
+  검증된 형태로 갖고 있었으므로, `EngineRuntime`이 이를 선택적으로
+  위임하기만 하면 새 알고리즘 없이 Agent 실행 경로의 비용 인식 공백을
+  메울 수 있었다. 선택적 DI로 기존 호출자(주입하지 않는 모든 곳)는
+  전혀 영향받지 않는다.
+- 결과/영향: `runtime/engine/engine_runtime.py`(`InMemoryEngineRuntime`),
+  `runtime/engine/managed_engine_runtime.py`(`ManagedEngineRuntime`)
+  수정 — 둘 다 생성자 확장 + `_select`/`_require_adapter` 분기.
+  `RecoveringEngineRuntime`은 변경 없음(순수 위임 구조 그대로).
+  새 Core Domain Interface 없음(기존 `EngineSelectionPolicy`/
+  `BudgetPolicyEngine` 재사용, 30종 유지). 신규 테스트 9건
+  (`InMemoryEngineRuntime` 4건, `ManagedEngineRuntime` 5건 — policy
+  미주입 시 회귀 없음, 최저 비용 선택, 예산 초과 후보 제외, 예산 내
+  후보 없음 시 예외, `run_parallel()` 배치 선택). `pytest` 1222개(신규
+  9개, 회귀 없음)/`ruff`/`mypy`(228 source files) 전부 통과. `.ai/
+  TASKS.md` Milestone 64 절 신규 추가. `docs/ARCHITECTURE.md` §3.9
+  Engine Runtime 절에 Cost & Routing Optimization 서술 추가(기존
+  "우선순위 정책 도입하지 않음" 문구 갱신).

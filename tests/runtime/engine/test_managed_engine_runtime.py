@@ -8,7 +8,10 @@ import pytest
 from tests.interfaces.fakes import FailingFakeEngineAdapter
 
 from ai_workspace.adapters.mock_engine_adapter import MockEngineAdapter
+from ai_workspace.domain.budget import Budget
 from ai_workspace.domain.task import Task, TaskStatus
+from ai_workspace.engines.budget_policy_engine import InMemoryBudgetPolicyEngine
+from ai_workspace.engines.engine_selection_policy import InMemoryEngineSelectionPolicy
 from ai_workspace.events.event_bus import InMemoryEventBus
 from ai_workspace.interfaces.engine_adapter import (
     CostEstimate,
@@ -24,6 +27,26 @@ from ai_workspace.interfaces.engine_runtime import (
 )
 from ai_workspace.interfaces.event_bus import Event
 from ai_workspace.runtime.engine.managed_engine_runtime import ManagedEngineRuntime
+
+
+class CostedEngineAdapter(MockEngineAdapter):
+    """M64: `estimate_cost()`가 고정 비용을 반환하고 `run()` 호출 여부를
+    기록하는 테스트용 Adapter — 비용 기반 선택을 테스트에서 재현할 수
+    있게 한다."""
+
+    def __init__(
+        self, estimated_cost_usd: float, capabilities: frozenset[str] = frozenset()
+    ) -> None:
+        super().__init__(capabilities)
+        self._estimated_cost_usd = estimated_cost_usd
+        self.run_count = 0
+
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
+        self.run_count += 1
+        return super().run(session_id, task, model=model)
+
+    def estimate_cost(self, task: Task) -> CostEstimate:
+        return CostEstimate(estimated_tokens=0, estimated_cost_usd=self._estimated_cost_usd)
 
 
 class SlowEngineAdapter(EngineAdapter):
@@ -575,3 +598,92 @@ def test_run_ensemble_does_not_affect_run_task_status_tracking() -> None:
 
     with pytest.raises(EngineTaskNotFoundError):
         runtime.status(task.task_id)
+
+
+def test_run_without_policy_picks_first_registered_matching_adapter() -> None:
+    """M64 이전과 100% 동일 동작(회귀 확인): policy 미주입 시 등록 순서상
+    첫 매칭을 그대로 고른다 — 비용이 더 낮은 두 번째 엔진을 무시한다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    expensive_first = CostedEngineAdapter(10.0)
+    cheap_second = CostedEngineAdapter(1.0)
+    runtime.register_engine("expensive", expensive_first)
+    runtime.register_engine("cheap", cheap_second)
+
+    runtime.run(make_task())
+
+    assert expensive_first.run_count == 1
+    assert cheap_second.run_count == 0
+
+
+def test_run_with_policy_selects_cheapest_registered_adapter() -> None:
+    """M64(ADR-0082): engine_selection_policy를 주입하면 등록 순서와
+    무관하게 예상 비용이 가장 낮은 엔진이 선택된다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(),
+        engine_selection_policy=InMemoryEngineSelectionPolicy(),
+    )
+    expensive_first = CostedEngineAdapter(10.0)
+    cheap_second = CostedEngineAdapter(1.0)
+    runtime.register_engine("expensive", expensive_first)
+    runtime.register_engine("cheap", cheap_second)
+
+    runtime.run(make_task())
+
+    assert expensive_first.run_count == 0
+    assert cheap_second.run_count == 1
+
+
+def test_run_with_policy_and_budget_excludes_over_budget_candidate() -> None:
+    """M64: budget_policy_engine을 함께 주입하면 예산을 초과하는 후보는
+    선택 대상에서 제외된다."""
+    budget_policy_engine = InMemoryBudgetPolicyEngine(Budget(max_cost_usd=5.0))
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(),
+        engine_selection_policy=InMemoryEngineSelectionPolicy(),
+        budget_policy_engine=budget_policy_engine,
+    )
+    over_budget = CostedEngineAdapter(10.0)
+    cheapest_within_budget = CostedEngineAdapter(1.0)
+    pricier_within_budget = CostedEngineAdapter(4.0)
+    runtime.register_engine("over_budget", over_budget)
+    runtime.register_engine("pricier_within_budget", pricier_within_budget)
+    runtime.register_engine("cheapest_within_budget", cheapest_within_budget)
+
+    runtime.run(make_task())
+
+    assert over_budget.run_count == 0
+    assert pricier_within_budget.run_count == 0
+    assert cheapest_within_budget.run_count == 1
+
+
+def test_run_raises_no_suitable_engine_when_no_candidate_within_budget() -> None:
+    budget_policy_engine = InMemoryBudgetPolicyEngine(Budget(max_cost_usd=1.0))
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(),
+        engine_selection_policy=InMemoryEngineSelectionPolicy(),
+        budget_policy_engine=budget_policy_engine,
+    )
+    runtime.register_engine("too_expensive", CostedEngineAdapter(5.0))
+
+    with pytest.raises(NoSuitableEngineError):
+        runtime.run(make_task())
+
+
+def test_run_parallel_with_policy_selects_cheapest_adapter_for_batch() -> None:
+    """M64: run_parallel()의 사전 검사도 비용 기반 선택을 거친다 —
+    각 Task는 여전히 self.run()을 통해 개별적으로 비용 평가·선택된다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(),
+        engine_selection_policy=InMemoryEngineSelectionPolicy(),
+    )
+    expensive = CostedEngineAdapter(10.0)
+    cheap = CostedEngineAdapter(1.0)
+    runtime.register_engine("expensive", expensive)
+    runtime.register_engine("cheap", cheap)
+    tasks = [make_task("t1"), make_task("t2")]
+
+    results = runtime.run_parallel(tasks)
+
+    assert [result.success for result in results] == [True, True]
+    assert expensive.run_count == 0
+    assert cheap.run_count == 2
