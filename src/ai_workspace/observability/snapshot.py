@@ -77,6 +77,18 @@ class GitRuntimeInfo:
     last_commit_summary: str | None
 
 
+class AutomationGateStatus(Enum):
+    """가장 최근 Automation 실행(`RecommendationOrchestrationService`
+    경유)에서 Guardian이 Execution을 막았는지를 나타내는 상태(M48,
+    ADR-0065). `guardian_all_passed`(라이브 재평가, M45)와는 다른
+    질문에 답한다 — "지금 소스가 통과하는가"가 아니라 "가장 최근
+    Automation 실행이 Guardian 때문에 막혔는가"(이력)."""
+
+    PASS = "pass"
+    BLOCKED = "blocked"
+    UNKNOWN = "unknown"
+
+
 @dataclass(frozen=True)
 class GuardianRuntimeInfo:
     """`guardian.checker.evaluate()`(M41)만 재사용해 `guardian_all_passed`
@@ -84,13 +96,19 @@ class GuardianRuntimeInfo:
     실행 결과(재실행 아님)다. `ruff_status`/`mypy_status`/
     `coverage_percentage`는 이 저장소에 캐시된 pass/fail 요약이 없고
     매 갱신마다 재실행하면 지연 위험이 커 Phase 1은 항상 `None`
-    (Not Available, ADR-0063)."""
+    (Not Available, ADR-0063). `last_automation_gate_status`/
+    `last_automation_gate_reason`은 M48에서 추가 — Vault
+    `Recommendation Execution.md`(M36)에 이미 기록되는 Gate 판정
+    이유를 재사용해 채우며, 그 문서가 아직 없으면(Automation이 한
+    번도 실행되지 않음) `UNKNOWN`/`None`으로 정직하게 남긴다."""
 
     guardian_all_passed: bool | None
     pytest_failed_count: int | None
     ruff_status: str | None
     mypy_status: str | None
     coverage_percentage: float | None
+    last_automation_gate_status: AutomationGateStatus = AutomationGateStatus.UNKNOWN
+    last_automation_gate_reason: str | None = None
 
 
 @dataclass(frozen=True)

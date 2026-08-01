@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from ai_workspace.engines.authentication_manager import InMemoryAuthenticationManager
 from ai_workspace.engines.engine_selection_policy import InMemoryEngineSelectionPolicy
 from ai_workspace.events.event_bus import InMemoryEventBus
+from ai_workspace.guardian.service import ArchitectureGuardianService
 from ai_workspace.integration.agent_adapter import AgentAdapter
 from ai_workspace.integration.vault_adapter import VaultAdapter
 from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
@@ -90,9 +91,17 @@ def build_app(
     (M43)도 이 시점에 처음 조립된다 — `RecommendationExecutionService`
     는 M43부터 Recommendation 의존성을 갖지 않으므로(ADR-0059),
     Orchestration Service가 Experience 조회 → Recommendation 계산
-    (Adaptation 포함) → Explanation 기록(M44) → Execution 위임까지
-    전체 흐름을 제어한다. `RecommendationExplanationService`(M44)도
-    이 시점에 조립돼 선택적으로 주입된다."""
+    (Adaptation 포함) → Explanation 기록(M44) → Guardian 평가(M48)
+    → Execution 위임까지 전체 흐름을 제어한다.
+    `RecommendationExplanationService`(M44)도 이 시점에 조립돼
+    선택적으로 주입된다.
+
+    `ArchitectureGuardianService`(M41)도 이 시점에 처음 자동 실행
+    경로에 조립된다(ADR-0065) — `vault_root`가 곧 Repository Root
+    (ADR-0037)이므로 `src_root`는 `vault_root/src/ai_workspace`로
+    계산한다. Guardian이 위반을 발견하면 Recommendation/Explanation
+    은 그대로 발행되고 Execution만 차단된다(`ExecutionGate`,
+    M36)."""
     config = config or load_production_config()
 
     event_bus = InMemoryEventBus()
@@ -128,11 +137,15 @@ def build_app(
     )
     experience_service = ExperienceIntelligenceService(vault_adapter, execution_memory_store)
     explanation_service = RecommendationExplanationService(vault_adapter)
+    guardian_service = ArchitectureGuardianService(
+        vault_adapter, Path(config.vault_root) / "src" / "ai_workspace"
+    )
     recommendation_orchestration_service = RecommendationOrchestrationService(
         experience_service,
         recommendation_service,
         recommendation_execution_service,
         explanation_service,
+        guardian_service,
     )
 
     automation_repository = InMemoryAutomationRepository()

@@ -13,6 +13,7 @@ Renderer로 재사용할 수 있도록, 이 모듈은 StatusLine 전용 포맷�
 from __future__ import annotations
 
 from ai_workspace.observability.snapshot import (
+    AutomationGateStatus,
     ClaudeRuntimeInfo,
     GitRuntimeInfo,
     GuardianRuntimeInfo,
@@ -22,6 +23,12 @@ from ai_workspace.observability.snapshot import (
     VaultRuntimeInfo,
     WorkspaceRuntimeSnapshot,
 )
+
+_GATE_STATUS_LABEL = {
+    AutomationGateStatus.PASS: "PASS",
+    AutomationGateStatus.BLOCKED: "BLOCKED",
+    AutomationGateStatus.UNKNOWN: "N/A",
+}
 
 _STAGE_SYMBOL = {
     PipelineStageStatus.OBSERVED_DONE: "✓",
@@ -117,9 +124,10 @@ def _render_guardian_line(info: GuardianRuntimeInfo) -> str:
         coverage = _NOT_AVAILABLE
     else:
         coverage = f"{info.coverage_percentage:.0f}%"
+    gate = _GATE_STATUS_LABEL[info.last_automation_gate_status]
     return (
-        f"Guardian {guardian} · pytest {pytest_status} · ruff {ruff_status} · "
-        f"mypy {mypy_status} · Coverage {coverage}"
+        f"Guardian {guardian} · Automation Gate {gate} · pytest {pytest_status} · "
+        f"ruff {ruff_status} · mypy {mypy_status} · Coverage {coverage}"
     )
 
 

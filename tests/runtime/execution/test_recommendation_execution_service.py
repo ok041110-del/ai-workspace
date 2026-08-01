@@ -5,6 +5,7 @@ from tests.interfaces.fakes import FakeExecutionEnvironment
 from ai_workspace.adapters.claude_code_engine_adapter import ClaudeCodeEngineAdapter
 from ai_workspace.engines.authentication_manager import InMemoryAuthenticationManager
 from ai_workspace.engines.engine_selection_policy import InMemoryEngineSelectionPolicy
+from ai_workspace.guardian.models import ArchitectureCheckResult, ArchitectureHealthReport
 from ai_workspace.integration.agent_adapter import AgentAdapter
 from ai_workspace.integration.vault_adapter import VaultAdapter
 from ai_workspace.intelligence.capability_service import CapabilityIntelligenceService
@@ -133,6 +134,62 @@ def test_execute_runs_next_task_via_execution_dispatcher(tmp_path: Path) -> None
     assert [t.new_status for t in outcome.lifecycle_transitions] == ["in-progress", "review"]
     tasks = {t.task_id: t.status for t in vault_adapter.list_tasks()}
     assert tasks["M36-T02"] == "review"
+
+
+def test_execute_blocks_ready_task_when_guardian_report_fails(tmp_path: Path) -> None:
+    vault_adapter = VaultAdapter(tmp_path)
+    vault_adapter.create_task(
+        "M48-T01",
+        "설계",
+        status="done",
+        priority="high",
+        milestone="M48",
+        owner="AI",
+        created="2026-08-01",
+        updated="2026-08-01",
+    )
+    vault_adapter.create_task(
+        "M48-T02",
+        "Gate",
+        status="todo",
+        priority="high",
+        milestone="M48",
+        owner="AI",
+        created="2026-08-01",
+        updated="2026-08-01",
+    )
+    recommendation_service = _make_recommendation_service(vault_adapter)
+    report = recommendation_service.generate()
+    execution_environment = FakeExecutionEnvironment()
+    execution_environment.result = ExecutionResult(returncode=0, stdout="ok", stderr="")
+    registry = InMemoryEngineRegistry()
+    registry.register(
+        "claude_code",
+        ClaudeCodeEngineAdapter(
+            execution_environment=execution_environment, subprocess_timeout_seconds=5.0
+        ),
+    )
+    auth = InMemoryAuthenticationManager(frozenset({"claude_code"}))
+    dispatcher = ExecutionDispatcher(engine_registry=registry, authentication_manager=auth)
+    service = RecommendationExecutionService(
+        vault_adapter,
+        registry,
+        InMemoryEngineSelectionPolicy(),
+        dispatcher,
+    )
+    guardian_report = ArchitectureHealthReport(
+        results=(ArchitectureCheckResult(rule_name="r1", passed=False, violations=()),)
+    )
+
+    outcome = service.execute(report, manual_trigger=True, guardian_report=guardian_report)
+
+    assert outcome.gate_decision.approved is False
+    assert "Architecture Guardian" in outcome.gate_decision.reason
+    assert outcome.action is None
+    assert outcome.result is None
+    assert execution_environment.executed_commands == []
+    tasks = {t.task_id: t.status for t in vault_adapter.list_tasks()}
+    assert tasks["M48-T02"] == "todo"
 
 
 def test_execute_reverts_task_to_todo_on_execution_failure(tmp_path: Path) -> None:
