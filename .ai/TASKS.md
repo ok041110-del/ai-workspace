@@ -13085,6 +13085,94 @@ Knowledge Graph Migration 공식 완료(Approved)**.
 
 ---
 
+## Milestone 48 — Automation Foundation (진행 중)
+
+**목표**(2026-08-01 사용자 요청, 재정의): `docs/ARCHITECTURE.md`
+§2.1은 원래 "Automation Core" 명명을 Memory Engine(M39)/Architecture
+Guardian(M41)/Learning Engine 3대 Engine 완성 이후로 미뤄뒀고, 그
+연장선에서 M48을 "Learning Engine 구현"으로 시작할 계획이었다.
+그러나 M35~M47 구현 완료 후 사용자가 이 계획을 재검토하도록
+지시함 — Recommendation/Execution/Memory/Experience/Guardian/
+Observability/Explainability/Orchestration/Knowledge Layer가 모두
+갖춰지며 "Automation" 범위가 초기 설계보다 넓어졌으므로, Learning
+Engine을 그대로 진행하지 말고 **현재 Runtime Pipeline이 실제로
+어디까지 자동 연결돼 있는지 T01 Domain Analysis를 다시 수행**하고,
+Learning Engine을 M48에 포함할지 M49 이후로 분리할지를 그 결과로
+판단하라는 지시(기존 §2.1 설계보다 현재 구현 상태 우선).
+
+**T01 — Domain Analysis(완료, 코드 전수 조사 기반)**
+
+*조사 방법*: 추측 없이 `web/server.py`(`build_app()`, 203줄
+전체)/`runtime/automation/`(Scheduler·ActionExecutor·Service)/
+`recommendation_orchestration_service.py`/`guardian/`/
+`observability/`/`web/automation_routes.py`를 직접 읽고, `.ai/
+TASKS.md` M45~M47 Deferred/Non-goal 목록을 재확인.
+
+*실제 자동 연결 상태(Automated Path, `AutomationScheduler` 기준)*:
+- `TriggerKind`(TIME/INTERVAL/EVENT/STARTUP) → `ActionKind.
+  RUN_RECOMMENDATION` → `RecommendationOrchestrationService.publish()`
+  → `ExperienceIntelligenceService.generate()`(M40) →
+  `RecommendationIntelligenceService.generate()`(M35 + M42 Adaptation
+  내장) → (선택) `RecommendationExplanationService.publish()`(M44) →
+  `RecommendationExecutionService.execute()/.publish()`(M36, 내부에서
+  M37 Task Lifecycle 전이 + M39 Execution Memory 저장까지 수행) 순서로
+  실제로 매 Trigger마다 실행된다. `web/automation_routes.py`
+  `POST /{rule_id}/run`으로 수동 발동도 동일 경로.
+- **Gap 1 — Architecture Guardian(M41) 미연결**: `guardian/checker.py`/
+  `service.py`는 `observability/guardian_runtime_analyzer.py`(StatusLine
+  표시용 재평가)와 `tests/`에서만 호출된다. `runtime/automation/`
+  어디에도 import되지 않아 **Guardian 평가가 Automation Trigger로 자동
+  발동되는 경로가 전혀 없다** — 사람이 StatusLine을 보거나 `pytest`를
+  돌릴 때만 결과를 확인할 수 있다.
+- **Gap 2 — Workspace Observability(M45/M45 확장) 완전 분리**:
+  `.claude/settings.json`의 `statusLine.command` Hook으로만 실행되는
+  세션 전용 기능이며, M45 DoD가 "Dashboard/Web UI/Automation/Telemetry
+  범위 밖"을 명시적으로 선언했다(TASKS.md M45 절). `build_app()`/
+  `AutomationScheduler`/REST API 어디에도 연결돼 있지 않다 — 이는
+  M45가 의도적으로 그렇게 설계한 것이라 "미완성 Gap"이 아니라
+  "확정된 설계 경계"로 재확인됨.
+- **Gap 3 — `RUN_WORKFLOW` 미지원**: `AutomationActionExecutor`가
+  `AutomationActionNotSupportedError`를 던지는 상태 그대로(M21 이후
+  변경 없음).
+- **관찰(Gap 아님, 참고용)**: `AutomationScheduler._fire()`가 Action
+  실행 중 예외를 전부 삼켜(`try/except: pass`) `RUN_RECOMMENDATION`
+  실패가 조용히 무시된다 — 이번 Domain Analysis 범위에서는 사실만
+  기록하고 판단은 T02(MDD Review)로 이관.
+
+*Learning Engine 재평가*: M42 `RecommendationAdjustmentAnalyzer`
+이외에 규칙/추천을 실제로 "학습"(가중치 갱신, 이력 기반 재조정,
+영속화)하는 컴포넌트는 전혀 없다. M40(Experience Intelligence)는
+설계 단계에서부터 "Learning"이라는 이름 자체를 의도적으로 피해왔고
+(TASKS.md M40 T04: "Learning(Rule 반영)은 M40 이후로 이관"), M41
+완료 후에도 "Learning Engine만 남아 'Automation Core' 명명 논의가
+계속된다"고 반복적으로 미뤄져 왔다(ARCHITECTURE.md §2.1). M42는
+그 자리를 채우지 않고 "Adaptation"이라는 §13.3 **Behavioral
+Concept**(1급 Domain 아님, 재사용 1건뿐이라 승격 보류)로만
+축소해서 다뤘다 — 즉 이 프로젝트는 이미 두 번(M40, M42) "Learning
+Engine"이라는 무거운 이름을 스스로 거부한 이력이 있다.
+
+**T01 결론(Gap 종합, 판단은 T02 MDD Review로 이관)**: Learning이
+학습할 대상(Guardian 위반 이력, Execution 성공/실패 추세)이 아직
+자동으로 쌓이는 경로 자체가 없다(Gap 1) — Guardian이 Automation에
+연결되지 않은 상태에서 "학습 Engine"을 새로 설계하면 관찰할 신호가
+없는 상태에서 설계하는 것이 되어 DX-02(YAGNI/최소 복잡성) 위반
+소지가 크다. 따라서 M48은 §2.1 원안("Learning Engine 구현")을
+그대로 따르지 않고, **Gap 1(Guardian↔Automation 연결)을 우선
+메우는 "Automation Foundation"으로 재정의하는 것이 현재 구현
+상태와 더 일치**한다고 잠정 판단한다. Learning Engine은 Gap 1이
+해소된 뒤 실제로 쌓이는 신호를 근거로 M49 이후 별도 제안·승인
+대상으로 분리하는 안을 다음 단계(T02 MDD Review)에 상정한다.
+
+**다음 단계**: T02(MDD Review) — 위 Gap 1(Guardian↔Automation
+연결) 재사용 전략과 신규 Interface/Service/ActionKind 필요 여부
+확정, Gap 2(Observability)는 설계 경계 유지 여부 재확인, Gap 3
+(RUN_WORKFLOW)/Scheduler 예외 처리 관찰은 범위 포함 여부 결정.
+**사용자 승인 대기 중** — 위 Domain Analysis와 "Automation
+Foundation(Guardian 우선 연결) + Learning Engine M49 이후 분리"
+방향에 동의하는지 확인 후 T02 착수.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
