@@ -1,7 +1,8 @@
 """Intelligence Layer — Recommendation Adjustment Analyzer (ADR-0058, Milestone 42-T02;
 표본 수 조건 정교화는 Milestone 49-T03, ADR-0066; 추세 기반 규칙 추가는
 Milestone 51-T03, ADR-0068; 가중치 결합은 Milestone 52-T03, ADR-0070;
-지수 Decay 실패율 반영은 Milestone 53-T03, ADR-0071).
+지수 Decay 실패율 반영은 Milestone 53-T03, ADR-0071; `compute_learning_score`
+공개 승격은 Milestone 55-T03, ADR-0073).
 
 Milestone 42(Recommendation Adaptation)의 유일한 판정 로직. "Adaptation"은
 새로운 1급 Domain이 아니라 **Behavioral Concept**(§13.3)이다 — 과거
@@ -19,7 +20,7 @@ Milestone 42(Recommendation Adaptation)의 유일한 판정 로직. "Adaptation"
   _RECENT_FAILURE_STREAK_THRESHOLD, 1.0)`
 - `score = _OVERALL_FAILURE_WEIGHT * signal_overall +
   _RECENT_STREAK_WEIGHT * signal_recent`
-- `score >= _WITHHOLD_SCORE_THRESHOLD`이면 보류
+- `score >= WITHHOLD_SCORE_THRESHOLD`이면 보류
 
 가중치·threshold는 모두 0.6으로 동일(사용자 확정) — 신호 하나가
 완전히 1.0(기존 M49/M51 조건 그대로)이면 그 신호만으로 이미
@@ -66,7 +67,7 @@ _MIN_SAMPLE_SIZE_FOR_WITHHOLD: Final[int] = 3
 _RECENT_FAILURE_STREAK_THRESHOLD: Final[int] = 5
 _OVERALL_FAILURE_WEIGHT: Final[float] = 0.6
 _RECENT_STREAK_WEIGHT: Final[float] = 0.6
-_WITHHOLD_SCORE_THRESHOLD: Final[float] = 0.6
+WITHHOLD_SCORE_THRESHOLD: Final[float] = 0.6
 
 
 @dataclass(frozen=True)
@@ -112,9 +113,9 @@ class RecommendationAdjustmentAnalyzer:
             stat.success_count == 0 and stat.total >= _MIN_SAMPLE_SIZE_FOR_WITHHOLD
         )
         recent_streak_triggered = stat.recent_failure_streak >= _RECENT_FAILURE_STREAK_THRESHOLD
-        score = _withhold_score(stat)
+        score = compute_learning_score(stat)
 
-        if score >= _WITHHOLD_SCORE_THRESHOLD:
+        if score >= WITHHOLD_SCORE_THRESHOLD:
             reason = _build_withhold_reason(
                 next_action.target, stat, score, overall_failure_triggered, recent_streak_triggered
             )
@@ -123,7 +124,12 @@ class RecommendationAdjustmentAnalyzer:
         return RecommendationAdjustment(next_action=next_action, adjusted=False, reason=None)
 
 
-def _withhold_score(stat: ExperienceStat) -> float:
+def compute_learning_score(stat: ExperienceStat) -> float:
+    """M52/M53의 가중치 결합 점수를 계산한다(M55, ADR-0073에서 공개
+    함수로 승격 — 원래 private `_withhold_score`였다). `analyze()`의
+    보류 판정뿐 아니라 `recommendation_explanation.py`(M44/M55)가
+    보류 여부와 무관하게 학습 신호를 상시 노출하는 데도 재사용해,
+    가중치·threshold 공식을 두 곳에 중복 구현하지 않는다."""
     signal_overall = (
         stat.decayed_failure_rate if stat.total >= _MIN_SAMPLE_SIZE_FOR_WITHHOLD else 0.0
     )

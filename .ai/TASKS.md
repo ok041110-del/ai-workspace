@@ -14186,6 +14186,57 @@ Learning Insight 공식 완료(Approved)**. PR #59(코드) 병합
 
 ---
 
+## Milestone 55 — Learning Explainability 고도화 (T03 완료, 사용자 승인 대기)
+
+**배경**: 로드맵에 사전 예고 없던 이름이라 착수 전 범위부터 확인.
+
+**T01 Domain Analysis(사용자 확인)**: `experience_summary`를 학습
+신호 전체로 확장하는 것으로 확정(새 Domain/Behavioral Concept
+아님, 기존 `Explainability`의 확장). M49~M53 학습 신호가 Adaptation
+이 실제로 보류를 발동했을 때만 보이고, 아직 보류되지 않은 near-miss
+케이스는 전혀 드러나지 않는 한계를 확인.
+
+**T02 MDD Review(사용자 승인)**: `recommendation_adjustment.py`의
+private `_withhold_score()`를 공개 함수 `compute_learning_score
+(stat)`로 승격(`WITHHOLD_SCORE_THRESHOLD` 상수도 공개) — 가중치·
+threshold 공식을 두 곳에 중복 구현하지 않기 위함. `_build_
+experience_summary()`가 보류 여부와 무관하게 항상
+`decayed_failure_rate`/`recent_failure_streak`/학습 Score를 성공률과
+함께 노출.
+
+**T03 구현**:
+- `src/ai_workspace/intelligence/recommendation_adjustment.py` —
+  `_withhold_score()` → `compute_learning_score()` 공개 승격,
+  `WITHHOLD_SCORE_THRESHOLD` 공개.
+- `src/ai_workspace/intelligence/recommendation_explanation.py` —
+  `_build_experience_summary()`를 `"성공률 X%(N건 중 M건 성공) ·
+  Decay실패율 R · 연속실패 S · 학습 Score V/T"` 형식으로 확장.
+  `compute_learning_score()` 재사용.
+- Vault 발행(`recommendation_explanation_service.py`)은 문자열을
+  그대로 한 줄에 임베드할 뿐이라 별도 수정 불필요(포맷 가정 없음,
+  확인만 함).
+- `tests/intelligence/test_recommendation_explanation.py` — 기존
+  1건을 새 형식 값으로 갱신, 신규 1건 추가(near-miss 가시성 —
+  `adaptation_applied=False`인 상태에서도 학습 Score가 노출되는지
+  검증).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 새 Domain/Service/Interface 없이 기존 파일 2개만 수정 | ✅ |
+| 2 | 새 계산 로직 없이 기존 값(compute_learning_score) 재사용만 | ✅ |
+| 3 | 보류 여부와 무관하게 학습 신호 상시 노출(near-miss 가시성) | ✅ |
+| 4 | 가중치·threshold 공식 중복 없음(공개 함수 재사용으로 확인) | ✅ |
+| 5 | Vault 발행 포맷에 영향 없음(문자열 임베드 방식 확인) | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음(값 갱신 1건 제외) | ✅ |
+
+`pytest` 1156개(신규 1개, 회귀 없음)/`ruff`/`mypy`(222 source files)
+전부 통과. ADR-0073. PR 생성·CI 확인·Merge·`main` 반영·Vault Index
+갱신 후 최종 완료 선언 예정(이전 Milestone과 동일한 절차).
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
