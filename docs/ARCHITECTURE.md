@@ -326,6 +326,17 @@ Execution Platform (M36~M38) — 실행·상태 전이·스케줄링
   `decayed_failure_rate` + `recent_failure_streak` + 학습 Score를
   노출한다. 새 계산 로직 없이 기존 공식만 재사용, 새 Domain/
   Interface/Service 없이 기존 파일 2개만 수정.
+- **M56 Multi-Agent 자가 확인 가드 일반화 — 완료(2026-08-01,
+  ADR-0074)**: M13이 `CodingAgent`에만 적용했던 `is_agent_selected()`
+  자가 확인 가드를 `ReviewAgent`/`DocumentationAgent`/`ShellAgent`/
+  `CoordinatorAgent` 4개로 확장했다(선택적 `agent_registry`/
+  `agent_scheduler` 키워드 인자, 미주입 시 기존 동작과 100% 동일).
+  `PlanningAgent`는 Event를 구독하지 않고 직접 호출되는 진입점이라
+  이 가드의 전제(여러 인스턴스가 같은 broadcast Event에 반응)가
+  성립하지 않아 구조적 이유로 범위에서 제외했다. 새로운 중앙
+  디스패처·Base Class 없이 M13의 기존 패턴을 5개 사례로 반복
+  (YAGNI), 새 Domain/Interface 없음. 프로덕션 Composition Root에는
+  M13도 아직 배선되지 않아 이번에도 배선하지 않음(MVP 범위 유지).
 
 ## 3. 핵심 컴포넌트
 

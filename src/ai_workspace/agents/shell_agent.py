@@ -4,7 +4,10 @@ import uuid
 
 from ai_workspace.adapters.process_runner import ProcessRunner
 from ai_workspace.agents.events import CODE_COMPLETED, SHELL_COMPLETED
+from ai_workspace.agents.scheduling import is_agent_selected
 from ai_workspace.domain.agent import AgentCapability, AgentRole
+from ai_workspace.interfaces.agent_registry import AgentRegistry
+from ai_workspace.interfaces.agent_scheduler import AgentScheduler
 from ai_workspace.interfaces.event_bus import Event, EventBus
 from ai_workspace.runtime.agent.agent_runtime import AgentRuntime
 
@@ -29,7 +32,14 @@ class ShellAgent:
     에 있는 고정 명령으로만 매핑되며, 외부에는 명령 배열 자체를 노출하지
     않는다. 실제 프로세스 실행은 `ProcessRunner`(M3-T03)에 위임한다 —
     `EngineRuntime`/`EngineAdapter`는 LLM 엔진 호출 전용이라 여기서는
-    쓰지 않는다."""
+    쓰지 않는다.
+
+    **Multi-Agent Collaboration(M56, ADR-0074)**: `CodingAgent`(M13)와
+    동일한 패턴 — `agent_registry`/`agent_scheduler`를 둘 다 주입하면,
+    같은 SHELL Capability의 다른 `ShellAgent` 인스턴스가 함께 등록돼
+    있어도 `AgentScheduler`가 선택한 인스턴스만 실제로 처리한다
+    (`is_agent_selected()`). 둘 중 하나라도 주어지지 않으면(기본값
+    `None`) 이 확인을 건너뛰어 기존 동작과 완전히 동일하다."""
 
     def __init__(
         self,
@@ -38,12 +48,16 @@ class ShellAgent:
         event_bus: EventBus,
         command_kind: str,
         process_runner: ProcessRunner | None = None,
+        agent_registry: AgentRegistry | None = None,
+        agent_scheduler: AgentScheduler | None = None,
     ) -> None:
         if command_kind not in _WHITELISTED_COMMANDS:
             raise UnknownShellCommandKindError(command_kind)
         self._command = _WHITELISTED_COMMANDS[command_kind]
         self._event_bus = event_bus
         self._process_runner = process_runner if process_runner is not None else ProcessRunner()
+        self._agent_registry = agent_registry
+        self._agent_scheduler = agent_scheduler
         self._session = agent_runtime.start_agent(
             AgentRole.SHELL, frozenset({AgentCapability.SHELL})
         )
@@ -52,6 +66,14 @@ class ShellAgent:
     def _on_code_completed(self, event: Event) -> None:
         if event.event_type != CODE_COMPLETED:
             return
+        if self._agent_registry is not None and self._agent_scheduler is not None:
+            if not is_agent_selected(
+                self._agent_registry,
+                self._agent_scheduler,
+                AgentCapability.SHELL,
+                self._session.agent_id,
+            ):
+                return
         task_id = event.payload["task_id"]
         process_id = str(uuid.uuid4())
         result = self._process_runner.run(process_id, self._command)

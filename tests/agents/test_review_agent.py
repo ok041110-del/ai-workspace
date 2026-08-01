@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from tests.agents.test_coding_agent import RecordingEngineRuntime
-from tests.interfaces.fakes import FakeAgentManager, FakeAgentRegistry, FakeTaskEngine
+from tests.interfaces.fakes import (
+    FakeAgentManager,
+    FakeAgentRegistry,
+    FakeAgentScheduler,
+    FakeTaskEngine,
+)
 
 from ai_workspace.agents.events import CODE_VERIFIED, REVIEW_COMPLETED
 from ai_workspace.agents.review_agent import ReviewAgent
@@ -141,3 +146,49 @@ def test_review_agent_passes_model_from_llm_policy_decision() -> None:
     )
 
     assert engine_runtime.received_models == ["gpt"]
+
+
+def test_review_agent_ignores_code_verified_when_not_selected_by_scheduler() -> None:
+    """M56(ADR-0074) — CodingAgent(M13)와 동일한 패턴: 같은 REVIEW
+    Capability를 가진 다른 ReviewAgent 인스턴스가 Scheduler에게
+    선택되면, 선택되지 않은 인스턴스는 아무것도 하지 않는다."""
+    shared_registry = FakeAgentRegistry()
+    shared_manager = FakeAgentManager()
+    shared_scheduler = FakeAgentScheduler()
+    event_bus = InMemoryEventBus()
+    task_engine = FakeTaskEngine()
+    engine_runtime = RecordingEngineRuntime(EngineResult(success=True, output="검토 완료"))
+
+    selected_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    ReviewAgent(
+        agent_runtime=selected_agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
+        engine_runtime=engine_runtime,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+    )
+    unselected_agent_runtime = AgentRuntime(
+        agent_manager=shared_manager, agent_registry=shared_registry
+    )
+    ReviewAgent(
+        agent_runtime=unselected_agent_runtime,
+        event_bus=event_bus,
+        task_engine=task_engine,
+        engine_runtime=engine_runtime,
+        agent_registry=shared_registry,
+        agent_scheduler=shared_scheduler,
+    )
+    task = task_engine.create_task("p1", "로그인 기능 구현하기")
+
+    event_bus.publish(
+        Event(
+            event_id="e1",
+            event_type=CODE_VERIFIED,
+            payload={"task_id": task.task_id, "output": "def login(): ...", "success": True},
+        )
+    )
+
+    assert len(engine_runtime.received_tasks) == 1

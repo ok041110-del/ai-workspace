@@ -8,7 +8,10 @@ from ai_workspace.agents.events import (
     REWORK_EXHAUSTED,
     SHELL_COMPLETED,
 )
+from ai_workspace.agents.scheduling import is_agent_selected
 from ai_workspace.domain.agent import AgentCapability, AgentRole
+from ai_workspace.interfaces.agent_registry import AgentRegistry
+from ai_workspace.interfaces.agent_scheduler import AgentScheduler
 from ai_workspace.interfaces.event_bus import Event, EventBus
 from ai_workspace.interfaces.task_engine import TaskEngine
 from ai_workspace.runtime.agent.agent_runtime import AgentRuntime
@@ -29,7 +32,14 @@ class CoordinatorAgent:
     시도 이력(Step)은 이 Agent가 직접 보관하지 않고
     `TaskEngine.record_step()`을 통해 실행 컨텍스트(TaskEngine)에
     기록한다 — Step의 소유권을 Agent가 아니라 Task 실행 컨텍스트에
-    두기 위함(사용자 지시)."""
+    두기 위함(사용자 지시).
+
+    **Multi-Agent Collaboration(M56, ADR-0074)**: `CodingAgent`(M13)와
+    동일한 패턴 — `agent_registry`/`agent_scheduler`를 둘 다 주입하면,
+    같은 COORDINATION Capability의 다른 `CoordinatorAgent` 인스턴스가
+    함께 등록돼 있어도 `AgentScheduler`가 선택한 인스턴스만 실제로
+    처리한다(`is_agent_selected()`). 둘 중 하나라도 주어지지 않으면
+    (기본값 `None`) 이 확인을 건너뛰어 기존 동작과 완전히 동일하다."""
 
     def __init__(
         self,
@@ -38,10 +48,14 @@ class CoordinatorAgent:
         event_bus: EventBus,
         task_engine: TaskEngine,
         max_rework_attempts: int = _DEFAULT_MAX_REWORK_ATTEMPTS,
+        agent_registry: AgentRegistry | None = None,
+        agent_scheduler: AgentScheduler | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._task_engine = task_engine
         self._max_rework_attempts = max_rework_attempts
+        self._agent_registry = agent_registry
+        self._agent_scheduler = agent_scheduler
         self._session = agent_runtime.start_agent(
             AgentRole.COORDINATOR, frozenset({AgentCapability.COORDINATION})
         )
@@ -50,6 +64,14 @@ class CoordinatorAgent:
     def _on_shell_completed(self, event: Event) -> None:
         if event.event_type != SHELL_COMPLETED:
             return
+        if self._agent_registry is not None and self._agent_scheduler is not None:
+            if not is_agent_selected(
+                self._agent_registry,
+                self._agent_scheduler,
+                AgentCapability.COORDINATION,
+                self._session.agent_id,
+            ):
+                return
         task_id = event.payload["task_id"]
 
         if event.payload["success"]:

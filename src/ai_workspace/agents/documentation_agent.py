@@ -3,10 +3,13 @@ from __future__ import annotations
 import uuid
 
 from ai_workspace.agents.events import DOCUMENTATION_COMPLETED, REVIEW_COMPLETED
+from ai_workspace.agents.scheduling import is_agent_selected
 from ai_workspace.domain.agent import AgentCapability, AgentRole
 from ai_workspace.domain.llm_policy import model_name, required_capabilities
 from ai_workspace.domain.session import WorkspaceSession
 from ai_workspace.domain.task import TaskStatus
+from ai_workspace.interfaces.agent_registry import AgentRegistry
+from ai_workspace.interfaces.agent_scheduler import AgentScheduler
 from ai_workspace.interfaces.context_manager import ContextManager
 from ai_workspace.interfaces.engine_runtime import EngineRuntime
 from ai_workspace.interfaces.event_bus import Event, EventBus
@@ -35,7 +38,14 @@ class DocumentationAgent:
     `workspace_session.memory_snapshot_id`에 되먹인다 — 이전에는 반환값
     자체가 버려져 다음 Mission이 이번 Snapshot을 전혀 알지 못했다. 같은
     세션에서 이어지는 Mission은 이제 `assemble_context()`가 자동으로
-    이 Snapshot을 반영한다."""
+    이 Snapshot을 반영한다.
+
+    **Multi-Agent Collaboration(M56, ADR-0074)**: `CodingAgent`(M13)와
+    동일한 패턴 — `agent_registry`/`agent_scheduler`를 둘 다 주입하면,
+    같은 DOCUMENTATION Capability의 다른 `DocumentationAgent` 인스턴스가
+    함께 등록돼 있어도 `AgentScheduler`가 선택한 인스턴스만 실제로
+    처리한다(`is_agent_selected()`). 둘 중 하나라도 주어지지 않으면
+    (기본값 `None`) 이 확인을 건너뛰어 기존 동작과 완전히 동일하다."""
 
     def __init__(
         self,
@@ -46,12 +56,16 @@ class DocumentationAgent:
         engine_runtime: EngineRuntime,
         context_manager: ContextManager,
         workspace_session: WorkspaceSession,
+        agent_registry: AgentRegistry | None = None,
+        agent_scheduler: AgentScheduler | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._task_engine = task_engine
         self._engine_runtime = engine_runtime
         self._context_manager = context_manager
         self._workspace_session = workspace_session
+        self._agent_registry = agent_registry
+        self._agent_scheduler = agent_scheduler
         self._session = agent_runtime.start_agent(
             AgentRole.DOCUMENTATION, frozenset({AgentCapability.DOCUMENTATION})
         )
@@ -60,6 +74,14 @@ class DocumentationAgent:
     def _on_review_completed(self, event: Event) -> None:
         if event.event_type != REVIEW_COMPLETED:
             return
+        if self._agent_registry is not None and self._agent_scheduler is not None:
+            if not is_agent_selected(
+                self._agent_registry,
+                self._agent_scheduler,
+                AgentCapability.DOCUMENTATION,
+                self._session.agent_id,
+            ):
+                return
         task_id = event.payload["task_id"]
         task = self._task_engine.get_task(task_id)
         result = self._engine_runtime.run(
