@@ -975,6 +975,18 @@ EventBus → Dashboard (Reader → Reader)
   `run_now(rule_id)`(Trigger 조건 무시, 즉시 발동 — API의 `/run`이
   위임). Action 실행 실패는 `InMemoryEventBus.publish()`와 동일한
   원칙으로 삼켜(swallow) 다른 Rule 평가에 영향을 주지 않는다.
+  **Trigger 평가 실패도 동일하게 격리한다(Milestone 60, ADR-0078)**:
+  `tick()`이 Rule마다 `TriggerEvaluator`를 호출하는 부분 전체를
+  `try/except`로 감싸 손상된 `time_of_day`/`last_executed_at`
+  (`ValueError`) 등으로 한 Rule의 평가가 실패해도 나머지 Rule
+  평가·`web/app.py`의 백그라운드 tick 루프 자체는 계속 살아있다 —
+  이전에는 이 예외가 `tick()` 밖으로 그대로 전파돼 tick 루프를
+  영구히 죽였고, 서버 프로세스는 살아있는데 자동화만 전체 정지되는
+  상태를 `HealthMonitor`도 감지하지 못했다(장시간 무인 운영의 핵심
+  위험). `_on_event()`는 대상 밖 — `EventTriggerEvaluator.
+  should_fire()`는 파싱 없이 항상 `True`만 반환해 실제로 던질 수
+  없고, 이 경로는 이미 `EventBus.publish()`의 구독자 예외 격리가
+  적용돼 있어 추가 보호가 불필요(YAGNI, 실증 없는 방어 코드 금지).
 - **`AutomationActionExecutor`(`runtime/automation/`)**: RUN_TASK를
   M17/M18 파이프라인(`EngineSelectionPolicy.select()` →
   `ExecutionDispatcher.dispatch()`)에 그대로 실어 실행한다(사용자

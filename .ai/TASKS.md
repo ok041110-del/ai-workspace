@@ -14483,6 +14483,72 @@ Workflow를 조회해 `workflow_runner.run(workflow)`에 위임한다. 둘 중
 
 ---
 
+## Milestone 60 — Autonomous Workspace: Tick 루프 내구성 (완료)
+
+**배경**: 사용자가 "M60 Autonomous Workspace(장시간 자율 운영)"으로
+착수 요청. "장시간 자율 운영"이라는 주제가 넓어(세션 영속화/재시도/
+Health 등 여러 해석 가능) 코드 조사로 구체적인 실제 버그를 먼저
+발견해 AskUserQuestion으로 범위를 확정.
+
+**T01 Domain Analysis**: `web/app.py`의 `_tick_loop()`이
+`automation_scheduler.tick()`을 `automation_tick_seconds`(기본
+30초)마다 호출하는 `while True` 백그라운드 asyncio Task임을 확인.
+`AutomationScheduler.tick()` 내부에서 `TimeTriggerEvaluator`/
+`IntervalTriggerEvaluator`가 `_parse_time_of_day()`/`_parse_iso()`로
+`Trigger.time_of_day`/`AutomationRule.last_executed_at`을 파싱하는데,
+값이 손상돼 있으면 `ValueError`를 던지고 이를 감싸는 코드가
+`tick()` 어디에도 없어 예외가 그대로 `_tick_loop()` 밖으로 전파됨을
+확인 — asyncio Task가 처리되지 않은 예외로 조용히 종료되면 **서버
+프로세스는 계속 살아있지만 자동화 전체가 영구히 멈추고, 기존
+`HealthMonitor`(M22)도 `automation_scheduler is not None`만 확인할
+뿐 tick 루프가 실제로 도는지는 확인하지 않아 이 상태를 감지하지
+못함**을 확인(추측 아님, 코드 경로 직접 추적). Rule 하나의 손상된
+`time_of_day`/`last_executed_at`만으로 재현 가능.
+
+**사용자 승인(AskUserQuestion)**: "Tick 루프 내구성 수정"으로 범위
+확정(HealthMonitor 연동 확장이나 다른 자율 운영 이슈 조사는 범위
+밖).
+
+**T02 설계**: `_fire()`가 이미 지키는 "한 Rule의 실패가 다른 Rule에
+영향 없음" 원칙(Action 실행 단계)을 Trigger 평가 단계까지 확장한다.
+`tick()`의 Rule별 처리(evaluator 생성→`should_fire()`→`_fire()`→
+`compute_next_execution_at()`→`save()`) 전체를 `try/except`로 감싸
+한 Rule의 평가 실패가 나머지 Rule 평가나 `tick()` 자체를 죽이지
+못하게 한다. **`_on_event()`는 대상에서 제외**(YAGNI) — `Event
+TriggerEvaluator.should_fire()`는 파싱 없이 항상 `True`만 반환해
+실제로 던질 수 없고(실증 불가능한 방어 코드는 추가하지 않음), 이미
+`EventBus.publish()`의 구독자 예외 격리(T2-02, `interfaces/
+event_bus.py` 계약)가 이 경로를 보호하고 있어 중복 보호가 된다.
+`run_now()`도 대상 밖 — REST API의 `/run`이 직접 위임하는 1회성
+호출이라 `AutomationRuleNotFoundError` 등을 그대로 전파해 호출자가
+즉시 알 수 있는 것이 오히려 바람직하다(백그라운드 루프가 아님).
+
+**T03 구현**:
+- `src/ai_workspace/runtime/automation/automation_scheduler.py` —
+  `tick()`의 Rule별 처리를 `try/except Exception: pass`로 감쌈(기존
+  `_fire()`의 swallow 원칙과 동일 패턴), docstring에 근거 기록.
+- `tests/runtime/automation/test_automation_scheduler.py` — 신규
+  2건(손상된 Rule이 있어도 다른 Rule은 정상 발동/손상된 Rule을 만난
+  뒤에도 다음 `tick()` 호출이 정상 동작함을 증명).
+- `docs/ARCHITECTURE.md` §3.19(Automation 절)에 Trigger 평가 실패
+  격리 서술 추가.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 실제 코드 경로 추적으로 버그를 실증(추측 아님) | ✅ |
+| 2 | 넓은 "자율 운영" 주제를 사용자 확인으로 좁은 범위로 확정 | ✅ |
+| 3 | 손상된 Rule 1개가 있어도 나머지 Rule 평가는 계속됨을 테스트로 증명 | ✅ |
+| 4 | 손상된 Rule을 만난 뒤에도 Scheduler가 다음 tick에서 계속 동작함을 증명 | ✅ |
+| 5 | 실증 불가능한 경로(`_on_event()`)에는 방어 코드 추가하지 않음(YAGNI) | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1184개(신규 2개, 회귀 없음)/`ruff`/`mypy`(224 source files)
+전부 통과. ADR-0078.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
