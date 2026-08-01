@@ -21,17 +21,28 @@ def make_task(task_id: str = "t1") -> Task:
 class CostedEngineAdapter(MockEngineAdapter):
     """M64: `estimate_cost()`가 고정 비용을 반환하고 `run()` 호출 여부를
     기록하는 테스트용 Adapter — 비용 기반 선택을 테스트에서 재현할 수
-    있게 한다."""
+    있게 한다. M65: `succeed=False`면 계속 실패해 신뢰도 추적을
+    재현할 수 있다."""
 
     def __init__(
-        self, estimated_cost_usd: float, capabilities: frozenset[str] = frozenset()
+        self,
+        estimated_cost_usd: float,
+        capabilities: frozenset[str] = frozenset(),
+        *,
+        succeed: bool = True,
     ) -> None:
         super().__init__(capabilities)
         self._estimated_cost_usd = estimated_cost_usd
+        self._succeed = succeed
         self.run_count = 0
 
     def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
         self.run_count += 1
+        if not self._succeed:
+            if session_id not in self._sessions:
+                raise ValueError("unknown session")
+            self._sessions[session_id] = EngineSessionStatus.COMPLETED
+            return EngineResult(success=False, output="", error="mock failure")
         return super().run(session_id, task, model=model)
 
     def estimate_cost(self, task: Task) -> CostEstimate:
@@ -215,3 +226,53 @@ def test_run_raises_no_suitable_engine_when_no_candidate_within_budget() -> None
 
     with pytest.raises(NoSuitableEngineError):
         runtime.run(make_task())
+
+
+def test_run_with_policy_excludes_engine_after_repeated_failures() -> None:
+    """M65(ADR-0083): 성공 0건 + 표본 3건 이상(M49와 동일한 임계값) 쌓인
+    엔진은 비용이 가장 싸도 더 이상 선택되지 않는다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    failing_cheap = CostedEngineAdapter(1.0, succeed=False)
+    reliable_expensive = CostedEngineAdapter(10.0)
+    runtime.register_engine("failing_cheap", failing_cheap)
+    runtime.register_engine("reliable_expensive", reliable_expensive)
+
+    for i in range(3):
+        runtime.run(make_task(f"warmup-{i}"))
+
+    assert failing_cheap.run_count == 3
+    assert reliable_expensive.run_count == 0
+
+    runtime.run(make_task("after-exclusion"))
+
+    assert failing_cheap.run_count == 3
+    assert reliable_expensive.run_count == 1
+
+
+def test_run_with_policy_does_not_exclude_engine_with_insufficient_sample() -> None:
+    """실패가 1~2건뿐이면(표본 부족) 아직 제외되지 않는다 — M49와 동일한
+    "성급하게 제외하지 않음" 원칙."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    failing_cheap = CostedEngineAdapter(1.0, succeed=False)
+    reliable_expensive = CostedEngineAdapter(10.0)
+    runtime.register_engine("failing_cheap", failing_cheap)
+    runtime.register_engine("reliable_expensive", reliable_expensive)
+
+    runtime.run(make_task("warmup-0"))
+    runtime.run(make_task("warmup-1"))
+
+    assert failing_cheap.run_count == 2
+    assert reliable_expensive.run_count == 0
+
+
+def test_run_without_policy_does_not_apply_reliability_exclusion() -> None:
+    """M65 이전과 100% 동일 동작(회귀 확인): policy 미주입 시 신뢰도
+    추적 자체는 여전히 계속 실패하는 엔진도 그대로 계속 선택한다."""
+    runtime = InMemoryEngineRuntime()
+    failing_only = CostedEngineAdapter(1.0, succeed=False)
+    runtime.register_engine("failing_only", failing_only)
+
+    for i in range(5):
+        runtime.run(make_task(f"t{i}"))
+
+    assert failing_only.run_count == 5

@@ -14822,6 +14822,82 @@ Task를 `self.run()`으로 개별 실행하므로 Task별 비용도 자연히 �
 
 ---
 
+## Milestone 65 — Engine Learning & Adaptive Routing: 엔진별 신뢰도 추적 (완료)
+
+**배경**: 사용자가 "M65 engine learning & adaptive routing"으로 착수
+요청. 조사 결과 M49(Learning Engine)는 Recommendation/Adaptation
+파이프라인의 학습만 다뤘고, M64에서 새로 생긴 `EngineRuntime`의 비용
+기반 선택(`EngineSelectionPolicy`)은 순수 정적 비용만 보고 과거
+성공/실패 이력을 전혀 반영하지 않았다 — 계속 실패하는 엔진이라도
+비용이 가장 싸면 계속 선택된다(추측 아님, 코드 확인). Dashboard의
+`ReliabilityStats`도 워크스페이스 전체 집계일 뿐 엔진별로 분리돼 있지
+않아 재사용할 수 없었다.
+
+**사용자 승인(AskUserQuestion)**: "EngineRuntime에 엔진별 신뢰도 추적 +
+실패 엔진 제외"로 범위 확정 — `EngineSelectionPolicy.select()` 시그니처
+확장(성공률 정식 점수화)이나 영속 저장소를 포함한 전체 파이프라인은
+범위 밖으로 명시적으로 제외.
+
+**설계**: `domain/engine_reliability.py`(신규)에 `EngineReliabilityStat`
+(total/success_count/failure_count, M40 `ExperienceStat`과 동일한 필드
+구성을 계층만 바꿔 재사용 — `runtime/engine/`이 `intelligence/`에
+의존하면 계층 위반이라 별도 타입으로 둠) + `is_unreliable()`(M49/
+ADR-0066과 완전히 동일한 임계값 규칙 `success_count == 0 and total >=
+3`을 그대로 재사용, 새 규칙 설계 없음). `InMemoryEngineRuntime`/
+`ManagedEngineRuntime`이 `run()`/`run_parallel()`/`run_ensemble()`이
+실제로 실행한 엔진의 성공/실패를 이름별로 in-process 누적한다.
+`engine_selection_policy`가 주입된 경로(M64)에서만
+`EngineCandidate` 목록을 만들 때 `is_unreliable()`인 엔진을 미리
+제외한 뒤 비용 기반 선택을 적용한다 — `EngineSelectionPolicy`
+인터페이스 자체는 변경하지 않는다(Decision Only 계약 유지, 후보
+필터링은 `EngineRuntime`의 책임으로 둠). policy 미주입 시(M64 이전
+동작)에는 신뢰도 추적만 계속되고 제외는 적용되지 않아 100% 하위
+호환이다. Cancel된 실행은 신뢰도에 반영하지 않는다(`EngineResult.error
+== "cancelled"` sentinel로 판별). 영속 저장소는 M49/M50과 동일하게
+이번 범위 밖(in-process 한정, YAGNI).
+
+**구현**:
+- `src/ai_workspace/domain/engine_reliability.py`(신규) —
+  `EngineReliabilityStat`(frozen dataclass) + `record()`/
+  `is_unreliable()`.
+- `src/ai_workspace/runtime/engine/engine_runtime.py`
+  (`InMemoryEngineRuntime`) — `_select()`가 이제 `(이름, adapter)`
+  튜플을 반환. `run()`/`run_parallel()`/`run_ensemble()`이 실행 후
+  `_record_engine_outcome()`으로 결과를 누적. `_build_candidates()`가
+  `is_unreliable()`인 엔진을 후보에서 제외.
+- `src/ai_workspace/runtime/engine/managed_engine_runtime.py`
+  (`ManagedEngineRuntime`) — `_require_adapter()`가 동일하게
+  `(이름, adapter)` 튜플 반환 + 신뢰도 필터링. `run()`은 Cancel되지
+  않은 완료/실패/타임아웃만 신뢰도에 반영. `_run_named()`(`run_ensemble()`
+  내부)도 결과를 누적.
+- `tests/domain/test_engine_reliability.py`(신규) — `EngineReliabilityStat`
+  단위 테스트 6건(성공/실패 기록, 표본 부족 시 미제외, 표본 충분 +
+  전량 실패 시 제외, 성공 1건 이상이면 미제외).
+- `tests/runtime/engine/test_engine_runtime.py`,
+  `tests/runtime/engine/test_managed_engine_runtime.py` — 각각 3건:
+  반복 실패 후 제외, 표본 부족 시 미제외, policy 미주입 시 제외
+  미적용(회귀 없음).
+- `docs/ARCHITECTURE.md` §3.9에 Engine Learning & Adaptive Routing
+  서술 추가. 새 Core Domain Interface 없음(`EngineReliabilityStat`은
+  Interface가 아닌 domain 값 객체, 30종 유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | M64 비용 기반 선택이 과거 성공/실패를 전혀 반영하지 않음을 코드로 확인 | ✅ |
+| 2 | 넓은 "Engine Learning & Adaptive Routing" 주제를 사용자 확인으로 "신뢰도 추적 + 실패 엔진 제외"로 좁힘 | ✅ |
+| 3 | M49/ADR-0066 임계값 규칙을 그대로 재사용(새 규칙 설계 없음) | ✅ |
+| 4 | 반복 실패 엔진이 후보에서 제외됨을 테스트로 증명 | ✅ |
+| 5 | 표본 부족(실패 1~2건) 시 성급하게 제외하지 않음을 테스트로 증명 | ✅ |
+| 6 | policy 미주입 시 이전 동작과 100% 동일함을 테스트로 증명(회귀 없음) | ✅ |
+| 7 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1234개(신규 12개, 회귀 없음)/`ruff`/`mypy`(229 source files)
+전부 통과. ADR-0083.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ai_workspace.domain.engine_reliability import EngineReliabilityStat
 from ai_workspace.domain.engine_selection import EngineCandidate
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.budget_policy_engine import BudgetPolicyEngine
@@ -27,7 +28,15 @@ class InMemoryEngineRuntime(EngineRuntime):
     `_select()`가 "능력 만족하는 첫 매칭" 대신 `EngineSelectionPolicy`(M17)
     로 비용 기반 선택을 한다 — Automation 파이프라인이 이미 쓰던 것과 같은
     선택 규칙을 Agent가 직접 쓰는 이 경로에도 적용한다. 생략(기본값 `None`)
-    하면 이전 동작(Milestone 64 이전)과 100% 동일하다."""
+    하면 이전 동작(Milestone 64 이전)과 100% 동일하다.
+
+    **엔진별 신뢰도 추적 + 적응형 라우팅(Milestone 65, ADR-0083)**: `run()`/
+    `run_parallel()`/`run_ensemble()`이 실제로 실행한 엔진의 성공/실패를
+    이름별로 in-process 누적한다(`EngineReliabilityStat`). 비용 기반 선택
+    경로(`engine_selection_policy` 주입 시)에서만 이 기록을 활용해
+    `EngineReliabilityStat.is_unreliable()`(M49와 동일한 "성공 0건 + 표본
+    3건 이상" 규칙)에 해당하는 엔진을 후보에서 제외한다 — 비용이 가장
+    싸도 계속 실패하는 엔진은 더 이상 선택되지 않는다."""
 
     def __init__(
         self,
@@ -39,25 +48,30 @@ class InMemoryEngineRuntime(EngineRuntime):
         self._task_status: dict[str, EngineSessionStatus] = {}
         self._engine_selection_policy = engine_selection_policy
         self._budget_policy_engine = budget_policy_engine
+        self._engine_reliability: dict[str, EngineReliabilityStat] = {}
 
     def register_engine(self, name: str, adapter: EngineAdapter) -> None:
         if name in self._engines:
             raise DuplicateEngineError(name)
         self._engines[name] = adapter
 
+    def _record_engine_outcome(self, name: str, success: bool) -> None:
+        stat = self._engine_reliability.get(name, EngineReliabilityStat())
+        self._engine_reliability[name] = stat.record(success)
+
     def _select(
         self,
         task: Task,
         required_capabilities: frozenset[str],
         require_parallel: bool = False,
-    ) -> EngineAdapter:
+    ) -> tuple[str, EngineAdapter]:
         if self._engine_selection_policy is None:
-            for adapter in self._engines.values():
+            for name, adapter in self._engines.items():
                 if not required_capabilities.issubset(adapter.capabilities()):
                     continue
                 if require_parallel and not adapter.supports_parallel():
                     continue
-                return adapter
+                return name, adapter
             raise NoSuitableEngineError(required_capabilities)
 
         candidates = self._build_candidates(task, required_capabilities, require_parallel)
@@ -66,7 +80,7 @@ class InMemoryEngineRuntime(EngineRuntime):
         )
         if decision is None:
             raise NoSuitableEngineError(required_capabilities)
-        return self._engines[decision.engine_name]
+        return decision.engine_name, self._engines[decision.engine_name]
 
     def _build_candidates(
         self, task: Task, required_capabilities: frozenset[str], require_parallel: bool
@@ -76,6 +90,8 @@ class InMemoryEngineRuntime(EngineRuntime):
             if not required_capabilities.issubset(adapter.capabilities()):
                 continue
             if require_parallel and not adapter.supports_parallel():
+                continue
+            if self._engine_reliability.get(name, EngineReliabilityStat()).is_unreliable():
                 continue
             estimate = adapter.estimate_cost(task)
             candidates.append(
@@ -96,10 +112,11 @@ class InMemoryEngineRuntime(EngineRuntime):
         *,
         model: str | None = None,
     ) -> EngineResult:
-        adapter = self._select(task, required_capabilities)
+        name, adapter = self._select(task, required_capabilities)
         session_id = adapter.create_session()
         result = adapter.run(session_id, task, model=model)
         adapter.destroy_session(session_id)
+        self._record_engine_outcome(name, result.success)
         self._task_status[task.task_id] = (
             EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED
         )
@@ -114,12 +131,13 @@ class InMemoryEngineRuntime(EngineRuntime):
     ) -> list[EngineResult]:
         if not tasks:
             return []
-        adapter = self._select(tasks[0], required_capabilities, require_parallel=True)
+        name, adapter = self._select(tasks[0], required_capabilities, require_parallel=True)
         results: list[EngineResult] = []
         for task in tasks:
             session_id = adapter.create_session()
             result = adapter.run(session_id, task, model=model)
             adapter.destroy_session(session_id)
+            self._record_engine_outcome(name, result.success)
             self._task_status[task.task_id] = (
                 EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED
             )
@@ -147,12 +165,13 @@ class InMemoryEngineRuntime(EngineRuntime):
                 adapter.destroy_session(session_id)
             except BaseException as exc:
                 results[name] = EngineResult(success=False, output="", error=str(exc))
+            self._record_engine_outcome(name, results[name].success)
         return results
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:
-        adapter = self._select(task, required_capabilities)
+        _name, adapter = self._select(task, required_capabilities)
         return adapter.estimate_cost(task)
 
     def cancel(self, task_id: str) -> None:
