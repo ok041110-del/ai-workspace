@@ -415,6 +415,12 @@ M46이 Phase 0까지만 실행하고 Deferred로 남긴 Metadata Backfill/Wiki L
 - 결정: T01 코드 전수 조사로 `MemoryEngine` Interface는 이미 존재하고 구현체는 `InMemoryMemoryEngine` 하나뿐이며 사용처는 `web/server.py` 1곳뿐임을 확인. `storage/`에 이미 확립된 File 기반 영속화 패턴(JSON 직렬화, `base_dir` 주입)을 그대로 재사용해 `FileMemoryEngine`을 신설, `<vault_root>/.ai-workspace-data/`에 단일 JSON 파일로 key-value를 영속화하기로 결정(사용자 승인). Composition Root 1곳만 교체 — 다른 `InMemoryMemoryEngine` 사용처는 무변경
 - 영향: `storage/file_memory_engine.py`(신규), `web/server.py`(1곳 교체), `observability/pipeline_stage_analyzer.py`(note 텍스트만 정확하게 갱신), `.gitignore`(`.ai-workspace-data/` 추가). 새 Core Domain Interface/Service 없음. `pytest` 1130개(7개 신규, 회귀 없음)/ruff/mypy(221 source files) 전부 통과. StatusLine Observability 배선은 향후 별도 Milestone 대상으로 명시적으로 분리. 상세는 [[Automation Index]]
 
+## ADR-0068: Learning Evolution — 최근 연속 실패 추세 규칙을 Adaptation에 보완 추가 (Milestone 51)
+
+- 목적: M49/M50 규칙(실패율 100% + 표본 3건 이상)은 전체 이력만 봐서, 과거에 여러 번 성공했지만 최근 들어 계속 실패하는 추세 악화를 포착하지 못하는 한계를 해소
+- 결정: `ExperienceStat`에 `recent_failure_streak`(가장 최근 기록부터 거슬러 올라간 연속 실패 횟수) 필드 신설. 최근 5건이 모두 실패면(사용자 승인 N=5) 전체 이력에 성공이 섞여 있어도 추천을 보류 — 기존 M49/M50 규칙은 무변경(OR 병존, 대체 아님). 어느 규칙이 발동했는지 기존 prose `reason` 채널에 "(M49 규칙)"/"(M51 규칙)"/"(M49+M51 규칙)"로 태깅(사용자 추가 요청 반영)
+- 영향: `intelligence/experience_rules.py`/`intelligence/recommendation_adjustment.py` 2개 파일만 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음. `pytest` 1137개(신규 7개, 회귀 없음)/ruff/mypy(221 source files) 전부 통과. 상세는 [[Automation Index]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
