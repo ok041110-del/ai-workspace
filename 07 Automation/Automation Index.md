@@ -158,6 +158,22 @@ M51(최근 연속 실패) 두 Rule의 OR 결합을 가중치 점수 결합으로
 Decay 계수(0.8)는 코드에 고정된 상수로 데이터 기반 학습은 하지
 않는다(Non-goal 유지).
 
+**Learning Insight(Milestone 54, ADR-0072)**: M49~M53 학습 신호가
+Adaptation 내부 판단에만 쓰이고 사람이 볼 수 있는 형태로 노출되지
+않았던 것을 StatusLine에 노출했다. 새 `LearningRuntimeAnalyzer`가
+`FileMemoryEngine`(M50)+`ExecutionMemoryStore`(M39)+
+`ExperienceIntelligenceService`(M40)를 그대로 조합해
+`ExperienceReport`를 얻는다(새 Domain/Interface/Service 없음).
+`WorkspaceInfo.current_task`가 Phase 1 범위 밖(ADR-0063)이라 "현재
+추천 대상"은 여전히 알 수 없어, "추적 중인 전체 task 중 가장
+위험한 것"(`decayed_failure_rate` 최댓값, 동점이면 task_id
+오름차순 — 새 채점 아니라 표시 로직)으로 범위를 좁혔다. 부수적으로
+Pipeline Stage의 Memory 단계가 `NOT_OBSERVABLE`에서
+`OBSERVED_DONE`/`OBSERVED_NOT_YET`으로 승격돼, M45/M50에서 두 번
+"별도 Milestone 대상"으로 미뤄뒀던 gap도 같은 배선으로 함께
+해소했다. 실제 `FileMemoryEngine` 데이터로 end-to-end 수동 검증
+완료.
+
 ## 관련 GitHub 문서
 
 - `docs/ARCHITECTURE.md` §3.19
