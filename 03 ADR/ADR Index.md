@@ -439,6 +439,12 @@ M46이 Phase 0까지만 실행하고 Deferred로 남긴 Metadata Backfill/Wiki L
 - 결정: `ExperienceStat`에 `decayed_failure_rate: float` 필드 신설 — `weight(rank) = 0.8**rank`(`rank=0`이 최신 기록), `decayed_failure_rate = Σ(weight×실패 여부)/Σ(weight)`. `signal_overall`을 이 필드로 교체(M52의 가중치·threshold는 그대로 유지). 전체 이력 100% 실패면 가중치와 무관하게 항상 정확히 1.0 — M49/M52의 회귀 없음 증명 체인이 그대로 보존됨. Decay 함수는 지수(사용자 선택), decay_factor=0.8(사용자 선택, 중간 강도)
 - 영향: `intelligence/experience_rules.py`(필드+헬퍼 추가), `intelligence/recommendation_adjustment.py`(signal_overall 교체) 2개 파일만 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음. 구현 중 `ExperienceStat` 수동 생성 테스트 5건이 새 필드 기본값(0.0)으로 인해 M49 트리거가 깨지는 것을 발견해 값 명시 지정으로 수정. `pytest` 1149개(신규 4개, 회귀 없음)/ruff/mypy(221 source files) 전부 통과. 상세는 [[Automation Index]]
 
+## ADR-0072: Learning Insight — M39~M53 학습 신호를 StatusLine에 노출 (Milestone 54)
+
+- 목적: M49~M53 학습 신호가 Adaptation 내부 판단에만 쓰이고 사람이 볼 수 있는 형태로 노출되지 않았던 것을 해소
+- 결정: 새 `LearningRuntimeAnalyzer`가 `FileMemoryEngine`(M50)+`ExecutionMemoryStore`(M39)+`ExperienceIntelligenceService`(M40)를 그대로 조합해 `ExperienceReport`를 얻는다(새 Domain/Interface/Service 없음). `tracked_task_count`+가장 위험한 task(`decayed_failure_rate` 최댓값, 동점이면 task_id 오름차순)를 StatusLine에 노출. `WorkspaceInfo.current_task`가 Phase 1 범위 밖(ADR-0063)이라 "현재 추천 대상"은 여전히 알 수 없어 "추적 중인 전체 중 최고 위험"으로 범위를 좁힘. Pipeline Stage의 Memory 단계를 `NOT_OBSERVABLE`에서 `OBSERVED_DONE`/`OBSERVED_NOT_YET`으로 승격(M45/M50에서 두 번 미뤄뒀던 gap 해소)
+- 영향: `observability/` 패키지 내 5개 파일 수정 + 1개 신규(`learning_runtime_analyzer.py`). 새 Core Domain Interface/Adapter/Service/Layer/File 없음. `pytest` 1155개(신규 3개, 회귀 없음)/ruff/mypy(222 source files) 전부 통과. 실제 `FileMemoryEngine` 데이터로 end-to-end 수동 검증 완료. 상세는 [[Automation Index]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]
