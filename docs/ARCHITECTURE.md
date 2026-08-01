@@ -266,6 +266,20 @@ Execution Platform (M36~M38) — 실행·상태 전이·스케줄링
   규칙이 발동했는지는 기존 prose 기반 `reason` 채널에 "(M49 규칙)"/
   "(M51 규칙)"/"(M49+M51 규칙)"로 태깅해 Explainability(M44)가 그대로
   노출한다 — 새 필드/시그니처 변경 없이 재사용.
+- **M45-1 StatusLine Integration Fix — 완료(2026-08-01, ADR-0069)**:
+  M45 StatusLine이 실제 Claude Code UI에서 표시되지 않는다는 보고를
+  공식 문서(`code.claude.com/docs/en/statusline`) 대조로 조사했다.
+  설정 형식과 stdin JSON 필드(`model.display_name`/`effort.level`/
+  `context_window.*`)는 모두 공식 문서와 일치했지만,
+  `statusline_main.py`의 `ai_workspace.*` import가 `try/except`
+  바깥에 있어 import 실패 시 아무 출력 없이 프로세스가 죽는 실제
+  버그를 발견했다 — 공식 문서의 "Status line not appearing" 실패
+  모드와 일치. import를 `main()` 내부로 옮겨 모든 예외가 항상 한 줄
+  출력으로 대체되도록 고쳤고, 실패 시에만 `/tmp/statusline.log`를
+  남기는 디버그 로그를 추가했다(정상 동작 시 로그 없음). Workspace
+  Trust 미승인 등 사용자 환경 설정 문제는 코드로 고칠 수 없어 DoD에
+  사용자 확인 항목으로 남겼다(헤드리스 원격 세션이라 실제 UI 접근
+  불가).
 
 ## 3. 핵심 컴포넌트
 

@@ -12935,6 +12935,62 @@ Hook 신규 도입은 별도 승인 필요), Vault `current_pr`(GitHub API
 
 ---
 
+## Milestone 45-1 — StatusLine Integration Fix (ADR-0069, 완료)
+
+**배경**: M45 구현·테스트는 모두 통과했지만, 사용자가 실제 Claude
+Code UI에서 StatusLine이 표시되지 않는다고 보고. 추측 대신 공식
+문서(`code.claude.com/docs/en/statusline`) 확인과 실제 실행 검증을
+전제 조건으로 조사를 요청.
+
+**조사(공식 문서 확인)**:
+- `.claude/settings.json`의 `statusLine.type`/`command` 형식은
+  공식 문서와 일치 — 문제 없음.
+- `ClaudeRuntimeAnalyzer`가 쓰는 `model.display_name`/`effort.level`/
+  `context_window.*`는 모두 공식 문서화된 필드(추측 아님) — 공식
+  Mock Input으로 실행해 정상 동작 확인.
+- **실제 버그**: `statusline_main.py`의 `ai_workspace.*` import 3개가
+  `try/except` 바깥에 있어, import 실패 시 아무 출력 없이 프로세스가
+  죽는다 — 공식 문서 Troubleshooting("Status line not appearing")이
+  명시하는 실패 모드와 정확히 일치.
+- 공식 문서는 별도로 **Workspace Trust 미승인** 시에도 StatusLine이
+  아예 실행되지 않는다고 명시(`claude --debug`로 확인 가능) — 이는
+  사용자 환경 설정이라 코드로 고칠 수 없음, DoD에 사용자 확인 항목으로
+  남김.
+
+**구현**: `observability/statusline_main.py` — import를 `main()`
+내부 `try` 블록으로 이동(모든 예외를 항상 한 줄 출력으로 대체).
+실패 시에만 `/tmp/statusline.log`에 디버그 기록(정상 동작 시 로그
+없음), `AI_WORKSPACE_STATUSLINE_DEBUG=1`로 실제 payload를 opt-in
+캡처 가능. 새 Domain/Interface/Service 없음.
+
+**테스트**: `tests/observability/test_statusline_main.py`(신규
+6건) — 정상/JSON 파싱 실패/빈 stdin 모두 크래시 없이 한 줄 출력,
+디버그 로그는 실패 시에만 기록, 환경 변수로 강제 기록 확인. 전체
+`pytest` 1143개(신규 6개, 회귀 없음)/`ruff`/`mypy`(221 source files)
+통과. 공식 문서의 Mock Input 예시로 수동 실행해 `model.display_name`/
+`effort.level`/`context_window.used_percentage` 정상 반영 확인.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 실제 Runtime JSON Schema를 추측 없이 공식 문서로 확인 | ✅ |
+| 2 | `.claude/settings.json` 형식을 공식 문서와 대조 검증 | ✅ |
+| 3 | 프로젝트 `.claude/settings.json` 로드 여부 확인(로컬 오버라이드 없음 확인) | ✅ |
+| 4 | 실패 시에만 디버그 로그를 남기고 정상 동작 시 로그 없음 | ✅ |
+| 5 | 기존 Observability 구조만 재사용, 새 Domain/Interface/Service 없음 | ✅ |
+| 6 | 실제 Claude Code UI에서 표시되는 스크린샷/실행 결과 검증 | ⚠️ 사용자 확인 필요 |
+
+**DoD 미충족 항목**: 이 세션은 헤드리스 원격 자동화 환경이라 실제
+Claude Code 데스크톱/터미널 UI에 접근할 수 없다. 코드 레벨에서
+확인 가능한 모든 것(공식 문서 대조, 실제 payload 스키마, 크래시
+안전성, 설정 파일 형식)은 검증했지만, 사용자가 실제 세션에서
+`claude --debug`로 최종 확인해야 완료된다 — 특히 Workspace Trust
+승인 여부(`Status line command skipped: workspace trust not
+accepted` 로그 유무).
+
+---
+
 ## Milestone 46 — Vault Information Architecture
 
 **목표**(2026-07-31 사용자 요청, ADR-0064): M39~M45로 기능 아키텍처
