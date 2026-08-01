@@ -14549,6 +14549,81 @@ event_bus.py` 계약)가 이 경로를 보호하고 있어 중복 보호가 된�
 
 ---
 
+## Milestone 61 — Distributed Multi-Agent: 최소 인터페이스 씨앗 (완료)
+
+**배경**: 사용자가 "M61 Distributed Multi-Agent(원격 Agent)"로 착수
+요청. 조사 결과 이 주제는 M11(§scope-out)/M16/M21(scope-out)/ADR-0074
+에서 **반복적으로 Non-goal로 이월**되어온 영역임을 확인 — "Distributed/
+Multi-node Scheduler"·"Multi-node Cluster"는 "실제 필요성이 생기기
+전까지 이월한다"고 명시되어 있었다. `Agent` 도메인
+(`agent_id/role/capabilities/status/priority`)에는 host/주소 개념이
+전혀 없고, `AgentRegistry`는 스스로 "in-memory, 프로세스 재시작 시
+소멸"이라 문서화하고 있어 단일 프로세스 전제가 코드 자체에 명시적임을
+확인. 유일하게 "원격"을 언급하는 `ExecutionEnvironment`(M11,
+ADR-0025)도 `EngineAdapter` 내부로만 범위를 한정해 Agent 레벨과는
+무관함을 확인.
+
+**사용자 승인(AskUserQuestion)**: "최소 인터페이스 씨앗" 범위로 확정
+(선택지: 최소 인터페이스 씨앗 / 실동작 HTTP 기반 구현 / 다른 주제로
+대체). 반복된 Non-goal 판단은 유지하되, 실제 네트워크/RPC 코드는 작성
+하지 않고 향후 확장을 위한 최소 진입점만 추가한다.
+
+**T02 설계**: `ExecutionEnvironment`(M11)가 `EngineAdapter` 내부에서
+"명령을 어디서 실행할지"를 추상화하는 패턴을, Agent Runtime 레벨의
+"Event를 어느 위치의 Agent에게 전달할지"에 그대로 적용한다.
+- `Agent.location: str | None = None`(신규 필드) — 기본값 `None`은
+  "같은 프로세스"(기존 동작과 100% 동일), 값이 있으면 원격이라고
+  선언하는 불투명한 식별자.
+- 신규 `RemoteAgentDispatcher` 계약(`interfaces/
+  remote_agent_dispatcher.py`) — `dispatch(agent, event)`로 location이
+  가리키는 목적지에 Event를 전달. location이 없는(로컬) Agent는 이
+  계약과 무관 — 여전히 기존 `EventBus.publish()` 방송 + `is_agent_
+  selected()`(M13) 경로로 처리.
+- `LoopbackAgentDispatcher`(`runtime/agent/remote_agent_dispatcher.py`)
+  — 실제 네트워크 없이 location별 `EventBus`를 연결해 여러 위치를
+  같은 프로세스 안에서 흉내내는 최소 구현체(향후 HTTP 등 실제 구현체로
+  교체해도 인터페이스 소비자는 변경 불필요).
+- `AgentRuntime`: `start_agent(..., location=...)`로 Agent에 location
+  기록, `dispatch_event(session_id, event)`로 원격 Agent에만 개입(로컬
+  Agent는 no-op — 100% 하위 호환). `remote_agent_dispatcher`는 선택적
+  생성자 주입(기본값 `None`).
+- Production Composition Root(`web/server.py`)에는 연결하지 않음
+  (M56~M60과 동일한 YAGNI 판단 — 실제 소비자가 생기기 전까지 인터페이스
+  +구현체만 준비).
+
+**T03 구현**:
+- `src/ai_workspace/domain/agent.py` — `Agent.location` 필드 추가.
+- `src/ai_workspace/interfaces/remote_agent_dispatcher.py`(신규) —
+  `RemoteAgentDispatcher` ABC, `AgentUnreachableError`.
+- `src/ai_workspace/runtime/agent/remote_agent_dispatcher.py`(신규) —
+  `LoopbackAgentDispatcher`.
+- `src/ai_workspace/runtime/agent/agent_runtime.py` — `remote_agent_
+  dispatcher` 생성자 주입(선택적), `start_agent(location=...)`,
+  `dispatch_event()` 신규 메서드.
+- `tests/domain/test_agent.py` — location 기본값/설정 테스트 2건.
+- `tests/runtime/agent/test_remote_agent_dispatcher.py`(신규) —
+  `LoopbackAgentDispatcher` 5건.
+- `tests/runtime/agent/test_agent_runtime.py` — location/dispatch_event
+  관련 6건.
+- `docs/ARCHITECTURE.md` §3.4에 Distributed Multi-Agent 서술 추가, §7
+  Interface 표에 `RemoteAgentDispatcher` 추가(28→29종).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 반복된 Non-goal 이력을 코드/문서 근거로 확인(추측 아님) | ✅ |
+| 2 | 넓은 "원격 Agent" 주제를 사용자 확인으로 좁은 범위로 확정 | ✅ |
+| 3 | 실제 네트워크/RPC 코드 없이 최소 진입점(도메인 필드+인터페이스+ InMemory 구현)만 추가 | ✅ |
+| 4 | `location`이 없는 기존 Agent는 100% 기존 동작과 동일(회귀 없음) | ✅ |
+| 5 | Production Composition Root에 연결하지 않음(YAGNI, M56~M60과 동일 판단) | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1197개(신규 13개, 회귀 없음)/`ruff`/`mypy`(226 source files)
+전부 통과. ADR-0079.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

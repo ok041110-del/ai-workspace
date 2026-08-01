@@ -423,6 +423,28 @@ Agent의 실행을 담당하는 계층.
   `max_count` 매개변수를 실제 협업 흐름에 처음 연결한 것이다.
 - **Agent Manager** (`AgentManager`): Agent 생성/생명주기/상태 관리.
 - **Event Bus** (`EventBus`): Event 발행/구독/Agent 간 통신.
+- **Distributed Multi-Agent — 최소 인터페이스 씨앗(Milestone 61, ADR-0079)**:
+  이 프로젝트는 M11/M16/M21/ADR-0074에서 "Distributed/Multi-node
+  Scheduler"·"Multi-node Cluster"를 반복적으로 Non-goal로 이월해왔다 —
+  실제 필요성이 생기기 전까지 네트워크/RPC 구현을 만들지 않는다는 원칙은
+  M61에서도 유지한다. 대신 향후 실제 필요가 생겼을 때 자연스럽게 확장할 수
+  있는 **최소한의 진입점**만 추가한다: `Agent.location`(불투명한 문자열
+  식별자, 기본값 `None` = 같은 프로세스)과, 이를 해석해 Event를 전달하는
+  `RemoteAgentDispatcher` 계약(`interfaces/remote_agent_dispatcher.py`).
+  `ExecutionEnvironment`(M11, §3.9)가 `EngineAdapter` 내부에서 "명령을
+  어디서 실행할지"를 추상화하는 것과 동일한 패턴을, Agent Runtime 레벨의
+  "Event를 어느 위치의 Agent에게 전달할지"에 적용한 것이다.
+  `LoopbackAgentDispatcher`(`runtime/agent/remote_agent_dispatcher.py`)는
+  실제 네트워크 없이 location마다 별도의 `EventBus`를 연결해 여러 위치를
+  같은 프로세스 안에서 흉내내는 최소 구현체다 — 실제 원격(HTTP 등)
+  구현체로 교체해도 `RemoteAgentDispatcher`를 쓰는 코드는 바뀌지 않는다.
+  `AgentRuntime.start_agent(..., location=...)`로 Agent에 location을
+  기록하고, `AgentRuntime.dispatch_event(session_id, event)`는 그 Agent가
+  로컬(location `None`)이면 아무 것도 하지 않아(기존 EventBus 방송 경로가
+  그대로 처리) 100% 하위 호환이며, 원격이면 주입된
+  `remote_agent_dispatcher`로 전달한다. Production Composition Root
+  (`web/server.py`)에는 연결하지 않는다 — M56~M60과 동일하게, 실제 소비자가
+  생기기 전까지는 인터페이스와 구현체만 준비해둔다(YAGNI).
 
 ### 3.5 Event Store (EventStore 인터페이스) — 독립 Subscriber
 - **책임**: Event Bus를 **구독하는 독립 구독자**로서 모든 이벤트를 기록한다.
@@ -2407,7 +2429,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `AgentCapability` | Coordination/Planning/Coding/Review/Documentation/Research/Vision/Voice/Git/MCP … |
 | `AgentStatus` | 생명주기 상태 |
 
-## 7. Interfaces (추상 계약, 총 28종)
+## 7. Interfaces (추상 계약, 총 29종)
 
 | Interface | 계약 책임 | 구현 시점 | 상태 |
 |---|---|---|---|
@@ -2439,6 +2461,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 | `WorkflowRepository` | `Workflow` 조회/저장(`AutomationActionExecutor`의 RUN_WORKFLOW가 `workflow_id`로 실제 Workflow를 찾는 유일한 통로) | Milestone 59 (계약+`InMemoryWorkflowRepository` 구현) | **완료(계약+구현)** |
+| `RemoteAgentDispatcher` | `Agent.location`이 가리키는 위치로 Event 전달(Agent Runtime 레벨의 원격 실행 경계) | Milestone 61 (계약+`LoopbackAgentDispatcher` 구현) | **완료(계약+구현)** |
 
 > **참고**: "완료(계약)"은 Interface 정의와 Fake 기반 계약 테스트만 존재하고
 > 실제 서비스에 쓰일 구체 구현체는 아직 없다는 뜻이다(각 컴포넌트의 계획된

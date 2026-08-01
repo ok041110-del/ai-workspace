@@ -5500,3 +5500,79 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   2개, 회귀 없음)/`ruff`/`mypy`(224 source files) 전부 통과. `.ai/
   TASKS.md` Milestone 60 절 신규 추가. `docs/ARCHITECTURE.md` §3.19
   Automation 절에 Trigger 평가 실패 격리 서술 추가.
+
+## ADR-0079: Distributed Multi-Agent — Agent.location + RemoteAgentDispatcher 최소 씨앗 (Milestone 61)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion으로 "최소 인터페이스
+  씨앗" 범위 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M61 Distributed Multi-Agent(원격 Agent)"로 착수를
+  요청했다. 조사 결과 이 주제는 M11(scope-out)/M16/M21(scope-out)/
+  ADR-0074에서 "Distributed/Multi-node Scheduler"·"Multi-node
+  Cluster"로 반복적으로 언급되며 "실제 필요성이 생기기 전까지
+  이월한다"고 명시된 Non-goal 영역이었다. `Agent` 도메인에는 host/주소
+  개념이 전혀 없고, `AgentRegistry`는 스스로를 "in-memory, 프로세스
+  재시작 시 소멸"이라 문서화해 단일 프로세스 전제가 코드에 명시적으로
+  박혀 있었다. 유일하게 "원격"을 언급하는 `ExecutionEnvironment`
+  (M11, ADR-0025)도 `EngineAdapter` 내부로만 범위를 한정해 Agent
+  레벨과는 무관했다.
+- 결정:
+  1. `Agent`에 `location: str | None = None` 필드를 추가한다.
+     기본값 `None`은 "같은 프로세스"를 뜻해 기존 Agent 전부와 100%
+     하위 호환이다.
+  2. 신규 `RemoteAgentDispatcher` 계약(`interfaces/
+     remote_agent_dispatcher.py`)을 도입한다 — `dispatch(agent,
+     event)`로 `agent.location`이 가리키는 목적지에 Event를 전달한다.
+     `ExecutionEnvironment`가 `EngineAdapter` 내부에서 "어디서 실행할
+     지"를 추상화하는 패턴을 Agent Runtime 레벨의 "Event를 어디로
+     전달할지"에 그대로 적용한 것이다.
+  3. `LoopbackAgentDispatcher`(`runtime/agent/
+     remote_agent_dispatcher.py`)를 최소 구현체로 둔다 — 실제
+     네트워크/RPC 없이 location마다 독립된 `EventBus`를 연결해 같은
+     프로세스 안에서 여러 위치를 흉내낸다. 향후 실제 원격(HTTP 등)
+     구현체로 교체해도 이 인터페이스를 쓰는 코드는 변경할 필요가
+     없다.
+  4. `AgentRuntime`에 `start_agent(..., location=...)`(Agent에 location
+     기록)와 `dispatch_event(session_id, event)`(location이 있는
+     Agent에만 개입, 없으면 no-op)를 추가한다. `remote_agent_
+     dispatcher`는 선택적 생성자 주입(기본값 `None`) — 미주입 시
+     `dispatch_event()`는 원격 Agent에 대해 `ValueError`를 던지되,
+     location이 없는 로컬 Agent는 계속 100% 기존 동작(EventBus 방송
+     + `is_agent_selected()`)과 동일하다.
+  5. Production Composition Root(`web/server.py`)에는 연결하지
+     않는다 — 실제 소비자(원격에서 실행되는 실제 Agent 프로세스)가
+     아직 없으므로 M56~M60과 동일한 YAGNI 판단을 유지한다.
+- 대안:
+  1. 실동작 HTTP 기반 `RemoteAgentAdapter` 구현(네트워크 계층/인증/
+     오류 처리 포함) — 기각(AskUserQuestion에서 사용자가 선택하지
+     않음): 지금 실제로 원격에서 실행해야 하는 Agent가 없는데
+     네트워크 코드를 작성하는 것은 이 프로젝트가 반복적으로 거부해온
+     실증되지 않은 선제 구현이다.
+  2. `AgentScheduler.select()`가 location을 선택 기준(예: "가까운
+     Agent 우선")으로 반영 — 기각: `select()`는 이미 Capability/
+     가용성/우선순위만으로 결정적이며(M57, ADR-0075), location 기반
+     정책은 실제 다중 location 배포가 생기기 전까지 근거가 없다.
+  3. M61을 진행하지 않고 완전히 대체 주제로 넘어간다 — 기각(사용자가
+     "최소 인터페이스 씨앗"을 선택): Non-goal 판단 자체는 유지하되,
+     향후 실제 필요가 생겼을 때 `Agent`/`AgentRegistry`/
+     `AgentScheduler`를 다시 건드리지 않고 확장할 수 있는 진입점을
+     지금 준비해두는 것이 더 낮은 비용이라고 판단.
+- 이유: "아직 필요 없다(Non-goal)"는 반복된 판단과 "미래에 필요할 때
+  자연스러운 확장점을 남긴다"는 요구를 동시에 만족시키려면, 실제
+  네트워크/RPC 코드 없이 도메인 필드 하나 + 인터페이스 하나 +
+  In-process 구현체 하나만으로 충분했다 — `ExecutionEnvironment`
+  (M11)가 이미 증명한 패턴을 재사용해 새로운 설계 위험을 도입하지
+  않았다.
+- 결과/영향: `domain/agent.py`(`location` 필드), `interfaces/
+  remote_agent_dispatcher.py`(신규, `RemoteAgentDispatcher`),
+  `runtime/agent/remote_agent_dispatcher.py`(신규,
+  `LoopbackAgentDispatcher`), `runtime/agent/agent_runtime.py`
+  (`remote_agent_dispatcher` 선택적 주입, `start_agent(location=...)`,
+  `dispatch_event()`) 수정/추가. Core Domain Interface 28→29종
+  (`RemoteAgentDispatcher` 추가). `tests/domain/test_agent.py`(2건),
+  `tests/runtime/agent/test_remote_agent_dispatcher.py`(신규 5건),
+  `tests/runtime/agent/test_agent_runtime.py`(6건) 신규 테스트.
+  `pytest` 1197개(신규 13개, 회귀 없음)/`ruff`/`mypy`(226 source
+  files) 전부 통과. `.ai/TASKS.md` Milestone 61 절 신규 추가. `docs/
+  ARCHITECTURE.md` §3.4에 Distributed Multi-Agent 서술 추가, §7
+  Interface 표 갱신.
