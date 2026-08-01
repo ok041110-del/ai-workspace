@@ -5855,3 +5855,68 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   `ruff`/`mypy`(229 source files) 전부 통과. `.ai/TASKS.md` Milestone
   65 절 신규 추가. `docs/ARCHITECTURE.md` §3.9 Engine Runtime 절에
   Engine Learning & Adaptive Routing 서술 추가.
+
+## ADR-0084: Self Optimization — 제외 엔진 자동 복구(Probe) 메커니즘 (Milestone 66)
+
+- 상태: 승인됨 (2026-08-01, AskUserQuestion으로 "M65 제외 엔진의 자동
+  복구(재시도) 메커니즘"으로 범위 확정)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M66 self optimization"으로 착수를 요청했다. "Self
+  Optimization"은 원래 `.ai/RULES.md` §7 로드맵의 M5 "Self Optimizer"
+  (실행 결과 피드백으로 Policy 자체를 개선)를 가리켰으나 M6 이후로
+  미뤄진 뒤 그 이름으로는 구현된 적이 없었다(`InMemoryLLMPolicyEngine.
+  select()`는 여전히 순수 정적 `dict.get()`, 코드 확인). 조사 중 M65
+  자체 로직의 실제 공백도 함께 드러났다: `EngineReliabilityStat.
+  is_unreliable()`이 한번 참이 되면 `success_count`가 늘어날 방법이
+  없어(제외된 엔진은 다시 선택되지 않으므로 `record()` 자체가 호출되지
+  않는다) 영구히 후보에서 제외된다 — 근본 원인이 고쳐진 엔진도 재선택될
+  길이 없었다(추측 아님, 코드 확인).
+- 결정:
+  1. AskUserQuestion으로 세 선택지(a. M65 제외 엔진 자동 복구/재시도,
+     b. `LLMPolicyEngine` 자체의 Self Optimizer, c. 둘 다)를 제시하고
+     사용자가 (a)를 선택 — 원래 M5 개념(b)은 이번 범위에서 명시적으로
+     제외한다.
+  2. 새 Interface를 추가하지 않고 기존 `EngineReliabilityStat`(M65)만
+     확장한다 — `skip_count: int` 필드 + `skip()`(제외될 때마다 호출,
+     다른 필드는 유지) + `is_probe_eligible()`(`skip_count >=
+     _PROBE_INTERVAL`) 메서드를 추가한다.
+  3. `_PROBE_INTERVAL = 5`(모듈 상수) — 제외된 엔진이 5번 연속 후보에서
+     빠지면 다음 선택에서 한 번 더 후보로 포함해(probe) 복구 여부를
+     재확인한다.
+  4. `record()`는 실행 결과(성공/실패)와 무관하게 `skip_count`를 0으로
+     되돌린다 — probe가 성공하면 `is_unreliable()`이 거짓이 되어 정상
+     복귀하고, 다시 실패하면 다음 probe까지 또 5번의 쿨다운을 거친다.
+  5. `InMemoryEngineRuntime._build_candidates()`/
+     `ManagedEngineRuntime._require_adapter()`의 제외 조건을
+     `is_unreliable()`에서 `is_unreliable() and not is_probe_eligible()`
+     로 바꾸고, 제외될 때마다 `self._engine_reliability[name] =
+     stat.skip()`으로 갱신한다.
+  6. `EngineSelectionPolicy`(M17) Decision-Only 계약은 M64/M65와
+     동일하게 무변경 — 필터링은 계속 `EngineRuntime`의 책임으로 둔다.
+- 대안:
+  1. 시간 기반 쿨다운(예: N초 경과 후 재시도) — 기각: 이 프로젝트는
+     `EngineRuntime` 내부에 실시간 시계 의존성을 두지 않는 순수 결정론적
+     규칙만 써 왔다(M49/M65와 동일 판단). 선택 시도 횟수 기반 카운터가
+     테스트하기도 더 쉽고 이 프로젝트의 기존 패턴과 일관된다.
+  2. probe 전용 별도 정책/Interface 신설 — 기각: YAGNI. 기존
+     `EngineReliabilityStat` 필드 2개(스킵 카운트, 판정 메서드) 추가로
+     충분하며, `EngineSelectionPolicy` 계약을 건드릴 필요가 없다.
+  3. `LLMPolicyEngine` Self Optimizer(원래 M5 개념)까지 함께 구현 —
+     기각: 사용자가 AskUserQuestion에서 명시적으로 이번 범위에서
+     제외하고 M65 공백 해소만 선택했다. 별도 Milestone 후보로 남긴다.
+- 이유: M65가 남긴 "한번 제외되면 영구 제외" 공백은 실제로 존재하는
+  버그에 가까운 설계 공백이었다 — 일시적 장애로 제외된 엔진이 복구돼도
+  다시 쓰일 길이 없었다. 기존 `EngineReliabilityStat`의 필드 구성만
+  확장하는 최소 변경으로 이 공백을 메우면서, `EngineSelectionPolicy`/
+  `EngineRuntime` 공개 계약과 하위 호환성은 그대로 유지된다.
+- 결과/영향: `domain/engine_reliability.py`(`EngineReliabilityStat`에
+  `skip_count`/`skip()`/`is_probe_eligible()` 추가, `_PROBE_INTERVAL`
+  모듈 상수 신규), `runtime/engine/engine_runtime.py`
+  (`InMemoryEngineRuntime._build_candidates()`),
+  `runtime/engine/managed_engine_runtime.py`
+  (`ManagedEngineRuntime._require_adapter()`) 수정. 새 Core Domain
+  Interface 없음(30종 유지). 신규 테스트 8건(`domain` 4건,
+  `InMemoryEngineRuntime` 2건, `ManagedEngineRuntime` 2건). `pytest`
+  1242개(신규 8개, 회귀 없음)/`ruff`/`mypy`(229 source files) 전부
+  통과. `.ai/TASKS.md` Milestone 66 절 신규 추가. `docs/ARCHITECTURE.md`
+  §3.9 Engine Runtime 절에 Self Optimization 서술 추가.

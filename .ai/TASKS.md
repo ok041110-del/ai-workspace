@@ -14898,6 +14898,80 @@ ADR-0066과 완전히 동일한 임계값 규칙 `success_count == 0 and total >
 
 ---
 
+## Milestone 66 — Self Optimization: 제외 엔진 자동 복구(Probe) 메커니즘 (완료)
+
+**배경**: 사용자가 "M66 self optimization"으로 착수 요청. "Self
+Optimization"은 원래 `.ai/RULES.md` §7 로드맵의 M5 "Self Optimizer"(실행
+결과 피드백으로 Policy 자체를 개선)를 가리켰으나(M6 이후로 미루고 그
+이름으로는 구현된 적 없음, `InMemoryLLMPolicyEngine.select()`는 여전히
+순수 정적 `dict.get()`), 조사 중 M65 자체 로직의 실제 공백도 함께
+확인됐다: `EngineReliabilityStat.is_unreliable()`이 한번 참이 되면
+`success_count`가 늘어날 방법이 없어(제외된 엔진은 `record()`가 호출되지
+않음) 영구히 후보에서 빠진다 — 근본 원인이 고쳐진 엔진도 재선택될 길이
+없다(추측 아님, 코드 확인).
+
+**사용자 승인(AskUserQuestion)**: 세 선택지(a. M65 제외 엔진 자동
+복구/재시도, b. `LLMPolicyEngine` 자체의 Self Optimizer, c. 둘 다) 중
+**"M65 제외 엔진의 자동 복구(재시도) 메커니즘"**(a, 권장)으로 확정 —
+`LLMPolicyEngine` Self Optimizer(원래 M5 개념)는 이번 범위 밖으로 명시적
+제외.
+
+**설계**: 새 Interface 없이 기존 `EngineReliabilityStat`(M65)만 확장한다.
+`skip_count: int` 필드 + `skip()`(제외될 때마다 호출, 다른 필드는
+유지하고 `skip_count`만 +1) + `is_probe_eligible()`(`skip_count >=
+_PROBE_INTERVAL`(5)) 추가. `record()`는 실제 실행 결과와 무관하게
+`skip_count`를 0으로 되돌린다(다음 탐색까지 다시 카운트). `_build_
+candidates()`(`InMemoryEngineRuntime`)/`_require_adapter()`
+(`ManagedEngineRuntime`)의 제외 조건을 `is_unreliable()`에서
+`is_unreliable() and not is_probe_eligible()`로 변경 — 조건을 만족하지
+못하면(아직 probe 자격 없음) `skip()`으로 카운트만 하고 여전히 후보에서
+제외, `_PROBE_INTERVAL`번 연속 제외됐으면 후보에 다시 포함해(probe) 한
+번 더 기회를 준다. probe 실행이 성공하면 `is_unreliable()`이 거짓이 되어
+정상 복귀하고, 다시 실패하면 `skip_count`가 0부터 다시 쌓여 다음 probe
+까지 또 5번의 쿨다운을 거친다. `EngineSelectionPolicy`(M17) Decision-Only
+계약은 M64/M65와 동일하게 무변경 — 필터링은 계속 `EngineRuntime`의
+책임으로 둔다.
+
+**구현**:
+- `src/ai_workspace/domain/engine_reliability.py` — `EngineReliabilityStat`에
+  `skip_count` 필드 + `skip()`/`is_probe_eligible()` 메서드 추가,
+  `record()`가 `skip_count`를 0으로 리셋. `_PROBE_INTERVAL: Final[int] = 5`
+  모듈 상수 신규.
+- `src/ai_workspace/runtime/engine/engine_runtime.py`
+  (`InMemoryEngineRuntime`) — `_build_candidates()`의 제외 조건에
+  `is_probe_eligible()` 반영, 제외 시 `self._engine_reliability[name] =
+  stat.skip()`으로 갱신.
+- `src/ai_workspace/runtime/engine/managed_engine_runtime.py`
+  (`ManagedEngineRuntime`) — `_require_adapter()`에 동일 로직 적용.
+- `tests/domain/test_engine_reliability.py` — `skip()`/`is_probe_eligible()`
+  단위 테스트 4건(임계값 미달/도달, skip이 신뢰도 카운트에 영향 없음,
+  `record()`가 `skip_count` 리셋).
+- `tests/runtime/engine/test_engine_runtime.py`,
+  `tests/runtime/engine/test_managed_engine_runtime.py` — 각각 2건: 제외된
+  엔진이 `_PROBE_INTERVAL`번 연속 건너뛴 뒤 다시 후보로 포함됨을 증명,
+  probe 실행이 성공하면 정상 복귀해 계속 선택됨을 증명.
+- `docs/ARCHITECTURE.md` §3.9에 "Self Optimization — 제외 엔진 자동
+  복구(Milestone 66, ADR-0084)" 서술 추가. 새 Core Domain Interface 없음
+  (30종 유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | M65 `is_unreliable()`이 영구 제외임을 코드로 확인(성공 기록 경로 부재) | ✅ |
+| 2 | 넓은 "Self Optimization" 주제를 사용자 확인으로 "M65 제외 엔진 자동 복구"로 좁힘 | ✅ |
+| 3 | 새 Interface 없이 기존 `EngineReliabilityStat`만 확장(YAGNI) | ✅ |
+| 4 | 제외 상태에서는 선택되지 않음을 테스트로 증명 | ✅ |
+| 5 | `_PROBE_INTERVAL`번 경과 후 다시 후보로 포함됨을 테스트로 증명 | ✅ |
+| 6 | probe 성공 시 정상 복귀함을 테스트로 증명 | ✅ |
+| 7 | policy 미주입 경로는 M64/M65와 동일하게 영향 없음(회귀 없음) | ✅ |
+| 8 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1242개(신규 8개, 회귀 없음)/`ruff`/`mypy`(229 source files)
+전부 통과. ADR-0084.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
