@@ -14061,7 +14061,7 @@ Learning Weighting 공식 완료(Approved)**. PR #53(코드) 병합
 
 ---
 
-## Milestone 53 — Learning Decay (T03 완료, 사용자 승인 대기)
+## Milestone 53 — Learning Decay (완료)
 
 **배경**: M51 승인 코멘트에서 사용자가 예고한 "M52(가중치), M53
 (Decay)" 중 마지막 M53 착수.
@@ -14114,8 +14114,11 @@ adjustment.py`의 `signal_overall`을 이 필드로 교체(M52의 가중치
 | 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음(값 명시 5건 제외) | ✅ |
 
 `pytest` 1149개(신규 4개, 회귀 없음)/`ruff`/`mypy`(221 source files)
-전부 통과. ADR-0071. PR 생성·CI 확인·Merge·`main` 반영·Vault Index
-갱신 후 최종 완료 선언 예정(이전 Milestone과 동일한 절차).
+전부 통과. ADR-0071.
+
+**사용자 승인(2026-08-01)**: 위 6개 항목을 확인해 **Milestone 53
+Learning Decay 공식 완료(Approved)**. PR #56(코드) 병합(`c4c37bd`),
+PR #57(Vault Index 반영) 병합(`7639b14`), `main` 반영 확인.
 
 ---
 
