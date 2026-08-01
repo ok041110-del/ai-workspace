@@ -90,7 +90,20 @@ class InMemoryEngineRuntime(EngineRuntime):
     `run_ensemble()`/`run_ensemble_auto()`는 호출자가 엔진을 직접 지정하거나
     (M62) 비교를 목적으로 여러 엔진을 의도적으로 동시에 쓰는 기능이라
     (M68) 이 범위에서 제외했다(YAGNI) — `max_concurrency`를 지정하지
-    않으면 이전 동작과 100% 동일하다."""
+    않으면 이전 동작과 100% 동일하다.
+
+    **Diversity Routing(Milestone 75, ADR-0093)**: 여러 Agent가 병렬로
+    Task를 제출하면, M64(비용)/M69(성공률)가 완전히 동률인 후보 여러 개가
+    모두 같은 Provider에 몰려 M74의 capacity 여유를 낭비하는 경우가
+    있었다. `_build_candidates()`가 M74 capacity 필터링 **이후**,
+    `_reorder_by_execution_memory()`보다 먼저 `_reorder_by_diversity()`
+    (안정 정렬)를 적용해 지금 이 순간 동시 실행 중인 세션 수(`_in_flight`,
+    M74 상태를 그대로 재사용 — 새 상태 없음)가 더 적은 엔진을 완전
+    동률 상황에서만 우선한다. 비용·성공률 우선순위는 정렬 순서상 항상
+    이 다양성 순서를 덮어쓰므로 절대 바뀌지 않는다 — 순수 tie-break이며
+    `engine_selection_policy` 미주입 시(첫 매칭 경로)에는 관여하지
+    않는다(100% 하위 호환). `run_ensemble()`/`run_ensemble_auto()`는
+    M74와 동일한 이유로 범위 밖(YAGNI)."""
 
     def __init__(
         self,
@@ -176,6 +189,22 @@ class InMemoryEngineRuntime(EngineRuntime):
 
         return sorted(candidates, key=_rank)
 
+    def _reorder_by_diversity(self, candidates: list[EngineCandidate]) -> list[EngineCandidate]:
+        """**Diversity Routing(Milestone 75, ADR-0093)**: 비용과 성공률이
+        모두 동률인 후보끼리는(`_reorder_by_execution_memory()`가 그
+        동률을 그대로 통과시킨 뒤, `EngineSelectionPolicy`의 `min()`이
+        동률일 때 반환하는 첫 원소를 이 순서로 결정) 지금 이 순간
+        동시 실행 중인 세션 수(M74 `_in_flight`, 새 상태 없이 그대로
+        재사용)가 더 적은(=덜 바쁜) 엔진을 앞세운다. `_reorder_by_
+        execution_memory()`보다 먼저 적용해(안정 정렬) 성공률이 갈리는
+        순간 이 다양성 순서는 곧바로 덮어써진다 — 비용·신뢰도 우선순위를
+        전혀 바꾸지 않고 "완전한 동률"에서만 개입하는 선택적 최적화다."""
+
+        def _rank(candidate: EngineCandidate) -> int:
+            return self._in_flight.get(candidate.engine_name, 0)
+
+        return sorted(candidates, key=_rank)
+
     def _select(
         self,
         task: Task,
@@ -256,6 +285,7 @@ class InMemoryEngineRuntime(EngineRuntime):
                     supports_parallel=adapter.supports_parallel(),
                 )
             )
+        candidates = self._reorder_by_diversity(candidates)
         return self._reorder_by_execution_memory(candidates, required_capabilities)
 
     def run(

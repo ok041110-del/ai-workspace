@@ -1036,3 +1036,55 @@ def test_run_parallel_fails_individual_task_when_all_providers_at_capacity() -> 
     assert successes.count(True) == 1
     assert successes.count(False) == 1
     assert engine_a.run_count == 1
+
+
+class CostedSlowEngineAdapter(CountingSlowEngineAdapter):
+    """M75(ADR-0093) 테스트용 — `CountingSlowEngineAdapter`(고유 세션 ID +
+    Lock 보호 호출 횟수)에 고정 비용을 더한다."""
+
+    def __init__(self, delay_seconds: float, estimated_cost_usd: float = 0.0) -> None:
+        super().__init__(delay_seconds)
+        self._estimated_cost_usd = estimated_cost_usd
+
+    def estimate_cost(self, task: Task) -> CostEstimate:
+        return CostEstimate(estimated_tokens=0, estimated_cost_usd=self._estimated_cost_usd)
+
+
+def test_run_parallel_diversity_spreads_across_engines_on_full_tie() -> None:
+    """M75(ADR-0093): `max_concurrency` 제한이 전혀 없어도(M74와 무관),
+    비용·신뢰도가 완전히 동률이면 실제 병렬 실행 중인(`ThreadPoolExecutor`)
+    두 Task가 같은 엔진에 몰리지 않고 각각 다른 엔진으로 분산된다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    engine_a = CostedSlowEngineAdapter(delay_seconds=0.2)
+    engine_b = CostedSlowEngineAdapter(delay_seconds=0.05)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+    tasks = [make_task("t1"), make_task("t2")]
+
+    results = runtime.run_parallel(tasks)
+
+    assert [result.success for result in results] == [True, True]
+    assert engine_a.run_count == 1
+    assert engine_b.run_count == 1
+
+
+def test_run_parallel_diversity_does_not_override_lower_cost() -> None:
+    """M75(ADR-0093): engine-a가 더 바쁘더라도(느려서 오래 점유) 비용이
+    더 낮으면 다양성이 이를 뒤집지 않는다 — 두 병렬 Task 모두 그대로
+    engine-a로 몰린다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    engine_a = CostedSlowEngineAdapter(delay_seconds=0.2, estimated_cost_usd=0.0)
+    engine_b = CostedSlowEngineAdapter(delay_seconds=0.05, estimated_cost_usd=5.0)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+    tasks = [make_task("t1"), make_task("t2")]
+
+    results = runtime.run_parallel(tasks)
+
+    assert [result.success for result in results] == [True, True]
+    assert engine_a.run_count == 2
+    assert engine_b.run_count == 0
