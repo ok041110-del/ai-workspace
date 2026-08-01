@@ -13349,13 +13349,96 @@ Gate" 1개 필드만 최소 추가, 실시간 재평가는 M45 그대로 유지*
 OrchestrationService`/`GuardianRuntimeInfo`/`GuardianRuntimeAnalyzer`
 /`web/server.py` 6개 기존 파일의 최소 확장만).
 
-**다음 단계**: 위 MDD Review(Guardian 실행 시점=Pre-Execution,
-실패 정책=Execution만 차단·Override 없음, Observability=Execution
-Gate 이유 문자열 재노출 1필드, Learning 경계=완전 제외) 방향에
-동의하면 T03(구현: `ExecutionGate`→`RecommendationExecutionService`
-→`RecommendationOrchestrationService`→Observability→`web/server.py`
-배선 순으로 진행, 기존 테스트 전체 통과 + 신규 테스트 작성)으로
-착수. **사용자 승인 대기 중.**
+**사용자 승인(2026-08-01)**: T02 MDD Review 방향에 최종 동의하며,
+Observability 필드를 이유 문자열 1개에서 "PASS/BLOCKED 상태 필드 +
+이유 문자열"로 확장하도록 지정(M45 StatusLine에서 Automation 건강
+상태를 한눈에 보여주고, M49 Learning/M50 이후 정책 Gate 확장에도
+자연스럽게 이어지는 것이 이유). T03 구현 착수 승인.
+
+### T03 — 구현(완료)
+
+MDD Review 계획대로 신규 파일 없이 기존 6개 파일만 확장했다(+
+사용자 요청으로 `AutomationGateStatus` Enum 1개 추가):
+
+1. **`guardian/models.py`** — `GUARDIAN_BLOCK_REASON_PREFIX`(Final
+   str) 상수 추가. Guardian이 이 문자열의 정본 소유자가 되어
+   `ExecutionGate`(Execution 차단 판정)와 `GuardianRuntimeAnalyzer`
+   (StatusLine 판독)가 같은 상수를 재사용한다(문자열 중복 정의
+   없음).
+2. **`runtime/execution/recommendation_execution_gate.py`** —
+   `ExecutionGate.check()`에 `guardian_report: ArchitectureHealthReport
+   | None = None` 파라미터 추가. 위반 시(`all_passed=False`)
+   `source`/`manual_trigger` 조건보다 먼저 거부 — Guardian 위반은
+   무조건 최우선으로 차단된다.
+3. **`runtime/execution/recommendation_execution_service.py`** —
+   `execute()`/`publish()`에 같은 이름의 선택적 파라미터를 추가해
+   Gate로 그대로 전달.
+4. **`runtime/execution/recommendation_orchestration_service.py`** —
+   `guardian_service: ArchitectureGuardianService | None = None`
+   생성자 인자 추가. Recommendation/Adaptation/Explainability 계산이
+   모두 끝난 뒤(Execution 위임 직전) 주입돼 있으면 `generate()`
+   (Read Only, Vault 미기록)를 호출해 Execution Service에 전달한다.
+5. **`observability/snapshot.py`** — `AutomationGateStatus`
+   Enum(`PASS`/`BLOCKED`/`UNKNOWN`, 사용자 요청으로 MDD Review
+   초안에서 확장) 신규. `GuardianRuntimeInfo`에
+   `last_automation_gate_status`(기본값 `UNKNOWN`)/
+   `last_automation_gate_reason`(기본값 `None`) 필드 추가 — 기존
+   호출부는 전부 기본값으로 100% 동일 동작.
+6. **`observability/guardian_runtime_analyzer.py`** — 새 Vault
+   문서·`VaultAdapter` 메서드 없이, Vault Root == Repository Root
+   (ADR-0037)를 이용해 `15 Project Intelligence/Recommendation
+   Execution.md`를 `.pytest_cache` 캐시 파일과 같은 방식으로 직접
+   읽어 "이유" 줄을 파싱한다. 문서가 없으면(Automation 미실행)
+   `UNKNOWN`/`None`으로 정직하게 남긴다(추정 금지). `GUARDIAN_
+   BLOCK_REASON_PREFIX`로 시작하면 `BLOCKED`, 아니면(문서는
+   있지만 Guardian 사유가 아님) `PASS`로 판정한다.
+7. **`observability/statusline_renderer.py`** — Guardian 줄에
+   `Automation Gate {PASS|BLOCKED|N/A}` 항목 추가(이유 문자열 자체는
+   한 줄 StatusLine에 넣기엔 길어 상태만 표시 — 이유는
+   `GuardianRuntimeInfo.last_automation_gate_reason` 필드로 이미
+   노출돼 있어 향후 Dashboard 등 다른 Renderer가 재사용 가능).
+8. **`web/server.py`** — `ArchitectureGuardianService(vault_adapter,
+   Path(config.vault_root) / "src" / "ai_workspace")`를 조립해
+   `RecommendationOrchestrationService`에 주입 — Guardian이 처음으로
+   자동 실행 경로에 실배선됐다(ADR-0065).
+
+**검증**: `pytest` 1122개(기존 1108개 + 신규 14개, 회귀 없음),
+`ruff check src tests`, `mypy src`(220 source files) 전부 통과.
+`guardian.checker.evaluate()` 저장소 자체 `all_passed=True` 유지
+(새 코드도 5개 규칙 전부 통과). 신규 테스트는 (a) `ExecutionGate`
+단위 테스트 3개(Guardian 통과/위반/위반이 manual_trigger보다
+우선), (b) `RecommendationExecutionService` 단위 테스트 1개
+(Guardian 위반 시 실제 Task가 `todo`에 머무름 확인), (c)
+`RecommendationOrchestrationService` 통합 테스트 4개(Guardian
+미주입 시 M43과 동일 동작, Guardian 통과 시 실행, Guardian 위반 시
+Execution만 차단, Execution 리포트에 위반 이유 기록), (d)
+`GuardianRuntimeAnalyzer` 단위 테스트 3개(문서 없음→UNKNOWN, 위반
+이유 있음→BLOCKED, 없음→PASS), (e) `StatusLineRenderer` 렌더링
+테스트 2개(BLOCKED/PASS 표시), (f) `build_app()` End-to-End
+스모크 테스트 1개(실제 위반 파일을 배치하고 `RUN_RECOMMENDATION`
+자동 발동 → Execution 리포트에 차단 이유 기록 + `ExecutionMemory`
+에 미기록 확인).
+
+**ADR 검토**: 새 ADR 필요 — Execution Gate 정책(Guardian이 무조건
+최우선 차단)과 Observability 계약(`AutomationGateStatus`)을 새로
+정의하므로 ADR-0056/ADR-0050과 동일한 성격. **ADR-0065 작성**.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | Guardian 실행 시점 결정(Pre-Execution) | ✅ |
+| 2 | Guardian 실패 정책 결정(Execution만 차단, Override 없음) | ✅ |
+| 3 | Observability 연계(PASS/BLOCKED/UNKNOWN 상태 필드 + 이유) | ✅ |
+| 4 | Learning과 완전 분리(Execution 결과 학습 없음, M49 이후로 이관) | ✅ |
+| 5 | 신규 Interface/Service/Adapter/Layer/File 없음(MDD Review 계획대로) | ✅ |
+| 6 | 기존 테스트 전체 통과(회귀 없음) | ✅ |
+| 7 | 신규 테스트로 Guardian↔Automation 연결 End-to-End 증명 | ✅ |
+| 8 | `ruff`/`mypy`/Guardian 자체 검사 통과 | ✅ |
+| 9 | ADR-0065 작성 | ✅ |
+
+**사용자 승인 대기 중** — 위 9개 항목을 확인해 Milestone 48
+Automation Foundation 공식 완료 여부를 결정해 주세요.
 
 ---
 

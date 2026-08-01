@@ -26,12 +26,22 @@ Adaptation까지 반영된 최종 `RecommendationIntelligenceReport`를
 위임 전) `RecommendationExplanationService.publish()`(M44)를 호출해
 근거를 Vault에 기록한다 — Recommendation→Explainability→Execution
 순서(M44 설계). 미주입 시(기본값 `None`) M43 이전과 완전히 동일하게
-동작한다."""
+동작한다.
+
+**Architecture Guardian 연결(M48, ADR-0065)**: `guardian_service`를
+선택적으로 주입하면, Recommendation/Explainability 계산이 모두 끝난
+뒤(따라서 Guardian 위반이 있어도 Recommendation은 그대로 Vault에
+남는다) `ArchitectureGuardianService.generate()`(M41, Read Only —
+Vault에 쓰지 않는다)를 호출해 `ArchitectureHealthReport`를 얻고
+`RecommendationExecutionService`에 전달한다 — Execution 직전
+(Pre-Execution) Gate로만 작동하며, 미주입 시(기본값 `None`) M43
+이전과 완전히 동일하게 동작한다."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from ai_workspace.guardian.service import ArchitectureGuardianService
 from ai_workspace.intelligence.experience_service import ExperienceIntelligenceService
 from ai_workspace.intelligence.recommendation_explanation_service import (
     RecommendationExplanationService,
@@ -46,6 +56,7 @@ from ai_workspace.runtime.execution.recommendation_execution_service import (
 class RecommendationOrchestrationService:
     """`ExperienceIntelligenceService`(M40) + `RecommendationIntelligenceService`
     (M35/M42) + `RecommendationExplanationService`(M44, 선택) +
+    `ArchitectureGuardianService`(M48, 선택) +
     `RecommendationExecutionService`(M36)를 정해진 순서로 호출만
     하는 순수 흐름 제어 계층. 새 판단 로직 없음."""
 
@@ -55,11 +66,13 @@ class RecommendationOrchestrationService:
         recommendation_service: RecommendationIntelligenceService,
         execution_service: RecommendationExecutionService,
         explanation_service: RecommendationExplanationService | None = None,
+        guardian_service: ArchitectureGuardianService | None = None,
     ) -> None:
         self._experience_service = experience_service
         self._recommendation_service = recommendation_service
         self._execution_service = execution_service
         self._explanation_service = explanation_service
+        self._guardian_service = guardian_service
 
     def execute(self, *, manual_trigger: bool) -> RecommendationExecutionOutcome:
         """
@@ -69,15 +82,23 @@ class RecommendationOrchestrationService:
         예외: 없음
         보장: side-effect는 전부 `RecommendationExecutionService`가
               일으킨다 — 이 메서드 자체는 Experience 조회 +
-              Recommendation 계산(Read Only)만 추가로 수행한다.
-              `explanation_service`가 주입돼 있으면 Vault에 근거도
-              함께 기록한다(M44, Recommendation 자체는 바뀌지 않음).
+              Recommendation 계산 + Guardian 평가(전부 Read Only)만
+              추가로 수행한다. `explanation_service`가 주입돼 있으면
+              Vault에 근거도 함께 기록한다(M44, Recommendation
+              자체는 바뀌지 않음). `guardian_service`가 주입돼 있으면
+              위반 시 Execution만 차단된다(M48, Recommendation은
+              영향받지 않음).
         """
         experience_report = self._experience_service.generate()
         report = self._recommendation_service.generate(experience_report=experience_report)
         if self._explanation_service is not None:
             self._explanation_service.publish(report, experience_report)
-        return self._execution_service.execute(report, manual_trigger=manual_trigger)
+        guardian_report = (
+            self._guardian_service.generate() if self._guardian_service is not None else None
+        )
+        return self._execution_service.execute(
+            report, manual_trigger=manual_trigger, guardian_report=guardian_report
+        )
 
     def publish(self, *, manual_trigger: bool) -> tuple[RecommendationExecutionOutcome, Path]:
         """`execute()`와 동일한 흐름으로 `RecommendationExecutionService.
@@ -87,4 +108,9 @@ class RecommendationOrchestrationService:
         report = self._recommendation_service.generate(experience_report=experience_report)
         if self._explanation_service is not None:
             self._explanation_service.publish(report, experience_report)
-        return self._execution_service.publish(report, manual_trigger=manual_trigger)
+        guardian_report = (
+            self._guardian_service.generate() if self._guardian_service is not None else None
+        )
+        return self._execution_service.publish(
+            report, manual_trigger=manual_trigger, guardian_report=guardian_report
+        )

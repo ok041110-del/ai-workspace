@@ -1,4 +1,7 @@
+import dataclasses
+
 from ai_workspace.observability.snapshot import (
+    AutomationGateStatus,
     ClaudeRuntimeInfo,
     GitRuntimeInfo,
     GuardianRuntimeInfo,
@@ -99,10 +102,39 @@ def test_render_includes_guardian_line() -> None:
     text = StatusLineRenderer().render(_SNAPSHOT)
 
     assert "Guardian OK" in text
+    assert "Automation Gate N/A" in text
     assert "pytest 0 failed" in text
     assert "ruff N/A" in text
     assert "mypy N/A" in text
     assert "Coverage N/A" in text
+
+
+def test_render_shows_automation_gate_blocked_status() -> None:
+    snapshot = dataclasses.replace(
+        _SNAPSHOT,
+        guardian_runtime=dataclasses.replace(
+            _GUARDIAN_RUNTIME,
+            last_automation_gate_status=AutomationGateStatus.BLOCKED,
+            last_automation_gate_reason="Architecture Guardian 위반으로 실행 차단: some_rule",
+        ),
+    )
+
+    text = StatusLineRenderer().render(snapshot)
+
+    assert "Automation Gate BLOCKED" in text
+
+
+def test_render_shows_automation_gate_pass_status() -> None:
+    snapshot = dataclasses.replace(
+        _SNAPSHOT,
+        guardian_runtime=dataclasses.replace(
+            _GUARDIAN_RUNTIME, last_automation_gate_status=AutomationGateStatus.PASS
+        ),
+    )
+
+    text = StatusLineRenderer().render(snapshot)
+
+    assert "Automation Gate PASS" in text
 
 
 def test_render_includes_vault_line() -> None:

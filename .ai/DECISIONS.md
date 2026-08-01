@@ -4500,3 +4500,125 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   유지. `find_broken_backlinks()`로 신규 문서 전수 검증(줄바꿈 Wiki
   Link 오류 다수 발견·수정). `.obsidian/graph.json` 무변경. 기존
   Vault 문서 삭제 0건, Rename 0건.
+
+## ADR-0065: Automation Foundation — Architecture Guardian을 Recommendation Orchestration의 Execution Gate에 연결 (Milestone 48)
+
+- 상태: 승인됨 (2026-08-01, 사용자가 T01 Domain Analysis 방향에
+  동의하고 T02 MDD Review에서 4개 항목 — Guardian 실행 시점/실패
+  정책/Observability 연계/Learning과의 경계 — 을 명시적으로 지정,
+  T02 MDD Review 결과를 확인 후 T03 구현에 최종 승인. Observability
+  연계는 사용자가 "PASS/BLOCKED 상태 필드"를 추가로 요청해 반영)
+- 날짜: 2026-08-01
+- 배경: M48은 원래 `docs/ARCHITECTURE.md` §2.1이 예약해 둔 "Automation
+  Core" 3대 Engine(Memory/Guardian/Learning) 중 마지막 Learning
+  Engine 구현으로 시작할 계획이었다. 그러나 M35~M47 구현 완료 후
+  사용자 지시로 T01 Domain Analysis를 재수행한 결과(코드 전수
+  조사), `RecommendationOrchestrationService`(M43)가 실제로
+  Automation Trigger마다 Experience→Recommendation+Adaptation→
+  Explainability→Execution→Task Lifecycle→Memory를 자동 실행하고
+  있음에도 **Architecture Guardian(M41)은 이 자동 경로 어디에도
+  연결돼 있지 않다**(테스트/StatusLine에서만 평가됨)는 것이
+  확인됐다. Learning이 관찰할 신호(Guardian 위반 이력)가 애초에
+  자동으로 쌓이지 않는 상태에서 Learning Engine을 먼저 설계하는
+  것은 DX-02(YAGNI) 위반 소지가 크다고 판단해, M48을 "Automation
+  Foundation"(Guardian↔Automation 연결)으로 재정의하고 Learning
+  Engine은 M49 이후로 분리했다.
+- 결정:
+  1. **Guardian 실행 시점 — Pre-Execution(Execution 직전)**:
+     Recommendation/Adaptation/Explainability는 Read-Only 분석이라
+     Guardian 위반 여부와 무관하게 항상 그대로 계산·발행된다.
+     `RecommendationOrchestrationService.execute()/publish()`가
+     `execution_service.execute()`를 호출하기 직전에만(주입된 경우)
+     `ArchitectureGuardianService.generate()`(M41, Read Only)를
+     호출해 `ArchitectureHealthReport`를 얻어 전달한다.
+  2. **Guardian 실패 정책 — "Recommendation은 그대로 생성, Execution만
+     차단", Override 없음**: `ExecutionGate.check()`에 선택적
+     `guardian_report` 파라미터를 추가했다 — 주어지고
+     `all_passed`가 `False`이면 `source`/`manual_trigger` 조건보다
+     먼저 거부한다(`GUARDIAN_BLOCK_REASON_PREFIX`, `guardian/
+     models.py`가 정본 소유). Automation 전체 중단은 채택하지
+     않는다(`AutomationScheduler`가 무관한 다른 Rule까지 멈출
+     이유가 없다는 기존 설계와 상충). Override는 실제 필요 사례가
+     없어 이번에 설계하지 않는다(YAGNI).
+  3. **Observability 연계 — `AutomationGateStatus`(PASS/BLOCKED/
+     UNKNOWN) 상태 필드 + 이유 문자열**: 사용자가 "PASS/BLOCKED
+     상태 하나를 StatusLine에서 한눈에 보여주는 것이 M45와도,
+     향후 M49 Learning/M50 이후 정책 Gate 확장과도 자연스럽게
+     이어진다"고 최종 의견을 제시해, 이유 문자열
+     (`last_automation_gate_reason`) 하나만 노출하려던 MDD Review
+     초안에서 `AutomationGateStatus` Enum 필드
+     (`last_automation_gate_status`)를 추가로 반영했다. `guardian_
+     runtime_analyzer.py`(M45 확장)가 새 Vault 문서나 `VaultAdapter`
+     메서드 없이, Vault Root == Repository Root(ADR-0037)를 이용해
+     이미 존재하는 `15 Project Intelligence/Recommendation
+     Execution.md`(M36)의 "이유" 줄을 직접 읽어 채운다 — 문서가
+     없으면(Automation 미실행) `UNKNOWN`으로 정직하게 남긴다(추정
+     금지). M45의 `guardian_all_passed`(라이브 재평가, "지금
+     소스가 통과하는가")는 그대로 유지 — `last_automation_gate_
+     status`는 다른 질문("가장 최근 Automation 실행이 Guardian
+     때문에 막혔는가", 이력)에 답한다. "Running" 상태는 만들지
+     않는다 — Guardian은 동기 호출이라 그런 중간 상태가 실제로
+     존재하지 않는다(허위 표시 금지).
+  4. **Learning과의 경계 — M48은 Execution 결과를 학습하지
+     않는다**: Guardian 평가 결과는 `ExecutionMemoryStore`(M39)에
+     기록되지 않고, `RecommendationAdjustmentAnalyzer`(M42
+     Adaptation)의 입력에도 포함되지 않는다. Guardian 위반 이력을
+     근거로 향후 추천을 조정하는 로직은 전혀 설계하지 않는다 —
+     M49 이후 Learning Engine 제안 시점에 이번에 쌓이는
+     `Recommendation Execution.md` 이력을 근거 자료로만 참고한다.
+  5. **신규 Interface/Service/Adapter/Layer/File 없음**: MDD
+     Review(Reuse First)로 확인된 대로, 기존 6개 파일(`ExecutionGate`/
+     `RecommendationExecutionService`/`RecommendationOrchestrationService`/
+     `GuardianRuntimeInfo`(`observability/snapshot.py`)/
+     `GuardianRuntimeAnalyzer`/`web/server.py`)의 선택적 의존성
+     주입(기본값 `None`)만으로 구현했다 — M38/M39/M42/M44와 동일한
+     패턴. `GUARDIAN_BLOCK_REASON_PREFIX` 상수는 새 모듈이 아니라
+     `guardian/models.py`(기존 파일)에 추가해 Guardian이 정본
+     소유자가 되도록 했다.
+- 대안:
+  - **Guardian을 Recommendation 이전(Pre-flight)에 실행해
+    Read-Only 분석 자체를 막는다** — 기각. Recommendation은
+    Architecture 위반과 무관하게 유용한 정보이므로 과잉 차단이다.
+  - **Guardian 평가를 Execution 이후(Post-flight)에 실행한다** —
+    기각. 이미 부작용(Execution)이 발생한 뒤라 "차단"의 의미가
+    없고, Post-flight 관측은 이미 M45(`GuardianRuntimeAnalyzer`의
+    라이브 재평가)가 제공하고 있어 중복이다.
+  - **Warning만 출력하고 Execution은 그대로 진행** — 기각. Guardian이
+    "평가·공표"에서 끝나던 M41 이전과 실질적으로 다르지 않아
+    연결의 의미가 없다.
+  - **Guardian 위반 시 Automation 전체(다른 Rule 포함)를 중단** —
+    기각. `AutomationScheduler`의 "한 Rule 실패가 다른 Rule에
+    영향 없음" 기존 설계와 상충한다.
+  - **Override 플래그를 함께 설계** — 기각(YAGNI). 실제 필요 사례가
+    없는 상태에서 "누가/어떤 조건으로"라는 별도 설계 결정을 지금
+    내리면 추측성 코드가 된다.
+  - **StatusLine에 이유 문자열만 노출하고 상태 필드는 만들지
+    않는다**(MDD Review 초안) — 기각(사용자 최종 의견 반영).
+    PASS/BLOCKED 상태 필드가 있어야 StatusLine에서 Automation의
+    현재 건강 상태를 한눈에 파악할 수 있고, M49/M50 이후 정책
+    Gate가 늘어나도 같은 Enum 패턴으로 자연스럽게 확장된다.
+- 이유: Automation의 각 단계(Recommendation/Adaptation/Explainability/
+  Execution/Task Lifecycle/Memory/Experience)는 이미 자동 연결돼
+  있었지만 Guardian만 예외였다 — 이 Gap을 메우는 것이 아직 신호가
+  쌓이지 않은 Learning Engine을 새로 설계하는 것보다 우선순위가
+  높다는 것이 T01 Domain Analysis의 핵심 발견이었다. Recommendation은
+  그대로 생성하고 Execution만 막는 정책은 "관찰은 방해하지 않고
+  부작용만 막는다"는 이 프로젝트의 기존 Gate 철학(`ExecutionGate`,
+  M36)과 정확히 같은 원칙이다.
+- 결과/영향: `guardian/models.py`(`GUARDIAN_BLOCK_REASON_PREFIX`
+  상수 추가), `runtime/execution/recommendation_execution_gate.py`
+  (`guardian_report` 선택적 파라미터), `runtime/execution/
+  recommendation_execution_service.py`(`execute()`/`publish()`에
+  `guardian_report` 전달), `runtime/execution/
+  recommendation_orchestration_service.py`(`guardian_service` 선택적
+  주입), `observability/snapshot.py`(`AutomationGateStatus` Enum
+  신규, `GuardianRuntimeInfo`에 필드 2개 추가), `observability/
+  guardian_runtime_analyzer.py`(Execution 리포트 직접 읽기),
+  `observability/statusline_renderer.py`(Automation Gate 상태
+  표시), `web/server.py`(`ArchitectureGuardianService` 조립·주입).
+  새 Core Domain Interface/Adapter/Service/Layer/File 없음(27종
+  유지, 기존 6개 파일의 선택적 의존성 확장만). `pytest` 1122개
+  (14개 신규, 회귀 없음)/`ruff`/`mypy`(220 source files)/
+  `guardian.checker.evaluate()` all_passed 전부 통과. `.ai/TASKS.md`
+  Milestone 48 절(T01~T03) 신규 추가. Learning Engine은 M49 이후로
+  명시적으로 분리.

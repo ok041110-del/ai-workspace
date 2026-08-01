@@ -125,3 +125,49 @@ def test_build_app_wires_execution_memory_store(tmp_path) -> None:
     # Scope, docstring 참고) 실행 자체는 실패하지만, 그 결과가
     # Memory에 자동 기록되는지가 이 테스트의 검증 대상이다.
     assert records[0].result == "failure"
+
+
+def test_build_app_wires_architecture_guardian_and_blocks_execution_on_violation(tmp_path) -> None:
+    """M48 — `build_app()`이 `ArchitectureGuardianService`를 실제
+    자동 실행 경로에 조립해, `RUN_RECOMMENDATION`이 발동될 때 소스
+    트리에 Guardian 위반이 있으면 Execution만 차단되는지 확인한다
+    (ADR-0065). Recommendation 자체는 계속 계산돼 Vault Execution
+    리포트가 여전히 발행된다."""
+    from ai_workspace.domain.automation import Action, ActionKind, Trigger, TriggerKind
+    from ai_workspace.integration.vault_adapter import VaultAdapter
+    from ai_workspace.runtime.production.config import ProductionConfig
+
+    vault_adapter = VaultAdapter(tmp_path)
+    vault_adapter.create_task(
+        "M48-T03",
+        "Guardian 연결",
+        status="todo",
+        priority="high",
+        milestone="M48",
+        owner="AI",
+        created="2026-08-01",
+        updated="2026-08-01",
+    )
+    # core_domain_does_not_import_vault 규칙을 의도적으로 위반하는
+    # 파일을 배치한다(GUARDIAN_RULES, guardian/rules.py).
+    domain_dir = tmp_path / "src" / "ai_workspace" / "domain"
+    domain_dir.mkdir(parents=True)
+    (domain_dir / "bad.py").write_text("import ai_workspace.vault\n", encoding="utf-8")
+
+    app = build_app(config=ProductionConfig(vault_root=str(tmp_path)))
+    automation_service = app.state.automation_service
+    automation_scheduler = app.state.automation_scheduler
+    rule = automation_service.create_rule(
+        name="추천 자동 실행",
+        description="M48 Guardian Gate 확인",
+        trigger=Trigger(kind=TriggerKind.INTERVAL, interval_seconds=3600),
+        action=Action(kind=ActionKind.RUN_RECOMMENDATION),
+    )
+
+    automation_scheduler.run_now(rule.rule_id)
+
+    execution_report = (
+        tmp_path / "15 Project Intelligence" / "Recommendation Execution.md"
+    ).read_text(encoding="utf-8")
+    assert "Architecture Guardian 위반으로 실행 차단" in execution_report
+    assert app.state.execution_memory_store.query(task_id="M48-T03") == []

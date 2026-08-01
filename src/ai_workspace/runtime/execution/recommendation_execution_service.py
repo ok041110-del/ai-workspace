@@ -38,6 +38,7 @@ from ai_workspace.domain.automation import Action
 from ai_workspace.domain.execution_memory import ExecutionMemory
 from ai_workspace.domain.execution_result import EngineExecutionResult
 from ai_workspace.domain.task import Task
+from ai_workspace.guardian.models import ArchitectureHealthReport
 from ai_workspace.integration.vault_adapter import TaskTransitionOutcome, VaultAdapter
 from ai_workspace.intelligence.recommendation_service import RecommendationIntelligenceReport
 from ai_workspace.interfaces.engine_registry import EngineRegistry
@@ -93,13 +94,18 @@ class RecommendationExecutionService:
         self._transitioner = TaskLifecycleTransitioner()
 
     def execute(
-        self, report: RecommendationIntelligenceReport, *, manual_trigger: bool
+        self,
+        report: RecommendationIntelligenceReport,
+        *,
+        manual_trigger: bool,
+        guardian_report: ArchitectureHealthReport | None = None,
     ) -> RecommendationExecutionOutcome:
         """
         입력: report(호출자가 이미 계산한 `RecommendationIntelligenceReport`
               — Experience/Adaptation 반영 여부는 호출자 책임),
               manual_trigger(호출자가 수동 트리거임을 명시적으로
-              전달해야 함 — 기본값 없음)
+              전달해야 함 — 기본값 없음), guardian_report(M48, 선택
+              — 주어지고 위반이 있으면 다른 조건보다 먼저 거부)
         출력: `RecommendationExecutionOutcome`(Gate 판정 + 승인된
               경우 실제 실행 결과 + 발생한 Task 상태 전이 이력)
         예외: 없음 — Gate가 승인하지 않으면 실행 자체를 시도하지
@@ -113,7 +119,9 @@ class RecommendationExecutionService:
               기록된다(M39, ADR-0053) — 미주입 시 기록을 건너뛴다.
               `report`를 수정하지 않는다.
         """
-        decision = self._gate.check(report.next_action, manual_trigger=manual_trigger)
+        decision = self._gate.check(
+            report.next_action, manual_trigger=manual_trigger, guardian_report=guardian_report
+        )
         if not decision.approved:
             return RecommendationExecutionOutcome(gate_decision=decision, action=None, result=None)
 
@@ -162,7 +170,11 @@ class RecommendationExecutionService:
         )
 
     def publish(
-        self, report: RecommendationIntelligenceReport, *, manual_trigger: bool
+        self,
+        report: RecommendationIntelligenceReport,
+        *,
+        manual_trigger: bool,
+        guardian_report: ArchitectureHealthReport | None = None,
     ) -> tuple[RecommendationExecutionOutcome, Path]:
         """`execute()` 결과를 Markdown으로 렌더링해 Vault에 쓴다
         (`VaultAdapter.publish_recommendation_execution()`에 위임).
@@ -170,7 +182,9 @@ class RecommendationExecutionService:
         보장: `15 Project Intelligence/Recommendation Execution.md`
               가 이번 결과로 완전히 덮어써진다(누적 append 아님).
         """
-        outcome = self.execute(report, manual_trigger=manual_trigger)
+        outcome = self.execute(
+            report, manual_trigger=manual_trigger, guardian_report=guardian_report
+        )
         markdown = render_markdown(outcome)
         path = self._vault_adapter.publish_recommendation_execution(markdown)
         return outcome, path
