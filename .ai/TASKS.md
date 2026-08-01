@@ -14301,7 +14301,7 @@ Multi-Agent 자가 확인 가드 일반화 공식 완료(Approved)**. PR #65
 
 ---
 
-## Milestone 57 — Scheduler 고도화 (T03 완료, 사용자 승인 대기)
+## Milestone 57 — Scheduler 고도화 (완료)
 
 **배경**: 사용자가 "우선순위·Capability·의존성 기반 Agent 선택 및
 실행 정책 설계"로 명시적 범위를 제시하며 착수 요청.
@@ -14347,8 +14347,12 @@ Multi-Agent 자가 확인 가드 일반화 공식 완료(Approved)**. PR #65
 | 6 | `pytest`/`ruff`/`mypy` 전부 통과 | ✅ |
 
 `pytest` 1168개(신규 8개, 회귀 없음)/`ruff`/`mypy`(222 source files)
-전부 통과. ADR-0075. PR 생성·CI 확인·Merge·`main` 반영·Vault Index
-갱신 후 최종 완료 선언 예정(이전 Milestone과 동일한 절차).
+전부 통과. ADR-0075.
+
+**사용자 승인(2026-08-01)**: 위 6개 항목을 확인해 **Milestone 57
+Scheduler 고도화 공식 완료(Approved)**. PR #68(코드) 병합
+(`8e79c12`), PR #69(Vault Index 반영) 병합(`fc8c7e3`), `main` 반영
+확인.
 
 ---
 
