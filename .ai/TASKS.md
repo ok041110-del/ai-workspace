@@ -13666,7 +13666,7 @@ Learning Engine 공식 완료 승인됨.
 
 ---
 
-## Milestone 50 — Learning Persistence (T03 완료, 사용자 승인 대기)
+## Milestone 50 — Learning Persistence (완료)
 
 **목표**: M49가 "in-process 범위로 한정"했던 `ExecutionMemoryStore`의
 학습 데이터를 파일로 영속화해 서버 재시작 후에도 학습 이력이 유지되게
@@ -13766,8 +13766,136 @@ Learning Engine 공식 완료 승인됨.
 `pytest` 1130개(신규 7개, 회귀 없음)/`ruff`/`mypy`(221 source files)
 전부 통과.
 
-**사용자 승인 대기**: 위 7개 항목을 확인해 Milestone 50 Learning
-Persistence 공식 완료 여부 승인 필요.
+**사용자 승인(2026-08-01)**: 위 7개 항목 확인 완료 — Milestone 50
+Learning Persistence 공식 완료 승인됨. PR #45(코드) 병합(`d721857`),
+PR #46(Vault Index 보완) 병합(`8333888`), `main` 반영 확인.
+
+---
+
+## Milestone 51 — Learning Evolution (T03 완료, 사용자 승인 대기)
+
+**목표**: M49/M50이 만든 "실패율 100% + 표본 3건 이상" 단일 규칙을
+추세(trend)/가중치/Decay 기반으로 확장해 Recommendation 품질을
+높인다. `RecommendationAdjustmentAnalyzer` 독스트링에 명시된 Non-goal
+("우선순위 재설계·점수화·가중치 학습은 하지 않는다")을 이번
+Milestone에서 부분적으로 해제한다.
+
+### T01 — Domain Analysis(완료)
+
+*조사 방법*: `intelligence/experience_rules.py`,
+`intelligence/recommendation_adjustment.py`,
+`intelligence/experience_service.py`,
+`intelligence/recommendation_explanation.py` 전수 조사.
+
+*발견*:
+1. `RecommendationAdjustmentAnalyzer` 독스트링에 이미 "우선순위
+   재설계·점수화·가중치 학습은 하지 않는다(Non-goal)"이라고 명시
+   — 이번 Milestone이 이 Non-goal을 Adaptation 범위 안에서 해제.
+2. `ExperienceRecord`(M40)는 이미 개별 실행 기록마다 `timestamp`를
+   가지며 `ExperienceAnalyzer._summarize()`가 `sorted(entries,
+   key=timestamp)`로 시간순 정렬까지 이미 수행 — 추세 계산에 필요한
+   원재료는 이미 존재, 새 저장소·새 필드 수집 불필요.
+3. `ExperienceAnalyzer._summarize()`는 현재 단순 집계(성공/실패
+   카운트 + 최근 1건)만 하고 있어, 추세 신호를 추가하려면 이 지점을
+   확장하는 것이 자연스러운 재사용 지점.
+4. `ExperienceStat`은 `experience_rules.py` 한 곳에서만 생성되고,
+   소비처는 `experience_service.py`(Markdown 렌더링),
+   `recommendation_explanation.py`(성공률 텍스트),
+   `recommendation_adjustment.py`(보류 판정) 3곳뿐 — 필드 추가의
+   영향 범위가 명확히 한정됨.
+
+**사용자 승인(2026-08-01)**:
+- 기존 M49/M50 규칙과의 관계: **보완**(두 규칙 병존 — 기존 규칙 삭제
+  없음, 회귀 없음).
+- 추세 계산 방식: **최근 N건 슬라이딩 윈도우**(exponential decay
+  대신 — 구현·검증이 단순함).
+- 윈도우 크기: **N=5**(더 보수적, 오탐 감소).
+
+### T02 — MDD Review(완료)
+
+- **Scope**: `ExperienceStat`에 필드 1개 추가 + `RecommendationAdjustmentAnalyzer`
+  에 조건 1개 추가(OR 병존). 기존 필드/기존 규칙은 무변경.
+- **Reuse**: `ExperienceRecord.timestamp` 기반 정렬(이미 `_summarize()`
+  가 수행)을 그대로 재사용. 새 Domain/Service/Interface 없음.
+- **Interface**: 신규 Interface 없음.
+- **Service**: 신규 Service 없음. `ExperienceIntelligenceService`/
+  `RecommendationAdjustmentAnalyzer` 시그니처 불변.
+- **Adapter**: 신규 Adapter 없음.
+- **Layer**: `intelligence/`(Analyzer 순수성 유지) 내부에서만 변경 —
+  Layer 이동 없음.
+- **File**: `intelligence/experience_rules.py`(`ExperienceStat`에
+  `recent_failure_streak: int` 필드 추가, `_summarize()`에서 계산),
+  `intelligence/recommendation_adjustment.py`(`_RECENT_FAILURE_
+  STREAK_THRESHOLD: Final[int] = 5` 상수 추가, 기존 조건에 OR로
+  새 조건 추가).
+
+*설계 상세*:
+- `recent_failure_streak`: 시간순 정렬된 기록의 **끝에서부터** 연속
+  실패 개수(가장 최근 기록이 성공이면 0). 특정 윈도우 크기에
+  종속되지 않는 범용 "연속 실패 추세" 신호로 설계 — `stat.
+  recent_failure_streak >= 5`는 정확히 "최근 5건이 모두 실패"와
+  동치(총 기록이 5건 미만이면 자연히 5 미만이 되어 조건 불충족).
+- 보류 조건(최종): `(success_count == 0 and total >= 3) or
+  recent_failure_streak >= 5` — 첫 항은 M49/M50 규칙 그대로, 둘째
+  항이 M51 신규. 전체 이력에 성공이 섞여 있어도 최근 추세가
+  나빠지면 보류하는 케이스를 새로 포착한다(기존 규칙은 포착 못 함).
+- `reason` 텍스트를 트리거된 조건에 따라 분기(기존 규칙 텍스트 유지,
+  신규 규칙은 별도 텍스트로 "최근 N회 연속 실패" 명시) — Explainability
+  (M44)가 그대로 소비 가능.
+
+*기각한 대안*:
+1. 지수 Decay(exponential weighting) — 기각: 사용자가 슬라이딩
+   윈도우를 선택(구현·설명이 더 단순).
+2. 기존 규칙을 가중치 점수로 완전히 대체 — 기각: 사용자가 "보완(두
+   규칙 병존)"을 선택, 회귀 위험 회피.
+3. `recent_results: tuple[str, ...]`(최근 N건 결과 자체를 저장) —
+   기각: `recent_failure_streak: int` 하나로 이번 Rule을 표현하는 데
+   충분하고, 원시 리스트를 노출하면 향후 다른 소비처가 윈도우 크기를
+   하드코딩하게 만들 위험이 있음(YAGNI).
+
+**사용자 승인(2026-08-01)**: 위 T02 설계로 T03 구현 진행 승인됨. 단,
+구현 전 아래 2가지를 문서/코드에 명시하도록 사용자가 추가 요청:
+1. `recent_failure_streak`의 정확한 정의(가장 최근 기록부터 거슬러
+   올라가며 연속 실패를 센다) 명문화.
+2. Explainability에서 어느 규칙(M49/M51/Both)이 보류를 발생시켰는지
+   구분해 기록.
+
+### T03 — Implementation(완료)
+
+*수정 파일*:
+- `src/ai_workspace/intelligence/experience_rules.py` —
+  `ExperienceStat`에 `recent_failure_streak: int = 0` 필드 추가(정확한
+  정의를 클래스 docstring에 명문화), `_count_recent_failure_streak()`
+  헬퍼로 `_summarize()`에서 계산.
+- `src/ai_workspace/intelligence/recommendation_adjustment.py` —
+  `_RECENT_FAILURE_STREAK_THRESHOLD: Final[int] = 5` 추가, `analyze()`
+  가 M49/M51 두 조건을 모두 평가해 OR로 판정. `_build_withhold_reason()`
+  헬퍼가 어느 규칙이 발동했는지에 따라 reason 텍스트에 "(M49 규칙)"/
+  "(M51 규칙, 과거 성공 이력 있음)"/"(M49+M51 규칙)"을 명시적으로
+  태깅 — Explainability(M44)가 그대로 소비하는 기존 prose 채널을
+  재사용해 사용자가 요청한 "규칙 구분 기록"을 만족(새 필드/시그니처
+  변경 없음).
+- `tests/intelligence/test_experience_rules.py`(신규 3건 —
+  `recent_failure_streak` 계산 검증).
+- `tests/intelligence/test_recommendation_adjustment.py`(신규 4건 —
+  M51 단독 발동/미달/M49+M51 동시 발동/M49 단독 발동 시 reason 태그
+  분기 검증).
+- `.ai/DECISIONS.md`(ADR-0068), `docs/ARCHITECTURE.md`(§2.1).
+
+| # | 완료 조건 | 상태 |
+|---|---|---|
+| 1 | 새 Domain/Service/Interface 없이 기존 파일 2개만 수정 | ✅ |
+| 2 | M49/M50 규칙 무변경(보완, 대체 아님) — 기존 테스트 전부 통과 | ✅ |
+| 3 | 추세 계산 = 최근 N건 슬라이딩 윈도우(N=5, 사용자 승인) | ✅ |
+| 4 | `recent_failure_streak` 정의 명문화(사용자 추가 요청) | ✅ |
+| 5 | Explainability reason에 M49/M51/Both 구분 태깅(사용자 추가 요청) | ✅ |
+| 6 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1137개(신규 7개, 회귀 없음)/`ruff`/`mypy`(221 source files)
+전부 통과.
+
+**사용자 승인 대기**: 위 6개 항목을 확인해 Milestone 51 Learning
+Evolution 공식 완료 여부 승인 필요.
 
 ---
 
