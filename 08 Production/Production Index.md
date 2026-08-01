@@ -1,5 +1,6 @@
 ---
 tags: [production]
+type: documentation
 ---
 
 # Production Index

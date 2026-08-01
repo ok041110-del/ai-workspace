@@ -1,5 +1,6 @@
 ---
 tags: [system]
+type: documentation
 ---
 
 # Daily Notes 사용법

@@ -1,5 +1,6 @@
 ---
 tags: [android]
+type: documentation
 ---
 
 # Android Placeholder

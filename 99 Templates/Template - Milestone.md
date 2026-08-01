@@ -1,5 +1,6 @@
 ---
 tags: [milestone]
+type: documentation
 ---
 
 # Milestone {{number}} — {{title}}

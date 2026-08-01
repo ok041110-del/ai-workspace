@@ -1,5 +1,6 @@
 ---
 tags: [decision]
+type: documentation
 ---
 
 # ADR-{{number}}: {{title}}

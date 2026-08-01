@@ -1,5 +1,6 @@
 ---
 tags: [ios]
+type: documentation
 ---
 
 # iOS Design

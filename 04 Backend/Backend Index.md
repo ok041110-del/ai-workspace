@@ -1,5 +1,6 @@
 ---
 tags: [backend]
+type: documentation
 ---
 
 # Backend Index

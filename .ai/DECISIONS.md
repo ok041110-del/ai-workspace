@@ -4440,3 +4440,63 @@ recommendation, not a mandatory decision.* — 이 한 문장이 M35
   없음 — `pytest`/`ruff`/`mypy`/`guardian.checker.evaluate()`
   전부 기존 상태(1108 passed) 그대로 유지. `.obsidian/graph.json`
   무변경(동결 유지). 기존 Vault 문서 삭제 0건, Rename 0건.
+
+### 구현 단계 — Milestone 47(Knowledge Graph Migration, 2026-07-31, 신규 ADR 아님)
+
+**ADR 필요 여부 판단**: 새 ADR을 작성하지 않는다. 이 작업은 새로운
+아키텍처 결정이 아니라 ADR-0064가 이미 승인한 Migration Plan
+(Phase 1~3)을 실행에 옮긴 것이다 — Domain Vocabulary/Node 정의/
+Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
+
+- **Phase 1 실행**: `15 Project Intelligence/Recommendation Hub.md`
+  생성 — Recommendation 파이프라인(M35→M42→M43→M36→M44) 리포트
+  3개(outgoing link 0건이었음)를 처음으로 연결.
+- **Phase 2 실행(8종 → 7종으로 조정)**: `02 Architecture/Concepts/*.md`
+  7개(Recommendation/Execution/Memory/Guardian/Observability/
+  Automation/Runtime) + `Concept Index.md` 생성. ADR-0064가 원래
+  열거한 8종 중 Adaptation/Orchestration/Explainability는
+  Recommendation 파이프라인의 **단계**일 뿐 독립 Domain Vocabulary
+  가 아니라고 판단해 별도 Concept 문서를 만들지 않았다(Reuse
+  First를 Concept 생성에도 적용, [[Recommendation Hub]]에서 흐름
+  으로 대체 표현) — 이 판단 자체가 새 아키텍처 결정이 아니라
+  ADR-0064 T02-6("Concept 채택")의 적용 범위를 실측 근거로 좁힌
+  것이다.
+- **Phase 3 실행(Boy Scout Rule → 전수 백필로 승격)**: ADR-0064는
+  원래 점진 적용(Boy Scout Rule)을 제안했으나, 사용자가 Milestone
+  47에서 "Metadata Backfill 완료"를 DoD로 명시적으로 요구해 스크립트
+  기반 전수 백필로 승격했다 — 기존 36개 문서 전부에 `type`을
+  추가해 Vault 54개 문서 100% 커버리지를 달성했다. 매핑은
+  [[Metadata Standard]]의 Document Type 표를 그대로 적용(새 Type
+  발명 없음).
+- **범위 확장 2건(ADR-0064 원안에 없던 것, 이번에 사용자가 명시
+  요청)**:
+  1. Architecture/Runtime/Decision/Knowledge Hub 4종 신규 — 기존
+     Architecture Overview/ADR Index/Decisions Index/Milestones
+     Index를 대체하지 않고 그 위에 얇은 진입점만 추가(내용 복제
+     없음).
+  2. `16 Lessons/Lessons.md` 신규 — ADR-0064 T03이 YAGNI로 명시
+     보류했던 Lesson 구조를 이번에 준비만 한다(`13 Daily`/`14
+     Tasks`와 동일 패턴 — 구조는 있지만 실제 항목은 없음, 허위
+     데이터 생성 금지). `vault/mapping.py`의
+     `VAULT_CONTENT_DIRECTORIES`에 17번째 디렉터리로 등록 —
+     Recommendation/Execution/Guardian/Automation/Memory/
+     Observability/Explainability/Orchestration 8개 보호 기능과
+     무관한 Integration Layer 상수 목록 변경이다.
+- **Color Migration(Phase 5)은 계속 Pending**: `.obsidian/graph.json`
+  은 이번에도 수정하지 않는다 — 2026-07-30 동결 결정 유지. `type`
+  필드가 이제 100% 채워져 있어 검증이 풀리는 즉시 적용 가능한
+  상태로만 대비했다.
+- 결과/영향: `15 Project Intelligence/Recommendation Hub.md`(신규),
+  `02 Architecture/Concepts/`(7개 Concept + Concept Index, 신규),
+  `02 Architecture/Architecture Hub.md`/`Runtime Hub.md`/`Decision
+  Hub.md`/`Knowledge Hub.md`(신규), `16 Lessons/Lessons.md`(신규),
+  기존 36개 문서에 `type` Frontmatter 추가, `00 System/
+  PROJECT_INDEX.md`(3행 추가), `03 ADR/ADR Index.md`(백틱 참조 3건을
+  Wiki Link로 전환), `src/ai_workspace/vault/mapping.py`
+  (`VAULT_CONTENT_DIRECTORIES` 17종으로 확장), `docs/ARCHITECTURE.md`
+  §15.1(신규)/헤더 상태 갱신. 코드 변경은 위 상수 목록 1건뿐 — 8개
+  보호 기능 전부 무변경. `pytest` 1108개(회귀 없음, 신규 테스트
+  없음)/`ruff`/`mypy`/`guardian.checker.evaluate()` 전부 기존 상태
+  유지. `find_broken_backlinks()`로 신규 문서 전수 검증(줄바꿈 Wiki
+  Link 오류 다수 발견·수정). `.obsidian/graph.json` 무변경. 기존
+  Vault 문서 삭제 0건, Rename 0건.

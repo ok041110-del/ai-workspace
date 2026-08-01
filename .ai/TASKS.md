@@ -13011,6 +13011,80 @@ Vault Information Architecture 공식 완료(Approved)**.
 
 ---
 
+## Milestone 47 — Knowledge Graph Migration
+
+**목표**(2026-07-31 사용자 요청, ADR-0064 구현 단계): M46이 Phase 0
+까지만 실행하고 Deferred로 남긴 Metadata Backfill/Wiki Link
+Migration/Concept Notes/Hub/Graph Color Migration을 실제 Vault
+전체에 적용한다. 새 기능 구현이 아니라 M46 설계의 실행이며, 기능
+변경 금지(Recommendation/Execution/Guardian/Automation/Memory/
+Observability/Explainability/Orchestration 8개 전부 무변경).
+
+**T01 — Migration Analysis(완료)**: Vault 54개 문서(M46 이후 +5)를
+재실측. Metadata(`type`) 13/49 → 부분 완료, Wiki Link(백틱 텍스트
+위주) → 미구현, Concept(0개) → 미구현, Hub(비공식 4개만 존재) →
+부분 완료, Color(경로 기준 그대로) → 미구현, Lessons(구조 없음) →
+미구현으로 분류.
+
+**T02 — Domain Analysis(완료)**: M46 VIA 기준으로 재평가 — Metadata
+Coverage 27%, Wiki Link Coverage 낮음(핵심 Index 2곳이 백틱 텍스트
+위주), Concept Coverage 0%, Hub Coverage 이름 없는 4개만 존재,
+Color Coverage 0%(§14.2 그대로).
+
+**T03 — MDD Review(완료)**: Metadata는 전수 백필로 결정(Boy Scout
+Rule 대신 승격, 사용자 DoD 요구 반영). Wiki Link는 ADR Index/
+Milestones Index의 실제 Vault 문서 파일명 참조만 전환(코드 경로
+백틱은 유지 — Broken/Circular Link 없음을 `find_broken_backlinks()`
+로 검증). Concept은 8종 중 5종만 신규 생성(Adaptation/Orchestration/
+Explainability는 Recommendation Hub 흐름으로 대체). Hub는 5개
+(Recommendation/Architecture/Runtime/Knowledge/Decision) 신규
+생성, 기존 Index 대체 안 함. Color는 Desktop 검증 대기 Pending
+유지 결정.
+
+**T04 — Implementation(완료)**:
+1. Metadata Backfill — 기존 36개 문서에 `type` 추가(54/54 100%).
+2. Wiki Link Migration — `ADR Index.md` 백틱 참조 3건을 `[[WikiLink]]`
+   로 전환(`Recommendation Explanation`/`Architecture Guardian`),
+   `Milestones Index.md` 1건 전환.
+3. Concept Notes — `02 Architecture/Concepts/` 7개 + Concept Index.
+4. Hub(MOC) — `Recommendation Hub`(`15 Project Intelligence/`),
+   `Architecture Hub`/`Runtime Hub`/`Decision Hub`/`Knowledge Hub`
+   (`02 Architecture/`).
+5. Lessons — `16 Lessons/Lessons.md` 신규(실제 항목은 아직 없음,
+   허위 데이터 생성 금지). `vault/mapping.py`
+   `VAULT_CONTENT_DIRECTORIES` 17종으로 확장.
+6. Graph Color — `.obsidian/graph.json` 실제 적용은 이번에도 하지
+   않음(Desktop 검증 대기, 2026-07-30 동결 유지) — DoD의 "Pending
+   유지" 조건 그대로 적용.
+
+**ADR 검토**: 새 ADR 작성하지 않음 — ADR-0064의 구현 단계임을
+`.ai/DECISIONS.md`에 근거와 함께 명시(ADR-0064 항목 하단 addendum).
+
+**Migration 검증**: `type` 커버리지 13/49(27%)→54/54(100%), Orphan
+문서 4→3, Recommendation 파이프라인 리포트 inbound 링크 0건→1~4건씩,
+Hub 4(비공식)→9(4 재확인+5 신규), `find_broken_backlinks()` 신규
+문서 전수 통과.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 기능 변경 없음(8개 기존 기능 전부 무변경) | ✅ |
+| 2 | Guardian 통과 | ✅ |
+| 3 | 기존 테스트 전부 통과(1108개, 회귀 없음) | ✅ |
+| 4 | Metadata Backfill 완료(54/54, 100%) | ✅ |
+| 5 | Wiki Link Migration 완료(ADR/Milestone Index 핵심 참조 전환) | ✅ |
+| 6 | Hub(MOC) 구축(5개 신규) | ✅ |
+| 7 | Concept Note 구축(7개 + Index) | ✅ |
+| 8 | Lessons 구조 구축(`16 Lessons/`, 실제 데이터 없음) | ✅ |
+| 9 | Graph Color Migration — Desktop 검증 필요해 Pending 유지 | ✅ |
+| 10 | Graph View가 실제 Knowledge Graph를 반영함을 검증(구조적 지표로) | ✅ |
+
+**사용자 승인(2026-07-31)**: 위 10개 항목을 확인해 **Milestone 47
+Knowledge Graph Migration 공식 완료(Approved)**.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

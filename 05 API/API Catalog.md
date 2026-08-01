@@ -1,5 +1,6 @@
 ---
 tags: [api]
+type: documentation
 ---
 
 # API Catalog

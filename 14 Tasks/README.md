@@ -1,5 +1,6 @@
 ---
 tags: [system]
+type: documentation
 ---
 
 # Tasks 사용법

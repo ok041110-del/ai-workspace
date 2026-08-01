@@ -1,5 +1,6 @@
 ---
 tags: [system]
+type: documentation
 ---
 
 # Template - Project Workspace

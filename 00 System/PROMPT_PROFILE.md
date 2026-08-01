@@ -1,5 +1,6 @@
 ---
 tags: [system]
+type: system
 ---
 
 # PROMPT_PROFILE

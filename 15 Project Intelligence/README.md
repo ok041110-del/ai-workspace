@@ -1,5 +1,6 @@
 ---
 tags: [system]
+type: documentation
 ---
 
 # Project Intelligence 사용법
@@ -8,6 +9,11 @@ tags: [system]
 리포트** 전용이다. 세 파일 모두 사람이나 AI가 직접 편집하는 원본이
 아니라, 매번 처음부터 다시 계산해 덮어쓰는 파일이다 — 직접 수정해도
 다음 실행 때 사라진다.
+
+> **예외 — [[Recommendation Hub]]**(Milestone 47, [[Vault Information Architecture]] Migration Plan Phase 1): 이 폴더의
+> 유일한 손으로 관리하는 문서다. 어떤 Service도 이 파일을 쓰지
+> 않으므로 자유롭게 편집해도 된다 — 이 폴더의 생성 리포트들이 서로
+> 링크되지 않는 문제(Orphan)를 해결하기 위한 Map of Content다.
 
 `14 Tasks/*.md`와 달리 `VaultDocumentKind` 체계(Index append/
 Backlink 검증)를 쓰지 않는다 — 원자적 전체 교체(overwrite)만 한다.
