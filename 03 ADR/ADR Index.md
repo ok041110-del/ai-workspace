@@ -445,6 +445,12 @@ M46이 Phase 0까지만 실행하고 Deferred로 남긴 Metadata Backfill/Wiki L
 - 결정: 새 `LearningRuntimeAnalyzer`가 `FileMemoryEngine`(M50)+`ExecutionMemoryStore`(M39)+`ExperienceIntelligenceService`(M40)를 그대로 조합해 `ExperienceReport`를 얻는다(새 Domain/Interface/Service 없음). `tracked_task_count`+가장 위험한 task(`decayed_failure_rate` 최댓값, 동점이면 task_id 오름차순)를 StatusLine에 노출. `WorkspaceInfo.current_task`가 Phase 1 범위 밖(ADR-0063)이라 "현재 추천 대상"은 여전히 알 수 없어 "추적 중인 전체 중 최고 위험"으로 범위를 좁힘. Pipeline Stage의 Memory 단계를 `NOT_OBSERVABLE`에서 `OBSERVED_DONE`/`OBSERVED_NOT_YET`으로 승격(M45/M50에서 두 번 미뤄뒀던 gap 해소)
 - 영향: `observability/` 패키지 내 5개 파일 수정 + 1개 신규(`learning_runtime_analyzer.py`). 새 Core Domain Interface/Adapter/Service/Layer/File 없음. `pytest` 1155개(신규 3개, 회귀 없음)/ruff/mypy(222 source files) 전부 통과. 실제 `FileMemoryEngine` 데이터로 end-to-end 수동 검증 완료. 상세는 [[Automation Index]]
 
+## ADR-0073: Learning Explainability 고도화 — experience_summary에 학습 신호 상시 노출 (Milestone 55)
+
+- 목적: M49~M53 학습 신호가 Adaptation이 실제로 보류를 발동했을 때만 보이고, 아직 보류되지 않은 near-miss 케이스는 전혀 드러나지 않던 것을 해소
+- 결정: `recommendation_adjustment.py`의 private `_withhold_score()`를 공개 함수 `compute_learning_score(stat)`로 승격(`WITHHOLD_SCORE_THRESHOLD`도 공개) — 가중치·threshold 공식 중복 방지. `experience_summary`가 보류 여부와 무관하게 항상 `decayed_failure_rate`/`recent_failure_streak`/학습 Score를 성공률과 함께 노출
+- 영향: `intelligence/recommendation_adjustment.py`(공개 승격), `intelligence/recommendation_explanation.py`(experience_summary 확장) 2개 파일만 수정. 새 Core Domain Interface/Adapter/Service/Layer/File 없음. `pytest` 1156개(신규 1개, 회귀 없음)/ruff/mypy(222 source files) 전부 통과. 상세는 [[Automation Index]]
+
 ## 관련 문서
 
 - [[Architecture Overview]]

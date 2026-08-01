@@ -174,6 +174,17 @@ Pipeline Stage의 Memory 단계가 `NOT_OBSERVABLE`에서
 해소했다. 실제 `FileMemoryEngine` 데이터로 end-to-end 수동 검증
 완료.
 
+**Learning Explainability 고도화(Milestone 55, ADR-0073)**: M49~M53
+학습 신호가 Adaptation이 실제로 보류를 발동했을 때만(`adaptation_
+reason` 프로즈 문자열 안에) 보이고, 아직 보류되지 않은 near-miss
+케이스는 전혀 드러나지 않던 것을 해소했다. `recommendation_
+adjustment.py`의 private `_withhold_score()`를 공개 함수
+`compute_learning_score(stat)`로 승격(`WITHHOLD_SCORE_THRESHOLD`도
+공개)해 `recommendation_explanation.py`가 재사용 —
+`experience_summary`가 이제 보류 여부와 무관하게 항상 성공률 +
+`decayed_failure_rate` + `recent_failure_streak` + 학습 Score를
+노출한다. 새 계산 로직 없이 기존 공식만 재사용했다.
+
 ## 관련 GitHub 문서
 
 - `docs/ARCHITECTURE.md` §3.19
