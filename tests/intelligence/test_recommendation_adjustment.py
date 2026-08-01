@@ -89,6 +89,7 @@ def test_analyze_withholds_recommendation_when_target_has_only_failures() -> Non
                 failure_count=3,
                 last_result="failure",
                 last_timestamp="2026-07-30T00:00:00",
+                decayed_failure_rate=1.0,
             )
         ]
     )
@@ -177,10 +178,10 @@ def test_analyze_passes_through_when_combined_score_below_threshold() -> None:
 
 
 def test_analyze_withholds_on_combined_signals_below_individual_thresholds() -> None:
-    """M52-T03(ADR-0070) — 실패율 50%(표본 8건) + 최근 4회 연속 실패는
-    개별 규칙(M49 실패율 100%, M51 연속 5회)은 어느 쪽도 충족하지
-    않지만, 가중치 결합 점수(0.6*0.5 + 0.6*0.8=0.78)가 threshold(0.6)
-    이상이라 보류한다."""
+    """M52-T03(ADR-0070) — 실패율 50%(표본 8건, decayed_failure_rate로
+    표현) + 최근 4회 연속 실패는 개별 규칙(M49 실패율 100%, M51 연속
+    5회)은 어느 쪽도 충족하지 않지만, 가중치 결합 점수(0.6*0.5 +
+    0.6*0.8=0.78)가 threshold(0.6) 이상이라 보류한다."""
     analyzer = RecommendationAdjustmentAnalyzer()
     report = ExperienceReport(
         stats=[
@@ -192,6 +193,7 @@ def test_analyze_withholds_on_combined_signals_below_individual_thresholds() -> 
                 last_result="failure",
                 last_timestamp="2026-07-30T00:00:00",
                 recent_failure_streak=4,
+                decayed_failure_rate=0.5,
             )
         ]
     )
@@ -242,6 +244,7 @@ def test_analyze_reason_tags_m49_only_when_only_overall_rule_triggered() -> None
                 last_result="failure",
                 last_timestamp="2026-07-30T00:00:00",
                 recent_failure_streak=3,
+                decayed_failure_rate=1.0,
             )
         ]
     )
@@ -270,6 +273,7 @@ def test_analyze_withholds_when_only_overall_signal_is_full_and_recent_streak_ze
                 last_result="failure",
                 last_timestamp="2026-07-30T00:00:00",
                 recent_failure_streak=0,
+                decayed_failure_rate=1.0,
             )
         ]
     )

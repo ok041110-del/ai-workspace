@@ -4973,3 +4973,81 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   수정, 신규 2건 추가 — 조합 트리거, 경계값 회귀 없음 증명).
   `pytest` 1145개(회귀 없음)/`ruff`/`mypy`(221 source files) 전부
   통과. `.ai/TASKS.md` Milestone 52 절(T01~T03) 신규 추가.
+
+## ADR-0071: Learning Decay — signal_overall을 지수 Decay 가중 실패율로 교체 (Milestone 53)
+
+- 상태: 승인됨 (2026-08-01, 사용자가 M51 승인 코멘트에서 예고한
+  "M53(Decay)" 착수 요청 — 두 차례 AskUserQuestion으로 적용 대상
+  (signal_overall 교체)과 Decay 함수(지수, decay_factor=0.8)를
+  직접 확정)
+- 날짜: 2026-08-01
+- 배경: M52까지 `signal_overall`은 `failure_count / total`(단순
+  평균)이었다 — 모든 기록을 동등하게 반영해, "예전엔 실패했지만
+  최근엔 성공 중"인 task와 "예전엔 성공했지만 최근 실패가 잦은"
+  task를 구분하지 못했다. M51(ADR-0068) 설계 당시 검토했던 지수
+  Decay는 그때는 "추천 보류 트리거 자체"에 쓰기엔 슬라이딩 윈도우
+  (N=5)보다 복잡하다고 판단해 기각됐지만(대안 1), 이번엔 별도
+  Milestone(M53)으로 그 아이디어를 `signal_overall` 계산 방식
+  자체에 적용한다 — 트리거 로직(M52의 가중 결합)은 그대로 두고,
+  "전체 실패율"이라는 개념 자체를 더 정교하게 만드는 것이라 M51의
+  기각 사유와 충돌하지 않는다.
+- 결정:
+  1. **Domain Analysis(T01)**: 새 Domain/Behavioral Concept 아님 —
+     기존 `Adaptation`의 신호 계산 정교화. `ExperienceStat`(M40/M51
+     패턴 재사용)에 필드만 추가.
+  2. **Architecture Review(T02) — 설계**: `ExperienceStat`에
+     `decayed_failure_rate: float` 필드 신설. `experience_rules.py`
+     의 `_summarize()`에서 계산(레코드 원본 접근 가능한 유일한
+     지점 — `recommendation_adjustment.py`는 집계값만 받으므로 여기
+     서만 계산 가능):
+     - `weight(rank) = _DECAY_FACTOR ** rank`(`rank=0`이 가장 최근
+       기록, `_DECAY_FACTOR = 0.8`)
+     - `decayed_failure_rate = Σ(weight × 실패 여부) / Σ(weight)`
+     `recommendation_adjustment.py`의 `signal_overall`을
+     `stat.decayed_failure_rate`로 교체(단, `total < 3`이면 0 —
+     기존 최소 표본 게이트 유지). 전체 이력이 100% 실패면 분자=분모
+     라 `decayed_failure_rate`는 가중치와 무관하게 항상 정확히
+     1.0 — M49 단일 규칙, M52의 "신호 1.0 → score=0.6" 체인이
+     그대로 보존됨(회귀 없음, 수학적으로 보장).
+  3. **Detailed Design(T03) — 테스트 인프라 함의 발견**: 구현 중
+     `ExperienceStat`을 수동 생성하는 기존 테스트(`test_recommendation_
+     adjustment.py`/`test_recommendation_service.py`)가 새 필드의
+     기본값(`0.0`)을 그대로 둔 채 "전체 실패" 시나리오를 표현하고
+     있었다는 것을 테스트 실행으로 발견 — `decayed_failure_rate`는
+     `failure_count`/`total`에서 자동으로 계산되지 않는 독립 필드라,
+     수동 생성 시 시나리오에 맞는 값을 직접 지정해야 한다(M51의
+     `recent_failure_streak`와 동일한 성격의 함의였지만 이번엔 M49
+     단일 규칙의 트리거 여부에 직접 영향을 줘 테스트가 실패로
+     드러났다). 영향받은 5개 테스트에 `decayed_failure_rate` 명시
+     지정으로 수정.
+  4. **Implementation**: `experience_rules.py`(`_DECAY_FACTOR` 상수,
+     `_compute_decayed_failure_rate()` 헬퍼, `ExperienceStat.
+     decayed_failure_rate` 필드), `recommendation_adjustment.py`
+     (`signal_overall` 교체, Non-goal 문구에 Decay 계수도 고정
+     상수임을 명시).
+- 대안:
+  1. Decay를 `recommendation_adjustment.py`에서 raw record로부터
+     직접 계산 — 기각: 이 모듈은 `ExperienceStat` 집계값만 받고
+     raw record에 접근하지 않는다(Analyzer 계층 분리 유지, Reuse-
+     First로 M51과 동일한 계산 위치 패턴 재사용).
+  2. Decay를 새 3번째 신호로 추가(기존 두 신호는 그대로 유지) —
+     기각: 사용자가 "signal_overall을 교체"를 선택. 신호 개수가
+     늘면 가중치 재조정이 필요해 M52의 회귀 없음 증명이 깨질
+     위험이 있어, 교체가 더 단순하고 안전.
+  3. 선형 Decay — 기각: 사용자가 지수 Decay를 선택.
+  4. decay_factor 0.9(완만)/0.7(공격적) — 기각: 사용자가 0.8(중간)
+     선택.
+- 이유: `signal_overall`이라는 기존 개념의 정의만 정교화하고
+  트리거 로직(M52)은 전혀 건드리지 않아 변경 범위가 최소화된다.
+  "전체 이력 100% 실패 → 항상 1.0"이라는 불변식이 Decay 가중치
+  선택과 무관하게 항상 성립해, M49/M52까지 쌓아온 회귀 없음 증명
+  체인이 그대로 이어진다.
+- 결과/영향: `intelligence/experience_rules.py`(필드 1개 + 헬퍼
+  함수 1개 추가), `intelligence/recommendation_adjustment.py`
+  (`signal_overall` 계산식 교체, docstring 갱신) 2개 파일 수정.
+  새 Core Domain Interface/Adapter/Service/Layer/File 없음.
+  `tests/intelligence/test_experience_rules.py`(신규 4건 — 전체
+  실패/전체 성공/최근 실패 가중 우대/입력 순서 무관), 기존 5개
+  테스트를 `decayed_failure_rate` 명시 지정으로 수정. `pytest`
+  1149개(신규 4개, 회귀 없음)/`ruff`/`mypy`(221 source files) 전부
+  통과. `.ai/TASKS.md` Milestone 53 절(T01~T03) 신규 추가.

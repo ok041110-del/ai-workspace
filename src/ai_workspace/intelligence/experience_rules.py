@@ -1,4 +1,6 @@
-"""Intelligence Layer — Experience Analyzer (ADR-0055, Milestone 40-T02).
+"""Intelligence Layer — Experience Analyzer (ADR-0055, Milestone 40-T02;
+연속 실패 추세는 Milestone 51-T03, ADR-0068; 지수 Decay 실패율은
+Milestone 53-T03, ADR-0071).
 
 task_id별 성공/실패 집계를 계산하는 순수 Analyzer.
 `RecommendationRuleAnalyzer`(M35)와 같은 성격 — Adapter도 Store도
@@ -20,8 +22,10 @@ test_intelligence_layering.py`가 `*Service` 클래스 유무로 강제).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Final
 
 _RESULT_SUCCESS = "success"
+_DECAY_FACTOR: Final[float] = 0.8
 
 
 @dataclass(frozen=True)
@@ -48,7 +52,17 @@ class ExperienceStat:
     세기를 멈춘다. 특정 윈도우 크기에 종속되지 않는 값이므로,
     `recent_failure_streak >= N`은 그대로 "최근 N건이 모두 실패"와
     동치다(전체 기록이 N건 미만이면 자연히 N 미만이 되어 성립하지
-    않는다)."""
+    않는다).
+
+    `decayed_failure_rate`(Milestone 53, ADR-0071): 시간순으로 정렬한
+    기록에 지수 Decay 가중치(`weight(rank) = _DECAY_FACTOR ** rank`,
+    `rank=0`이 가장 최근 기록)를 적용한 가중 실패율 —
+    `Σ(weight × 실패 여부) / Σ(weight)`. 전체 기록이 모두 실패면
+    가중치와 무관하게 분자=분모라 항상 정확히 1.0이다(M49 조건과의
+    호환성 보장). 단순 `failure_count / total`과 달리 오래된 기록의
+    영향력을 지수적으로 줄여, "예전엔 실패했지만 최근엔 성공 중"인
+    task는 더 낮게, "예전엔 성공했지만 최근 실패가 잦은" task는 더
+    높게 평가한다."""
 
     task_id: str
     total: int
@@ -57,6 +71,7 @@ class ExperienceStat:
     last_result: str
     last_timestamp: str
     recent_failure_streak: int = 0
+    decayed_failure_rate: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -104,6 +119,7 @@ class ExperienceAnalyzer:
             last_result=latest.result,
             last_timestamp=latest.timestamp,
             recent_failure_streak=_count_recent_failure_streak(ordered),
+            decayed_failure_rate=_compute_decayed_failure_rate(ordered),
         )
 
 
@@ -114,3 +130,14 @@ def _count_recent_failure_streak(ordered: list[ExperienceRecord]) -> int:
             break
         streak += 1
     return streak
+
+
+def _compute_decayed_failure_rate(ordered: list[ExperienceRecord]) -> float:
+    total_weight = 0.0
+    failure_weight = 0.0
+    for rank, entry in enumerate(reversed(ordered)):
+        weight = _DECAY_FACTOR**rank
+        total_weight += weight
+        if entry.result != _RESULT_SUCCESS:
+            failure_weight += weight
+    return failure_weight / total_weight if total_weight > 0 else 0.0

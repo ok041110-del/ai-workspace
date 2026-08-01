@@ -293,6 +293,17 @@ Execution Platform (M36~M38) — 실행·상태 전이·스케줄링
   가중치·threshold는 코드에 고정된 상수로 데이터 기반 학습은
   하지 않는다(Non-goal). 새 Domain/Service/Interface 없이 기존
   파일 1개만 수정.
+- **M53 Learning Decay — 완료(2026-08-01, ADR-0071)**: M52의
+  `signal_overall`(`failure_count/total`, 모든 기록을 동등 반영)을
+  지수 Decay 가중 실패율(`ExperienceStat.decayed_failure_rate`)로
+  교체했다. `weight(rank) = 0.8**rank`(`rank=0`이 최신 기록)를
+  적용해 `Σ(weight×실패 여부)/Σ(weight)`로 계산 — 최근 기록일수록
+  더 큰 비중을 갖는다. 전체 이력이 100% 실패면 가중치와 무관하게
+  항상 정확히 1.0이라, M49/M52까지 쌓아온 "신호 1.0 → score=0.6"
+  회귀 없음 증명 체인이 그대로 보존된다. Decay 계수는 코드에 고정된
+  상수(0.8, 사용자 확정)로 데이터 기반 학습은 하지 않는다
+  (Non-goal). 새 Domain/Service/Interface 없이 기존 파일 2개만
+  수정.
 
 ## 3. 핵심 컴포넌트
 

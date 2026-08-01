@@ -1,3 +1,5 @@
+import pytest
+
 from ai_workspace.intelligence.experience_rules import ExperienceAnalyzer, ExperienceRecord
 
 
@@ -111,6 +113,75 @@ def test_recent_failure_streak_ignores_input_order() -> None:
     report = analyzer.analyze(records)
 
     assert report.stats[0].recent_failure_streak == 2
+
+
+def test_decayed_failure_rate_is_exactly_one_when_all_records_are_failures() -> None:
+    """M53(ADR-0071) — 전체가 실패면 Decay 가중치와 무관하게 항상
+    정확히 1.0(M49 조건과의 호환성 보장)."""
+    analyzer = ExperienceAnalyzer()
+    records = [
+        _record("M40-T01", "failure", "2026-07-30T00:00:00+00:00"),
+        _record("M40-T01", "failure", "2026-07-30T01:00:00+00:00"),
+        _record("M40-T01", "failure", "2026-07-30T02:00:00+00:00"),
+    ]
+
+    report = analyzer.analyze(records)
+
+    assert report.stats[0].decayed_failure_rate == pytest.approx(1.0)
+
+
+def test_decayed_failure_rate_is_zero_when_all_records_are_successes() -> None:
+    analyzer = ExperienceAnalyzer()
+    records = [
+        _record("M40-T01", "success", "2026-07-30T00:00:00+00:00"),
+        _record("M40-T01", "success", "2026-07-30T01:00:00+00:00"),
+    ]
+
+    report = analyzer.analyze(records)
+
+    assert report.stats[0].decayed_failure_rate == pytest.approx(0.0)
+
+
+def test_decayed_failure_rate_weighs_recent_failure_more_than_old_failure() -> None:
+    """M53(ADR-0071) — 실패 1건/성공 2건으로 실패 개수는 같아도, 그
+    실패가 가장 최근 기록이면 오래된 기록일 때보다 decayed_failure_rate
+    가 더 높다(지수 Decay가 최근 기록에 더 큰 비중을 준다는 증거)."""
+    analyzer = ExperienceAnalyzer()
+    recent_failure_records = [
+        _record("M40-T01", "success", "2026-07-30T00:00:00+00:00"),
+        _record("M40-T01", "success", "2026-07-30T01:00:00+00:00"),
+        _record("M40-T01", "failure", "2026-07-30T02:00:00+00:00"),
+    ]
+    old_failure_records = [
+        _record("M40-T02", "failure", "2026-07-30T00:00:00+00:00"),
+        _record("M40-T02", "success", "2026-07-30T01:00:00+00:00"),
+        _record("M40-T02", "success", "2026-07-30T02:00:00+00:00"),
+    ]
+
+    report = analyzer.analyze(recent_failure_records + old_failure_records)
+
+    recent_rate = next(s for s in report.stats if s.task_id == "M40-T01").decayed_failure_rate
+    old_rate = next(s for s in report.stats if s.task_id == "M40-T02").decayed_failure_rate
+    assert recent_rate > old_rate
+    assert recent_rate == pytest.approx(1 / 2.44)
+    assert old_rate == pytest.approx(0.64 / 2.44)
+
+
+def test_decayed_failure_rate_ignores_input_order() -> None:
+    analyzer = ExperienceAnalyzer()
+    records = [
+        _record("M40-T01", "failure", "2026-07-30T02:00:00+00:00"),
+        _record("M40-T01", "success", "2026-07-30T00:00:00+00:00"),
+        _record("M40-T01", "success", "2026-07-30T01:00:00+00:00"),
+    ]
+    shuffled = [records[2], records[0], records[1]]
+
+    report_in_order = analyzer.analyze(records)
+    report_shuffled = analyzer.analyze(shuffled)
+
+    assert report_in_order.stats[0].decayed_failure_rate == pytest.approx(
+        report_shuffled.stats[0].decayed_failure_rate
+    )
 
 
 def test_analyze_does_not_mutate_input_list() -> None:
