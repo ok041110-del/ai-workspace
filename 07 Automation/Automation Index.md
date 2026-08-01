@@ -118,6 +118,18 @@ StatusLine이 아예 실행되지 않는다고 별도로 명시하는데, 이는
 사용자 확인 항목으로 남겼다(`claude --debug` 로그 확인 필요,
 헤드리스 원격 세션이라 실제 UI 접근 불가).
 
+**후속 환경 실증(2026-08-01)**: 이 세션 자체가 StatusLine을
+지원하는지 직접 조회로 실증했다 — `sys.stdin/stdout.isatty()` 모두
+`False`, `CLAUDE_CODE_ENTRYPOINT=remote_mobile`, 실제 `claude`
+프로세스가 `--output-format=stream-json --input-format=stream-json`
+(비대화형 print 모드)로 구동 중임을 `ps aux`로 확인했다.
+`/tmp/statusline.log`가 세션 내내 생성되지 않아 `statusline_main.py`
+가 한 번도 호출되지 않았음도 확인했다. **결론(실증)**: 이 세션
+타입(Claude Code Remote, 비대화형 stream-json)은 대화형 터미널 UI
+자체가 없어 StatusLine을 아키텍처상 지원하지 않는다 — 코드 결함이
+아니다. 사용자의 로컬 대화형 터미널 환경에서의 실제 표시 여부는
+이 세션이 자체 검증할 수 없어 사용자 확인으로 남는다.
+
 ## 관련 GitHub 문서
 
 - `docs/ARCHITECTURE.md` §3.19
