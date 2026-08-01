@@ -15584,6 +15584,71 @@ dependency를 실제로 만족하는지 검증하도록 확정했다.
 
 ---
 
+## Milestone 75 — Diversity Routing: 동률 후보의 Provider 분산 tie-break (완료)
+
+**배경**: 사용자가 "여러 Agent가 병렬 실행될 때 동일 Provider/Model에
+불필요하게 집중되지 않도록 다양성을 고려한 Engine 선택을 지원"하는
+M75를 요청했다. 최신 main(M74/ADR-0092까지 반영, PR #83 병합 확인) 기준
+으로 시작해 조사한 결과, M64~M74가 쌓아온 선택 로직은 전부 "어떤
+엔진이 더 나은가"/"지금 쓸 수 있는가"만 판단했고, 비용·성공률이 완전히
+동률인 후보 여럿이 등록 순서상 첫 번째로만 계속 몰리는 문제(M74의
+capacity 여유를 낭비)가 코드로 확인됐다.
+
+**사용자 승인(AskUserQuestion, 2회)**:
+1. 다양성 신호 — **M74 `_in_flight`(현재 동시 실행 중인 세션 수) 재사용
+   (권장안 채택)**: 새 카운터 없이 "지금 가장 한가한 Provider"를 그대로
+   활용, 요구사항의 "기존 구조 재사용"/"상태는 in-process로만 관리"에
+   정확히 부합.
+2. 범위(Provider vs Model) — **Provider(engine_name) 수준만(권장안
+   채택)**: `EngineCandidate`에 `model` 필드가 없고 M14(ADR-0026)가
+   이미 "Model은 엔진 선택에 관여하지 않는다"고 확정해둔 경계를 다시
+   열지 않는다.
+
+**구현**:
+- `src/ai_workspace/runtime/engine/engine_runtime.py`(`InMemoryEngineRuntime`)
+  /`src/ai_workspace/runtime/engine/managed_engine_runtime.py`
+  (`ManagedEngineRuntime`) — `_reorder_by_diversity(candidates)` 신설
+  (`_in_flight` 오름차순 안정 정렬). `_build_candidates()`에서 M74
+  capacity 필터링 이후, `_reorder_by_execution_memory()`(M69) 적용
+  **직전**에 배치해 정렬 안정성만으로 "비용·성공률 완전 동률일 때만
+  개입"을 보장(새 조건문 없음). `engine_selection_policy` 미주입 경로/
+  `run_ensemble()`/`run_ensemble_auto()`는 M74와 동일한 이유로 범위 밖
+  (YAGNI).
+- `EngineRuntime`(interface) 계약은 전혀 무변경 — 새 메서드/파라미터
+  없음, private 메서드 추가와 `_build_candidates()` 내부 배선 한 줄뿐.
+- `tests/runtime/engine/test_engine_runtime.py` — 실제 스레드
+  (`threading.Thread`) 기반 신규 테스트 4건(완전 동률 시 한가한
+  Provider 우선, 비용 우선순위 불변, 실행 이력 성공률 우선순위 불변,
+  정책 미주입 시 회귀 없음).
+- `tests/runtime/engine/test_managed_engine_runtime.py` — `ThreadPoolExecutor`
+  기반 실제 병렬 신규 테스트 2건(동률 시 분산, 비용 우선순위 불변),
+  5회 연속 실행으로 타이밍 안정성 확인.
+- `docs/ARCHITECTURE.md` §3.9 Engine Runtime 절에 Diversity Routing
+  (M75) 서술 추가, §7 인터페이스 표 `EngineRuntime` 행 갱신. 새 Core
+  Domain Interface 없음(기존 `EngineRuntime` 계약 완전 무변경, 30종
+  유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 최신 main 기준에서 시작, 기존 ADR/TASKS/ROADMAP·구현 상태를 먼저 조사 | ✅ |
+| 2 | 기존 EngineSelectionPolicy/EngineRuntime/Provider Capacity(M74) 구조 재사용, 새 컴포넌트 없음 | ✅ |
+| 3 | M74 capacity 검사 이후에만 Diversity Routing 적용 | ✅ |
+| 4 | 동일 성능(비용·신뢰도) 후보가 여러 개일 때만 다양성을 tie-break로 사용함을 테스트로 증명 | ✅ |
+| 5 | 비용·신뢰도 우선순위를 절대 변경하지 않음을 테스트로 증명(정렬 안정성으로 구조적 보장) | ✅ |
+| 6 | Diversity가 기존 선택 결과를 강제로 바꾸지 않는 "선택적 최적화"임을 확인(완전 동률에서만 개입) | ✅ |
+| 7 | 새 Core Domain Interface 없음(EngineRuntime 계약 완전 무변경) | ✅ |
+| 8 | 기존 API와 100% 하위 호환(engine_selection_policy 미주입 시 M75 이전과 동일 동작) | ✅ |
+| 9 | 상태는 EngineRuntime 내부 in-process로만 관리(M74 `_in_flight` 재사용, 영속화 없음) | ✅ |
+| 10 | 넓은 "Diversity Routing" 주제를 AskUserQuestion 2회로 구체 설계까지 좁힘 | ✅ |
+| 11 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1337개(신규 6개, 회귀 없음)/`ruff`/`mypy`(233 source files)
+전부 통과. ADR-0093.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

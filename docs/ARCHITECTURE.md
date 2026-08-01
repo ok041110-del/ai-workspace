@@ -782,6 +782,24 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   이전 동작과 100% 동일하다. 새 Core Domain Interface 없음 — 기존
   `EngineRuntime.register_engine()`에 선택적 keyword 인자 하나만 추가
   (30종 유지).
+- **Diversity Routing(Milestone 75, ADR-0093)**: 여러 Agent가 병렬로
+  Task를 제출하면, M64(비용)/M69(실행 이력 성공률)가 완전히 동률인
+  후보가 모두 같은 Provider에 몰려 M74가 확보해 둔 capacity 여유를
+  낭비하는 경우가 있었다(코드로 확인). `_build_candidates()`가 M74
+  capacity 필터링 **이후**, `_reorder_by_execution_memory()`(M69)보다
+  먼저 `_reorder_by_diversity()`(안정 정렬)를 적용해 지금 이 순간 동시
+  실행 중인 세션 수(M74 `_in_flight`를 그대로 재사용 — 새 상태 없음)가
+  더 적은 엔진을 앞세운다. Python 정렬의 안정성(stable sort) 덕분에
+  이후 적용되는 성공률 정렬이 다르면 이 다양성 순서는 곧바로 덮어써지고,
+  `EngineSelectionPolicy.select()`의 비용 기준 `min()`도 비용이 다르면
+  항상 진짜 최저 비용을 고르므로 다양성은 **비용과 성공률이 모두
+  완전히 동률**일 때만 개입하는 순수 tie-break다 — 비용·신뢰도
+  우선순위를 절대 바꾸지 않는다. `engine_selection_policy`를 주입하지
+  않으면(첫 매칭 경로) 관여하지 않고, `run_ensemble()`/`run_ensemble_auto()`
+  (M62/M68)는 M74와 동일한 이유로 범위 밖(YAGNI)이다. 새 Core Domain
+  Interface·새 public 메서드·새 상태 없음(30종 유지, `EngineRuntime`
+  계약 완전 무변경) — `InMemoryEngineRuntime`/`ManagedEngineRuntime`
+  내부 private 메서드 추가뿐이라 100% 하위 호환이다.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -2686,7 +2704,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `InteractionEngine` | 입력 표면 정규화/응답 변환 (기존 ConversationEngine 대체) | Milestone 1 (T1-21) 계약, Milestone 3 구현 | **완료(계약)** |
 | `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료(계약)** |
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
-| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70)+Provider별 동시 실행 상한(M74) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장, M74(ADR-0092) `register_engine()`에 선택적 `max_concurrency` 확장 | **완료(계약)** |
+| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70)+Provider별 동시 실행 상한(M74)+동률 후보 다양성 라우팅(M75) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장, M74(ADR-0092) `register_engine()`에 선택적 `max_concurrency` 확장, M75(ADR-0093) `_build_candidates()` 내부 tie-break 추가(계약 무변경) | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 | `WorkflowRepository` | `Workflow` 조회/저장(`AutomationActionExecutor`의 RUN_WORKFLOW가 `workflow_id`로 실제 Workflow를 찾는 유일한 통로) | Milestone 59 (계약+`InMemoryWorkflowRepository` 구현) | **완료(계약+구현)** |

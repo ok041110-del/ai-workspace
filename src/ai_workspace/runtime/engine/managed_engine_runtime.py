@@ -126,7 +126,14 @@ class ManagedEngineRuntime(EngineRuntime):
     `run_ensemble_auto()`는 `InMemoryEngineRuntime`과 동일한 이유(M62/M68)
     로 이 범위에서 제외했다(YAGNI). `max_concurrency`를 지정하지 않으면
     이전 동작과 100% 동일하다.
-    """
+
+    **Diversity Routing(Milestone 75, ADR-0093)**: `_build_candidates()`가
+    M74 capacity 필터링 이후, `_reorder_by_execution_memory()`보다 먼저
+    `_reorder_by_diversity()`(안정 정렬)를 적용해 비용·성공률이 완전
+    동률인 후보끼리는 지금 동시 실행 중인 세션 수(`_in_flight`, M74 상태
+    재사용)가 더 적은 엔진을 우선한다. `InMemoryEngineRuntime`과 동일한
+    설계(순수 tie-break, 새 상태 없음, `engine_selection_policy` 미주입
+    시 관여하지 않음)."""
 
     def __init__(
         self,
@@ -215,6 +222,17 @@ class ManagedEngineRuntime(EngineRuntime):
             stat = self._execution_memory.get((required_capabilities, candidate.engine_name))
             rate = stat.success_rate() if stat is not None else None
             return -(rate if rate is not None else _NEUTRAL_RATE)
+
+        return sorted(candidates, key=_rank)
+
+    def _reorder_by_diversity(self, candidates: list[EngineCandidate]) -> list[EngineCandidate]:
+        """**Diversity Routing(Milestone 75, ADR-0093)**: `InMemoryEngineRuntime.
+        _reorder_by_diversity()`와 동일 — 비용·성공률이 완전 동률인
+        후보끼리만 지금 동시 실행 중인 세션 수(M74 `_in_flight`)가 더
+        적은 엔진을 앞세운다."""
+
+        def _rank(candidate: EngineCandidate) -> int:
+            return self._in_flight.get(candidate.engine_name, 0)
 
         return sorted(candidates, key=_rank)
 
@@ -445,6 +463,7 @@ class ManagedEngineRuntime(EngineRuntime):
                     supports_parallel=adapter.supports_parallel(),
                 )
             )
+        candidates = self._reorder_by_diversity(candidates)
         return self._reorder_by_execution_memory(candidates, required_capabilities)
 
     def run_ensemble_auto(

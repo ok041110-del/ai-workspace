@@ -1,3 +1,6 @@
+import threading
+import time
+
 import pytest
 
 from ai_workspace.adapters.mock_engine_adapter import MockEngineAdapter
@@ -628,3 +631,100 @@ def test_run_respects_capacity_with_engine_selection_policy() -> None:
     assert adapter_a.nested_result is not None
     assert adapter_a.nested_result.success is True
     assert adapter_b.run_count == 1
+
+
+class SlowCostedEngineAdapter(CostedEngineAdapter):
+    """M75(ADR-0093) 테스트용 — `CostedEngineAdapter`에 지연을 더해, 실제
+    스레드 두 개가 `InMemoryEngineRuntime.run()`을 동시에 호출했을 때
+    한쪽 엔진이 "지금 실행 중"인 상태(M74 `_in_flight` > 0)를 진짜
+    동시성으로 재현한다."""
+
+    def __init__(self, delay_seconds: float, estimated_cost_usd: float = 0.0) -> None:
+        super().__init__(estimated_cost_usd)
+        self._delay_seconds = delay_seconds
+
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
+        time.sleep(self._delay_seconds)
+        return super().run(session_id, task, model=model)
+
+
+def test_diversity_prefers_less_busy_engine_on_full_tie() -> None:
+    """M75(ADR-0093): 비용(둘 다 0.0)과 성공률(둘 다 미검증→중립)이 완전히
+    동률이면, 지금 실행 중(M74 in-flight)인 engine-a 대신 한가한
+    engine-b를 우선한다 — 두 스레드가 동시에 `run()`을 호출하는 실제
+    병렬 상황으로 재현한다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    engine_a = SlowCostedEngineAdapter(delay_seconds=0.2)
+    engine_b = SlowCostedEngineAdapter(delay_seconds=0.01)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    thread = threading.Thread(target=runtime.run, args=(make_task("busy"),))
+    thread.start()
+    time.sleep(0.05)  # engine-a가 실행 중(in-flight=1)인 순간을 보장
+    runtime.run(make_task("tie"))
+    thread.join()
+
+    assert engine_a.run_count == 1
+    assert engine_b.run_count == 1
+
+
+def test_diversity_does_not_override_lower_cost() -> None:
+    """M75(ADR-0093): engine-a가 지금 바쁘더라도(in-flight 더 많음) 비용이
+    더 낮으면 다양성이 이를 뒤집지 않고 그대로 engine-a가 선택된다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    engine_a = SlowCostedEngineAdapter(delay_seconds=0.2, estimated_cost_usd=0.0)
+    engine_b = SlowCostedEngineAdapter(delay_seconds=0.01, estimated_cost_usd=5.0)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    thread = threading.Thread(target=runtime.run, args=(make_task("busy"),))
+    thread.start()
+    time.sleep(0.05)
+    runtime.run(make_task("second"))
+    thread.join()
+
+    assert engine_a.run_count == 2
+    assert engine_b.run_count == 0
+
+
+def test_diversity_does_not_override_execution_memory_success_rate() -> None:
+    """M75(ADR-0093): 비용이 동률이어도 성공률이 이미 갈린 경우(M69),
+    다양성(현재 바쁜지 여부)은 그 우선순위를 절대 뒤집지 않는다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    reliable = SlowCostedEngineAdapter(delay_seconds=0.2)
+    runtime.register_engine("reliable", reliable)
+    for i in range(3):
+        runtime.run(make_task(f"seed-{i}"))
+    assert reliable.run_count == 3
+
+    untested = SlowCostedEngineAdapter(delay_seconds=0.01)
+    runtime.register_engine("untested", untested)
+
+    thread = threading.Thread(target=runtime.run, args=(make_task("busy"),))
+    thread.start()
+    time.sleep(0.05)  # reliable이 실행 중(in-flight=1)인 순간을 보장
+    runtime.run(make_task("tie"))
+    thread.join()
+
+    assert reliable.run_count == 5
+    assert untested.run_count == 0
+
+
+def test_diversity_not_applied_without_engine_selection_policy() -> None:
+    """M75 이전과 100% 동일 동작(회귀 확인): `engine_selection_policy`를
+    주입하지 않으면(첫 매칭 경로) 다양성이 전혀 관여하지 않는다."""
+    runtime = InMemoryEngineRuntime()
+    engine_a = SlowCostedEngineAdapter(delay_seconds=0.2)
+    engine_b = SlowCostedEngineAdapter(delay_seconds=0.01)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    thread = threading.Thread(target=runtime.run, args=(make_task("busy"),))
+    thread.start()
+    time.sleep(0.05)
+    runtime.run(make_task("second"))
+    thread.join()
+
+    assert engine_a.run_count == 2
+    assert engine_b.run_count == 0
