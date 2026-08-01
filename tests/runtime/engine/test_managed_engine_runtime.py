@@ -807,3 +807,86 @@ def test_run_without_policy_does_not_apply_reliability_exclusion() -> None:
         runtime.run(make_task(f"t{i}"))
 
     assert failing_only.run_count == 5
+
+
+def test_run_ensemble_auto_without_policy_picks_first_n_matching_registered_order() -> None:
+    """M68: policy 미주입 시 등록 순서상 조건을 만족하는 첫 top_n개를
+    고른다 — run()의 정책 미주입 동작과 동일한 원칙."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("first", MockEngineAdapter())
+    runtime.register_engine("second", MockEngineAdapter())
+    runtime.register_engine("third", MockEngineAdapter())
+
+    results = runtime.run_ensemble_auto(make_task(), top_n=2)
+
+    assert set(results) == {"first", "second"}
+
+
+def test_run_ensemble_auto_with_policy_selects_cheapest_n_candidates() -> None:
+    """M68(ADR-0086): engine_selection_policy를 주입하면 비용이 낮은
+    순서로 top_n개를 동적으로 고른다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    runtime.register_engine("expensive", CostedEngineAdapter(10.0))
+    runtime.register_engine("cheapest", CostedEngineAdapter(1.0))
+    runtime.register_engine("middle", CostedEngineAdapter(5.0))
+
+    results = runtime.run_ensemble_auto(make_task(), top_n=2)
+
+    assert set(results) == {"cheapest", "middle"}
+
+
+def test_run_ensemble_auto_filters_by_required_capabilities() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("vision", MockEngineAdapter(frozenset({"vision"})))
+    runtime.register_engine("code", MockEngineAdapter(frozenset({"code_generation"})))
+
+    results = runtime.run_ensemble_auto(
+        make_task(), required_capabilities=frozenset({"code_generation"}), top_n=5
+    )
+
+    assert set(results) == {"code"}
+
+
+def test_run_ensemble_auto_returns_fewer_than_top_n_when_not_enough_candidates() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("only", MockEngineAdapter())
+
+    results = runtime.run_ensemble_auto(make_task(), top_n=5)
+
+    assert set(results) == {"only"}
+
+
+def test_run_ensemble_auto_raises_no_suitable_engine_when_no_candidate_matches() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("mock", MockEngineAdapter(frozenset({"code_generation"})))
+
+    with pytest.raises(NoSuitableEngineError):
+        runtime.run_ensemble_auto(make_task(), required_capabilities=frozenset({"vision"}))
+
+
+def test_run_ensemble_auto_with_top_n_below_one_returns_empty_dict() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("mock", MockEngineAdapter())
+
+    assert runtime.run_ensemble_auto(make_task(), top_n=0) == {}
+
+
+def test_run_ensemble_auto_excludes_unreliable_engine_with_policy() -> None:
+    """M68이 M65/M66의 신뢰도 기반 제외 규칙을 그대로 적용받는지 확인한다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    failing_cheap = CostedEngineAdapter(1.0, succeed=False)
+    reliable_expensive = CostedEngineAdapter(10.0)
+    runtime.register_engine("failing_cheap", failing_cheap)
+    runtime.register_engine("reliable_expensive", reliable_expensive)
+
+    for i in range(3):
+        runtime.run(make_task(f"t{i}"))
+    assert failing_cheap.run_count == 3
+
+    results = runtime.run_ensemble_auto(make_task("after"), top_n=2)
+
+    assert set(results) == {"reliable_expensive"}

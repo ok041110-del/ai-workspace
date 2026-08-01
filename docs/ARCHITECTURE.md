@@ -697,6 +697,24 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   전환하지 않는다. Probe 기반 자동 복구(M66과 동일한 개념)는 이번
   범위에서 명시적으로 제외하고 별도 Milestone 후보로 남긴다. 새 Core
   Domain Interface 없음 — 기존 `LLMPolicyEngine`의 메서드 1개 확장뿐.
+- **Dynamic Ensemble Routing(Milestone 68, ADR-0086)**: `run_ensemble()`
+  (M62)은 호출자가 `engine_names`를 직접 나열해야 하는 계약이라 M64/M65/
+  M66이 `run()`/`estimate_cost()` 경로에 이미 구현한 `EngineSelectionPolicy`
+  기반 비용·신뢰도 인식 선택을 전혀 활용하지 못했다. 새 `run_ensemble_auto(
+  task, required_capabilities=frozenset(), *, top_n=2, model=None)`
+  (`EngineRuntime`의 새 abstract method)이 `run()`/`estimate_cost()`가
+  쓰는 후보 선정 로직(`_build_candidates()` — M65/M66의 신뢰도 기반
+  제외·Probe 규칙 포함)으로 `EngineCandidate` 목록을 만들고,
+  `engine_selection_policy`가 주입돼 있으면 `EngineSelectionPolicy.
+  select()`(M17)를 반복 호출해(매 회 직전 선택 후보를 제거) 비용이 낮은
+  순으로 top_n개를 고른다 — `EngineSelectionPolicy` 시그니처는 무변경
+  (Decision Only 계약 유지). 정책 미주입 시에는 등록 순서상 조건을
+  만족하는 첫 top_n개를 고른다(100% 하위 호환). 선택된 이름 목록은 새
+  실행 로직 없이 기존 `run_ensemble()`(M62의 `ThreadPoolExecutor` 동시
+  실행 + 개별 엔진 실패 격리)에 그대로 위임한다(YAGNI). `RecoveringEngineRuntime`
+  은 `run_ensemble()`과 동일한 이유로 재시도 없이 내부 Runtime에 위임한다.
+  새 Core Domain Interface 없음 — 기존 `EngineRuntime`의 메서드 1개
+  확장뿐(30종 유지).
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -2560,7 +2578,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `InteractionEngine` | 입력 표면 정규화/응답 변환 (기존 ConversationEngine 대체) | Milestone 1 (T1-21) 계약, Milestone 3 구현 | **완료(계약)** |
 | `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료(계약)** |
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
-| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15) | Milestone 1 (T1-19) | **완료(계약)** |
+| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장 | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 | `WorkflowRepository` | `Workflow` 조회/저장(`AutomationActionExecutor`의 RUN_WORKFLOW가 `workflow_id`로 실제 Workflow를 찾는 유일한 통로) | Milestone 59 (계약+`InMemoryWorkflowRepository` 구현) | **완료(계약+구현)** |

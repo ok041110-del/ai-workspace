@@ -79,6 +79,14 @@ class ManagedEngineRuntime(EngineRuntime):
     제외된 엔진을 `_PROBE_INTERVAL`번 연속으로 건너뛰면 다음 선택에서 한
     번 더 후보로 포함해(probe) 복구 여부를 다시 확인한다 — `EngineRuntime`과
     동일한 규칙(`EngineReliabilityStat.is_probe_eligible()`)이다.
+
+    **Dynamic Ensemble Routing(Milestone 68, ADR-0086)**: `run_ensemble()`
+    (M62)은 `engine_names`를 호출자가 직접 나열해야 했다. `run_ensemble_auto()`
+    는 `_require_adapter()`에서 쓰던 후보 선정 로직을 `_build_candidates()`로
+    분리해 재사용하고, `EngineSelectionPolicy.select()`를 반복 호출해(매번
+    이미 선택된 후보를 제외) 상위 `top_n`개 엔진을 동적으로 고른 뒤 기존
+    `run_ensemble()`에 그대로 위임한다 — 새 병렬 실행 로직을 만들지
+    않는다(YAGNI).
     """
 
     def __init__(
@@ -246,6 +254,17 @@ class ManagedEngineRuntime(EngineRuntime):
                     return name, adapter
             raise NoSuitableEngineError(required_capabilities)
 
+        candidates = self._build_candidates(task, required_capabilities)
+        decision = self._engine_selection_policy.select(
+            task, candidates, budget_policy_engine=self._budget_policy_engine
+        )
+        if decision is None:
+            raise NoSuitableEngineError(required_capabilities)
+        return decision.engine_name, self._engines[decision.engine_name]
+
+    def _build_candidates(
+        self, task: Task, required_capabilities: frozenset[str]
+    ) -> list[EngineCandidate]:
         candidates: list[EngineCandidate] = []
         for name, adapter in self._engines.items():
             if not required_capabilities.issubset(adapter.capabilities()):
@@ -264,12 +283,46 @@ class ManagedEngineRuntime(EngineRuntime):
                     supports_parallel=adapter.supports_parallel(),
                 )
             )
-        decision = self._engine_selection_policy.select(
-            task, candidates, budget_policy_engine=self._budget_policy_engine
-        )
-        if decision is None:
+        return candidates
+
+    def run_ensemble_auto(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 2,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        if top_n < 1:
+            return {}
+        names = self._select_top_n(task, required_capabilities, top_n)
+        if not names:
             raise NoSuitableEngineError(required_capabilities)
-        return decision.engine_name, self._engines[decision.engine_name]
+        return self.run_ensemble(task, names, model=model)
+
+    def _select_top_n(
+        self, task: Task, required_capabilities: frozenset[str], top_n: int
+    ) -> list[str]:
+        if self._engine_selection_policy is None:
+            names: list[str] = []
+            for name, adapter in self._engines.items():
+                if required_capabilities.issubset(adapter.capabilities()):
+                    names.append(name)
+                if len(names) >= top_n:
+                    break
+            return names
+
+        remaining = self._build_candidates(task, required_capabilities)
+        selected: list[str] = []
+        while remaining and len(selected) < top_n:
+            decision = self._engine_selection_policy.select(
+                task, remaining, budget_policy_engine=self._budget_policy_engine
+            )
+            if decision is None:
+                break
+            selected.append(decision.engine_name)
+            remaining = [c for c in remaining if c.engine_name != decision.engine_name]
+        return selected
 
     def _finish_as_completed(
         self, task_id: str, session_id: str, adapter: EngineAdapter, result: EngineResult

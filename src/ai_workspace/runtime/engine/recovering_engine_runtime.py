@@ -103,6 +103,20 @@ class RecoveringEngineRuntime(EngineRuntime):
         않음)."""
         return self._inner.run_ensemble(task, engine_names, model=model)
 
+    def run_ensemble_auto(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 2,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        """`run_ensemble()`과 동일한 이유(M62)로 재시도 없이 내부
+        Runtime에 그대로 위임한다(Milestone 68, ADR-0086)."""
+        return self._inner.run_ensemble_auto(
+            task, required_capabilities, top_n=top_n, model=model
+        )
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

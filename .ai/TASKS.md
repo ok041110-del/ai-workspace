@@ -15063,6 +15063,83 @@ no-op) — Agent는 `LLMPolicyEngine` interface를 직접 알지 못하고
 
 ---
 
+## Milestone 68 — Dynamic Ensemble Routing: EngineSelectionPolicy 기반 top-N 자동 선택 (완료)
+
+**배경**: 사용자가 "M68 Dynamic Ensemble Routing"으로 착수 요청. `run_ensemble()`
+(M62)은 `engine_names`를 호출자가 직접 나열해야 했고, M64/M65/M66에서
+`run()`/`estimate_cost()` 경로에 이미 구현된 `EngineSelectionPolicy` 기반
+비용·신뢰도 인식 선택(`engine_selection_policy` 주입 시 `_select`/
+`_require_adapter`가 수행)을 전혀 활용하지 못했다 — 같은 Task를 여러
+엔진에 "동적으로" 분산하려면 호출자가 후보 목록을 미리 알아야 했다
+(코드 확인, 추측 아님).
+
+**설계**: 새 Core Domain Interface를 추가하지 않고 기존 `EngineRuntime`에
+`run_ensemble_auto(task, required_capabilities=frozenset(), *, top_n=2,
+model=None) -> dict[str, EngineResult]` abstract method 하나만 추가한다.
+내부적으로 `run()`/`estimate_cost()`가 쓰는 후보 선정 로직
+(`InMemoryEngineRuntime._build_candidates()`, `ManagedEngineRuntime`은
+`_require_adapter()`에서 동일 로직을 `_build_candidates()`로 추출해 재사용)
+을 그대로 활용해 `EngineCandidate` 목록을 만들고, `engine_selection_policy`가
+주입돼 있으면 `EngineSelectionPolicy.select()`를 반복 호출한다(매 회마다
+직전에 선택된 후보를 제거하고 재호출) — "가장 낮은 비용"을 고르는 M17
+규칙을 그대로 반복 적용해 top-N을 얻는다(`EngineSelectionPolicy.select()`
+시그니처는 무변경, Decision Only 계약 유지). M65/M66의 신뢰도 기반
+제외·Probe 규칙도 후보 빌드 단계에서 자동으로 함께 적용된다. 정책 미주입
+시에는 `run()`의 "등록 순서상 첫 매칭" 원칙을 그대로 확장해 "첫 top_n개"를
+고른다(100% 하위 호환). 선택된 이름 목록은 기존 `run_ensemble()`에 그대로
+위임한다 — 동시 실행/개별 엔진 실패 격리 메커니즘(M62, `ThreadPoolExecutor`)
+을 재사용하고 새로 만들지 않는다(YAGNI).
+
+**구현**:
+- `src/ai_workspace/interfaces/engine_runtime.py` — `run_ensemble_auto()`
+  abstract method 추가(계약 docstring 포함).
+- `src/ai_workspace/runtime/engine/engine_runtime.py`
+  (`InMemoryEngineRuntime`) — `run_ensemble_auto()` + `_select_top_n()` 추가,
+  기존 `run_ensemble()`에 위임.
+- `src/ai_workspace/runtime/engine/managed_engine_runtime.py`
+  (`ManagedEngineRuntime`) — `_require_adapter()`의 후보 빌드 로직을
+  `_build_candidates()`로 추출(재사용), `run_ensemble_auto()` +
+  `_select_top_n()` 추가.
+- `src/ai_workspace/runtime/engine/recovering_engine_runtime.py`
+  (`RecoveringEngineRuntime`) — `run_ensemble()`과 동일한 이유로 재시도
+  없이 내부 Runtime에 그대로 위임.
+- `tests/interfaces/fakes.py`(`FakeEngineRuntime`),
+  `tests/runtime/engine/test_recovering_engine_runtime.py`
+  (`ScriptedEngineRuntime`), `tests/core/test_workspace_core.py`
+  (`SpyEngineRuntime`), `tests/agents/test_coding_agent.py`
+  (`RecordingEngineRuntime`) — 새 abstract method 구현 추가(ABC 계약
+  충족, 대부분 미사용 경로는 `NotImplementedError`/`AssertionError`로
+  기존 테스트 더블 관례 유지).
+- `tests/runtime/engine/test_engine_runtime.py`,
+  `tests/runtime/engine/test_managed_engine_runtime.py` — 각 7건 추가
+  (정책 미주입 시 첫 top_n개, 정책 주입 시 최저 비용 top_n개, capability
+  필터링, 후보 부족 시 있는 만큼만 반환, 후보 없음 시
+  `NoSuitableEngineError`, `top_n < 1`이면 빈 dict, 신뢰도 기반 제외
+  규칙이 그대로 적용됨).
+- `tests/runtime/engine/test_recovering_engine_runtime.py` — 위임 확인
+  테스트 1건 추가.
+- `docs/ARCHITECTURE.md` §3.9에 Dynamic Ensemble Routing(M68) 서술 추가.
+  새 Core Domain Interface 없음(기존 `EngineRuntime` 확장, 30종 유지).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | `run_ensemble()`이 호출자가 엔진 이름을 직접 나열해야 하는 계약임을 코드로 확인 | ✅ |
+| 2 | 새 Core Domain Interface 없이 기존 `EngineRuntime`만 확장(`run_ensemble_auto()` 1개 메서드) | ✅ |
+| 3 | `EngineSelectionPolicy`(M17) 재사용 — 시그니처 무변경, 새 알고리즘 없음 | ✅ |
+| 4 | top-N 동적 선택이 비용 기준으로 동작함을 테스트로 증명 | ✅ |
+| 5 | required_capabilities로 후보가 필터링됨을 테스트로 증명 | ✅ |
+| 6 | M65/M66 신뢰도 기반 제외 규칙이 그대로 적용됨을 테스트로 증명 | ✅ |
+| 7 | M62의 `run_ensemble()`(병렬 실행 + 개별 실패 격리)을 그대로 재사용(중복 구현 없음) | ✅ |
+| 8 | 정책 미주입 시 등록 순서상 첫 top_n개를 고르는 기존 원칙과 일치(회귀 없음) | ✅ |
+| 9 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1274개(신규 15개, 회귀 없음)/`ruff`/`mypy`(230 source files)
+전부 통과. ADR-0086.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

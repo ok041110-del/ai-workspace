@@ -42,7 +42,14 @@ class InMemoryEngineRuntime(EngineRuntime):
     한번 참이 되면 성공 기록 없이는 다시 후보가 될 수 없었던 M65의 공백을
     메운다 — `_build_candidates()`가 제외된 엔진을 `_PROBE_INTERVAL`번
     연속으로 건너뛰면 다음 선택에서 한 번 더 후보로 포함해(probe) 복구
-    여부를 다시 확인할 기회를 준다."""
+    여부를 다시 확인할 기회를 준다.
+
+    **Dynamic Ensemble Routing(Milestone 68, ADR-0086)**: `run_ensemble()`
+    (M62)은 `engine_names`를 호출자가 직접 나열해야 했다. `run_ensemble_auto()`
+    는 `_build_candidates()`(M64/M65/M66과 동일한 비용·신뢰도 기반 후보
+    선정)를 재사용해 `EngineSelectionPolicy.select()`를 반복 호출하는
+    방식으로 상위 `top_n`개 엔진을 동적으로 고른 뒤 기존 `run_ensemble()`
+    에 그대로 위임한다 — 새 병렬 실행 로직을 만들지 않는다(YAGNI)."""
 
     def __init__(
         self,
@@ -175,6 +182,45 @@ class InMemoryEngineRuntime(EngineRuntime):
                 results[name] = EngineResult(success=False, output="", error=str(exc))
             self._record_engine_outcome(name, results[name].success)
         return results
+
+    def run_ensemble_auto(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 2,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        if top_n < 1:
+            return {}
+        names = self._select_top_n(task, required_capabilities, top_n)
+        if not names:
+            raise NoSuitableEngineError(required_capabilities)
+        return self.run_ensemble(task, names, model=model)
+
+    def _select_top_n(
+        self, task: Task, required_capabilities: frozenset[str], top_n: int
+    ) -> list[str]:
+        if self._engine_selection_policy is None:
+            names: list[str] = []
+            for name, adapter in self._engines.items():
+                if required_capabilities.issubset(adapter.capabilities()):
+                    names.append(name)
+                if len(names) >= top_n:
+                    break
+            return names
+
+        remaining = self._build_candidates(task, required_capabilities, require_parallel=False)
+        selected: list[str] = []
+        while remaining and len(selected) < top_n:
+            decision = self._engine_selection_policy.select(
+                task, remaining, budget_policy_engine=self._budget_policy_engine
+            )
+            if decision is None:
+                break
+            selected.append(decision.engine_name)
+            remaining = [c for c in remaining if c.engine_name != decision.engine_name]
+        return selected
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

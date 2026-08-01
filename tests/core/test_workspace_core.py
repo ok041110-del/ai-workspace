@@ -53,6 +53,16 @@ class SpyEngineRuntime(EngineRuntime):
     ) -> dict[str, EngineResult]:
         raise AssertionError("Workspace Core는 Task를 직접 실행하면 안 된다.")
 
+    def run_ensemble_auto(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 2,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        raise AssertionError("Workspace Core는 Task를 직접 실행하면 안 된다.")
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

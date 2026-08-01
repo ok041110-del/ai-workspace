@@ -6023,3 +6023,86 @@ Color 원칙/Backward Compatibility 원칙 중 무엇도 변경하지 않았다.
   Milestone 67 절 신규 추가. `docs/ARCHITECTURE.md` §3.9에 Self
   Optimization(정책 계층) 서술 추가, §7 Interface 표의 `LLMPolicyEngine`
   행에 M67 확장 반영.
+
+## ADR-0086: Dynamic Ensemble Routing — EngineSelectionPolicy 기반 top-N 자동 선택 (Milestone 68)
+
+- 상태: 승인됨 (2026-08-01)
+- 날짜: 2026-08-01
+- 배경: 사용자가 "M68 Dynamic Ensemble Routing"으로 명확한 범위를 담아
+  착수를 요청했다 — `run_ensemble()`(M62, ADR-0080)은 호출자가
+  `engine_names`를 직접 나열해야 하는 계약이라, M64/M65/M66에서
+  `run()`/`estimate_cost()` 경로에 이미 구현된 `EngineSelectionPolicy`
+  기반 비용·신뢰도 인식 선택을 전혀 활용하지 못했다(코드 확인, 추측
+  아님) — 같은 Task를 여러 엔진에 "동적으로" 분산하는 경로가 없었다.
+- 결정:
+  1. 새 Core Domain Interface를 추가하지 않고 기존 `EngineRuntime`에
+     `run_ensemble_auto(task, required_capabilities=frozenset(), *,
+     top_n=2, model=None) -> dict[str, EngineResult]` abstract method
+     하나만 추가한다.
+  2. `InMemoryEngineRuntime`/`ManagedEngineRuntime`은 `run()`/
+     `estimate_cost()`가 이미 쓰는 후보 선정 로직(`_build_candidates()`,
+     `ManagedEngineRuntime`은 이번에 `_require_adapter()`에서 이 부분을
+     별도 메서드로 추출해 재사용)으로 `EngineCandidate` 목록을 만든다 —
+     M65/M66의 신뢰도 기반 제외·Probe 규칙이 후보 빌드 단계에서 자동으로
+     함께 적용된다.
+  3. `engine_selection_policy`가 주입돼 있으면 `EngineSelectionPolicy.
+     select()`(M17)를 반복 호출해(매 회 직전 선택 후보를 후보 목록에서
+     제거) top_n개를 얻는다 — "예산 내 최저 비용 하나"를 고르는 기존
+     규칙을 그대로 반복 적용할 뿐, `EngineSelectionPolicy` 시그니처는
+     전혀 바꾸지 않는다(Decision Only 계약 유지).
+  4. 정책 미주입 시에는 `run()`의 "등록 순서상 첫 매칭" 원칙을 그대로
+     확장해 조건을 만족하는 첫 top_n개를 고른다 — 100% 하위 호환.
+  5. 선택된 이름 목록은 새 실행 로직을 만들지 않고 기존 `run_ensemble()`
+     (M62의 `ThreadPoolExecutor` 동시 실행 + 개별 엔진 실패 격리)에
+     그대로 위임한다(YAGNI).
+  6. `required_capabilities`를 만족하며 신뢰도상 제외되지 않는 등록된
+     엔진이 하나도 없으면(`top_n >= 1`인 경우) `run()`과 동일하게
+     `NoSuitableEngineError`를 전파한다 — 선택 단계 오류와 개별 엔진의
+     실행 실패(결과로만 격리)를 구분하는 기존 원칙을 그대로 따른다.
+  7. `top_n < 1`이면 후보를 조회하지 않고 빈 dict를 반환한다(`run_ensemble()`
+     의 "engine_names가 비어 있으면 빈 dict" 계약과 대칭).
+  8. `RecoveringEngineRuntime`은 `run_ensemble()`과 동일한 이유(비교
+     대상인 개별 결과를 재시도로 덮어쓰면 안 됨)로 재시도 없이 내부
+     Runtime에 그대로 위임한다.
+- 대안:
+  1. `run_ensemble()` 자체의 시그니처를 `engine_names: list[str] | None`
+     으로 바꿔 `None`이면 자동 선택하도록 확장 — 기각: 하나의 메서드가
+     "명시적 지정"과 "동적 선택"이라는 서로 다른 계약을 함께 가지면
+     반환 dict의 key 집합이 입력과 항상 같다는 기존 `run_ensemble()`의
+     계약(§ "언제나 engine_names와 같다")이 깨진다. 별도 메서드가 기존
+     계약을 그대로 보존한다.
+  2. 새 `EnsembleRoutingPolicy` interface를 별도로 추가 — 기각: 사용자가
+     명시적으로 "새 Core Domain Interface는 추가하지 말고" 요청했고,
+     top-N 선택은 기존 `EngineSelectionPolicy.select()`를 반복 호출하는
+     것만으로 충분해 새 계약을 정당화할 필요성이 없다(YAGNI).
+  3. `EngineSelectionPolicy.select()`에 `top_n` 파라미터를 추가해 정책
+     구현체가 직접 목록을 반환하도록 확장 — 기각: M17 "Decision Only,
+     단일 선택" 계약과 기존 호출부(Automation 파이프라인 등 단일 선택만
+     쓰는 곳)에 영향을 준다. `EngineRuntime` 쪽에서 반복 호출하는 편이
+     기존 계약을 하나도 건드리지 않는다.
+  4. `EngineRegistry`를 통해 후보를 다시 조회 — 기각: ADR-0082(M64)가
+     이미 같은 이유로 기각한 대안과 동일 — `EngineRuntime`은 자체
+     `self._engines` dict로 이미 관리하므로 이중 관리가 된다.
+- 이유: `EngineSelectionPolicy.select()`가 이미 "후보 목록 중 최적 하나"
+  를 검증된 형태로 판단하므로, 그 후보 목록에서 직전 선택을 제거하며
+  반복 호출하면 새 랭킹 알고리즘 없이 top-N을 얻을 수 있다. `run_ensemble()`
+  의 실행/격리 메커니즘도 그대로 재사용해, 이번 Milestone은 순수하게
+  "후보를 어떻게 정할지"만 다루는 최소 확장으로 끝난다.
+- 결과/영향: `interfaces/engine_runtime.py`(abstract method 추가),
+  `runtime/engine/engine_runtime.py`(`InMemoryEngineRuntime`),
+  `runtime/engine/managed_engine_runtime.py`(`ManagedEngineRuntime`,
+  `_build_candidates()` 추출), `runtime/engine/recovering_engine_runtime.py`
+  (`RecoveringEngineRuntime`, 위임) 수정. 새 abstract method 추가로
+  기존 `EngineRuntime` 테스트 더블(`tests/interfaces/fakes.py`
+  `FakeEngineRuntime`, `tests/runtime/engine/test_recovering_engine_runtime.py`
+  `ScriptedEngineRuntime`, `tests/core/test_workspace_core.py`
+  `SpyEngineRuntime`, `tests/agents/test_coding_agent.py`
+  `RecordingEngineRuntime`)에도 최소 구현을 추가했다(ABC 계약 충족
+  목적, 대부분 미사용 경로는 기존 관례대로 `NotImplementedError`/
+  `AssertionError`). 새 Core Domain Interface 없음(기존 `EngineRuntime`
+  확장, 30종 유지). 신규 테스트 15건(`InMemoryEngineRuntime` 7건,
+  `ManagedEngineRuntime` 7건, `RecoveringEngineRuntime` 1건 — 정확한
+  분해는 `.ai/TASKS.md` Milestone 68 참고). `pytest` 1274개(신규 15개,
+  회귀 없음)/`ruff`/`mypy`(230 source files) 전부 통과. `.ai/TASKS.md`
+  Milestone 68 절 신규 추가. `docs/ARCHITECTURE.md` §3.9 Engine Runtime
+  절에 Dynamic Ensemble Routing 서술 추가.

@@ -131,6 +131,49 @@ class EngineRuntime(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def run_ensemble_auto(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 2,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        """**Dynamic Ensemble Routing(Milestone 68, ADR-0086)**:
+        `run_ensemble()`(M62)은 `engine_names`를 호출자가 직접 나열해야
+        했고, `run()`/`estimate_cost()`가 이미 쓰는 `EngineSelectionPolicy`
+        기반 비용·신뢰도 인식 선택(M64/M65/M66)을 전혀 활용하지 못했다.
+        이 메서드는 `engine_names`를 직접 받는 대신 `run()`과 동일한
+        `required_capabilities` 기준으로 후보를 추리고, 그중 상위 `top_n`
+        개를 동적으로 골라 `run_ensemble()`에 그대로 위임한다 — 실제
+        동시 실행/개별 실패 격리 메커니즘은 새로 만들지 않고 M62의
+        것을 그대로 재사용한다(YAGNI).
+
+        입력: task (모든 후보 엔진에 동일하게 실행할 Task),
+              required_capabilities (후보가 반드시 지원해야 하는 능력
+              태그 집합, 생략 시 제약 없음), top_n (선택할 최대 엔진
+              개수, 기본값 2 — 1 미만이면 후보를 조회하지 않고 빈 dict를
+              반환한다), model (선택적, 선택된 모든 엔진에 동일하게
+              전달할 모델 이름)
+        출력: 실제로 선택된 엔진 이름을 key로 하는 `run_ensemble()`의
+              반환값 그대로. 선택된 엔진 수는 0 이상 `top_n` 이하이며,
+              후보 수가 `top_n`보다 적으면 있는 만큼만 선택된다.
+        예외: `top_n >= 1`인데 required_capabilities를 만족하는(그리고
+              `engine_selection_policy` 주입 시 신뢰도상 제외되지 않는)
+              등록된 엔진이 하나도 없으면 NoSuitableEngineError(선택
+              단계 오류는 `run()`과 동일하게 예외로 전파하고, 개별 엔진의
+              실행 실패는 `run_ensemble()`과 동일하게 결과로만 격리한다).
+        보장: `engine_selection_policy`가 주입된 구현체는 그 정책으로
+              후보를 반복 선택해(매번 이미 선택된 후보를 제외하고
+              재선택) 비용이 낮은 순으로 최대 `top_n`개를 고르며,
+              M65/M66의 신뢰도 기반 제외·Probe 규칙도 그대로 적용된다.
+              주입되지 않았으면(기본값) 등록 순서상 조건을 만족하는
+              첫 `top_n`개를 고른다 — `run()`의 정책 미주입 시 동작과
+              동일한 원칙이다.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

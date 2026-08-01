@@ -152,6 +152,16 @@ class ScriptedEngineRuntime(EngineRuntime):
     ) -> dict[str, EngineResult]:
         raise NotImplementedError
 
+    def run_ensemble_auto(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 2,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        raise NotImplementedError
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:
@@ -358,6 +368,18 @@ def test_run_ensemble_delegates_to_inner_runtime_without_retrying() -> None:
 
     assert results["ok"].success is True
     assert results["missing"].success is False
+
+
+def test_run_ensemble_auto_delegates_to_inner_runtime_without_retrying() -> None:
+    """M68(ADR-0086): `run_ensemble_auto()`도 `run_ensemble()`과 동일한
+    이유로 재시도 없이 내부 Runtime에 그대로 위임한다."""
+    managed = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    managed.register_engine("ok", MockEngineAdapter())
+    runtime = RecoveringEngineRuntime(inner=managed, retry_policy=RetryPolicy())
+
+    results = runtime.run_ensemble_auto(make_task(), top_n=2)
+
+    assert set(results) == {"ok"}
 
 
 def test_retry_policy_defaults_to_three_attempts() -> None:

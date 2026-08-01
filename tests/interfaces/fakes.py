@@ -439,6 +439,26 @@ class FakeEngineRuntime(EngineRuntime):
                 results[name] = EngineResult(success=False, output="", error=str(exc))
         return results
 
+    def run_ensemble_auto(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 2,
+        model: str | None = None,
+    ) -> dict[str, EngineResult]:
+        if top_n < 1:
+            return {}
+        names: list[str] = []
+        for name, adapter in self._engines.items():
+            if required_capabilities.issubset(adapter.capabilities()):
+                names.append(name)
+            if len(names) >= top_n:
+                break
+        if not names:
+            raise NoSuitableEngineError(required_capabilities)
+        return self.run_ensemble(task, names, model=model)
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:
