@@ -875,6 +875,29 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   (기존 `EngineRuntime`에 read-only 조회 메서드 하나 추가, M70/M77과
   동일한 방식), 새 상태 없음, `run_ensemble()`/`run_ensemble_auto()`
   로의 확장은 이번 범위 밖(단일/`top_n` 조회만, YAGNI).
+- **Autonomous Decision Engine(Milestone 80, ADR-0098)**: M65~M79가
+  각각 신뢰도·Benchmark·Recommendation을 제공했지만, "실행 직전 최종
+  결정"이라는 단일 개념으로 묶는 오케스트레이션 API는 없었다.
+  `decide_engine(task, required_capabilities)`를 `EngineRuntime`에
+  추가해, 새 알고리즘 없이 `recommend_engine()`(M79)의 1순위를 M17
+  `EngineSelectionDecision`(새 domain 타입 없음, engine_name/model/
+  reason)에 그대로 담아 반환한다. `recommend_engine()`의 1순위는 항상
+  `_build_candidates()`/`EngineSelectionPolicy.select()`와 동일한
+  파이프라인 결과이므로(같은 코드 재사용), `confident`가 낮아도 실제
+  선택되는 엔진은 `run()`이 고를 엔진과 수학적으로 항상 같다 — "새
+  알고리즘을 만들지 말고 기존 결과를 순차적으로 통합"하라는 요구를
+  결과 동일성으로 보장한다(reason 문구에만 confident 여부가 반영된다).
+  추천 자체가 없으면(후보 없음) `_select()`/`_require_adapter()`를 그대로
+  호출해 `run()`과 동일한 `NoSuitableEngineError`를 낸다 — "Recommendation
+  부족 시 기존 EngineSelectionPolicy로 즉시 fallback"을 예외 정책까지
+  일치시켜 만족한다. 이 작업 중 `recommend_engine()`(M79)의 정책 미주입
+  경로가 `_has_capacity()`를 확인하지 않아 `_select()`(capacity 필터링함)
+  와 다른 엔진을 추천할 수 있던 사소한 불일치를 함께 바로잡았다(`decide_
+  engine()`의 "항상 run()과 같은 엔진" 보장에 필요). `run()`/`_select()`/
+  재정렬 메서드는 전혀 수정하지 않는다(`decide_engine()`은 `_select()`를
+  대체하지 않고 병렬적인 조회 API로만 추가) — 새 Core Domain Interface
+  없음(M70/M77/M79와 동일한 방식), 새 상태 없음, Ensemble(top_n) 지원은
+  이번 범위 밖(단일 결정만, YAGNI).
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -2779,7 +2802,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `InteractionEngine` | 입력 표면 정규화/응답 변환 (기존 ConversationEngine 대체) | Milestone 1 (T1-21) 계약, Milestone 3 구현 | **완료(계약)** |
 | `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료(계약)** |
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
-| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70)+Provider별 동시 실행 상한(M74)+동률 후보 다양성 라우팅(M75)+상대 부하율 기반 로드 밸런싱(M76)+Benchmark Profile 조회(M77)+Benchmark 기반 Routing tie-break(M78)+실행 없는 Engine 추천(M79) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장, M74(ADR-0092) `register_engine()`에 선택적 `max_concurrency` 확장, M75(ADR-0093) `_build_candidates()` 내부 tie-break 추가(계약 무변경), M76(ADR-0094) tie-break 신호를 raw count→상대 부하율로 개선(계약 무변경), M77(ADR-0095) `benchmark_profile()` 신규 public 메서드 추가(Routing 무변경), M78(ADR-0096) `_build_candidates()` 내부에 Benchmark 기반 tie-break 추가(계약 무변경), M79(ADR-0097) `recommend_engine()` 신규 public 메서드 추가(Routing 무변경, 실행 강제 없음) | **완료(계약)** |
+| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70)+Provider별 동시 실행 상한(M74)+동률 후보 다양성 라우팅(M75)+상대 부하율 기반 로드 밸런싱(M76)+Benchmark Profile 조회(M77)+Benchmark 기반 Routing tie-break(M78)+실행 없는 Engine 추천(M79)+추천 기반 최종 결정 통합(M80) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장, M74(ADR-0092) `register_engine()`에 선택적 `max_concurrency` 확장, M75(ADR-0093) `_build_candidates()` 내부 tie-break 추가(계약 무변경), M76(ADR-0094) tie-break 신호를 raw count→상대 부하율로 개선(계약 무변경), M77(ADR-0095) `benchmark_profile()` 신규 public 메서드 추가(Routing 무변경), M78(ADR-0096) `_build_candidates()` 내부에 Benchmark 기반 tie-break 추가(계약 무변경), M79(ADR-0097) `recommend_engine()` 신규 public 메서드 추가(Routing 무변경, 실행 강제 없음), M80(ADR-0098) `decide_engine()` 신규 public 메서드 추가(새 알고리즘 없음, `run()`과 항상 동일 엔진) | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 | `WorkflowRepository` | `Workflow` 조회/저장(`AutomationActionExecutor`의 RUN_WORKFLOW가 `workflow_id`로 실제 Workflow를 찾는 유일한 통로) | Milestone 59 (계약+`InMemoryWorkflowRepository` 구현) | **완료(계약+구현)** |

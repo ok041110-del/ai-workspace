@@ -179,6 +179,9 @@ class ScriptedEngineRuntime(EngineRuntime):
     def recommend_engine(self, task, required_capabilities=frozenset(), *, top_n=1):
         raise NotImplementedError
 
+    def decide_engine(self, task, required_capabilities=frozenset()):
+        raise NotImplementedError
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

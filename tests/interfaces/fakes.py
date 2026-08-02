@@ -14,6 +14,7 @@ from ai_workspace.domain.dashboard import (
 )
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.engine_recommendation import EngineRecommendation
+from ai_workspace.domain.engine_selection import EngineSelectionDecision
 from ai_workspace.domain.knowledge import KnowledgeDocument
 from ai_workspace.domain.llm_policy import LLMPolicyDecision
 from ai_workspace.domain.project import Project
@@ -515,6 +516,20 @@ class FakeEngineRuntime(EngineRuntime):
         대역) 항상 빈 목록을 반환한다 — "추천이 없으면 기존 Routing
         결과를 그대로 사용한다"는 계약의 극단 케이스와 동일하다."""
         return []
+
+    def decide_engine(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> EngineSelectionDecision:
+        """이 Fake는 `recommend_engine()`이 항상 빈 목록이므로(위 참고)
+        `run()`과 동일한 첫 매칭 규칙으로 바로 fallback한다."""
+        for name, adapter in self._engines.items():
+            if required_capabilities.issubset(adapter.capabilities()):
+                return EngineSelectionDecision(
+                    engine_name=name,
+                    model=None,
+                    reason="추천 근거 없음 — 기존 EngineSelectionPolicy로 fallback",
+                )
+        raise NoSuitableEngineError(required_capabilities)
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

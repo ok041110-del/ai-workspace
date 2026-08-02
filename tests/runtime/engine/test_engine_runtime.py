@@ -1038,3 +1038,106 @@ def test_recommend_engine_without_policy_matches_first_registered_and_not_confid
     assert recommendations[0].confident is False
     assert recommendations[0].evidence == {}
     assert engine_a.run_count == 0
+
+
+class RecommendingReentrantEngineAdapter(MockEngineAdapter):
+    """M80(ADR-0098) 테스트용 — `ReentrantEngineAdapter`와 같은 재진입
+    트릭으로, `run()` 도중(자신이 아직 in-flight인 상태) `recommend_engine()`
+    을 호출해 그 결과를 기록한다."""
+
+    def __init__(self, runtime: InMemoryEngineRuntime) -> None:
+        super().__init__()
+        self._runtime = runtime
+        self.recommended_during_busy: list[str] | None = None
+
+    def run(self, session_id: str, task: Task, *, model: str | None = None) -> EngineResult:
+        self.recommended_during_busy = [
+            r.engine_name for r in self._runtime.recommend_engine(make_task("probe"), top_n=2)
+        ]
+        return super().run(session_id, task, model=model)
+
+
+def test_recommend_engine_without_policy_respects_capacity() -> None:
+    """M80(ADR-0098) 버그 수정: `engine_selection_policy` 미주입 경로에서
+    `recommend_engine()`이 `_has_capacity()`를 확인하지 않아 `_select()`
+    (capacity 필터링함)와 다른 엔진을 추천할 수 있었다 — `decide_engine()`
+    이 "항상 run()과 같은 엔진"이라는 보장을 하려면 이 불일치가 없어야
+    한다. `busy`가 지금 실행 중(capacity=1, in-flight=1)일 때
+    `recommend_engine()`을 호출하면 `idle`만 추천되어야 한다."""
+    runtime = InMemoryEngineRuntime()
+    busy = RecommendingReentrantEngineAdapter(runtime)
+    idle = CostedEngineAdapter(estimated_cost_usd=0.0)
+    runtime.register_engine("busy", busy, max_concurrency=1)
+    runtime.register_engine("idle", idle)
+
+    runtime.run(make_task("outer"))
+
+    assert busy.recommended_during_busy == ["idle"]
+
+
+def test_decide_engine_matches_run_selection_with_policy() -> None:
+    """M80(ADR-0098): `engine_selection_policy`가 주입돼 있으면
+    `decide_engine()`이 반환하는 engine_name은 `run()`이 실제로 선택할
+    엔진과 항상 같다 — `recommend_engine()`의 1순위를 그대로 채택하기
+    때문이다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    cheap = CostedEngineAdapter(estimated_cost_usd=0.0)
+    expensive = CostedEngineAdapter(estimated_cost_usd=5.0)
+    runtime.register_engine("cheap", cheap)
+    runtime.register_engine("expensive", expensive)
+
+    decision = runtime.decide_engine(make_task("decide"))
+
+    assert decision.engine_name == "cheap"
+    assert decision.model is None
+
+    runtime.run(make_task("actual"))
+    assert cheap.run_count == 1
+    assert expensive.run_count == 0
+
+
+def test_decide_engine_reason_reflects_confidence() -> None:
+    """M80(ADR-0098): 표본이 충분하면 reason에 "Benchmark/Execution Memory
+    근거 반영"이, 부족하면 "표본 부족"이 반영된다 — `recommend_engine()`
+    (M79)이 만든 reason 문구를 그대로 재사용한다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    engine = CostedEngineAdapter(estimated_cost_usd=0.0, capabilities=frozenset({"cap"}))
+    runtime.register_engine("engine-a", engine)
+
+    insufficient = runtime.decide_engine(
+        make_task("first"), required_capabilities=frozenset({"cap"})
+    )
+    assert "표본 부족" in insufficient.reason
+
+    for i in range(3):
+        runtime.run(make_task(f"seed-{i}"), required_capabilities=frozenset({"cap"}))
+
+    sufficient = runtime.decide_engine(
+        make_task("second"), required_capabilities=frozenset({"cap"})
+    )
+    assert "Benchmark/Execution Memory 근거 반영" in sufficient.reason
+    assert sufficient.engine_name == "engine-a"
+
+
+def test_decide_engine_falls_back_to_policy_without_recommendation() -> None:
+    """M80(ADR-0098): `engine_selection_policy` 미주입 시(첫 매칭 경로)
+    `run()`이 고를 엔진과 같은 엔진을 반환한다."""
+    runtime = InMemoryEngineRuntime()
+    engine_a = CostedEngineAdapter(estimated_cost_usd=0.0)
+    engine_b = CostedEngineAdapter(estimated_cost_usd=0.0)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    decision = runtime.decide_engine(make_task("decide"))
+
+    assert decision.engine_name == "engine-a"
+    assert "미주입" in decision.reason
+
+
+def test_decide_engine_raises_when_no_suitable_engine() -> None:
+    """M80(ADR-0098): 후보가 하나도 없으면 `run()`과 동일하게
+    `NoSuitableEngineError`를 던진다 — 추천 없음을 조용히 삼키지 않는다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+
+    with pytest.raises(NoSuitableEngineError):
+        runtime.decide_engine(make_task("decide"), required_capabilities=frozenset({"missing"}))

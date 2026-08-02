@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.engine_recommendation import EngineRecommendation
+from ai_workspace.domain.engine_selection import EngineSelectionDecision
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_adapter import (
     CostEstimate,
@@ -299,6 +300,37 @@ class EngineRuntime(ABC):
               로직 자체를 전혀 수정하지 않고 그 결과를 조회·설명만
               한다. 상태는 M65/M69/M77이 이미 관리하는 in-process 값만
               읽으며 새 상태를 추가하지 않는다.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def decide_engine(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> EngineSelectionDecision:
+        """**Autonomous Decision Engine(Milestone 80, ADR-0098)**: M65~M79
+        (신뢰도/실행 메모리/Benchmark/Benchmark tie-break/Recommendation)를
+        하나의 최종 실행 결정으로 통합하는 오케스트레이션 계층 — 새
+        알고리즘을 만들지 않고 `recommend_engine()`(M79, 그 안에서
+        `_build_candidates()`/`EngineSelectionPolicy.select()`를 그대로
+        재사용)의 1순위 추천을 그대로 최종 결정으로 채택한다. 반환
+        타입도 새로 만들지 않고 M17 `EngineSelectionDecision`(engine_name/
+        model/reason)을 그대로 재사용한다.
+
+        입력: task (결정 대상 Task), required_capabilities (`run()`과 동일한
+              선택 기준)
+        출력: `EngineSelectionDecision(engine_name, model=None, reason)`.
+              `recommend_engine(task, required_capabilities, top_n=1)`이
+              추천을 반환하면(confident 여부와 무관하게) 그 1순위를 그대로
+              채택한다 — `recommend_engine()`의 1순위는 항상 `run()`이
+              실제로 선택할 엔진과 같은 파이프라인 결과이므로, confident가
+              낮아도 "기존 EngineSelectionPolicy로 즉시 fallback"한 것과
+              실제로 선택되는 엔진은 동일하다(`reason`에 confident 여부가
+              반영된다). 추천 자체가 없으면(후보가 하나도 없음) 이 메서드도
+              `run()`/`_select()`와 동일한 예외 정책을 따른다.
+        예외: 후보가 하나도 없으면 NoSuitableEngineError(`run()`과 동일).
+        보장: side-effect 없음(read-only, `recommend_engine()`과 동일한
+              경로만 사용). Routing 로직(`_select()`/`_build_candidates()`)
+              은 전혀 수정하지 않으며, 새 상태도 추가하지 않는다.
         """
         raise NotImplementedError
 

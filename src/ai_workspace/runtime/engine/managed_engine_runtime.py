@@ -165,7 +165,13 @@ class ManagedEngineRuntime(EngineRuntime):
     조회만 해 `EngineRecommendation` 목록을 반환한다. 근거(`evidence`)는
     M65/M69(이번 capability 조합, "Workflow Learning" 근거로 재사용)/M77
     을 조합하며, 표본 부족 시 `confident=False`로 표시해 호출자가 기존
-    Routing 결과를 그대로 쓸 수 있게 한다. Routing 로직 자체는 무변경."""
+    Routing 결과를 그대로 쓸 수 있게 한다. Routing 로직 자체는 무변경.
+
+    **Autonomous Decision Engine(Milestone 80, ADR-0098)**:
+    `InMemoryEngineRuntime.decide_engine()`과 완전히 동일한 설계 — 새
+    알고리즘 없이 `recommend_engine()`의 1순위를 M17 `EngineSelectionDecision`
+    에 그대로 담아 반환한다. 추천이 없으면 `_require_adapter()`를 그대로
+    호출해 `run()`과 동일한 예외를 낸다."""
 
     def __init__(
         self,
@@ -521,6 +527,8 @@ class ManagedEngineRuntime(EngineRuntime):
             for name, adapter in self._engines.items():
                 if not required_capabilities.issubset(adapter.capabilities()):
                     continue
+                if not self._has_capacity(name):
+                    continue
                 recommendations.append(
                     EngineRecommendation(
                         engine_name=name,
@@ -544,6 +552,26 @@ class ManagedEngineRuntime(EngineRuntime):
             results.append(self._build_recommendation(decision, required_capabilities))
             remaining = [c for c in remaining if c.engine_name != decision.engine_name]
         return results
+
+    def decide_engine(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> EngineSelectionDecision:
+        """`InMemoryEngineRuntime.decide_engine()`과 동일 —
+        `recommend_engine()`(M79)의 1순위를 새 알고리즘 없이 그대로 최종
+        결정으로 채택한다."""
+
+        recommendations = self.recommend_engine(task, required_capabilities, top_n=1)
+        if recommendations:
+            top = recommendations[0]
+            return EngineSelectionDecision(
+                engine_name=top.engine_name, model=None, reason=top.reason
+            )
+        name, _adapter = self._require_adapter(required_capabilities, task)
+        return EngineSelectionDecision(
+            engine_name=name,
+            model=None,
+            reason="추천 근거 없음 — 기존 EngineSelectionPolicy로 fallback",
+        )
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

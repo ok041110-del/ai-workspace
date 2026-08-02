@@ -1359,3 +1359,72 @@ def test_recommend_engine_without_policy_matches_first_registered_and_not_confid
     assert recommendations[0].confident is False
     assert recommendations[0].evidence == {}
     assert engine_a.run_count == 0
+
+
+def test_recommend_engine_without_policy_respects_capacity() -> None:
+    """M80(ADR-0098) 버그 수정: `engine_selection_policy` 미주입 경로에서
+    `recommend_engine()`이 `_has_capacity()`를 확인하지 않아 실제로
+    실행 가능한 엔진과 다른 엔진을 추천할 수 있었다 — engine-a가
+    capacity=1을 다 쓴 상태(threading으로 실제 동시성 재현)면 engine-b만
+    추천되어야 한다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    engine_a = CostedSlowEngineAdapter(delay_seconds=0.2)
+    engine_b = CostedSlowEngineAdapter(delay_seconds=0.01)
+    runtime.register_engine("engine-a", engine_a, max_concurrency=1)
+    runtime.register_engine("engine-b", engine_b)
+
+    thread = threading.Thread(target=runtime.run, args=(make_task("busy"),))
+    thread.start()
+    time.sleep(0.05)  # engine-a in-flight=1(capacity=1 소진)인 순간을 보장
+    recommendations = runtime.recommend_engine(make_task("probe"), top_n=2)
+    thread.join()
+
+    assert [r.engine_name for r in recommendations] == ["engine-b"]
+
+
+def test_decide_engine_matches_run_selection_with_policy() -> None:
+    """M80(ADR-0098): `engine_selection_policy`가 주입돼 있으면
+    `decide_engine()`이 반환하는 engine_name은 `run()`이 실제로 선택할
+    엔진과 항상 같다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    cheap = CostedSlowEngineAdapter(delay_seconds=0.0, estimated_cost_usd=0.0)
+    expensive = CostedSlowEngineAdapter(delay_seconds=0.0, estimated_cost_usd=5.0)
+    runtime.register_engine("cheap", cheap)
+    runtime.register_engine("expensive", expensive)
+
+    decision = runtime.decide_engine(make_task("decide"))
+
+    assert decision.engine_name == "cheap"
+    assert decision.model is None
+
+    runtime.run(make_task("actual"))
+    assert cheap.run_count == 1
+    assert expensive.run_count == 0
+
+
+def test_decide_engine_falls_back_to_policy_without_recommendation() -> None:
+    """M80(ADR-0098): `engine_selection_policy` 미주입 시(첫 매칭 경로)
+    `run()`이 고를 엔진과 같은 엔진을 반환한다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    engine_a = CostedSlowEngineAdapter(delay_seconds=0.0)
+    engine_b = CostedSlowEngineAdapter(delay_seconds=0.0)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    decision = runtime.decide_engine(make_task("decide"))
+
+    assert decision.engine_name == "engine-a"
+    assert "미주입" in decision.reason
+
+
+def test_decide_engine_raises_when_no_suitable_engine() -> None:
+    """M80(ADR-0098): 후보가 하나도 없으면 `run()`과 동일하게
+    `NoSuitableEngineError`를 던진다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+
+    with pytest.raises(NoSuitableEngineError):
+        runtime.decide_engine(make_task("decide"), required_capabilities=frozenset({"missing"}))
