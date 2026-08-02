@@ -16891,3 +16891,29 @@ plan()`은 단일 결정론적 순서만 반환해 — 여러 Agent의 서로 �
 
 `pytest` 1428개(신규 7개, 회귀 없음)/`ruff`/`mypy`(241 source files)
 전부 통과. ADR-0102.
+
+---
+
+## 예약 — AI-07-T02: EngineRuntime 재판단 재확인 시점
+
+**성격**: 이 절은 새 Milestone이 아니다. 2차 독립 재감사 Action Plan
+AI-07-T02(`.ai/audit/TASK_BREAKDOWN_ACTION_PLAN.md` §7)에 따라 캘린더/이슈
+관리 수준의 표식만 남긴다. 코드 변경 없음.
+
+- **기준선**: `.ai/RULES.md` §1.7(AI-07-T01, 2026-08-02 실측) —
+  `engine_runtime.py` 1,104줄/39개 메서드, `interfaces/engine_runtime.py`
+  490줄/16개 메서드. 정책(§1.7) 적용 시점은 Milestone 84.
+- **재확인 방식**: 고정된 미래 Milestone 번호(예: "M94")를 미리 지정하지
+  않는다 — AI-07-T01이 이미 트리거 조건을 "정책 적용 시점(M84) 이후의
+  **모든** Milestone에서 기준선 대비 순증가 여부"로 정의했으므로(연속
+  관찰), 임의의 N값을 새로 추가하는 것은 근거 없는 결정(Evidence First
+  위반)이 된다. 따라서 이 예약은 **"M84 이후 Milestone이 완료될 때마다,
+  해당 Milestone이 `engine_runtime.py`/`interfaces/engine_runtime.py`를
+  수정했다면 `.ai/RULES.md` §1.7 기준 재판단 트리거 여부를 확인한다"**는
+  상시 확인 절차를 가리키는 표식이다.
+- **재확인 절차(AI-07-T03 착수 여부 판단 시 사용)**: 대상 Milestone의
+  커밋에서 `git show --stat`으로 두 파일의 변경 여부를 확인 → 변경되었으면
+  `wc -l`/메서드 수를 재실측해 기준선과 비교 → 순증가 시 AI-07-T03(보류)
+  분해 여부를 사용자에게 보고.
+- **상태**: 대기(트리거 미도달). 이 절은 트리거 발생 여부를 확인할 때마다
+  갱신하며, Milestone 계획을 대체하지 않는다.
