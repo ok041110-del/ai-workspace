@@ -2,14 +2,22 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.10.2 |
-| 작성일 | 2026-07-30 |
+| 문서 버전 | v0.10.3 |
+| 작성일 | 2026-08-02 |
 | 적용 대상 | 이 저장소에서 작업하는 모든 AI 구현 엔진(Claude Code, Codex, Gemini CLI 등) 및 기여자 |
 
 이 문서는 AI Workspace 프로젝트에서 **반드시 지켜야 하는 개발 규칙**을 정의한다.
 아래 규칙은 사용자가 제시한 개발 철학을 프로젝트 내부 규정으로 명문화한 것이며,
 모든 Task 수행 시 최우선으로 준수해야 한다.
 
+> **v0.10.3 변경 (EngineRuntime Extension Policy, 2026-08-02)**: 신규
+> §1.7 EngineRuntime Extension Policy 추가 — 2차 독립 재감사
+> (`.ai/audit/ACTION_PLAN_2ND_AUDIT.md` AI-06, Finding 2)가 지적한
+> `EngineRuntime` 성장 궤적에 대응해, M54/M83/M84에서 실제로 반복
+> 관찰된 "옵트인 계층 확장" 패턴(생성자 주입 순수 오케스트레이션
+> 클래스로 확장, `WorkspaceCore`/`AgentManager` 자동 배선 없음)을
+> 명문화했다. 새 원칙이 아니라 이미 지켜지던 관행의 문서화다.
+>
 > **v0.10.2 변경 (Naming Technical Debt Ledger, 2026-07-30)**: §1.6에
 > Rename Candidate 표를 **공식 기술 부채(technical debt) 목록**으로
 > 유지한다는 원칙을 추가했다 — 항목이 해결되면 행을 지우지 않고
@@ -200,6 +208,24 @@
   "제안" 칸에 취소선(`~~이전 이름~~`)을 긋고, "상태" 칸에 해결 일자와
   처리한 PR/커밋을 남긴다 — 표 자체가 언제 무엇이 왜 바뀌었는지의
   변경 이력이 된다.
+
+### 1.7 EngineRuntime Extension Policy (EngineRuntime 확장 정책, 2026-08-02)
+- `EngineRuntime`(및 `InMemoryEngineRuntime` 등 구현체)에 새 메서드를
+  추가하기 전에, 기존 `EngineRuntime`/`WorkflowEngine`을 **생성자로
+  주입받는 순수 오케스트레이션 클래스** + 필요 시 신규 Domain 값
+  객체로 옵트인(opt-in) 확장이 가능한지 먼저 검토한다(§4.2 Simplicity
+  First의 "새 컴포넌트를 만들기 전 자문 질문"과 동일한 절차를
+  `EngineRuntime`에 구체적으로 적용한 것).
+- 옵트인 확장이 가능하면 그 방식을 택하고, `WorkspaceCore`/
+  `AgentManager` 등 상위 컴포넌트에 **자동으로 배선하지 않는다** —
+  호출자가 필요할 때 직접 조립해 사용한다.
+- 이 패턴은 `LearningRuntimeAnalyzer`(M54), `NegotiationCoordinator`
+  (M84)에서 이미 반복 적용되어 확인된 관행이며, 2차 독립 재감사
+  (`.ai/audit/ACTION_PLAN_2ND_AUDIT.md` AI-06, Finding 2 —
+  `EngineRuntime` 성장 궤적)에 대한 대응으로 명문화한다.
+- `EngineRuntime` 자체의 리팩터링(클래스 분리 등) 여부는 이 정책과
+  별개로 관찰 후 재판단한다(`.ai/audit/ACTION_PLAN_2ND_AUDIT.md`
+  AI-07 참고, 지금 단계에서 착수하지 않음).
 
 ---
 
