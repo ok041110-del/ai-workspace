@@ -176,6 +176,9 @@ class ScriptedEngineRuntime(EngineRuntime):
     def benchmark_profile(self, engine_name: str):
         raise NotImplementedError
 
+    def recommend_engine(self, task, required_capabilities=frozenset(), *, top_n=1):
+        raise NotImplementedError
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

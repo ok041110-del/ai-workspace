@@ -15850,6 +15850,85 @@ tie-break)의 더 좁은 범위 신호를 최우선으로 쓰고 있었다.
 
 ---
 
+## Milestone 79 — Adaptive Engine Recommendation: 실행 없는 Engine 추천 API (완료)
+
+**배경**: 사용자가 "M65~M78에서 축적된 Learning, Benchmark, Routing
+정보를 종합하여 현재 Task에 가장 적합한 Provider/Model(또는 Ensemble)을
+추천하는 Recommendation Layer"를 요청했다(M79). 최신 main(M78/ADR-0096
+까지 반영) 기준으로 조사한 결과, `_build_candidates()`/
+`EngineSelectionPolicy.select()`가 이미 "Task에 가장 적합한 Provider"
+판단에 필요한 신호(M64 비용/M65 신뢰도/M69 실행 메모리/M77 Benchmark/
+M78 tie-break)를 전부 갖추고 있었지만, 실행(`run()`)하지 않고 그
+판단만 조회하는 API가 없었다.
+
+**사용자 승인(AskUserQuestion, 3회)**:
+1. 추가 위치 — **`EngineRuntime`에 `recommend_engine()` 신규 public
+   메서드(권장안 채택)**: M70/M77과 동일한 방식으로 기존 계약을
+   확장한다.
+2. "Workflow Learning" 근거 범위 — **EngineRuntime이 이미 추적 중인
+   M69 실행 메모리(성공률)를 "학습된 근거"로 그대로 재사용(권장안
+   채택)**: M71 `WorkflowEngine.recommended_order()`는 Task 순서
+   학습이지 Engine 선택과 무관한 별개 계약이고, M70/ADR-0088의 결합
+   금지 원칙을 재확인해 `WorkflowEngine`을 직접 참조하지 않는다.
+3. 추천 결과 구조 — **단일 `engine_name` + 근거 dict(`evidence`) +
+   신뢰도 플래그(`confident`), `top_n`으로 여러 개 조회(권장안
+   채택)**.
+
+**구현**:
+- `src/ai_workspace/domain/engine_recommendation.py`(신규) —
+  `EngineRecommendation`(frozen dataclass: `engine_name`/`reason`/
+  `evidence: dict[str, float | None]`/`confident: bool`).
+- `src/ai_workspace/interfaces/engine_runtime.py` — `recommend_engine
+  (task, required_capabilities=frozenset(), *, top_n=1) -> list[
+  EngineRecommendation]` 추상 메서드 신설(M70/M77과 동일한 방식의 계약
+  확장, 새 Core Domain Interface 아님). 후보가 없으면 예외 없이 빈
+  목록 반환(`run()`과 달리 `NoSuitableEngineError` 없음).
+- `src/ai_workspace/runtime/engine/engine_runtime.py`/
+  `managed_engine_runtime.py` — `_build_recommendation()`/
+  `recommend_engine()` 구현. `_build_candidates()`/`EngineSelectionPolicy.
+  select()`를 `estimate_cost()`와 동일한 read-only 경로로 반복 호출해
+  (`_select_top_n()`과 같은 패턴) `run()`을 호출하지 않고 추천만
+  만든다. 근거는 M65(`reliability_success_rate`)/M69(`execution_memory_
+  success_rate`/`latency_seconds`, 이번 capability 조합 전용)/M77
+  (`benchmark_success_rate`/`benchmark_average_latency_seconds`)을 조합.
+  둘 다 표본 부족(3건 미만)이면 `confident=False`. 정책 미주입 시(첫
+  매칭 경로) `run()`이 고를 엔진과 같은 엔진을 `confident=False`로 반환.
+- `src/ai_workspace/runtime/engine/recovering_engine_runtime.py` — 내부
+  Runtime에 위임.
+- 테스트 대역 4곳(`tests/interfaces/fakes.py` `FakeEngineRuntime`,
+  `tests/agents/test_coding_agent.py` `RecordingEngineRuntime`,
+  `tests/core/test_workspace_core.py` `SpyEngineRuntime`,
+  `tests/runtime/engine/test_recovering_engine_runtime.py`
+  `ScriptedEngineRuntime`)에 계약 준수 최소 구현 추가.
+- `tests/runtime/engine/test_engine_runtime.py`(신규 5건: 표본 충분 시
+  confident=True+run() 결과와 동일 엔진/표본 부족 시 confident=False/
+  top_n 비용순 정렬/top_n<1 시 빈 목록/정책 미주입 시 첫 매칭과 동일
+  엔진+confident=False), `tests/runtime/engine/
+  test_managed_engine_runtime.py`(동일 시나리오 3건) 추가.
+- `docs/ARCHITECTURE.md` §3.9 Engine Runtime 절에 Adaptive Engine
+  Recommendation(M79) 서술 추가, §7 인터페이스 표 `EngineRuntime`
+  행 갱신.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 최신 main 기준에서 시작, 기존 ADR/TASKS/ROADMAP·구현 상태를 먼저 조사 | ✅ |
+| 2 | 기존 EngineSelectionPolicy/EngineRuntime/Benchmark Profile(M77)/Adaptive Benchmark Routing(M78)/Learning 구조 재사용 | ✅ |
+| 3 | Recommendation은 실행을 강제하지 않고 추천만 제공(run() 미호출) | ✅ |
+| 4 | 추천 근거로 Cost/Reliability/Latency/Benchmark/Workflow Learning(M69 재해석)을 함께 사용 | ✅ |
+| 5 | Recommendation 없음/근거 부족 시 기존 Routing 결과를 그대로 사용(confident=False로 명시, run()과 동일 엔진 반환) | ✅ |
+| 6 | 새로운 Core Domain Interface 없음(EngineRuntime 계약 확장만, M70/M77과 동일 방식) | ✅ |
+| 7 | 상태는 EngineRuntime 내부 in-process로만 관리, 영속화 없음(M65/M69/M77 상태 재사용, 새 상태 없음) | ✅ |
+| 8 | 기존 API와 100% 하위 호환(YAGNI) | ✅ |
+| 9 | 추가 위치·Learning 신호 범위·추천 결과 구조를 AskUserQuestion 3회로 확정 | ✅ |
+| 10 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1364개(신규 8개, 회귀 없음)/`ruff`/`mypy`(235 source files)
+전부 통과. ADR-0097.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
