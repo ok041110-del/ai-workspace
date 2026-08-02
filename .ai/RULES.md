@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.10.4 |
+| 문서 버전 | v0.10.5 |
 | 작성일 | 2026-08-02 |
 | 적용 대상 | 이 저장소에서 작업하는 모든 AI 구현 엔진(Claude Code, Codex, Gemini CLI 등) 및 기여자 |
 
@@ -10,6 +10,18 @@
 아래 규칙은 사용자가 제시한 개발 철학을 프로젝트 내부 규정으로 명문화한 것이며,
 모든 Task 수행 시 최우선으로 준수해야 한다.
 
+> **v0.10.5 변경 (Review Gate 확정, AI-04, 2026-08-02)**: 신규 §8.7
+> Review Gate 추가 — 2차 독립 재감사(`.ai/audit/ACTION_PLAN_2ND_AUDIT.md`
+> AI-04, Finding 1)가 지적한 "Branch Protection이 실질적 리뷰 게이트로
+> 작동하지 않음" 문제에 대한 최종 대응이다. (a) `main` Branch
+> Protection Rule에 등록된 `pytest`/`mypy`/`ruff` 필수 상태 검사(기술적
+> 게이트, 2026-08-02 등록 완료)와 (b) 구현 세션과 분리된 독립 AI 세션의
+> 병합 전 사전 리뷰(절차적 게이트, 1차·2차 독립 감사에서 이미 실제로
+> 수행된 방식의 정책화)를 결합했다. §8.6 Merge 조건의 pytest/ruff/mypy
+> 통과 항목은 변경 없이 그대로 유지되며, 이번 개정은 그 항목의 강제
+> 수단을 사람 확인에서 GitHub 기술적 차단으로 전환한 것이다(새 조건
+> 아님).
+>
 > **v0.10.4 변경 (EngineRuntime 관찰 지표·재판단 트리거, 2026-08-02)**:
 > §1.7 마지막 항목에 관찰 지표·재판단 트리거 조건(라인 수·메서드 수
 > 기준선과 순증가 조건)을 구체화했다(`.ai/audit/ACTION_PLAN_2ND_AUDIT.md`
@@ -658,6 +670,51 @@ Later, Scheduler 등). 권한이 승인되면 중단된 작업부터 자동으�
 - 대규모 리팩토링
 - 프로젝트 구조 변경
 - ADR 추가가 아닌 Architecture 재구성
+
+### 8.7 Review Gate (AI-04, 2026-08-02)
+
+**배경**: 2차 독립 재감사(Finding 1, `.ai/audit/ACTION_PLAN_2ND_AUDIT.md`
+AI-04)는 `protected: true`로 설정되어 있던 기존 Branch Protection이
+실질적인 리뷰 게이트로 작동하지 않았음을 지적했다(PR #93: 리뷰 0건,
+10초 내 자기 병합). 이 저장소는 1인 개발 + AI 협업 구조이므로 GitHub의
+필수 Reviewer(제3자 인간 승인) 기능을 강제하지 않고, 다음 두 가지를
+병합 전 게이트로 확정한다.
+
+**(a) 기술적 게이트 — Branch Protection 필수 상태 검사**
+- `main` 브랜치는 PR을 통해서만 변경된다(§8.3, 기존 규칙 그대로).
+- `main` 브랜치 Branch Protection Rule에 GitHub Actions CI(AI-03,
+  `.github/workflows/ci.yml`)의 `pytest`/`mypy`/`ruff` 3개 Job이 필수
+  상태 검사(Required Status Checks)로 등록되어 있다(2026-08-02 등록
+  완료, PR #94에서 3개 체크가 실제로 노출·실행·통과됨을 확인). 셋 중
+  하나라도 실패하면 GitHub이 Merge를 차단한다.
+- §8.6 Merge 조건의 "pytest/ruff/mypy 통과" 항목은 이제 사람이 수동으로
+  확인하던 절차에서 GitHub이 기술적으로 강제하는 절차로 전환됐다 —
+  조건 자체는 §8.6에 이미 있던 것과 동일하며 새 조건이 아니다.
+- 이 설정(Branch Protection Rule 조회·변경)은 Repository Admin의
+  GitHub 웹 UI 작업 영역이다. Claude Code를 비롯한 AI 구현 엔진은 이
+  설정을 조회·변경할 수 있는 도구를 가지고 있지 않다 — 변경이 필요하면
+  사용자에게 요청하고, 사용자의 완료 확인을 근거로 삼는다.
+
+**(b) 절차적 게이트 — 독립 AI 세션의 사전 리뷰**
+- 1인 개발 체제에서 GitHub 필수 Reviewer(제3자 인간 승인)는 구조적으로
+  사용할 수 없다는 감사의 Counter Evidence를 그대로 인정한다.
+- 이를 대체하는 절차로, 구현을 수행한 세션과는 별도의 AI 세션이 병합
+  전에 저장소를 독립적으로 검토하는 것을 병합 전 필수 절차로 채택한다.
+  이 방식은 새로 고안한 것이 아니라, 이 저장소가 실제로 두 차례(1차
+  독립 감사, 2차 독립 재감사) 수행했고 그 결과가 실제 Action Item
+  (`.ai/audit/ACTION_PLAN_2ND_AUDIT.md`)으로 이어진 방식을 그대로
+  정책화한 것이다. 독립 세션이 따르는 감사 절차·근거 기준은
+  `.ai/audit/AWAS.md`에 별도로 정의되어 있다(이 문서를 복제하지
+  않는다).
+
+**(c) 역할 구분**
+
+| 구분 | 수행 주체 | 방법 |
+|---|---|---|
+| Branch Protection 설정(필수 상태 검사 등록/변경) | Repository Admin(사용자) | GitHub 웹 UI(Settings → Branches) |
+| pytest/mypy/ruff 실행 | GitHub Actions CI(AI-03) | `.github/workflows/ci.yml` |
+| 독립 사전 리뷰 | 별도 AI 세션 | `.ai/audit/AWAS.md` |
+| 최종 승인 | 사용자 | §1.4 Approval Required |
 
 ## 9. Obsidian Workspace Templates (Milestone 27, ADR-0038, 2026-07-27)
 
