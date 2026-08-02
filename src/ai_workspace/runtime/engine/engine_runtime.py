@@ -153,7 +153,19 @@ class InMemoryEngineRuntime(EngineRuntime):
     rate`가 모두 표본 부족(3건 미만)이면 `confident=False`로 표시해,
     호출자가 근거 부족 시 기존 Routing 결과를 그대로 쓸 수 있게 한다.
     Routing 로직 자체(`_select()`/`_build_candidates()`/재정렬 메서드들)
-    는 전혀 수정하지 않는다."""
+    는 전혀 수정하지 않는다.
+
+    **Autonomous Decision Engine(Milestone 80, ADR-0098)**: `decide_engine
+    (task, required_capabilities)`은 M65~M79를 하나의 최종 실행 결정으로
+    통합하는 오케스트레이션 계층이다 — 새 알고리즘 없이 `recommend_
+    engine()`의 1순위를 M17 `EngineSelectionDecision`(새 domain 타입
+    없음)에 그대로 담아 반환한다. `recommend_engine()`의 1순위는 항상
+    `_build_candidates()`/`EngineSelectionPolicy.select()`와 같은
+    파이프라인 결과이므로, confident가 낮아도 실제 선택되는 엔진은
+    `run()`이 고를 엔진과 동일하다(reason에 confident 여부만 반영). 추천
+    자체가 없으면(후보 없음) `_select()`를 그대로 호출해 `run()`과 동일한
+    예외를 낸다 — "Recommendation 부족 시 기존 EngineSelectionPolicy로
+    즉시 fallback"을 예외 정책까지 일치시켜 만족한다."""
 
     def __init__(
         self,
@@ -629,6 +641,8 @@ class InMemoryEngineRuntime(EngineRuntime):
             for name, adapter in self._engines.items():
                 if not required_capabilities.issubset(adapter.capabilities()):
                     continue
+                if not self._has_capacity(name):
+                    continue
                 recommendations.append(
                     EngineRecommendation(
                         engine_name=name,
@@ -652,6 +666,32 @@ class InMemoryEngineRuntime(EngineRuntime):
             results.append(self._build_recommendation(decision, required_capabilities))
             remaining = [c for c in remaining if c.engine_name != decision.engine_name]
         return results
+
+    def decide_engine(
+        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+    ) -> EngineSelectionDecision:
+        """**Autonomous Decision Engine(Milestone 80, ADR-0098)**: 새
+        알고리즘 없이 `recommend_engine()`(M79)의 1순위를 그대로 채택한다
+        — 그 1순위는 이미 `_build_candidates()`/`EngineSelectionPolicy.
+        select()`와 동일한 파이프라인 결과이므로, confident 여부와 무관
+        하게 이 메서드가 반환하는 engine_name은 항상 `run()`이 실제로
+        선택할 엔진과 같다. 추천이 아예 없으면(후보 없음) `_select()`를
+        그대로 호출해 `run()`과 동일한 예외(`NoSuitableEngineError`)를
+        낸다 — "Recommendation이 없으면 기존 EngineSelectionPolicy로 즉시
+        fallback"을 예외 정책까지 포함해 만족한다."""
+
+        recommendations = self.recommend_engine(task, required_capabilities, top_n=1)
+        if recommendations:
+            top = recommendations[0]
+            return EngineSelectionDecision(
+                engine_name=top.engine_name, model=None, reason=top.reason
+            )
+        name, _adapter = self._select(task, required_capabilities)
+        return EngineSelectionDecision(
+            engine_name=name,
+            model=None,
+            reason="추천 근거 없음 — 기존 EngineSelectionPolicy로 fallback",
+        )
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

@@ -15929,6 +15929,72 @@ M78 tie-break)를 전부 갖추고 있었지만, 실행(`run()`)하지 않고 �
 
 ---
 
+## Milestone 80 — Autonomous Decision Engine: 추천을 최종 실행 결정으로 통합 (완료)
+
+**배경**: 사용자가 "M65~M79에서 구현된 Learning, Benchmark, Workflow
+Learning, Routing, Recommendation을 하나의 의사결정 계층으로 통합하여
+실행 직전 최적의 Provider/Model을 자동 결정하는 Autonomous Decision
+Engine"을 요청했다(M80). 최신 main(M79/ADR-0097까지 반영) 기준으로
+조사한 결과, M79 `recommend_engine()`이 이미 모든 신호를 통합한 "1순위
+후보"를 계산하고 있었지만 이를 "결정"으로 표현하는 API가 없었다.
+
+**사용자 승인(AskUserQuestion, 3회)**:
+1. 추가 위치/반환 타입 — **`EngineRuntime.decide_engine()` + 기존
+   `EngineSelectionDecision`(M17) 재사용(권장안 채택)**: 새 domain
+   타입을 만들지 않는다.
+2. 실행 경로 결합 — **기존 `_select()` 무수정, `decide_engine()`은
+   `recommend_engine()`을 재사용하는 병렬 조회 API(권장안 채택)**:
+   `decide_engine()`의 engine_name은 `recommend_engine()`의 1순위(동일
+   파이프라인 결과)를 그대로 쓰므로 `run()`이 실제로 고를 엔진과
+   수학적으로 항상 같다.
+3. Ensemble 범위 — **단일 결정만(top_n 미지원)(권장안 채택)**: Ensemble
+   조합 결정은 `run_ensemble_auto()`(M68)가 이미 담당한다.
+
+**구현**:
+- `src/ai_workspace/interfaces/engine_runtime.py` — `decide_engine
+  (task, required_capabilities=frozenset()) -> EngineSelectionDecision`
+  추상 메서드 신설(M70/M77/M78/M79와 동일한 방식의 계약 확장, 새 domain
+  타입 없음).
+- `src/ai_workspace/runtime/engine/engine_runtime.py`/
+  `managed_engine_runtime.py` — `recommend_engine()`(M79)의 1순위를
+  `EngineSelectionDecision`에 그대로 담아 반환. 추천이 없으면 `_select()`/
+  `_require_adapter()`를 그대로 호출해 `run()`과 동일한
+  `NoSuitableEngineError`를 낸다.
+- **부수 버그 수정**: `recommend_engine()`(M79)의 `engine_selection_
+  policy` 미주입 경로가 `_has_capacity()`(M74)를 확인하지 않아 `_select()`
+  와 다른(capacity가 꽉 찬) 엔진을 추천할 수 있던 불일치를 발견, 필터를
+  추가해 바로잡았다 — `decide_engine()`의 "항상 run()과 같은 엔진" 보장에
+  필요.
+- `src/ai_workspace/runtime/engine/recovering_engine_runtime.py` — 내부
+  Runtime에 위임.
+- 테스트 대역 4곳에 계약 준수 최소 구현 추가.
+- `tests/runtime/engine/test_engine_runtime.py`(신규 6건: capacity
+  버그 수정 검증/정책 주입 시 run()과 동일 엔진/confident별 reason/
+  정책 미주입 시 fallback/후보 없을 때 예외), `tests/runtime/engine/
+  test_managed_engine_runtime.py`(동일 시나리오 5건) 추가.
+- `docs/ARCHITECTURE.md` §3.9 Engine Runtime 절에 Autonomous Decision
+  Engine(M80) 서술 추가, §7 인터페이스 표 `EngineRuntime` 행 갱신.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 최신 main 기준에서 시작, 기존 ADR/TASKS/ROADMAP·구현 상태를 먼저 조사 | ✅ |
+| 2 | 기존 EngineSelectionPolicy/EngineRuntime/Recommendation(M79)/Benchmark(M77)/Workflow Learning/Adaptive Routing 재사용 | ✅ |
+| 3 | AutonomousDecisionEngine은 Recommendation 결과를 종합하는 오케스트레이션 계층으로만 동작(새 실행 경로 없음) | ✅ |
+| 4 | 새 알고리즘 없이 기존 Cost/Reliability/Benchmark/Workflow Learning/Diversity/Load Balancing 결과를 순차 통합(recommend_engine() 1순위 재사용) | ✅ |
+| 5 | Recommendation 없음/근거 부족 시 기존 EngineSelectionPolicy로 즉시 fallback(예외 정책까지 일치) | ✅ |
+| 6 | 새로운 Core Domain Interface 없음(EngineRuntime 계약 확장만, 새 domain 타입 없음) | ✅ |
+| 7 | 상태는 EngineRuntime 내부 in-process로만 관리, 영속화 없음(M65/M69/M77/M79 상태 재사용) | ✅ |
+| 8 | 기존 API와 100% 하위 호환(YAGNI) | ✅ |
+| 9 | 추가 위치·실행 경로 결합 방식·Ensemble 범위를 AskUserQuestion 3회로 확정 | ✅ |
+| 10 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1373개(신규 9개, 회귀 없음)/`ruff`/`mypy`(235 source files)
+전부 통과. ADR-0098.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
