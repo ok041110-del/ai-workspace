@@ -16816,3 +16816,78 @@ Checkpoint 4개 경계 모두 발동, 전부 Sonnet/High "동일" — M3-T01과 
 **M3-T04**(Session & Workspace Integration — WorkspaceCore↔
 ManagedEngineRuntime 연결, EngineSession 생명주기, 실행 기록, EventBus
 완전 연동). |
+
+## Milestone 84 — Multi-Agent Negotiation: 실행 전 선호안 다수결 조율 계층 (완료)
+
+**배경**: 사용자가 "여러 Agent가 동일한 Task 또는 공유 자원(Provider/
+Model/Workflow)을 사용할 때 독립적으로 결정하지 않고, 협상(Negotiation)을
+통해 역할과 실행 계획을 조율하는 최소 범위"를 요청했다(M84). 최신
+main(M83/ADR-0101까지 반영) 기준으로 조사한 결과, `EngineRuntime.
+decide_engine()`(M80)은 항상 단일 호출자 관점의 "하나의" 최적 엔진만
+결정하고, `AgentManager`(T1-18)는 생성/상태 전이만 책임지며, `WorkflowEngine.
+plan()`은 단일 결정론적 순서만 반환해 — 여러 Agent의 서로 다른 선호를
+입력받아 하나로 합의하는 계층은 어디에도 없었다.
+
+**사용자 승인(AskUserQuestion, 4회)**:
+1. 배치 위치 — **독립 오케스트레이션 클래스(권장안 채택)**: 새 Core
+   Domain Interface 없이 `runtime/negotiation/negotiation_coordinator.py`에
+   `EngineRuntime`/`WorkflowEngine`을 생성자로 주입받는 순수 클래스로
+   추가. `WorkspaceCore`/`AgentManager`에 자동 배선하지 않음(옵트인,
+   `LearningRuntimeAnalyzer`(M54)와 동일 패턴).
+2. 제안(Proposal) 형식 — **호출자가 조립한 `AgentProposal` 목록 전달
+   (권장안 채택)**: `NegotiationCoordinator`는 Agent 인스턴스를 알지
+   못하며 `agents/` 패키지는 전혀 수정하지 않는다(결합 최소화,
+   ADR-0080/0081 원칙과 동일).
+3. 충돌 해결 — **다수결 + `Agent.priority`(M57) tie-break(권장안 채택)**:
+   동률이면 priority로 임의로 깨지 않고 협상 실패로 간주한다.
+4. Fallback 범위 — **전체 all-or-nothing(권장안 채택)**: engine/model/
+   workflow 순서 중 하나라도 합의 실패면 전체를 기존 단독 의사결정으로
+   즉시 전환한다.
+
+**구현**:
+- `src/ai_workspace/domain/negotiation.py` 신설 — `AgentProposal`(frozen
+  dataclass: `agent_id`/`engine_name`/`model`/`priority`/`preferred_
+  workflow_order`), `NegotiatedPlan`(frozen dataclass: 기존
+  `EngineSelectionDecision`을 그대로 감싼 `decision`+`workflow_order`+
+  `consensus_reached`+`reason`).
+- `src/ai_workspace/runtime/negotiation/negotiation_coordinator.py` 신설
+  — `NegotiationCoordinator(engine_runtime, workflow_engine=None)`.
+  `negotiate(task, proposals, required_capabilities=frozenset(), *,
+  goal=DecisionGoal.BALANCED, workflow=None) -> NegotiatedPlan`이 유일한
+  public 메서드. `engine_name` 다수결(단독 최다 득표만 채택, 동률이면
+  즉시 전체 fallback) → 채택된 엔진 그룹 내 `model`은 `priority` 최소
+  제안을 대표값으로 채택 → `workflow`가 주어지고 `preferred_workflow_
+  order`를 낸 제안이 있으면 동일한 다수결 + `workflow.dependencies`
+  재검증(M72 `plan()`과 동일 원칙, 위반 시 fallback) → 아무도 workflow
+  순서를 제안하지 않았으면 협상 대상이 아니므로 `WorkflowEngine.plan()`을
+  그대로 사용. 실패 시 `EngineRuntime.decide_engine()`/`WorkflowEngine.
+  plan()`을 그대로 호출하는 all-or-nothing fallback.
+- 기존 파일 수정 없음 — `EngineRuntime`/`WorkflowEngine`/`AgentManager`/
+  `WorkspaceCore` 계약·구현 전혀 무변경. `NegotiationCoordinator`는
+  호출 간 아무 상태도 in-process로 보관하지 않는다(순수 함수형, 인자로만
+  값이 오감).
+- `tests/runtime/negotiation/test_negotiation_coordinator.py` 신규
+  7건(다수결 채택/제안 없음 fallback/engine 동률 fallback/model
+  tie-break/workflow 다수결 채택/dependency 위반 fallback/미제안 시
+  plan() 재사용) 추가.
+- `docs/ARCHITECTURE.md` §3.9 Engine Runtime 절에 Multi-Agent
+  Negotiation(M84) 서술 추가(새 Interface가 아니므로 §7 인터페이스 표는
+  무변경).
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 최신 main 기준에서 시작, 기존 ADR/TASKS/ROADMAP·구현 상태를 먼저 조사 | ✅ |
+| 2 | 기존 AgentManager/WorkflowEngine/AutonomousDecisionEngine(decide_engine)/Recommendation/EngineSelectionPolicy 최대 재사용 | ✅ |
+| 3 | 협상은 실행 전 단계에서만 수행, 기존 실행 흐름 무변경 | ✅ |
+| 4 | 각 Agent가 Provider/Model/Workflow 선호안을 제안, NegotiationCoordinator가 충돌 해결 | ✅ |
+| 5 | 합의 실패 시 기존 AutonomousDecisionEngine(decide_engine())의 단독 의사결정으로 즉시 fallback | ✅ |
+| 6 | 새로운 Core Domain Interface 없음(순수 오케스트레이션 클래스 + domain 값 객체만 추가) | ✅ |
+| 7 | 상태는 in-process로만 관리, 영속화 제외(사실상 상태 자체를 두지 않음) | ✅ |
+| 8 | 기존 API와 100% 하위 호환(YAGNI, 완전한 옵트인) | ✅ |
+| 9 | 배치 위치·제안 형식·충돌 해결·Fallback 범위를 AskUserQuestion 4회로 확정 | ✅ |
+| 10 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1428개(신규 7개, 회귀 없음)/`ruff`/`mypy`(241 source files)
+전부 통과. ADR-0102.
