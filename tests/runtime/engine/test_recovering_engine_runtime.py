@@ -10,6 +10,7 @@ from tests.runtime.engine.test_managed_engine_runtime import (
 )
 
 from ai_workspace.adapters.mock_engine_adapter import MockEngineAdapter
+from ai_workspace.domain.decision_goal import DecisionGoal
 from ai_workspace.domain.retry_policy import InvalidRetryPolicyError, RetryPolicy
 from ai_workspace.domain.task import Task
 from ai_workspace.events.event_bus import InMemoryEventBus
@@ -176,10 +177,12 @@ class ScriptedEngineRuntime(EngineRuntime):
     def benchmark_profile(self, engine_name: str):
         raise NotImplementedError
 
-    def recommend_engine(self, task, required_capabilities=frozenset(), *, top_n=1):
+    def recommend_engine(
+        self, task, required_capabilities=frozenset(), *, top_n=1, goal=DecisionGoal.BALANCED
+    ):
         raise NotImplementedError
 
-    def decide_engine(self, task, required_capabilities=frozenset()):
+    def decide_engine(self, task, required_capabilities=frozenset(), *, goal=DecisionGoal.BALANCED):
         raise NotImplementedError
 
     def reflection_reports(self, engine_name: str | None = None):

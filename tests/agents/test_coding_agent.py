@@ -12,6 +12,7 @@ from ai_workspace.agents.coding_agent import CodingAgent
 from ai_workspace.agents.events import CODE_COMPLETED, MISSION_PLANNED
 from ai_workspace.domain.agent import AgentRole
 from ai_workspace.domain.budget import Budget
+from ai_workspace.domain.decision_goal import DecisionGoal
 from ai_workspace.domain.knowledge import KnowledgeDocument, KnowledgeKind
 from ai_workspace.domain.llm_policy import LLMEffort, LLMModel, LLMPolicyDecision, LLMProvider
 from ai_workspace.domain.task import Task, TaskStatus
@@ -81,10 +82,12 @@ class RecordingEngineRuntime(EngineRuntime):
     def benchmark_profile(self, engine_name: str):
         raise NotImplementedError
 
-    def recommend_engine(self, task, required_capabilities=frozenset(), *, top_n=1):
+    def recommend_engine(
+        self, task, required_capabilities=frozenset(), *, top_n=1, goal=DecisionGoal.BALANCED
+    ):
         raise NotImplementedError
 
-    def decide_engine(self, task, required_capabilities=frozenset()):
+    def decide_engine(self, task, required_capabilities=frozenset(), *, goal=DecisionGoal.BALANCED):
         raise NotImplementedError
 
     def reflection_reports(self, engine_name: str | None = None):

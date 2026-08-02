@@ -16064,6 +16064,81 @@ ADR-0098까지 반영) 기준으로 조사한 결과, `_build_recommendation()`(
 
 ---
 
+## Milestone 82 — Goal-Aware Decision Policy: Cost/Quality/Latency 우선순위를 조정하는 Policy 계층 (완료)
+
+**배경**: 사용자가 "M80 Autonomous Decision Engine이 모든 Task를 동일한
+기준으로 처리하지 않고, 사용자가 지정한 목표(Goal)에 따라 의사결정
+우선순위를 동적으로 변경"하는 M82를 요청했다. 최신 main(M81/ADR-0099까지
+반영) 기준으로 조사한 결과, `decide_engine()`(M80)은 항상 `recommend_
+engine()`(M79)의 1순위를 채택하고 `recommend_engine()`은 항상
+`EngineSelectionPolicy.select()`(비용 최소 고정)의 결과만 반환해, Task/
+호출자가 "품질 우선"·"latency 우선" 같은 의도를 표현할 방법이 없었다.
+
+**사용자 승인(AskUserQuestion, 4회)**:
+1. Goal 노출 위치 — **`recommend_engine()`/`decide_engine()`에만 선택적
+   `goal` 키워드 파라미터(권장안 채택)**: `run()`/`_select()`는 전혀
+   건드리지 않는다(100% 하위 호환). 이 결정으로 M80의 "decide_engine()은
+   항상 run()과 같은 엔진" 보장은 `goal=BALANCED`(기본값)일 때만
+   유효해진다.
+2. Goal별 순위 결정 방식 — **우선순위 튜플 정렬(권장안 채택)**:
+   `(1차키, 2차키, 3차키, engine_name)` tie-break 튜플. `COST_OPTIMIZED
+   =(cost,-quality,latency,name)` / `QUALITY_OPTIMIZED=(-quality,cost,
+   latency,name)` / `LATENCY_OPTIMIZED=(latency,cost,-quality,name)` /
+   `BALANCED`=기존 `EngineSelectionPolicy.select()` 그대로.
+3. Budget 필터링 — **기존과 동일하게 적용(권장안 채택)**: Goal 기반
+   재정렬 전에 `budget_policy_engine.check()`로 예산 초과 후보를 먼저
+   제외한다.
+4. `decide_engine()`의 "run()과 항상 같은 엔진" 보장 범위 —
+   **`BALANCED`일 때만 보장(권장안 채택)**: 다른 goal이면 `reason`에
+   "run()과 다른 엔진일 수 있음"을 명시한다.
+
+**구현**:
+- `src/ai_workspace/domain/decision_goal.py` 신설 — `DecisionGoal`
+  (Enum: `COST_OPTIMIZED`/`QUALITY_OPTIMIZED`/`LATENCY_OPTIMIZED`/
+  `BALANCED`).
+- `src/ai_workspace/interfaces/engine_runtime.py` — `recommend_engine()`/
+  `decide_engine()`에 `goal: DecisionGoal = DecisionGoal.BALANCED` 추가
+  (M70/M77/M79/M80/M81과 동일한 방식의 계약 확장).
+- `src/ai_workspace/runtime/engine/engine_runtime.py`/
+  `managed_engine_runtime.py` — `goal=BALANCED`(기본값)면 기존 코드
+  경로를 그대로 실행(신규 분기 완전 우회). 다른 goal이면(`engine_
+  selection_policy` 주입 시에만) `_build_candidates()`가 만든 후보에
+  Budget 필터링 적용 후 `_goal_rank_key()`(신규)로 재정렬. `_evidence_
+  snapshot()`(M79/M81) 재사용. `_representative_success_rate()`/
+  `_representative_latency_seconds()`를 모듈 함수로 신설해 M81
+  `_record_reflection()`의 인라인 계산을 대체(리팩터링)하고 M82가 공유.
+  `decide_engine()`은 `goal != BALANCED`면 `reason`에 "run()과 다른
+  엔진일 수 있음" 문구 추가.
+- `src/ai_workspace/runtime/engine/recovering_engine_runtime.py` — 내부
+  Runtime에 위임 확장.
+- 테스트 대역 4곳에 `goal` 파라미터 추가(동작 무변경).
+- `tests/runtime/engine/test_engine_runtime.py`(신규 9건), `tests/
+  runtime/engine/test_managed_engine_runtime.py`(동일 시나리오 7건)
+  추가.
+- `docs/ARCHITECTURE.md` §3.9 Engine Runtime 절에 Goal-Aware Decision
+  Policy(M82) 서술 추가, §7 인터페이스 표 `EngineRuntime` 행 갱신.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 최신 main 기준에서 시작, 기존 ADR/TASKS/ROADMAP·구현 상태를 먼저 조사 | ✅ |
+| 2 | 기존 AutonomousDecisionEngine/EngineSelectionPolicy/Recommendation/Benchmark/Workflow Learning 최대 재사용 | ✅ |
+| 3 | Goal은 새 알고리즘이 아니라 기존 요소(Cost/Reliability/Latency/Benchmark/Diversity/Workflow Learning)의 우선순위를 조정하는 Policy로만 구현 | ✅ |
+| 4 | 최소 Goal Profile 4종(Cost/Quality/Latency Optimized, Balanced 기본값) | ✅ |
+| 5 | Goal 미지정 시 기존 동작(Balanced)과 100% 동일 | ✅ |
+| 6 | 기존 Routing/Recommendation 알고리즘 무변경, Policy Layer만 추가 | ✅ |
+| 7 | 새로운 Core Domain Interface 없음(EngineRuntime 계약 확장 + Enum만) | ✅ |
+| 8 | 상태는 EngineRuntime 내부 in-process로만 관리, 영속화 제외 | ✅ |
+| 9 | 기존 API와 100% 하위 호환(YAGNI) | ✅ |
+| 10 | Goal 노출 위치·순위 결정 방식·Budget 필터링·decide_engine 보장 범위를 AskUserQuestion 4회로 확정 | ✅ |
+| 11 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1400개(신규 16개, 회귀 없음)/`ruff`/`mypy`(237 source files)
+전부 통과. ADR-0100.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

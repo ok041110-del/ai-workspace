@@ -8,6 +8,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
 from ai_workspace.domain.consensus_agreement import ConsensusAgreementStat
+from ai_workspace.domain.decision_goal import DecisionGoal
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.engine_execution_memory import EngineExecutionMemoryStat
 from ai_workspace.domain.engine_recommendation import EngineRecommendation
@@ -36,6 +37,35 @@ _DEFAULT_TIMEOUT_SECONDS = 30.0
 _NEUTRAL_RATE = 0.5
 _MIN_BENCHMARK_SAMPLES = 3
 _REFLECTION_HISTORY_LIMIT = 20
+
+_GOAL_BASIS: dict[DecisionGoal, str] = {
+    DecisionGoal.COST_OPTIMIZED: "비용(estimated_cost_usd) 오름차순 우선, 품질→latency tie-break",
+    DecisionGoal.QUALITY_OPTIMIZED: "품질(성공률) 내림차순 우선, 비용→latency 순 tie-break",
+    DecisionGoal.LATENCY_OPTIMIZED: "latency 오름차순 우선, 비용→품질 순 tie-break",
+}
+
+
+def _representative_success_rate(evidence: dict[str, float | None]) -> float | None:
+    """`InMemoryEngineRuntime._representative_success_rate()`와 동일 —
+    M81/M82가 이 계산을 공유한다."""
+
+    return (
+        evidence["execution_memory_success_rate"]
+        if evidence["execution_memory_success_rate"] is not None
+        else evidence["benchmark_success_rate"]
+        if evidence["benchmark_success_rate"] is not None
+        else evidence["reliability_success_rate"]
+    )
+
+
+def _representative_latency_seconds(evidence: dict[str, float | None]) -> float | None:
+    """`InMemoryEngineRuntime._representative_latency_seconds()`와 동일."""
+
+    return (
+        evidence["latency_seconds"]
+        if evidence["latency_seconds"] is not None
+        else evidence["benchmark_average_latency_seconds"]
+    )
 
 
 class ManagedEngineRuntime(EngineRuntime):
@@ -174,7 +204,23 @@ class ManagedEngineRuntime(EngineRuntime):
     `InMemoryEngineRuntime.decide_engine()`과 완전히 동일한 설계 — 새
     알고리즘 없이 `recommend_engine()`의 1순위를 M17 `EngineSelectionDecision`
     에 그대로 담아 반환한다. 추천이 없으면 `_require_adapter()`를 그대로
-    호출해 `run()`과 동일한 예외를 낸다."""
+    호출해 `run()`과 동일한 예외를 낸다.
+
+    **Workspace Reflection & Continuous Improvement(Milestone 81,
+    ADR-0099)**: `InMemoryEngineRuntime`과 동일 — `run()`이 실행을 마칠
+    때마다 실행 직전 evidence 스냅샷과 실제 결과를 비교해 `ReflectionReport`
+    를 엔진별 최근 20건만 in-process로 쌓고(`reflection_reports()`로
+    조회), 그 불일치 횟수를 `recommend_engine()`의 `reason`에 참고
+    문구로만 덧붙인다.
+
+    **Goal-Aware Decision Policy(Milestone 82, ADR-0100)**:
+    `InMemoryEngineRuntime`과 완전히 동일한 설계 — `recommend_engine()`/
+    `decide_engine()`에 선택적 `goal: DecisionGoal = DecisionGoal.BALANCED`
+    를 추가한다. `BALANCED`(기본값)면 새 코드 경로가 전혀 실행되지 않아
+    기존 계약이 100% 유지된다. 다른 goal을 명시하면(`engine_selection_
+    policy` 주입 시에만) `_build_candidates()`가 만든 후보를 Cost/Quality/
+    Latency 우선순위로 재정렬해 반환한다 — `_select()`/`_build_candidates()`/
+    `EngineSelectionPolicy`는 전혀 수정하지 않는다."""
 
     def __init__(
         self,
@@ -539,18 +585,8 @@ class ManagedEngineRuntime(EngineRuntime):
         `ReflectionReport`를 엔진별 `deque(maxlen=_REFLECTION_HISTORY_
         LIMIT)`에 추가한다."""
 
-        expected_success_rate = (
-            expected_evidence["execution_memory_success_rate"]
-            if expected_evidence["execution_memory_success_rate"] is not None
-            else expected_evidence["benchmark_success_rate"]
-            if expected_evidence["benchmark_success_rate"] is not None
-            else expected_evidence["reliability_success_rate"]
-        )
-        expected_latency_seconds = (
-            expected_evidence["latency_seconds"]
-            if expected_evidence["latency_seconds"] is not None
-            else expected_evidence["benchmark_average_latency_seconds"]
-        )
+        expected_success_rate = _representative_success_rate(expected_evidence)
+        expected_latency_seconds = _representative_latency_seconds(expected_evidence)
         expectation_matched = (
             None
             if expected_success_rate is None
@@ -607,16 +643,91 @@ class ManagedEngineRuntime(EngineRuntime):
             engine_name=name, reason=reason, evidence=evidence, confident=confident
         )
 
+    def _goal_rank_key(
+        self,
+        candidate: EngineCandidate,
+        required_capabilities: frozenset[str],
+        goal: DecisionGoal,
+    ) -> tuple[float, float, float, str]:
+        """`InMemoryEngineRuntime._goal_rank_key()`와 동일 — Goal-Aware
+        Decision Policy(Milestone 82, ADR-0100)."""
+
+        evidence, _confident = self._evidence_snapshot(candidate.engine_name, required_capabilities)
+        quality = _representative_success_rate(evidence)
+        quality = quality if quality is not None else _NEUTRAL_RATE
+        latency = _representative_latency_seconds(evidence)
+        latency = latency if latency is not None else math.inf
+        cost = candidate.estimated_cost_usd
+        name = candidate.engine_name
+        if goal is DecisionGoal.COST_OPTIMIZED:
+            return (cost, -quality, latency, name)
+        if goal is DecisionGoal.QUALITY_OPTIMIZED:
+            return (-quality, cost, latency, name)
+        return (latency, cost, -quality, name)  # LATENCY_OPTIMIZED
+
+    def _goal_reason(self, goal: DecisionGoal, name: str, confident: bool) -> str:
+        """`InMemoryEngineRuntime._goal_reason()`과 동일."""
+
+        basis = _GOAL_BASIS[goal]
+        confident_suffix = (
+            "(Benchmark/Execution Memory 근거 반영)"
+            if confident
+            else "(표본 부족 — 근거 데이터 부족)"
+        )
+        reason = f"Goal={goal.value}: {basis} {confident_suffix}"
+        return f"{reason}{self._reflection_note(name)}"
+
+    def _recommend_by_goal(
+        self,
+        candidates: list[EngineCandidate],
+        required_capabilities: frozenset[str],
+        goal: DecisionGoal,
+        top_n: int,
+    ) -> list[EngineRecommendation]:
+        """`InMemoryEngineRuntime._recommend_by_goal()`과 동일 — Budget
+        필터링만 그대로 적용한 뒤 `_goal_rank_key()`로 재정렬한다."""
+
+        allowed = candidates
+        if self._budget_policy_engine is not None:
+            allowed = [
+                candidate
+                for candidate in candidates
+                if self._budget_policy_engine.check(
+                    CostEstimate(candidate.estimated_tokens, candidate.estimated_cost_usd)
+                ).allowed
+            ]
+        if not allowed:
+            return []
+        ranked = sorted(allowed, key=lambda c: self._goal_rank_key(c, required_capabilities, goal))
+        results: list[EngineRecommendation] = []
+        for candidate in ranked[:top_n]:
+            evidence, confident = self._evidence_snapshot(
+                candidate.engine_name, required_capabilities
+            )
+            reason = self._goal_reason(goal, candidate.engine_name, confident)
+            results.append(
+                EngineRecommendation(
+                    engine_name=candidate.engine_name,
+                    reason=reason,
+                    evidence=evidence,
+                    confident=confident,
+                )
+            )
+        return results
+
     def recommend_engine(
         self,
         task: Task,
         required_capabilities: frozenset[str] = frozenset(),
         *,
         top_n: int = 1,
+        goal: DecisionGoal = DecisionGoal.BALANCED,
     ) -> list[EngineRecommendation]:
         """`InMemoryEngineRuntime.recommend_engine()`과 동일 —
         `_build_candidates()`/`EngineSelectionPolicy.select()`를 실행 없이
-        조회만 해 추천 목록을 만든다."""
+        조회만 해 추천 목록을 만든다. `goal`이 `BALANCED`(기본값)가
+        아니면(Milestone 82, ADR-0100) `_recommend_by_goal()`로 재정렬한
+        결과를 반환한다."""
 
         if top_n < 1:
             return []
@@ -640,6 +751,8 @@ class ManagedEngineRuntime(EngineRuntime):
             return recommendations
 
         remaining = self._build_candidates(task, required_capabilities)
+        if goal is not DecisionGoal.BALANCED:
+            return self._recommend_by_goal(remaining, required_capabilities, goal, top_n)
         results: list[EngineRecommendation] = []
         while remaining and len(results) < top_n:
             decision = self._engine_selection_policy.select(
@@ -652,18 +765,24 @@ class ManagedEngineRuntime(EngineRuntime):
         return results
 
     def decide_engine(
-        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        goal: DecisionGoal = DecisionGoal.BALANCED,
     ) -> EngineSelectionDecision:
         """`InMemoryEngineRuntime.decide_engine()`과 동일 —
         `recommend_engine()`(M79)의 1순위를 새 알고리즘 없이 그대로 최종
-        결정으로 채택한다."""
+        결정으로 채택한다. `goal`이 `BALANCED`가 아니면(Milestone 82,
+        ADR-0100) `reason`에 `run()`과 다를 수 있다는 사실을 명시한다."""
 
-        recommendations = self.recommend_engine(task, required_capabilities, top_n=1)
+        recommendations = self.recommend_engine(task, required_capabilities, top_n=1, goal=goal)
         if recommendations:
             top = recommendations[0]
-            return EngineSelectionDecision(
-                engine_name=top.engine_name, model=None, reason=top.reason
-            )
+            reason = top.reason
+            if goal is not DecisionGoal.BALANCED:
+                reason = f"{reason} (BALANCED가 아니므로 run()과 다른 엔진일 수 있음)"
+            return EngineSelectionDecision(engine_name=top.engine_name, model=None, reason=reason)
         name, _adapter = self._require_adapter(required_capabilities, task)
         return EngineSelectionDecision(
             engine_name=name,
