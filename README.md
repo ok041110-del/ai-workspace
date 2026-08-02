@@ -42,6 +42,7 @@ AI Workspace는 또 하나의 코딩 AI가 아닙니다. 실제 코드 작성은
 > 폐지, ADR-0021). Task는 아키텍처 책임 경계에 따라 분해합니다
 > (ADR-0022). 자세한 계획은 [`docs/ROADMAP.md`](docs/ROADMAP.md)와
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)를 참고하세요.
+> **최신 진행 상황은 [`.ai/TASKS.md`](.ai/TASKS.md) 참고.**
 
 ## 시작 방법
 
