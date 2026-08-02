@@ -3,6 +3,7 @@ from __future__ import annotations
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.engine_recommendation import EngineRecommendation
 from ai_workspace.domain.engine_selection import EngineSelectionDecision
+from ai_workspace.domain.reflection import ReflectionReport
 from ai_workspace.domain.retry_policy import RetryPolicy
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_adapter import (
@@ -159,6 +160,12 @@ class RecoveringEngineRuntime(EngineRuntime):
         """재시도와 무관한 read-only 조회이므로(Milestone 80, ADR-0098)
         내부 Runtime에 그대로 위임한다."""
         return self._inner.decide_engine(task, required_capabilities)
+
+    def reflection_reports(self, engine_name: str | None = None) -> list[ReflectionReport]:
+        """재시도와 무관한 read-only 조회이므로(Milestone 81, ADR-0099)
+        내부 Runtime에 그대로 위임한다. 재시도로 여러 번 실행되면 각
+        시도마다 내부 Runtime이 별도의 `ReflectionReport`를 기록한다."""
+        return self._inner.reflection_reports(engine_name)
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

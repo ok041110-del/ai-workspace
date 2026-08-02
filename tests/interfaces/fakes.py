@@ -18,6 +18,7 @@ from ai_workspace.domain.engine_selection import EngineSelectionDecision
 from ai_workspace.domain.knowledge import KnowledgeDocument
 from ai_workspace.domain.llm_policy import LLMPolicyDecision
 from ai_workspace.domain.project import Project
+from ai_workspace.domain.reflection import ReflectionReport
 from ai_workspace.domain.session import WorkspaceSession
 from ai_workspace.domain.step import Step
 from ai_workspace.domain.task import Task, TaskStatus
@@ -530,6 +531,11 @@ class FakeEngineRuntime(EngineRuntime):
                     reason="추천 근거 없음 — 기존 EngineSelectionPolicy로 fallback",
                 )
         raise NoSuitableEngineError(required_capabilities)
+
+    def reflection_reports(self, engine_name: str | None = None) -> list[ReflectionReport]:
+        """이 Fake는 Reflection을 추적하지 않으므로(최소 테스트 대역)
+        항상 빈 목록을 반환한다."""
+        return []
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

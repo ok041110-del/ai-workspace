@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.engine_recommendation import EngineRecommendation
 from ai_workspace.domain.engine_selection import EngineSelectionDecision
+from ai_workspace.domain.reflection import ReflectionReport
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_adapter import (
     CostEstimate,
@@ -331,6 +332,32 @@ class EngineRuntime(ABC):
         보장: side-effect 없음(read-only, `recommend_engine()`과 동일한
               경로만 사용). Routing 로직(`_select()`/`_build_candidates()`)
               은 전혀 수정하지 않으며, 새 상태도 추가하지 않는다.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def reflection_reports(self, engine_name: str | None = None) -> list[ReflectionReport]:
+        """**Workspace Reflection & Continuous Improvement(Milestone 81,
+        ADR-0099)**: `run()`이 실행을 마칠 때마다(이번 Milestone은 단일
+        결정 경로만 다루는 M80 `decide_engine()`과 동일한 범위로 `run()`
+        에만 한정한다) 자동으로 쌓이는 `ReflectionReport` 기록을 조회하는
+        read-only API다. 새 측정을 하지 않고 M65/M69/M77이 이미 관리하는
+        값의 실행 시점 스냅샷과 그 실행의 실제 결과만 비교해 기록한다.
+
+        입력: engine_name (생략하면 모든 엔진의 기록을 반환, 지정하면 그
+              엔진의 기록만 반환)
+        출력: 시간순(오래된 것 → 최신) `ReflectionReport` 목록. 엔진별로
+              최근 20건만 in-process로 보관하며(영속화 없음, 초과분은
+              가장 오래된 것부터 폐기), 기록이 없으면 빈 목록을 반환한다.
+              engine_name을 생략하면 여러 엔진의 기록이 섞여 반환되며,
+              엔진 간 상대적인 시간 순서는 보장하지 않는다(각 엔진 내부
+              순서만 보장).
+        예외: 없음
+        보장: side-effect 없음(read-only). 이 기록은 Routing 로직
+              (`_select()`/`_build_candidates()`)에 전혀 관여하지
+              않는다 — `recommend_engine()`의 `reason` 텍스트에 참고
+              문구로만 반영될 뿐, `evidence`/순위/`confident` 판정을
+              바꾸지 않는다.
         """
         raise NotImplementedError
 

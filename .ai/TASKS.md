@@ -15995,6 +15995,75 @@ Engine"을 요청했다(M80). 최신 main(M79/ADR-0097까지 반영) 기준으�
 
 ---
 
+## Milestone 81 — Workspace Reflection & Continuous Improvement: Decision을 사후 평가하는 Reflection 계층 (완료)
+
+**배경**: 사용자가 "M80 Autonomous Decision Engine이 내린 실행 결과를
+사후 평가(Reflection)하여 다음 실행에서 더 나은 의사결정을 할 수 있도록
+Continuous Improvement 계층을 추가"하는 M81을 요청했다. 최신 main(M80/
+ADR-0098까지 반영) 기준으로 조사한 결과, `_build_recommendation()`(M79)이
+실행 *전* 근거(evidence)를 계산하는 로직은 있었지만, `run()` 실행이 끝난
+뒤 그 근거가 실제 결과와 얼마나 맞았는지 비교·기록하는 계층은 없었다.
+
+**사용자 승인(AskUserQuestion, 4회)**:
+1. 적용 범위 — **`run()`만(권장안 채택)**: M80 `decide_engine()`이
+   "단일 결정만" 범위로 한정한 것과 동일. `run_parallel()`/
+   `run_ensemble()`/`run_ensemble_auto()`는 범위 밖(YAGNI).
+2. "예상"의 정의 — **evidence 전체 스냅샷(권장안 채택)**:
+   `_build_recommendation()`/`recommend_engine()`(M79)의 evidence dict
+   구조를 그대로 재사용해, 실행 직전(이번 실행 자체가 통계에 반영되기
+   전) 스냅샷한다.
+3. 보관 정책 — **엔진별 최근 20개만(권장안 채택)**: 영속화 없음, 엔진별
+   `deque(maxlen=20)`로 무제한 메모리 증가를 방지한다.
+4. 참고 정보 반영 방식 — **`reason` 텍스트에 문구 추가(권장안 채택)**:
+   `evidence`/`confident`/순위(Routing 결과)는 전혀 바뀌지 않는다.
+
+**구현**:
+- `src/ai_workspace/domain/reflection.py` 신설 — `ReflectionReport`
+  (frozen dataclass: `engine_name`/`expected_evidence`/`expected_
+  confident`/`expected_success_rate`/`expected_latency_seconds`/
+  `actual_success`/`actual_latency_seconds`/`expectation_matched`/
+  `latency_gap_seconds`).
+- `src/ai_workspace/interfaces/engine_runtime.py` — `reflection_reports
+  (engine_name: str | None = None) -> list[ReflectionReport]` 추상
+  메서드 신설(M70/M77/M79/M80과 동일한 방식의 계약 확장).
+- `src/ai_workspace/runtime/engine/engine_runtime.py`/
+  `managed_engine_runtime.py` — `_build_recommendation()`의 evidence
+  계산을 `_evidence_snapshot()`(신규 private 헬퍼)로 공유·재사용.
+  `run()`이 엔진을 선택·실행하기 직전 이 스냅샷을 캡처해, 실행 후
+  `_record_reflection()`이 실제 결과와 비교해 `ReflectionReport`를
+  엔진별 `deque(maxlen=20)`에 추가. `_build_recommendation()`의
+  `reason`에 `_reflection_note()`(최근 불일치 횟수 참고 문구)를 덧붙임
+  — `evidence`/`confident`/순위는 무변경.
+- `src/ai_workspace/runtime/engine/recovering_engine_runtime.py` — 내부
+  Runtime에 위임.
+- 테스트 대역 4곳에 계약 준수 최소 구현 추가.
+- `tests/runtime/engine/test_engine_runtime.py`(신규 6건), `tests/
+  runtime/engine/test_managed_engine_runtime.py`(동일 시나리오 5건)
+  추가.
+- `docs/ARCHITECTURE.md` §3.9 Engine Runtime 절에 Workspace Reflection
+  & Continuous Improvement(M81) 서술 추가, §7 인터페이스 표
+  `EngineRuntime` 행 갱신.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 최신 main 기준에서 시작, 기존 ADR/TASKS/ROADMAP·구현 상태를 먼저 조사 | ✅ |
+| 2 | 기존 AutonomousDecisionEngine(M80)/Recommendation/Workflow Learning/Benchmark/Learning 구조 최대 재사용 | ✅ |
+| 3 | 실행 종료 후 Decision → Outcome을 비교해 ReflectionReport 생성 | ✅ |
+| 4 | Reflection은 "예상과 실제의 차이"만 기록하며 즉시 Routing 정책을 변경하지 않음 | ✅ |
+| 5 | Reflection 결과는 다음 Recommendation/Learning에서 참고 정보로만 활용(reason 문구, evidence/confident/순위 무변경) | ✅ |
+| 6 | 새로운 Core Domain Interface 없음(EngineRuntime 계약 확장만) | ✅ |
+| 7 | 상태는 EngineRuntime 내부 in-process로만 관리, 영속화 제외(엔진별 최근 20건 ring buffer) | ✅ |
+| 8 | 기존 API와 100% 하위 호환(YAGNI) | ✅ |
+| 9 | 적용 범위·예상 정의·보관 정책·참고 정보 반영 방식을 AskUserQuestion 4회로 확정 | ✅ |
+| 10 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1384개(신규 11개, 회귀 없음)/`ruff`/`mypy`(236 source files)
+전부 통과. ADR-0099.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`
