@@ -972,6 +972,28 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   `WorkflowEngine`과 저장소를 클로저로 묶어 전달한다. 두 콜백을
   생략하면(기본값) 이 두 시점에 아무 일도 일어나지 않아 기존 동작과
   100% 동일하다.
+- **Multi-Agent Negotiation(Milestone 84, ADR-0102)**: 여러 Agent가 같은
+  Task/공유 자원(Provider·Model·Workflow 순서)에 대해 각자 독립적으로
+  `decide_engine()`을 호출하는 대신, 실행 전 단계에서 선호안을 조율해
+  하나의 계획으로 합의하는 새 순수 오케스트레이션 클래스
+  `runtime.negotiation.NegotiationCoordinator`(새 Core Domain Interface
+  아님, `EngineRuntime`/`WorkflowEngine` 계약도 무변경)를 추가한다.
+  `LearningRuntimeAnalyzer`(M54)와 동일한 패턴 — `WorkspaceCore`/
+  `AgentManager`/기존 실행 흐름(`run()`/`decide_engine()`/`plan()`)
+  어디에도 자동으로 배선되지 않으며, 호출자가 명시적으로 생성·호출해야만
+  쓰인다. 새 domain 값 객체 `AgentProposal`(agent_id/engine_name/model/
+  priority/preferred_workflow_order)과 `NegotiatedPlan`(기존
+  `EngineSelectionDecision`을 그대로 감싼 `decision`+`workflow_order`+
+  `consensus_reached`+`reason`)만 추가한다. `negotiate()`는
+  `engine_name`/(제안된 경우만) `preferred_workflow_order` 각각을
+  다수결로 조율하고(동률이면 "합의 실패"), workflow 순서는 채택 전
+  현재 `workflow.dependencies`를 만족하는지 검증한다(M72 `plan()`의
+  재검증 원칙과 동일). 제안이 없거나 다수결이 동률이거나 협상된 순서가
+  dependency를 어기면 **all-or-nothing**으로 즉시 기존 단독 의사결정
+  (`EngineRuntime.decide_engine()`/`WorkflowEngine.plan()`)으로
+  전환한다 — 새 알고리즘 없이 기존 두 계약을 그대로 호출할 뿐이다.
+  상태는 `negotiate()` 호출 인자로만 오가며 in-process로도 보관하지
+  않는다(호출 사이에 아무 것도 기억하지 않는 순수 함수형 오케스트레이션).
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
