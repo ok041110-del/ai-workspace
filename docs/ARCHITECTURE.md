@@ -898,6 +898,26 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   대체하지 않고 병렬적인 조회 API로만 추가) — 새 Core Domain Interface
   없음(M70/M77/M79와 동일한 방식), 새 상태 없음, Ensemble(top_n) 지원은
   이번 범위 밖(단일 결정만, YAGNI).
+- **Workspace Reflection & Continuous Improvement(Milestone 81,
+  ADR-0099)**: M80까지는 "실행 전 결정"만 다뤘고, 그 결정이 실제로
+  맞았는지 사후 평가하는 계층이 없었다. `run()`이 실행을 마칠 때마다
+  실행 직전(이번 실행 자체가 통계에 반영되기 전) M65/M69/M77 상태의
+  스냅샷을 "예상"으로 캡처해(`_evidence_snapshot()` — `_build_
+  recommendation()`(M79)과 계산을 공유) 실제 결과(성공 여부·latency)와
+  비교한 `ReflectionReport`(domain, 새 Core Domain Interface 아님)를
+  엔진별 최근 20건만 in-process `deque`로 쌓는다(영속화 없음). 새
+  public read-only 조회 메서드 `reflection_reports(engine_name=None)`
+  하나만 `EngineRuntime`에 추가한다(M70/M77/M79/M80과 동일한 계약 확장
+  방식). Reflection은 "예상과 실제의 차이"만 기록할 뿐 `_select()`/
+  `_build_candidates()`/재정렬 메서드/`decide_engine()`을 전혀 건드리지
+  않는다 — 즉시 Routing 정책을 바꾸지 않는다는 요구를 그대로 반영한다.
+  다음 `recommend_engine()` 호출에는 그 기록(최근 불일치 횟수)이
+  `reason` 텍스트에 참고 문구로만 덧붙는다(`evidence`/`confident`/순위는
+  전혀 바뀌지 않는다) — "참고 정보로만 활용, 즉시 정책 변경 없음"이라는
+  요구를 문자 그대로 만족한다. 대상 실행 경로는 M80 `decide_engine()`과
+  동일하게 단일 결정 경로(`run()`)로 한정한다(`run_parallel()`은
+  `ManagedEngineRuntime`에서 내부적으로 `run()`을 호출해 자동으로 함께
+  적용되지만, `run_ensemble()`/`run_ensemble_auto()`는 범위 밖, YAGNI).
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -2802,7 +2822,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `InteractionEngine` | 입력 표면 정규화/응답 변환 (기존 ConversationEngine 대체) | Milestone 1 (T1-21) 계약, Milestone 3 구현 | **완료(계약)** |
 | `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료(계약)** |
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
-| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70)+Provider별 동시 실행 상한(M74)+동률 후보 다양성 라우팅(M75)+상대 부하율 기반 로드 밸런싱(M76)+Benchmark Profile 조회(M77)+Benchmark 기반 Routing tie-break(M78)+실행 없는 Engine 추천(M79)+추천 기반 최종 결정 통합(M80) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장, M74(ADR-0092) `register_engine()`에 선택적 `max_concurrency` 확장, M75(ADR-0093) `_build_candidates()` 내부 tie-break 추가(계약 무변경), M76(ADR-0094) tie-break 신호를 raw count→상대 부하율로 개선(계약 무변경), M77(ADR-0095) `benchmark_profile()` 신규 public 메서드 추가(Routing 무변경), M78(ADR-0096) `_build_candidates()` 내부에 Benchmark 기반 tie-break 추가(계약 무변경), M79(ADR-0097) `recommend_engine()` 신규 public 메서드 추가(Routing 무변경, 실행 강제 없음), M80(ADR-0098) `decide_engine()` 신규 public 메서드 추가(새 알고리즘 없음, `run()`과 항상 동일 엔진) | **완료(계약)** |
+| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70)+Provider별 동시 실행 상한(M74)+동률 후보 다양성 라우팅(M75)+상대 부하율 기반 로드 밸런싱(M76)+Benchmark Profile 조회(M77)+Benchmark 기반 Routing tie-break(M78)+실행 없는 Engine 추천(M79)+추천 기반 최종 결정 통합(M80)+실행 후 예상-실제 비교 Reflection 기록/조회(M81) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장, M74(ADR-0092) `register_engine()`에 선택적 `max_concurrency` 확장, M75(ADR-0093) `_build_candidates()` 내부 tie-break 추가(계약 무변경), M76(ADR-0094) tie-break 신호를 raw count→상대 부하율로 개선(계약 무변경), M77(ADR-0095) `benchmark_profile()` 신규 public 메서드 추가(Routing 무변경), M78(ADR-0096) `_build_candidates()` 내부에 Benchmark 기반 tie-break 추가(계약 무변경), M79(ADR-0097) `recommend_engine()` 신규 public 메서드 추가(Routing 무변경, 실행 강제 없음), M80(ADR-0098) `decide_engine()` 신규 public 메서드 추가(새 알고리즘 없음, `run()`과 항상 동일 엔진), M81(ADR-0099) `reflection_reports()` 신규 read-only 조회 메서드 추가(Routing 무변경, `run()` 실행 후 자동 기록만) | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 | `WorkflowRepository` | `Workflow` 조회/저장(`AutomationActionExecutor`의 RUN_WORKFLOW가 `workflow_id`로 실제 Workflow를 찾는 유일한 통로) | Milestone 59 (계약+`InMemoryWorkflowRepository` 구현) | **완료(계약+구현)** |

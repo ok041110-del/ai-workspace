@@ -1141,3 +1141,119 @@ def test_decide_engine_raises_when_no_suitable_engine() -> None:
 
     with pytest.raises(NoSuitableEngineError):
         runtime.decide_engine(make_task("decide"), required_capabilities=frozenset({"missing"}))
+
+
+def test_run_records_reflection_report_with_no_prior_expectation() -> None:
+    """M81(ADR-0099): `run()`이 실행을 마치면 `reflection_reports()`로
+    조회 가능한 `ReflectionReport`가 하나 쌓인다. 이번 실행이 그 엔진의
+    첫 실행이면 실행 직전 evidence 스냅샷이 전부 표본 없음(`None`)이므로
+    `expected_success_rate`도 `None`이고, 판정 불가능한 `expectation_
+    matched`도 `None`이다."""
+    runtime = InMemoryEngineRuntime()
+    runtime.register_engine("engine-a", CostedEngineAdapter(estimated_cost_usd=0.0))
+
+    result = runtime.run(make_task("t1"))
+
+    assert result.success is True
+    reports = runtime.reflection_reports("engine-a")
+    assert len(reports) == 1
+    report = reports[0]
+    assert report.engine_name == "engine-a"
+    assert report.expected_success_rate is None
+    assert report.expectation_matched is None
+    assert report.actual_success is True
+    assert report.actual_latency_seconds >= 0.0
+    assert report.latency_gap_seconds is None
+
+
+def test_reflection_report_flags_mismatch_when_expectation_diverges_from_outcome() -> None:
+    """M81(ADR-0099): 3건 연속 성공으로 `execution_memory_success_rate`가
+    1.0(확실히 성공을 예상)이 된 다음 실제로 실패하면, 그 실행의
+    `ReflectionReport.expectation_matched`가 `False`로 기록된다 —
+    Reflection은 이 불일치만 기록할 뿐, 다음 `run()`이 고를 엔진에는
+    전혀 관여하지 않는다(Routing 정책 무변경)."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    engine = CostedEngineAdapter(estimated_cost_usd=0.0, capabilities=frozenset({"cap"}))
+    runtime.register_engine("engine-a", engine)
+
+    for i in range(3):
+        runtime.run(make_task(f"seed-{i}"), required_capabilities=frozenset({"cap"}))
+
+    engine._succeed = False
+    runtime.run(make_task("fail"), required_capabilities=frozenset({"cap"}))
+
+    reports = runtime.reflection_reports("engine-a")
+    assert len(reports) == 4
+    mismatched = reports[-1]
+    assert mismatched.expected_success_rate == 1.0
+    assert mismatched.actual_success is False
+    assert mismatched.expectation_matched is False
+    # 이전 3건은 예상(표본 부족 또는 성공 예측)과 실제(성공)가 일치했다.
+    assert all(r.expectation_matched is not False for r in reports[:3])
+
+
+def test_reflection_reports_bounded_per_engine_ring_buffer() -> None:
+    """M81(ADR-0099): 엔진별 Reflection 기록은 영속화 없이 최근 20건만
+    in-process로 보관한다 — 그 이상은 오래된 것부터 폐기된다."""
+    runtime = InMemoryEngineRuntime()
+    runtime.register_engine("engine-a", CostedEngineAdapter(estimated_cost_usd=0.0))
+
+    for i in range(25):
+        runtime.run(make_task(f"t{i}"))
+
+    reports = runtime.reflection_reports("engine-a")
+    assert len(reports) == 20
+
+
+def test_reflection_reports_empty_for_unknown_engine() -> None:
+    runtime = InMemoryEngineRuntime()
+    runtime.register_engine("engine-a", CostedEngineAdapter(estimated_cost_usd=0.0))
+
+    assert runtime.reflection_reports("no-such-engine") == []
+    assert runtime.reflection_reports() == []
+
+
+def test_reflection_reports_without_filter_aggregates_all_engines() -> None:
+    """M81(ADR-0099): `engine_name`을 생략하면 등록된 모든 엔진의 기록이
+    섞여 반환된다(엔진 간 상대 순서는 보장하지 않음, 엔진 내부 순서만
+    보장)."""
+    runtime = InMemoryEngineRuntime()
+    runtime.register_engine("engine-a", CostedEngineAdapter(estimated_cost_usd=0.0))
+    runtime.register_engine("engine-b", CostedEngineAdapter(estimated_cost_usd=1.0))
+
+    runtime.run(make_task("a1"), required_capabilities=frozenset())
+
+    all_reports = runtime.reflection_reports()
+    assert len(all_reports) == 1
+    assert all_reports[0].engine_name == "engine-a"
+
+
+def test_recommendation_reason_notes_recent_reflection_mismatch_without_changing_evidence() -> None:
+    """M81(ADR-0099): Reflection 기록에 불일치가 쌓이면 `recommend_
+    engine()`의 `reason`에만 참고 문구가 덧붙는다 — `evidence`/
+    `confident`/추천된 engine_name(순위)에는 전혀 영향을 주지 않는다
+    (Reflection은 참고 정보로만 활용되고 즉시 Routing 정책을 바꾸지
+    않는다는 요구를 그대로 반영)."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    engine = CostedEngineAdapter(estimated_cost_usd=0.0, capabilities=frozenset({"cap"}))
+    runtime.register_engine("engine-a", engine)
+
+    for i in range(3):
+        runtime.run(make_task(f"seed-{i}"), required_capabilities=frozenset({"cap"}))
+
+    before = runtime.recommend_engine(
+        make_task("before"), required_capabilities=frozenset({"cap"})
+    )[0]
+    assert "회고" not in before.reason
+
+    engine._succeed = False
+    runtime.run(make_task("fail"), required_capabilities=frozenset({"cap"}))
+    engine._succeed = True
+
+    after = runtime.recommend_engine(
+        make_task("after"), required_capabilities=frozenset({"cap"})
+    )[0]
+
+    assert "최근 회고: 예측-실제 불일치 1회" in after.reason
+    assert after.engine_name == before.engine_name == "engine-a"
+    assert after.confident == before.confident is True

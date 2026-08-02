@@ -83,6 +83,9 @@ class SpyEngineRuntime(EngineRuntime):
     def decide_engine(self, task, required_capabilities=frozenset()):
         raise AssertionError("Workspace Core는 Task를 직접 실행하면 안 된다.")
 
+    def reflection_reports(self, engine_name: str | None = None):
+        raise AssertionError("Workspace Core는 Task를 직접 실행하면 안 된다.")
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

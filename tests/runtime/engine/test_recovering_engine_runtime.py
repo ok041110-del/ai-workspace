@@ -182,6 +182,9 @@ class ScriptedEngineRuntime(EngineRuntime):
     def decide_engine(self, task, required_capabilities=frozenset()):
         raise NotImplementedError
 
+    def reflection_reports(self, engine_name: str | None = None):
+        raise NotImplementedError
+
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()
     ) -> CostEstimate:

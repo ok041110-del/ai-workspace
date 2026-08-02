@@ -4,6 +4,7 @@ import math
 import threading
 import time
 import uuid
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
 from ai_workspace.domain.consensus_agreement import ConsensusAgreementStat
@@ -12,6 +13,7 @@ from ai_workspace.domain.engine_execution_memory import EngineExecutionMemorySta
 from ai_workspace.domain.engine_recommendation import EngineRecommendation
 from ai_workspace.domain.engine_reliability import EngineReliabilityStat
 from ai_workspace.domain.engine_selection import EngineCandidate, EngineSelectionDecision
+from ai_workspace.domain.reflection import ReflectionReport
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.budget_policy_engine import BudgetPolicyEngine
 from ai_workspace.interfaces.engine_adapter import (
@@ -33,6 +35,7 @@ from ai_workspace.interfaces.event_bus import Event, EventBus
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 _NEUTRAL_RATE = 0.5
 _MIN_BENCHMARK_SAMPLES = 3
+_REFLECTION_HISTORY_LIMIT = 20
 
 
 class ManagedEngineRuntime(EngineRuntime):
@@ -195,6 +198,7 @@ class ManagedEngineRuntime(EngineRuntime):
         self._max_concurrency: dict[str, int] = {}
         self._in_flight: dict[str, int] = {}
         self._concurrency_lock = threading.Lock()
+        self._reflections: dict[str, deque[ReflectionReport]] = {}
 
     def register_engine(
         self, name: str, adapter: EngineAdapter, *, max_concurrency: int | None = None
@@ -328,6 +332,9 @@ class ManagedEngineRuntime(EngineRuntime):
     ) -> EngineResult:
         name, adapter = self._require_adapter_and_acquire(required_capabilities, task)
         try:
+            expected_evidence, expected_confident = self._evidence_snapshot(
+                name, required_capabilities
+            )
             session_id = adapter.create_session()
             self._task_sessions[task.task_id] = session_id
             self._task_adapters[task.task_id] = adapter
@@ -355,6 +362,7 @@ class ManagedEngineRuntime(EngineRuntime):
             if thread.is_alive():
                 self._record_engine_outcome(name, success=False)
                 self._record_execution_memory(required_capabilities, name, False, latency)
+                self._record_reflection(name, expected_evidence, expected_confident, False, latency)
                 return self._finish_as_timeout(task.task_id, session_id, adapter)
 
             if "error" in error_box:
@@ -362,6 +370,7 @@ class ManagedEngineRuntime(EngineRuntime):
                 self._task_status[task.task_id] = EngineSessionStatus.FAILED
                 self._record_engine_outcome(name, success=False)
                 self._record_execution_memory(required_capabilities, name, False, latency)
+                self._record_reflection(name, expected_evidence, expected_confident, False, latency)
                 raise error_box["error"]
 
             result = self._finish_as_completed(
@@ -370,6 +379,9 @@ class ManagedEngineRuntime(EngineRuntime):
             if result.error != "cancelled":
                 self._record_engine_outcome(name, result.success)
                 self._record_execution_memory(required_capabilities, name, result.success, latency)
+                self._record_reflection(
+                    name, expected_evidence, expected_confident, result.success, latency
+                )
             return result
         finally:
             self._release(name)
@@ -475,15 +487,14 @@ class ManagedEngineRuntime(EngineRuntime):
             total_latency_seconds=total_latency_seconds,
         )
 
-    def _build_recommendation(
-        self, decision: EngineSelectionDecision, required_capabilities: frozenset[str]
-    ) -> EngineRecommendation:
-        """`InMemoryEngineRuntime._build_recommendation()`과 동일 — M65/
-        M69/M77 데이터로 근거(`evidence`)를 채우고, M69(이번 capability
-        조합)/M77(Provider 전체) 중 하나라도 표본이 충분하면
-        `confident=True`다."""
+    def _evidence_snapshot(
+        self, name: str, required_capabilities: frozenset[str]
+    ) -> tuple[dict[str, float | None], bool]:
+        """`InMemoryEngineRuntime._evidence_snapshot()`과 동일 — M65/M69/
+        M77 데이터를 새 측정 없이 읽기 전용으로 조합한다. `_build_
+        recommendation()`(M79)과 `_record_reflection()`(M81) 양쪽이
+        공유한다."""
 
-        name = decision.engine_name
         reliability = self._engine_reliability.get(name, EngineReliabilityStat())
         memory = self._execution_memory.get((required_capabilities, name))
         profile = self.benchmark_profile(name)
@@ -500,11 +511,98 @@ class ManagedEngineRuntime(EngineRuntime):
             evidence["execution_memory_success_rate"] is not None
             or profile.execution_count >= _MIN_BENCHMARK_SAMPLES
         )
+        return evidence, confident
+
+    def _reflection_note(self, name: str) -> str:
+        """`InMemoryEngineRuntime._reflection_note()`와 동일 — 최근
+        Reflection 기록 중 예상과 실제가 어긋난 개수를 참고 문구로만
+        반환한다(evidence/confident/순위 무관여)."""
+
+        history = self._reflections.get(name)
+        if not history:
+            return ""
+        mismatches = sum(1 for report in history if report.expectation_matched is False)
+        if mismatches == 0:
+            return ""
+        return f" (최근 회고: 예측-실제 불일치 {mismatches}회)"
+
+    def _record_reflection(
+        self,
+        name: str,
+        expected_evidence: dict[str, float | None],
+        expected_confident: bool,
+        actual_success: bool,
+        actual_latency_seconds: float,
+    ) -> None:
+        """`InMemoryEngineRuntime._record_reflection()`과 동일 — `run()`
+        실행 직전 스냅샷(`expected_evidence`)과 실제 결과를 비교해
+        `ReflectionReport`를 엔진별 `deque(maxlen=_REFLECTION_HISTORY_
+        LIMIT)`에 추가한다."""
+
+        expected_success_rate = (
+            expected_evidence["execution_memory_success_rate"]
+            if expected_evidence["execution_memory_success_rate"] is not None
+            else expected_evidence["benchmark_success_rate"]
+            if expected_evidence["benchmark_success_rate"] is not None
+            else expected_evidence["reliability_success_rate"]
+        )
+        expected_latency_seconds = (
+            expected_evidence["latency_seconds"]
+            if expected_evidence["latency_seconds"] is not None
+            else expected_evidence["benchmark_average_latency_seconds"]
+        )
+        expectation_matched = (
+            None
+            if expected_success_rate is None
+            else (expected_success_rate >= _NEUTRAL_RATE) == actual_success
+        )
+        latency_gap_seconds = (
+            None
+            if expected_latency_seconds is None
+            else actual_latency_seconds - expected_latency_seconds
+        )
+        report = ReflectionReport(
+            engine_name=name,
+            expected_evidence=expected_evidence,
+            expected_confident=expected_confident,
+            expected_success_rate=expected_success_rate,
+            expected_latency_seconds=expected_latency_seconds,
+            actual_success=actual_success,
+            actual_latency_seconds=actual_latency_seconds,
+            expectation_matched=expectation_matched,
+            latency_gap_seconds=latency_gap_seconds,
+        )
+        history = self._reflections.setdefault(name, deque(maxlen=_REFLECTION_HISTORY_LIMIT))
+        history.append(report)
+
+    def reflection_reports(self, engine_name: str | None = None) -> list[ReflectionReport]:
+        """`InMemoryEngineRuntime.reflection_reports()`와 동일한 read-only
+        조회."""
+
+        if engine_name is not None:
+            return list(self._reflections.get(engine_name, ()))
+        reports: list[ReflectionReport] = []
+        for history in self._reflections.values():
+            reports.extend(history)
+        return reports
+
+    def _build_recommendation(
+        self, decision: EngineSelectionDecision, required_capabilities: frozenset[str]
+    ) -> EngineRecommendation:
+        """`InMemoryEngineRuntime._build_recommendation()`과 동일 — M65/
+        M69/M77 데이터로 근거(`evidence`)를 채우고, M69(이번 capability
+        조합)/M77(Provider 전체) 중 하나라도 표본이 충분하면
+        `confident=True`다. `reason`에는 `_reflection_note()`(M81)의
+        참고 문구를 덧붙인다."""
+
+        name = decision.engine_name
+        evidence, confident = self._evidence_snapshot(name, required_capabilities)
         reason = (
             f"{decision.reason} (Benchmark/Execution Memory 근거 반영)"
             if confident
             else f"{decision.reason} (표본 부족 — 기존 Routing 결과와 동일)"
         )
+        reason = f"{reason}{self._reflection_note(name)}"
         return EngineRecommendation(
             engine_name=name, reason=reason, evidence=evidence, confident=confident
         )

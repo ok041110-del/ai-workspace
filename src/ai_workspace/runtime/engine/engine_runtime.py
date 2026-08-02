@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import threading
 import time
+from collections import deque
 
 from ai_workspace.domain.consensus_agreement import ConsensusAgreementStat
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
@@ -10,6 +11,7 @@ from ai_workspace.domain.engine_execution_memory import EngineExecutionMemorySta
 from ai_workspace.domain.engine_recommendation import EngineRecommendation
 from ai_workspace.domain.engine_reliability import EngineReliabilityStat
 from ai_workspace.domain.engine_selection import EngineCandidate, EngineSelectionDecision
+from ai_workspace.domain.reflection import ReflectionReport
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.budget_policy_engine import BudgetPolicyEngine
 from ai_workspace.interfaces.engine_adapter import (
@@ -28,6 +30,7 @@ from ai_workspace.interfaces.engine_selection_policy import EngineSelectionPolic
 
 _NEUTRAL_RATE = 0.5
 _MIN_BENCHMARK_SAMPLES = 3
+_REFLECTION_HISTORY_LIMIT = 20
 
 
 class InMemoryEngineRuntime(EngineRuntime):
@@ -165,7 +168,20 @@ class InMemoryEngineRuntime(EngineRuntime):
     `run()`이 고를 엔진과 동일하다(reason에 confident 여부만 반영). 추천
     자체가 없으면(후보 없음) `_select()`를 그대로 호출해 `run()`과 동일한
     예외를 낸다 — "Recommendation 부족 시 기존 EngineSelectionPolicy로
-    즉시 fallback"을 예외 정책까지 일치시켜 만족한다."""
+    즉시 fallback"을 예외 정책까지 일치시켜 만족한다.
+
+    **Workspace Reflection & Continuous Improvement(Milestone 81,
+    ADR-0099)**: `run()`이 실행을 마칠 때마다, 그 실행이 시작되기
+    직전(이번 실행 자체가 통계에 반영되기 전) M65/M69/M77 상태의
+    스냅샷(`_evidence_snapshot()` — `_build_recommendation()`과 완전히
+    같은 계산을 공유)을 "예상"으로 남기고, 실제 결과(성공 여부·latency)
+    와 비교해 `ReflectionReport`를 엔진별 최근
+    `_REFLECTION_HISTORY_LIMIT`(20)건만 in-process로 쌓는다(영속화 없음,
+    `reflection_reports()`로 조회). Reflection은 이 실행이 예상과 얼마나
+    맞았는지만 기록할 뿐 `_select()`/`_build_candidates()`/재정렬
+    메서드는 전혀 건드리지 않는다 — `_build_recommendation()`의 `reason`
+    텍스트에 참고 문구를 덧붙이는 것으로만 다음 Recommendation에
+    반영되며, `evidence`/순위/`confident` 판정은 그대로다."""
 
     def __init__(
         self,
@@ -183,6 +199,7 @@ class InMemoryEngineRuntime(EngineRuntime):
         self._max_concurrency: dict[str, int] = {}
         self._in_flight: dict[str, int] = {}
         self._concurrency_lock = threading.Lock()
+        self._reflections: dict[str, deque[ReflectionReport]] = {}
 
     def register_engine(
         self, name: str, adapter: EngineAdapter, *, max_concurrency: int | None = None
@@ -427,6 +444,9 @@ class InMemoryEngineRuntime(EngineRuntime):
     ) -> EngineResult:
         name, adapter = self._select_and_acquire(task, required_capabilities)
         try:
+            expected_evidence, expected_confident = self._evidence_snapshot(
+                name, required_capabilities
+            )
             session_id = adapter.create_session()
             started = time.monotonic()
             result = adapter.run(session_id, task, model=model)
@@ -434,6 +454,9 @@ class InMemoryEngineRuntime(EngineRuntime):
             adapter.destroy_session(session_id)
             self._record_engine_outcome(name, result.success)
             self._record_execution_memory(required_capabilities, name, result.success, latency)
+            self._record_reflection(
+                name, expected_evidence, expected_confident, result.success, latency
+            )
             self._task_status[task.task_id] = (
                 EngineSessionStatus.COMPLETED if result.success else EngineSessionStatus.FAILED
             )
@@ -582,18 +605,16 @@ class InMemoryEngineRuntime(EngineRuntime):
             total_latency_seconds=total_latency_seconds,
         )
 
-    def _build_recommendation(
-        self, decision: EngineSelectionDecision, required_capabilities: frozenset[str]
-    ) -> EngineRecommendation:
-        """**Adaptive Engine Recommendation(Milestone 79, ADR-0097)**:
-        `EngineSelectionPolicy.select()`가 이미 내린 결정(`decision`)에,
-        M65/M69/M77이 읽기 전용으로 관리하는 데이터를 근거로 덧붙인다.
-        `execution_memory_success_rate`(M69, 이번 `required_capabilities`
-        조합 전용 — "Workflow Learning" 근거로 재사용)와 `benchmark_
-        success_rate`(M77, Provider 전체 누적) 중 하나라도 표본이
-        충분하면(M69/M78과 동일한 "3건 이상" 기준) `confident=True`다."""
+    def _evidence_snapshot(
+        self, name: str, required_capabilities: frozenset[str]
+    ) -> tuple[dict[str, float | None], bool]:
+        """M65(`_engine_reliability`)/M69(`_execution_memory`)/M77
+        (`benchmark_profile()`)을 새 측정 없이 읽기 전용으로 조합해
+        `EngineRecommendation.evidence`와 동일한 구조의 dict를 만든다.
+        `_build_recommendation()`(M79)과 `_record_reflection()`(M81) 양쪽이
+        이 계산을 공유해, "예상"이 실행 전 추천의 근거와 항상 같은
+        방식으로 계산됨을 구조적으로 보장한다."""
 
-        name = decision.engine_name
         reliability = self._engine_reliability.get(name, EngineReliabilityStat())
         memory = self._execution_memory.get((required_capabilities, name))
         profile = self.benchmark_profile(name)
@@ -610,11 +631,120 @@ class InMemoryEngineRuntime(EngineRuntime):
             evidence["execution_memory_success_rate"] is not None
             or profile.execution_count >= _MIN_BENCHMARK_SAMPLES
         )
+        return evidence, confident
+
+    def _reflection_note(self, name: str) -> str:
+        """**Workspace Reflection & Continuous Improvement(Milestone 81,
+        ADR-0099)**: `reflection_reports(name)`에 쌓인 최근 기록 중
+        `expectation_matched is False`(예상과 실제가 어긋났던 실행)인
+        개수를 세어, 있으면 사람이 읽을 수 있는 문구로만 반환한다. 이
+        문구는 `_build_recommendation()`의 `reason`에 덧붙는 참고 정보일
+        뿐, `evidence`/`confident`/순위에는 전혀 영향을 주지 않는다."""
+
+        history = self._reflections.get(name)
+        if not history:
+            return ""
+        mismatches = sum(1 for report in history if report.expectation_matched is False)
+        if mismatches == 0:
+            return ""
+        return f" (최근 회고: 예측-실제 불일치 {mismatches}회)"
+
+    def _record_reflection(
+        self,
+        name: str,
+        expected_evidence: dict[str, float | None],
+        expected_confident: bool,
+        actual_success: bool,
+        actual_latency_seconds: float,
+    ) -> None:
+        """**Workspace Reflection & Continuous Improvement(Milestone 81,
+        ADR-0099)**: `run()` 실행 하나가 끝날 때마다 실행 직전 스냅샷
+        (`expected_evidence`)과 실제 결과를 비교해 `ReflectionReport`를
+        엔진별 `deque(maxlen=_REFLECTION_HISTORY_LIMIT)`에 추가한다 —
+        Routing 상태(`_engine_reliability`/`_execution_memory`)는 이
+        메서드가 호출되기 전에 이미 `_record_engine_outcome()`/`_record_
+        execution_memory()`로 갱신되어 있으므로, `expected_evidence`는
+        반드시 그 갱신 이전에 캡처된 스냅샷이어야 "예상"이라는 의미가
+        성립한다(호출자 책임).
+
+        `expected_success_rate`는 `execution_memory_success_rate` >
+        `benchmark_success_rate` > `reliability_success_rate` 순서로
+        (Routing tie-break 우선순위, M78/M69와 동일) 첫 값을 채택한다.
+        `expectation_matched`는 `expected_success_rate >= 0.5`와 `actual_
+        success`가 같은지 비교한다 — 예상 성공률 자체가 없으면 `None`."""
+
+        expected_success_rate = (
+            expected_evidence["execution_memory_success_rate"]
+            if expected_evidence["execution_memory_success_rate"] is not None
+            else expected_evidence["benchmark_success_rate"]
+            if expected_evidence["benchmark_success_rate"] is not None
+            else expected_evidence["reliability_success_rate"]
+        )
+        expected_latency_seconds = (
+            expected_evidence["latency_seconds"]
+            if expected_evidence["latency_seconds"] is not None
+            else expected_evidence["benchmark_average_latency_seconds"]
+        )
+        expectation_matched = (
+            None
+            if expected_success_rate is None
+            else (expected_success_rate >= _NEUTRAL_RATE) == actual_success
+        )
+        latency_gap_seconds = (
+            None
+            if expected_latency_seconds is None
+            else actual_latency_seconds - expected_latency_seconds
+        )
+        report = ReflectionReport(
+            engine_name=name,
+            expected_evidence=expected_evidence,
+            expected_confident=expected_confident,
+            expected_success_rate=expected_success_rate,
+            expected_latency_seconds=expected_latency_seconds,
+            actual_success=actual_success,
+            actual_latency_seconds=actual_latency_seconds,
+            expectation_matched=expectation_matched,
+            latency_gap_seconds=latency_gap_seconds,
+        )
+        history = self._reflections.setdefault(name, deque(maxlen=_REFLECTION_HISTORY_LIMIT))
+        history.append(report)
+
+    def reflection_reports(self, engine_name: str | None = None) -> list[ReflectionReport]:
+        """`_reflections`(엔진별 최근 `_REFLECTION_HISTORY_LIMIT`건 ring
+        buffer)를 읽기 전용으로 조회한다. `engine_name`을 생략하면 등록
+        순서상 딕셔너리 순서로 모든 엔진의 기록을 이어 붙여 반환한다."""
+
+        if engine_name is not None:
+            return list(self._reflections.get(engine_name, ()))
+        reports: list[ReflectionReport] = []
+        for history in self._reflections.values():
+            reports.extend(history)
+        return reports
+
+    def _build_recommendation(
+        self, decision: EngineSelectionDecision, required_capabilities: frozenset[str]
+    ) -> EngineRecommendation:
+        """**Adaptive Engine Recommendation(Milestone 79, ADR-0097)**:
+        `EngineSelectionPolicy.select()`가 이미 내린 결정(`decision`)에,
+        M65/M69/M77이 읽기 전용으로 관리하는 데이터를 근거로 덧붙인다.
+        `execution_memory_success_rate`(M69, 이번 `required_capabilities`
+        조합 전용 — "Workflow Learning" 근거로 재사용)와 `benchmark_
+        success_rate`(M77, Provider 전체 누적) 중 하나라도 표본이
+        충분하면(M69/M78과 동일한 "3건 이상" 기준) `confident=True`다.
+
+        **Workspace Reflection(Milestone 81, ADR-0099)**: `reason`에
+        `_reflection_note()`가 반환하는 참고 문구(예: "최근 회고:
+        예측-실제 불일치 N회")를 덧붙인다 — `evidence`/`confident`/순위는
+        전혀 바뀌지 않는다(참고 정보로만 활용)."""
+
+        name = decision.engine_name
+        evidence, confident = self._evidence_snapshot(name, required_capabilities)
         reason = (
             f"{decision.reason} (Benchmark/Execution Memory 근거 반영)"
             if confident
             else f"{decision.reason} (표본 부족 — 기존 Routing 결과와 동일)"
         )
+        reason = f"{reason}{self._reflection_note(name)}"
         return EngineRecommendation(
             engine_name=name, reason=reason, evidence=evidence, confident=confident
         )

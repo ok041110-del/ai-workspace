@@ -1428,3 +1428,97 @@ def test_decide_engine_raises_when_no_suitable_engine() -> None:
 
     with pytest.raises(NoSuitableEngineError):
         runtime.decide_engine(make_task("decide"), required_capabilities=frozenset({"missing"}))
+
+
+def test_run_records_reflection_report_with_no_prior_expectation() -> None:
+    """M81(ADR-0099): `InMemoryEngineRuntime`과 동일한 시나리오 — `run()`
+    실행 하나마다 `reflection_reports()`로 조회 가능한 `ReflectionReport`가
+    쌓인다. 첫 실행이면 예상 근거가 전부 표본 없음이라 `expected_success_
+    rate`/`expectation_matched`가 모두 `None`이다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("engine-a", CostedSlowEngineAdapter(delay_seconds=0.0))
+
+    result = runtime.run(make_task("t1"))
+
+    assert result.success is True
+    reports = runtime.reflection_reports("engine-a")
+    assert len(reports) == 1
+    report = reports[0]
+    assert report.engine_name == "engine-a"
+    assert report.expected_success_rate is None
+    assert report.expectation_matched is None
+    assert report.actual_success is True
+
+
+def test_reflection_report_flags_mismatch_when_expectation_diverges_from_outcome() -> None:
+    """M81(ADR-0099): 3건 연속 성공으로 실행 메모리 성공률이 1.0이 된
+    다음 실제로 실패하면, 그 실행의 `ReflectionReport.expectation_matched`
+    가 `False`로 기록된다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    engine = FailableCostedSlowEngineAdapter(delay_seconds=0.0, capabilities=frozenset({"cap"}))
+    runtime.register_engine("engine-a", engine)
+
+    for i in range(3):
+        runtime.run(make_task(f"seed-{i}"), frozenset({"cap"}))
+
+    engine.succeed = False
+    runtime.run(make_task("fail"), frozenset({"cap"}))
+
+    reports = runtime.reflection_reports("engine-a")
+    assert len(reports) == 4
+    mismatched = reports[-1]
+    assert mismatched.expected_success_rate == 1.0
+    assert mismatched.actual_success is False
+    assert mismatched.expectation_matched is False
+
+
+def test_reflection_reports_bounded_per_engine_ring_buffer() -> None:
+    """M81(ADR-0099): 엔진별 Reflection 기록은 영속화 없이 최근 20건만
+    in-process로 보관한다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("engine-a", CostedSlowEngineAdapter(delay_seconds=0.0))
+
+    for i in range(25):
+        runtime.run(make_task(f"t{i}"))
+
+    assert len(runtime.reflection_reports("engine-a")) == 20
+
+
+def test_reflection_reports_empty_for_unknown_engine() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("engine-a", CostedSlowEngineAdapter(delay_seconds=0.0))
+
+    assert runtime.reflection_reports("no-such-engine") == []
+
+
+def test_recommendation_reason_notes_recent_reflection_mismatch_without_changing_evidence() -> None:
+    """M81(ADR-0099): Reflection 불일치는 `recommend_engine()`의 `reason`
+    문구에만 참고 정보로 반영되고 `evidence`/`confident`/추천된
+    engine_name에는 전혀 영향을 주지 않는다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    engine = FailableCostedSlowEngineAdapter(delay_seconds=0.0, capabilities=frozenset({"cap"}))
+    runtime.register_engine("engine-a", engine)
+
+    for i in range(3):
+        runtime.run(make_task(f"seed-{i}"), frozenset({"cap"}))
+
+    before = runtime.recommend_engine(
+        make_task("before"), required_capabilities=frozenset({"cap"})
+    )[0]
+    assert "회고" not in before.reason
+
+    engine.succeed = False
+    runtime.run(make_task("fail"), frozenset({"cap"}))
+    engine.succeed = True
+
+    after = runtime.recommend_engine(
+        make_task("after"), required_capabilities=frozenset({"cap"})
+    )[0]
+
+    assert "최근 회고: 예측-실제 불일치 1회" in after.reason
+    assert after.engine_name == before.engine_name == "engine-a"
+    assert after.confident == before.confident is True
