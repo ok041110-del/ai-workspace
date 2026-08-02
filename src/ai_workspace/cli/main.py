@@ -13,6 +13,7 @@ from ai_workspace.runtime.agent.agent_manager import InMemoryAgentManager
 from ai_workspace.runtime.agent.agent_registry import InMemoryAgentRegistry
 from ai_workspace.runtime.agent.agent_scheduler import InMemoryAgentScheduler
 from ai_workspace.runtime.engine.managed_engine_runtime import ManagedEngineRuntime
+from ai_workspace.storage.file_learning_state_store import FileLearningStateStore
 from ai_workspace.storage.file_project_repository import FileProjectRepository
 
 DEFAULT_DATA_DIR = str(Path("workspace") / "projects")
@@ -24,16 +25,29 @@ def _build_workspace_core(data_dir: str) -> WorkspaceCore:
     요구하는 것이 없어 등록하지 않는다(지연 초기화) — Task 실행이 필요한
     명령이 추가되는 시점에 `engine_runtime.register_engine("claude_code",
     ClaudeCodeEngineAdapter())`를 호출한다. 그전까지 CLI는 `claude` 실행
-    파일 설치 여부에 의존하지 않는다."""
+    파일 설치 여부에 의존하지 않는다.
+
+    **Persistent Learning Memory(Milestone 83, ADR-0101)**: `Workspace
+    Core`는 구체 저장소를 몰라야 하므로(§8 규칙 3), 이 Composition Root가
+    `FileLearningStateStore`(`<data_dir 상위>/.ai-workspace-data/`)를 직접
+    조립하고 이미 만들어 둔 `engine_runtime`/`workflow_engine`을 클로저로
+    묶어 `restore_learning_state`/`persist_learning_state` 콜백으로
+    전달한다 — 파일이 없거나 손상됐어도 `FileLearningStateStore`가 조용히
+    무시하므로 CLI 동작에 영향이 없다."""
     event_bus = InMemoryEventBus()
+    engine_runtime = ManagedEngineRuntime(event_bus=event_bus)
+    workflow_engine = InMemoryWorkflowEngine()
+    learning_state_store = FileLearningStateStore(Path(data_dir).parent / ".ai-workspace-data")
     return WorkspaceCore(
         project_repository=FileProjectRepository(data_dir),
-        workflow_engine=InMemoryWorkflowEngine(),
+        workflow_engine=workflow_engine,
         agent_registry=InMemoryAgentRegistry(),
         agent_scheduler=InMemoryAgentScheduler(),
         agent_manager=InMemoryAgentManager(),
         event_bus=event_bus,
-        engine_runtime=ManagedEngineRuntime(event_bus=event_bus),
+        engine_runtime=engine_runtime,
+        restore_learning_state=lambda: learning_state_store.load(engine_runtime, workflow_engine),
+        persist_learning_state=lambda: learning_state_store.save(engine_runtime, workflow_engine),
     )
 
 
@@ -117,12 +131,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     core = _build_workspace_core(args.data_dir)
-
-    if args.project_command == "create":
-        return _create_project(core, args)
-    if args.project_command == "list":
-        return _list_projects(core, args)
-    return _show_project(core, args)
+    try:
+        if args.project_command == "create":
+            return _create_project(core, args)
+        if args.project_command == "list":
+            return _list_projects(core, args)
+        return _show_project(core, args)
+    finally:
+        core.shutdown()
 
 
 if __name__ == "__main__":

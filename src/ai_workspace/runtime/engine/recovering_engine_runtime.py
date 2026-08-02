@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from ai_workspace.domain.decision_goal import DecisionGoal
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.engine_recommendation import EngineRecommendation
@@ -183,3 +185,13 @@ class RecoveringEngineRuntime(EngineRuntime):
 
     def status(self, task_id: str) -> EngineSessionStatus:
         return self._inner.status(task_id)
+
+    def export_learning_state(self) -> dict[str, Any]:
+        """재시도와 무관한 read-only 조회이므로(Milestone 83, ADR-0101)
+        내부 Runtime에 그대로 위임한다."""
+        return self._inner.export_learning_state()
+
+    def import_learning_state(self, state: dict[str, Any]) -> None:
+        """재시도와 무관한 상태 복원이므로(Milestone 83, ADR-0101) 내부
+        Runtime에 그대로 위임한다."""
+        self._inner.import_learning_state(state)

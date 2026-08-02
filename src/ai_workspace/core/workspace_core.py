@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Callable
 
 from ai_workspace.domain.engine_session import EngineSession
 from ai_workspace.domain.project import Project
@@ -41,7 +42,19 @@ class WorkspaceCore:
     필드 모양은 비슷하지만 공통 추상화(BaseSession)로 묶지 않는다 — 세 종류의
     Session이 실제로 겹치는 동작을 반복적으로 드러내기 전까지는 독립된 개념으로
     유지한다(점진적 확장 원칙, `.ai/RULES.md` §4.2).
-    """
+
+    **Persistent Learning Memory(Milestone 83, ADR-0101)**: `restore_
+    learning_state`/`persist_learning_state`(둘 다 선택, 기본값 `None`)는
+    각각 `__init__` 끝과 `shutdown()` 시작에서 호출되는 인자 없는
+    콜백이다. Workspace Core는 이 콜백의 내용(어떤 파일에 어떻게
+    저장하는지, `EngineRuntime.export_learning_state()`/`import_learning_
+    state()`를 호출한다는 사실)을 전혀 모른다 — 구체 저장소(`storage.
+    FileLearningStateStore`)에 의존하면 §8 규칙 3("Workspace Core →
+    Agent Runtime, Engine Runtime, **Interfaces**에만 의존")을 어기므로,
+    Composition Root(예: CLI)가 이미 조립된 `EngineRuntime`/
+    `WorkflowEngine`과 저장소를 클로저로 묶어 전달한다. 두 콜백을
+    생략하면(기본값) 이 두 시점에 아무 일도 일어나지 않아 기존 동작과
+    100% 동일하다."""
 
     def __init__(
         self,
@@ -54,6 +67,8 @@ class WorkspaceCore:
         event_bus: EventBus,
         engine_runtime: EngineRuntime,
         config: dict[str, str] | None = None,
+        restore_learning_state: Callable[[], None] | None = None,
+        persist_learning_state: Callable[[], None] | None = None,
     ) -> None:
         self._project_repository = project_repository
         self._workflow_engine = workflow_engine
@@ -68,6 +83,9 @@ class WorkspaceCore:
         self._engine_sessions: dict[str, EngineSession] = {}
         self._engine_session_id_generator = itertools.count(1)
         self._engine_session_history: list[EngineSession] = []
+        self._persist_learning_state = persist_learning_state
+        if restore_learning_state is not None:
+            restore_learning_state()
 
     @property
     def config(self) -> dict[str, str]:
@@ -167,5 +185,7 @@ class WorkspaceCore:
         return list(self._engine_session_history)
 
     def shutdown(self) -> None:
+        if self._persist_learning_state is not None:
+            self._persist_learning_state()
         self._sessions.clear()
         self._engine_sessions.clear()

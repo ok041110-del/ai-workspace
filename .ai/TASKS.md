@@ -16139,6 +16139,83 @@ engine()`(M79)의 1순위를 채택하고 `recommend_engine()`은 항상
 
 ---
 
+## Milestone 83 — Persistent Learning Memory: 학습 상태를 단일 JSON 파일로 영속화 (완료)
+
+**배경**: 사용자가 "M65~M82에서 학습한 Engine Reliability, Benchmark,
+Workflow Learning, Reflection, Recommendation 데이터를 세션 종료 후에도
+유지"하는 M83을 요청했다. 최신 main(M82/ADR-0100까지 반영) 기준으로
+조사한 결과, 관련 학습 데이터는 모두 in-process dict/deque로만 존재해
+프로세스 종료(CLI는 매 명령마다 새 프로세스) 시 사라졌다. Benchmark/
+Recommendation은 그 자체가 저장 대상이 아니라 4가지 원시 데이터(M65/
+M69/M70/M81)를 조합한 파생값임을 확인했다.
+
+**사용자 승인(AskUserQuestion, 4회)**:
+1. 연결 지점 — **`WorkspaceCore.__init__`/`shutdown()`(권장안 채택)**:
+   `shutdown()`이 이미 "종료" 의미를 갖고 있고, 생성자가 `engine_runtime`/
+   `workflow_engine`을 이미 주입받는다.
+2. API 표면 — **기존 `EngineRuntime`/`WorkflowEngine` 추상 인터페이스
+   확장(권장안 채택)**: M70~M82와 동일한 계약 확장 방식.
+3. 파일 구성 — **단일 JSON 파일로 통합(권장안 채택)**: `<data_dir 상위>/
+   .ai-workspace-data/learning_state.json`.
+4. 실패 처리 — **조용히 무시하고 in-process 기본값으로 fallback
+   (권장안 채택)**: 새 로깅/예외 인프라 추가하지 않음(YAGNI).
+
+**구현**:
+- `src/ai_workspace/interfaces/engine_runtime.py`/`workflow_engine.py` —
+  `export_learning_state() -> dict[str, Any]`/`import_learning_state
+  (state) -> None` 추상 메서드 신설.
+- `src/ai_workspace/runtime/engine/engine_runtime.py`/
+  `managed_engine_runtime.py` — M65/M69/M70/M81 4가지 값 객체를 JSON
+  직렬화 가능한 dict로 인코딩/디코딩. `(required_capabilities,
+  engine_name)` 튜플 키는 레코드 리스트로 표현. `import_learning_state()`
+  는 기존 상태를 대체(병합 아님).
+- `src/ai_workspace/engines/workflow_engine.py` — `_order_stats`(이중
+  중첩 키 dict)를 평평한 레코드 리스트로 표현.
+- `src/ai_workspace/storage/file_learning_state_store.py` 신설 —
+  `FileLearningStateStore`(새 Core Domain Interface 아님, 순수 I/O
+  헬퍼). `FileMemoryEngine`(M50)과 동일한 패턴. 모든 I/O·파싱 예외를
+  조용히 무시.
+- `src/ai_workspace/core/workspace_core.py` — `restore_learning_state`/
+  `persist_learning_state`(둘 다 `Callable[[], None] | None = None`)
+  추가. `WorkspaceCore`는 §8 규칙 3("Interfaces에만 의존")에 따라 구체
+  저장소를 몰라야 하므로 콜백으로만 연결(클로저는 Composition Root가
+  구성).
+- `src/ai_workspace/cli/main.py` — `_build_workspace_core()`가 저장소를
+  조립하고 콜백을 연결, `main()`이 `finally`에서 `core.shutdown()` 호출.
+- `src/ai_workspace/runtime/engine/recovering_engine_runtime.py` — 위임
+  추가.
+- 테스트 대역 5곳에 최소 구현 추가.
+- `tests/runtime/engine/test_engine_runtime.py`(신규 4건), `tests/
+  runtime/engine/test_managed_engine_runtime.py`(신규 3건), `tests/
+  runtime/engine/test_recovering_engine_runtime.py`(신규 1건), `tests/
+  engines/test_workflow_engine.py`(신규 3건), `tests/storage/
+  test_file_learning_state_store.py`(신규 5건), `tests/core/
+  test_workspace_core.py`(신규 3건), `tests/cli/test_main.py`(신규 2건)
+  추가.
+- `docs/ARCHITECTURE.md` §3.3 Workspace Core·§3.9 Engine Runtime 절 및
+  §7 인터페이스 표(`EngineRuntime`/`WorkflowEngine`)에 Persistent
+  Learning Memory(M83) 서술 추가.
+
+**완료 조건 확인**
+
+| # | 항목 | 상태 |
+|---|---|---|
+| 1 | 최신 main 기준에서 시작, 기존 ADR/TASKS/ROADMAP·구현 상태를 먼저 조사 | ✅ |
+| 2 | 기존 Learning/EngineRuntime/WorkflowEngine/Reflection 구조 최대 재사용 | ✅ |
+| 3 | in-process 상태를 Workspace 종료 시 저장, 시작 시 자동 복원 | ✅ |
+| 4 | 저장 대상은 기존 학습 데이터로 제한, 새 Learning 데이터 없음 | ✅ |
+| 5 | 저장 실패 시 기존 in-process 동작으로 즉시 fallback | ✅ |
+| 6 | 저장 형식이 기존 Workspace 저장 방식(FileMemoryEngine)과 일관 | ✅ |
+| 7 | 새로운 Core Domain Interface 없음(기존 인터페이스 확장 + 순수 I/O 헬퍼) | ✅ |
+| 8 | 기존 API와 100% 하위 호환(YAGNI, 콜백 기본값 None) | ✅ |
+| 9 | 연결 지점·API 표면·파일 구성·실패 처리를 AskUserQuestion 4회로 확정 | ✅ |
+| 10 | `pytest`/`ruff`/`mypy` 전부 통과, 기존 테스트 회귀 없음 | ✅ |
+
+`pytest` 1421개(신규 21개, 회귀 없음)/`ruff`/`mypy`(238 source files)
+전부 통과. ADR-0101.
+
+---
+
 ## GitHub Flow Migration
 
 **목표**(2026-07-27 사용자 요청, 3단계): `claude/ai-workspace-docs-setup-aj3jvo`

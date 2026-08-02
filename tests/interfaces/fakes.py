@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Callable
+from typing import Any
 
 from ai_workspace.domain.agent import Agent, AgentCapability, AgentRole, AgentStatus
 from ai_workspace.domain.budget import Budget, BudgetDecision
@@ -142,6 +143,14 @@ class FakeWorkflowEngine(WorkflowEngine):
 
     def recommended_order(self, workflow: Workflow) -> list[str] | None:
         return None
+
+    def export_learning_state(self) -> dict[str, Any]:
+        """이 Fake는 Workflow Learning을 추적하지 않으므로(최소 테스트
+        대역) 항상 빈 dict를 반환한다."""
+        return {}
+
+    def import_learning_state(self, state: dict[str, Any]) -> None:
+        """이 Fake는 학습 상태를 추적하지 않으므로 아무 것도 하지 않는다."""
 
 
 class FakeTaskEngine(TaskEngine):
@@ -559,6 +568,14 @@ class FakeEngineRuntime(EngineRuntime):
         if task_id not in self._task_status:
             raise EngineTaskNotFoundError(task_id)
         return self._task_status[task_id]
+
+    def export_learning_state(self) -> dict[str, Any]:
+        """이 Fake는 M65/M69/M70/M81 통계를 추적하지 않으므로(최소
+        테스트 대역) 항상 빈 dict를 반환한다."""
+        return {}
+
+    def import_learning_state(self, state: dict[str, Any]) -> None:
+        """이 Fake는 학습 상태를 추적하지 않으므로 아무 것도 하지 않는다."""
 
 
 class FakeAgentManager(AgentManager):

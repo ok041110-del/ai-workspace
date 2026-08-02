@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from ai_workspace.domain.workflow import Workflow
 from ai_workspace.domain.workflow_order_memory import WorkflowOrderStat
 from ai_workspace.interfaces.engine_registry import EngineRegistry
@@ -149,3 +151,40 @@ class InMemoryWorkflowEngine(WorkflowEngine):
 
     def _signature(self, workflow: Workflow) -> _WorkflowSignature:
         return frozenset(workflow.task_ids)
+
+    def export_learning_state(self) -> dict[str, Any]:
+        """**Persistent Learning Memory(Milestone 83, ADR-0101)**: `_order_
+        stats`(`dict[frozenset[str], dict[tuple[str, ...], WorkflowOrderStat]]`)
+        는 이중으로 중첩된 dict이며 바깥·안쪽 키 모두 JSON dict 키가 될 수
+        없는 `frozenset`/`tuple`이므로, `task_ids`(정렬된 리스트)/`order`
+        (리스트) 필드를 가진 평평한 레코드 리스트로 표현한다."""
+
+        return {
+            "order_stats": [
+                {
+                    "task_ids": sorted(signature),
+                    "order": list(order_key),
+                    "total": stat.total,
+                    "success_count": stat.success_count,
+                    "failure_count": stat.failure_count,
+                }
+                for signature, orders in self._order_stats.items()
+                for order_key, stat in orders.items()
+            ]
+        }
+
+    def import_learning_state(self, state: dict[str, Any]) -> None:
+        """**Persistent Learning Memory(Milestone 83, ADR-0101)**:
+        `export_learning_state()`의 역변환 — 기존 학습 상태를 대체한다
+        (병합이 아니다). `plan()`의 위상 정렬 로직은 건드리지 않는다."""
+
+        order_stats: dict[_WorkflowSignature, dict[tuple[str, ...], WorkflowOrderStat]] = {}
+        for record in state.get("order_stats", []):
+            signature = frozenset(record["task_ids"])
+            orders = order_stats.setdefault(signature, {})
+            orders[tuple(record["order"])] = WorkflowOrderStat(
+                total=record["total"],
+                success_count=record["success_count"],
+                failure_count=record["failure_count"],
+            )
+        self._order_stats = order_stats

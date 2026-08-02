@@ -100,6 +100,12 @@ class SpyEngineRuntime(EngineRuntime):
     def status(self, task_id: str) -> EngineSessionStatus:
         raise AssertionError("Workspace Core는 Engine Runtime을 직접 제어하면 안 된다.")
 
+    def export_learning_state(self):
+        raise AssertionError("영속화가 설정되지 않은 WorkspaceCore는 이 메서드를 호출하면 안 된다.")
+
+    def import_learning_state(self, state) -> None:
+        raise AssertionError("영속화가 설정되지 않은 WorkspaceCore는 이 메서드를 호출하면 안 된다.")
+
 
 def make_core(
     config: dict[str, str] | None = None,
@@ -308,6 +314,55 @@ def test_shutdown_clears_all_sessions() -> None:
 
     with pytest.raises(WorkspaceSessionNotFoundError):
         core.get_session(session.session_id)
+
+
+def test_restore_learning_state_callback_called_once_during_init() -> None:
+    """M83(ADR-0101): `restore_learning_state` 콜백을 생성자에 넘기면
+    `__init__` 끝에서 정확히 한 번 호출된다."""
+    calls: list[str] = []
+    WorkspaceCore(
+        project_repository=FakeProjectRepository(),
+        workflow_engine=FakeWorkflowEngine(),
+        agent_registry=FakeAgentRegistry(),
+        agent_scheduler=FakeAgentScheduler(),
+        agent_manager=FakeAgentManager(),
+        event_bus=FakeEventBus(),
+        engine_runtime=SpyEngineRuntime(),
+        restore_learning_state=lambda: calls.append("restored"),
+    )
+
+    assert calls == ["restored"]
+
+
+def test_persist_learning_state_callback_called_on_shutdown() -> None:
+    """M83(ADR-0101): `persist_learning_state` 콜백을 생성자에 넘기면
+    `shutdown()` 호출 시 정확히 한 번 호출된다."""
+    calls: list[str] = []
+    core = WorkspaceCore(
+        project_repository=FakeProjectRepository(),
+        workflow_engine=FakeWorkflowEngine(),
+        agent_registry=FakeAgentRegistry(),
+        agent_scheduler=FakeAgentScheduler(),
+        agent_manager=FakeAgentManager(),
+        event_bus=FakeEventBus(),
+        engine_runtime=SpyEngineRuntime(),
+        persist_learning_state=lambda: calls.append("persisted"),
+    )
+
+    assert calls == []
+    core.shutdown()
+    assert calls == ["persisted"]
+
+
+def test_learning_state_callbacks_default_to_none_and_are_never_called() -> None:
+    """M83(ADR-0101): 두 콜백을 생략하면(기본값 `None`) `__init__`/
+    `shutdown()` 어디에서도 아무 일이 일어나지 않는다 — `SpyEngineRuntime`
+    은 `export_learning_state()`/`import_learning_state()`가 호출되면
+    `AssertionError`를 던지므로, 이 테스트가 통과한다는 사실 자체가
+    호출되지 않았음을 증명한다(100% 하위 호환)."""
+    core = make_core()
+
+    core.shutdown()  # AssertionError가 발생하지 않아야 한다
 
 
 def test_core_exposes_injected_agent_and_engine_runtime_dependencies() -> None:
