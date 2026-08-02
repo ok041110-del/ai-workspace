@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.10.3 |
+| 문서 버전 | v0.10.4 |
 | 작성일 | 2026-08-02 |
 | 적용 대상 | 이 저장소에서 작업하는 모든 AI 구현 엔진(Claude Code, Codex, Gemini CLI 등) 및 기여자 |
 
@@ -10,6 +10,12 @@
 아래 규칙은 사용자가 제시한 개발 철학을 프로젝트 내부 규정으로 명문화한 것이며,
 모든 Task 수행 시 최우선으로 준수해야 한다.
 
+> **v0.10.4 변경 (EngineRuntime 관찰 지표·재판단 트리거, 2026-08-02)**:
+> §1.7 마지막 항목에 관찰 지표·재판단 트리거 조건(라인 수·메서드 수
+> 기준선과 순증가 조건)을 구체화했다(`.ai/audit/ACTION_PLAN_2ND_AUDIT.md`
+> AI-07-T01). 새 정책이 아니라 이미 §1.7이 언급한 "관찰 후 재판단"의
+> 판단 기준을 수치로 명시한 것이다.
+>
 > **v0.10.3 변경 (EngineRuntime Extension Policy, 2026-08-02)**: 신규
 > §1.7 EngineRuntime Extension Policy 추가 — 2차 독립 재감사
 > (`.ai/audit/ACTION_PLAN_2ND_AUDIT.md` AI-06, Finding 2)가 지적한
@@ -226,6 +232,15 @@
 - `EngineRuntime` 자체의 리팩터링(클래스 분리 등) 여부는 이 정책과
   별개로 관찰 후 재판단한다(`.ai/audit/ACTION_PLAN_2ND_AUDIT.md`
   AI-07 참고, 지금 단계에서 착수하지 않음).
+  - **관찰 지표 및 재판단 트리거(AI-07-T01, 기준선 2026-08-02 실측)**:
+    `src/ai_workspace/runtime/engine/engine_runtime.py`(현재 1,104줄/
+    메서드 39개)와 `src/ai_workspace/interfaces/engine_runtime.py`
+    (현재 490줄/메서드 16개)의 라인 수·메서드 수를 관찰 지표로 삼는다.
+    이 정책(§1.7) 적용 시점(M84) 이후 Milestone에서 두 파일 중 하나라도
+    라인 수 또는 메서드 수가 위 기준선보다 **순증가**하면(옵트인 확장이
+    아니라 `EngineRuntime`/구현체 자체에 메서드·로직이 추가된 경우)
+    재판단 트리거로 간주한다. 재확인 시점은 `.ai/TASKS.md`에서
+    `git show`로 실측한다(AI-07-T02, 조건부·미착수).
 
 ---
 
