@@ -12,6 +12,7 @@ from ai_workspace.domain.dashboard import (
     ReliabilityStats,
     WorkspaceStatus,
 )
+from ai_workspace.domain.decision_goal import DecisionGoal
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.engine_recommendation import EngineRecommendation
 from ai_workspace.domain.engine_selection import EngineSelectionDecision
@@ -512,14 +513,20 @@ class FakeEngineRuntime(EngineRuntime):
         required_capabilities: frozenset[str] = frozenset(),
         *,
         top_n: int = 1,
+        goal: DecisionGoal = DecisionGoal.BALANCED,
     ) -> list[EngineRecommendation]:
         """이 Fake는 M65/M69/M77 통계를 추적하지 않으므로(최소 테스트
         대역) 항상 빈 목록을 반환한다 — "추천이 없으면 기존 Routing
-        결과를 그대로 사용한다"는 계약의 극단 케이스와 동일하다."""
+        결과를 그대로 사용한다"는 계약의 극단 케이스와 동일하다. `goal`
+        (Milestone 82, ADR-0100)은 이 Fake에서는 사용하지 않는다."""
         return []
 
     def decide_engine(
-        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        goal: DecisionGoal = DecisionGoal.BALANCED,
     ) -> EngineSelectionDecision:
         """이 Fake는 `recommend_engine()`이 항상 빈 목록이므로(위 참고)
         `run()`과 동일한 첫 매칭 규칙으로 바로 fallback한다."""

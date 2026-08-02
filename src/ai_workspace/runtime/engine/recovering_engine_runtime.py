@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ai_workspace.domain.decision_goal import DecisionGoal
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.engine_recommendation import EngineRecommendation
 from ai_workspace.domain.engine_selection import EngineSelectionDecision
@@ -149,17 +150,22 @@ class RecoveringEngineRuntime(EngineRuntime):
         required_capabilities: frozenset[str] = frozenset(),
         *,
         top_n: int = 1,
+        goal: DecisionGoal = DecisionGoal.BALANCED,
     ) -> list[EngineRecommendation]:
-        """재시도와 무관한 read-only 조회이므로(Milestone 79, ADR-0097)
-        내부 Runtime에 그대로 위임한다."""
-        return self._inner.recommend_engine(task, required_capabilities, top_n=top_n)
+        """재시도와 무관한 read-only 조회이므로(Milestone 79, ADR-0097;
+        `goal`은 Milestone 82, ADR-0100) 내부 Runtime에 그대로 위임한다."""
+        return self._inner.recommend_engine(task, required_capabilities, top_n=top_n, goal=goal)
 
     def decide_engine(
-        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        goal: DecisionGoal = DecisionGoal.BALANCED,
     ) -> EngineSelectionDecision:
-        """재시도와 무관한 read-only 조회이므로(Milestone 80, ADR-0098)
-        내부 Runtime에 그대로 위임한다."""
-        return self._inner.decide_engine(task, required_capabilities)
+        """재시도와 무관한 read-only 조회이므로(Milestone 80, ADR-0098;
+        `goal`은 Milestone 82, ADR-0100) 내부 Runtime에 그대로 위임한다."""
+        return self._inner.decide_engine(task, required_capabilities, goal=goal)
 
     def reflection_reports(self, engine_name: str | None = None) -> list[ReflectionReport]:
         """재시도와 무관한 read-only 조회이므로(Milestone 81, ADR-0099)

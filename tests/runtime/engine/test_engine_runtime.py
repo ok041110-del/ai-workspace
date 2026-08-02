@@ -5,6 +5,7 @@ import pytest
 
 from ai_workspace.adapters.mock_engine_adapter import MockEngineAdapter
 from ai_workspace.domain.budget import Budget
+from ai_workspace.domain.decision_goal import DecisionGoal
 from ai_workspace.domain.task import Task, TaskStatus
 from ai_workspace.engines.budget_policy_engine import InMemoryBudgetPolicyEngine
 from ai_workspace.engines.engine_selection_policy import InMemoryEngineSelectionPolicy
@@ -1257,3 +1258,253 @@ def test_recommendation_reason_notes_recent_reflection_mismatch_without_changing
     assert "최근 회고: 예측-실제 불일치 1회" in after.reason
     assert after.engine_name == before.engine_name == "engine-a"
     assert after.confident == before.confident is True
+
+
+def test_recommend_engine_balanced_goal_matches_omitted_goal() -> None:
+    """M82(ADR-0100): `goal`을 생략한 호출과 `DecisionGoal.BALANCED`를
+    명시한 호출은 완전히 같은 결과를 반환한다 — Balanced는 goal이
+    지정되지 않았을 때와 100% 동일한 코드 경로를 탄다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    cheap = CostedEngineAdapter(estimated_cost_usd=0.0)
+    expensive = CostedEngineAdapter(estimated_cost_usd=5.0)
+    runtime.register_engine("cheap", cheap)
+    runtime.register_engine("expensive", expensive)
+
+    omitted = runtime.recommend_engine(make_task("t1"))
+    explicit = runtime.recommend_engine(make_task("t2"), goal=DecisionGoal.BALANCED)
+
+    assert omitted == explicit
+    assert omitted[0].engine_name == "cheap"
+
+
+def test_recommend_engine_quality_optimized_prefers_reliable_engine_over_cheaper_one() -> None:
+    """M82(ADR-0100): BALANCED(기본값)는 비용이 가장 낮은(그러나 성공률이
+    더 낮은) 엔진을 고르지만, QUALITY_OPTIMIZED는 같은 후보 데이터에서
+    신뢰도가 더 높은(그러나 더 비싼) 엔진을 우선한다 — 새 알고리즘이
+    아니라 이미 존재하는 신호(M65/M69 성공률)의 우선순위만 바뀐다.
+    `cheap`은 성공 1건을 포함시켜(success_count > 0) M65/M66의 완전
+    배제(`is_unreliable()`) 규칙에 걸리지 않게 하고, 성공률만 낮춘다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    cheap_low_quality = CostedEngineAdapter(estimated_cost_usd=0.0, capabilities=frozenset({"cap"}))
+    expensive_reliable = CostedEngineAdapter(
+        estimated_cost_usd=5.0, capabilities=frozenset({"cap"}), succeed=True
+    )
+    runtime.register_engine("cheap", cheap_low_quality)
+    runtime.register_engine("expensive", expensive_reliable)
+
+    # run()은 항상 비용이 가장 낮은 후보를 고르므로, 특정 엔진의 통계를
+    # 독립적으로 채우려면 run_ensemble()로 이름을 직접 지정해야 한다.
+    runtime.run_ensemble(make_task("seed-cheap-0"), ["cheap"])
+    cheap_low_quality._succeed = False  # noqa: SLF001 (테스트 전용 상태 조작)
+    for i in range(2):
+        runtime.run_ensemble(make_task(f"seed-cheap-{i + 1}"), ["cheap"])
+    for i in range(3):
+        runtime.run_ensemble(make_task(f"seed-expensive-{i}"), ["expensive"])
+
+    balanced = runtime.recommend_engine(
+        make_task("balanced"), required_capabilities=frozenset({"cap"})
+    )
+    assert balanced[0].engine_name == "cheap"
+
+    quality = runtime.recommend_engine(
+        make_task("quality"),
+        required_capabilities=frozenset({"cap"}),
+        goal=DecisionGoal.QUALITY_OPTIMIZED,
+    )
+    assert quality[0].engine_name == "expensive"
+    assert "Goal=quality_optimized" in quality[0].reason
+
+
+def test_recommend_engine_cost_optimized_prefers_cheaper_engine_even_if_less_reliable() -> None:
+    """M82(ADR-0100): COST_OPTIMIZED는 신뢰도가 낮아도 비용이 더 낮은
+    엔진을 우선한다(BALANCED와 이 시나리오에서는 같은 선택을 하지만,
+    별도의 명시적 Goal 경로를 통과한 결과임을 `reason`으로 확인한다)."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    cheap = CostedEngineAdapter(estimated_cost_usd=0.0, capabilities=frozenset({"cap"}))
+    expensive = CostedEngineAdapter(estimated_cost_usd=5.0, capabilities=frozenset({"cap"}))
+    runtime.register_engine("cheap", cheap)
+    runtime.register_engine("expensive", expensive)
+
+    result = runtime.recommend_engine(
+        make_task("cost"),
+        required_capabilities=frozenset({"cap"}),
+        goal=DecisionGoal.COST_OPTIMIZED,
+    )
+
+    assert result[0].engine_name == "cheap"
+    assert "Goal=cost_optimized" in result[0].reason
+
+
+def test_recommend_engine_latency_optimized_prefers_faster_engine_despite_higher_cost() -> None:
+    """M82(ADR-0100): LATENCY_OPTIMIZED는 비용이 더 낮은 엔진 대신 평균
+    latency가 더 짧은 엔진을 우선한다. `run()`은 항상 비용이 가장 낮은
+    후보를 고르므로(M69 latency 기록은 `run()`/`run_ensemble_auto()`
+    에서만 일어남), 각 엔진의 latency 표본을 독립적으로 만들기 위해
+    seeding 단계에서만 일시적으로 비용을 맞바꿔(그 엔진이 그 순간
+    가장 저렴하도록) 차례로 `run()`을 호출한다. 실제 비교에 쓰는 최종
+    비용은 seeding이 끝난 뒤 확정한다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    slow_cheap = SlowCostedEngineAdapter(
+        delay_seconds=0.05, estimated_cost_usd=1.0, capabilities=frozenset({"cap"})
+    )
+    fast_expensive = SlowCostedEngineAdapter(
+        delay_seconds=0.0, estimated_cost_usd=0.0, capabilities=frozenset({"cap"})
+    )
+    runtime.register_engine("slow", slow_cheap)
+    runtime.register_engine("fast", fast_expensive)
+
+    # 1단계: fast가 더 비싸도록 바꿔 slow만 저렴한 순간에 slow를 시딩한다.
+    fast_expensive._estimated_cost_usd = 100.0  # noqa: SLF001 (테스트 전용 상태 조작)
+    for i in range(3):
+        runtime.run(make_task(f"seed-slow-{i}"), required_capabilities=frozenset({"cap"}))
+    # 2단계: 반대로 slow를 비싸게 만들어 fast만 저렴한 순간에 fast를 시딩한다.
+    slow_cheap._estimated_cost_usd = 100.0  # noqa: SLF001 (테스트 전용 상태 조작)
+    fast_expensive._estimated_cost_usd = 0.0  # noqa: SLF001 (테스트 전용 상태 조작)
+    for i in range(3):
+        runtime.run(make_task(f"seed-fast-{i}"), required_capabilities=frozenset({"cap"}))
+    # 3단계: 실제 비교에 쓸 최종 비용을 확정한다(slow가 더 저렴, fast가 더 빠름).
+    slow_cheap._estimated_cost_usd = 0.0  # noqa: SLF001 (테스트 전용 상태 조작)
+    fast_expensive._estimated_cost_usd = 1.0  # noqa: SLF001 (테스트 전용 상태 조작)
+
+    balanced = runtime.recommend_engine(
+        make_task("balanced"), required_capabilities=frozenset({"cap"})
+    )
+    assert balanced[0].engine_name == "slow"
+
+    latency = runtime.recommend_engine(
+        make_task("latency"),
+        required_capabilities=frozenset({"cap"}),
+        goal=DecisionGoal.LATENCY_OPTIMIZED,
+    )
+    assert latency[0].engine_name == "fast"
+    assert "Goal=latency_optimized" in latency[0].reason
+
+
+def test_recommend_engine_goal_respects_budget_filtering() -> None:
+    """M82(ADR-0100): Goal 기반 재정렬도 기존과 동일하게 Budget 필터링을
+    먼저 적용한다 — QUALITY_OPTIMIZED가 선호할 더 비싼 엔진이 예산을
+    초과하면 후보에서 제외되어 남은 엔진만 추천된다."""
+    runtime = InMemoryEngineRuntime(
+        engine_selection_policy=InMemoryEngineSelectionPolicy(),
+        budget_policy_engine=InMemoryBudgetPolicyEngine(Budget(max_cost_usd=0.5)),
+    )
+    cheap_unreliable = CostedEngineAdapter(
+        estimated_cost_usd=0.0, capabilities=frozenset({"cap"}), succeed=False
+    )
+    expensive_reliable = CostedEngineAdapter(
+        estimated_cost_usd=5.0, capabilities=frozenset({"cap"}), succeed=True
+    )
+    runtime.register_engine("cheap", cheap_unreliable)
+    runtime.register_engine("expensive", expensive_reliable)
+
+    result = runtime.recommend_engine(
+        make_task("quality"),
+        required_capabilities=frozenset({"cap"}),
+        goal=DecisionGoal.QUALITY_OPTIMIZED,
+    )
+
+    assert len(result) == 1
+    assert result[0].engine_name == "cheap"
+
+
+def test_recommend_engine_goal_empty_when_all_candidates_exceed_budget() -> None:
+    runtime = InMemoryEngineRuntime(
+        engine_selection_policy=InMemoryEngineSelectionPolicy(),
+        budget_policy_engine=InMemoryBudgetPolicyEngine(Budget(max_cost_usd=0.0001)),
+    )
+    runtime.register_engine("engine-a", CostedEngineAdapter(estimated_cost_usd=5.0))
+
+    result = runtime.recommend_engine(make_task("t1"), goal=DecisionGoal.QUALITY_OPTIMIZED)
+
+    assert result == []
+
+
+def test_recommend_engine_goal_ignored_without_policy() -> None:
+    """M82(ADR-0100): `engine_selection_policy` 미주입 시(첫 매칭 경로)엔
+    `goal`이 무엇이든 관여하지 않는다 — 근거 데이터 자체가 없다."""
+    runtime = InMemoryEngineRuntime()
+    engine_a = CostedEngineAdapter(estimated_cost_usd=0.0)
+    engine_b = CostedEngineAdapter(estimated_cost_usd=5.0)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    result = runtime.recommend_engine(make_task("t1"), goal=DecisionGoal.QUALITY_OPTIMIZED)
+
+    assert len(result) == 1
+    assert result[0].engine_name == "engine-a"
+    assert result[0].confident is False
+
+
+def test_recommend_engine_goal_top_n_ranks_by_quality() -> None:
+    """`unreliable`도 성공 1건을 포함시켜(success_count > 0) M65/M66의
+    완전 배제 규칙에 걸리지 않게 하면서 성공률만 `reliable`보다 낮춘다
+    — 그래야 top_n=2 결과에 두 후보가 모두 남아 순위를 검증할 수 있다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    reliable = CostedEngineAdapter(
+        estimated_cost_usd=5.0, capabilities=frozenset({"cap"}), succeed=True
+    )
+    unreliable = CostedEngineAdapter(estimated_cost_usd=0.0, capabilities=frozenset({"cap"}))
+    runtime.register_engine("reliable", reliable)
+    runtime.register_engine("unreliable", unreliable)
+
+    # run()은 항상 비용이 가장 낮은 후보를 고르므로, 특정 엔진의 통계를
+    # 독립적으로 채우려면 run_ensemble()로 이름을 직접 지정해야 한다.
+    for i in range(3):
+        runtime.run_ensemble(make_task(f"seed-reliable-{i}"), ["reliable"])
+    runtime.run_ensemble(make_task("seed-unreliable-0"), ["unreliable"])
+    unreliable._succeed = False  # noqa: SLF001 (테스트 전용 상태 조작)
+    for i in range(2):
+        runtime.run_ensemble(make_task(f"seed-unreliable-{i + 1}"), ["unreliable"])
+
+    result = runtime.recommend_engine(
+        make_task("t1"),
+        required_capabilities=frozenset({"cap"}),
+        top_n=2,
+        goal=DecisionGoal.QUALITY_OPTIMIZED,
+    )
+
+    assert [r.engine_name for r in result] == ["reliable", "unreliable"]
+
+
+def test_decide_engine_goal_may_differ_from_run_and_reason_notes_it() -> None:
+    """M82(ADR-0100): `goal=BALANCED`(기본값)이면 `decide_engine()`은
+    항상 `run()`과 같은 엔진을 반환하지만, 다른 goal을 명시하면 다른
+    엔진을 반환할 수 있고 `reason`에 그 사실이 명시된다 — `run()` 자체는
+    goal을 전혀 알지 못하고 그대로 동작한다. `cheap`은 성공 1건을
+    포함시켜(success_count > 0) M65/M66의 완전 배제 규칙에 걸리지 않게
+    하면서 성공률만 낮춘다."""
+    runtime = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    cheap_low_quality = CostedEngineAdapter(estimated_cost_usd=0.0, capabilities=frozenset({"cap"}))
+    expensive_reliable = CostedEngineAdapter(
+        estimated_cost_usd=5.0, capabilities=frozenset({"cap"}), succeed=True
+    )
+    runtime.register_engine("cheap", cheap_low_quality)
+    runtime.register_engine("expensive", expensive_reliable)
+
+    # run()은 항상 비용이 가장 낮은 후보를 고르므로, 특정 엔진의 통계를
+    # 독립적으로 채우려면 run_ensemble()로 이름을 직접 지정해야 한다.
+    runtime.run_ensemble(make_task("seed-cheap-0"), ["cheap"])
+    cheap_low_quality._succeed = False  # noqa: SLF001 (테스트 전용 상태 조작)
+    for i in range(2):
+        runtime.run_ensemble(make_task(f"seed-cheap-{i + 1}"), ["cheap"])
+    for i in range(3):
+        runtime.run_ensemble(make_task(f"seed-expensive-{i}"), ["expensive"])
+
+    balanced_decision = runtime.decide_engine(
+        make_task("balanced"), required_capabilities=frozenset({"cap"})
+    )
+    assert balanced_decision.engine_name == "cheap"
+    assert "run()과 다른" not in balanced_decision.reason
+
+    quality_decision = runtime.decide_engine(
+        make_task("quality"),
+        required_capabilities=frozenset({"cap"}),
+        goal=DecisionGoal.QUALITY_OPTIMIZED,
+    )
+    assert quality_decision.engine_name == "expensive"
+    assert "run()과 다른 엔진일 수 있음" in quality_decision.reason
+
+    actual = runtime.run(make_task("actual"), required_capabilities=frozenset({"cap"}))
+    assert actual.success is False
+    assert cheap_low_quality.run_count == 4
+    assert expensive_reliable.run_count == 3

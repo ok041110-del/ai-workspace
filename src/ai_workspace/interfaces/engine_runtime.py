@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from ai_workspace.domain.decision_goal import DecisionGoal
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.engine_recommendation import EngineRecommendation
 from ai_workspace.domain.engine_selection import EngineSelectionDecision
@@ -269,6 +270,7 @@ class EngineRuntime(ABC):
         required_capabilities: frozenset[str] = frozenset(),
         *,
         top_n: int = 1,
+        goal: DecisionGoal = DecisionGoal.BALANCED,
     ) -> list[EngineRecommendation]:
         """**Adaptive Engine Recommendation(Milestone 79, ADR-0097)**:
         M65(신뢰도)/M69(실행 메모리·latency)/M77(Benchmark Profile)/M78
@@ -277,28 +279,47 @@ class EngineRuntime(ABC):
         — `run()`/`run_ensemble_auto()`처럼 세션을 만들거나 엔진을 실제로
         호출하지 않는다(`estimate_cost()`와 동일한 read-only 원칙).
 
+        **Goal-Aware Decision Policy(Milestone 82, ADR-0100)**: `goal`
+        (기본값 `DecisionGoal.BALANCED`)을 생략하거나 `BALANCED`를 명시적
+        으로 넘기면 아래 문단이 그대로 적용된다(새 코드 경로가 실행되지
+        않는다 — 100% 하위 호환). `COST_OPTIMIZED`/`QUALITY_OPTIMIZED`/
+        `LATENCY_OPTIMIZED`를 넘기면, `engine_selection_policy`가 주입된
+        경우에 한해 `_build_candidates()`가 만든 (Budget 필터링까지 거친)
+        후보를 Cost/Quality(신뢰도·Benchmark·Workflow Learning 대표값)/
+        Latency 중 그 목표가 우선하는 순서로 재정렬해 상위 `top_n`개를
+        반환한다 — 새 알고리즘이 아니라 이미 존재하는 이 세 신호의
+        **우선순위 정렬 순서**만 바꾼다(`_select()`/`_build_candidates()`/
+        `EngineSelectionPolicy`는 전혀 수정하지 않는다). `engine_selection_
+        policy` 미주입 시(첫 매칭 경로)에는 `goal`이 무엇이든 관여하지
+        않는다(근거 데이터 자체가 없으므로 기존 동작 그대로).
+
         입력: task (추천 대상 Task), required_capabilities (`run()`과 동일한
               선택 기준), top_n (반환할 최대 추천 개수, 기본값 1 — 1
-              미만이면 빈 목록)
+              미만이면 빈 목록), goal (Milestone 82 — 우선순위 프로필,
+              기본값 `BALANCED`)
         출력: `EngineRecommendation` 목록(최대 `top_n`개, 실제 우선순위
               순서). `engine_selection_policy`가 주입되지 않았으면(첫
               매칭 경로) `run()`이 고를 엔진과 동일한 엔진을
               `confident=False`(근거 데이터 없음)로 담아 반환한다.
-              `engine_selection_policy`가 주입되어 있으면 `run()`이 실제로
-              선택할 엔진과 정확히 같은 1순위 후보를 반환하며(같은
-              `_build_candidates()`/`EngineSelectionPolicy.select()`
-              파이프라인 재사용), 각 추천에 `evidence`(비용·신뢰도·
-              latency·Benchmark)를 채운다. `evidence`의 `execution_memory_
-              success_rate`/`benchmark_success_rate`가 모두 표본 부족으로
-              `None`이면 `confident=False`다 — 호출자는 이 경우 이
-              추천을 참고하지 않고 기존 Routing 결과(`run()`이 실제로
-              선택하는 것)를 그대로 써도 된다는 뜻이다.
-        예외: 없음 — 후보가 하나도 없으면 빈 목록을 반환한다(`run()`처럼
-              NoSuitableEngineError를 던지지 않는다, "추천은 실행을
-              강제하지 않는다"는 요구를 그대로 반영).
+              `engine_selection_policy`가 주입되어 있으면 `goal=BALANCED`
+              (기본값)일 때 `run()`이 실제로 선택할 엔진과 정확히 같은
+              1순위 후보를 반환하며(같은 `_build_candidates()`/
+              `EngineSelectionPolicy.select()` 파이프라인 재사용), 각
+              추천에 `evidence`(비용·신뢰도·latency·Benchmark)를 채운다.
+              `goal`이 `BALANCED`가 아니면 그 목표 우선순위로 재정렬된
+              결과이므로 `run()`이 실제로 선택할 엔진과 다를 수 있다.
+              `evidence`의 `execution_memory_success_rate`/`benchmark_
+              success_rate`가 모두 표본 부족으로 `None`이면
+              `confident=False`다 — 호출자는 이 경우 이 추천을 참고하지
+              않고 기존 Routing 결과(`run()`이 실제로 선택하는 것)를
+              그대로 써도 된다는 뜻이다.
+        예외: 없음 — 후보가 하나도 없거나(`goal`이 `BALANCED`가 아닐 때는
+              Budget 필터링 이후 후보가 하나도 남지 않아도) 빈 목록을
+              반환한다(`run()`처럼 NoSuitableEngineError를 던지지 않는다,
+              "추천은 실행을 강제하지 않는다"는 요구를 그대로 반영).
         보장: side-effect 없음에 준한다 — `_build_candidates()`를 통해서만
               후보를 조회하며(`estimate_cost()`와 동일한 경로), Routing
-              로직 자체를 전혀 수정하지 않고 그 결과를 조회·설명만
+              로직 자체를 전혀 수정하지 않고 그 결과를 조회·설명·재정렬만
               한다. 상태는 M65/M69/M77이 이미 관리하는 in-process 값만
               읽으며 새 상태를 추가하지 않는다.
         """
@@ -306,7 +327,11 @@ class EngineRuntime(ABC):
 
     @abstractmethod
     def decide_engine(
-        self, task: Task, required_capabilities: frozenset[str] = frozenset()
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        goal: DecisionGoal = DecisionGoal.BALANCED,
     ) -> EngineSelectionDecision:
         """**Autonomous Decision Engine(Milestone 80, ADR-0098)**: M65~M79
         (신뢰도/실행 메모리/Benchmark/Benchmark tie-break/Recommendation)를
@@ -317,17 +342,30 @@ class EngineRuntime(ABC):
         타입도 새로 만들지 않고 M17 `EngineSelectionDecision`(engine_name/
         model/reason)을 그대로 재사용한다.
 
+        **Goal-Aware Decision Policy(Milestone 82, ADR-0100)**: `goal`을
+        그대로 `recommend_engine()`에 전달한다. 기본값 `BALANCED`(생략
+        포함)일 때만 M80이 확립한 "`decide_engine()`은 항상 `run()`과
+        같은 엔진을 반환한다"는 보장이 유지된다 — `COST_OPTIMIZED`/
+        `QUALITY_OPTIMIZED`/`LATENCY_OPTIMIZED`를 명시적으로 넘기면 그
+        목표 우선순위로 고른 엔진이 `run()`이 실제로 고를 엔진과 다를 수
+        있으며, 이 경우 `reason`에 그 사실이 명시된다(`run()`은 goal을
+        전혀 알지 못하고 여전히 기존 `_select()` 그대로 동작한다).
+
         입력: task (결정 대상 Task), required_capabilities (`run()`과 동일한
-              선택 기준)
+              선택 기준), goal (Milestone 82 — 우선순위 프로필, 기본값
+              `BALANCED`)
         출력: `EngineSelectionDecision(engine_name, model=None, reason)`.
-              `recommend_engine(task, required_capabilities, top_n=1)`이
-              추천을 반환하면(confident 여부와 무관하게) 그 1순위를 그대로
-              채택한다 — `recommend_engine()`의 1순위는 항상 `run()`이
-              실제로 선택할 엔진과 같은 파이프라인 결과이므로, confident가
-              낮아도 "기존 EngineSelectionPolicy로 즉시 fallback"한 것과
-              실제로 선택되는 엔진은 동일하다(`reason`에 confident 여부가
-              반영된다). 추천 자체가 없으면(후보가 하나도 없음) 이 메서드도
-              `run()`/`_select()`와 동일한 예외 정책을 따른다.
+              `recommend_engine(task, required_capabilities, top_n=1,
+              goal=goal)`이 추천을 반환하면(confident 여부와 무관하게) 그
+              1순위를 그대로 채택한다 — `goal=BALANCED`(기본값)일 때는
+              `recommend_engine()`의 1순위가 항상 `run()`이 실제로 선택할
+              엔진과 같은 파이프라인 결과이므로, confident가 낮아도 실제로
+              선택되는 엔진은 동일하다(`reason`에 confident 여부가
+              반영된다). `goal`이 `BALANCED`가 아니면 `reason`에 "run()과
+              다른 엔진일 수 있음"이 추가로 명시된다. 추천 자체가
+              없으면(후보가 하나도 없음) 이 메서드도 `run()`/`_select()`와
+              동일한 예외 정책을 따른다(이 fallback은 `goal`과 무관하게
+              항상 기존 `EngineSelectionPolicy` 결과다).
         예외: 후보가 하나도 없으면 NoSuitableEngineError(`run()`과 동일).
         보장: side-effect 없음(read-only, `recommend_engine()`과 동일한
               경로만 사용). Routing 로직(`_select()`/`_build_candidates()`)

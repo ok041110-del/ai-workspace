@@ -16,6 +16,7 @@ from ai_workspace.core.workspace_core import (
     WorkspaceCore,
     WorkspaceSessionNotFoundError,
 )
+from ai_workspace.domain.decision_goal import DecisionGoal
 from ai_workspace.domain.project import Project
 from ai_workspace.domain.task import Task
 from ai_workspace.domain.workflow import Workflow
@@ -77,10 +78,12 @@ class SpyEngineRuntime(EngineRuntime):
     def benchmark_profile(self, engine_name: str):
         raise AssertionError("Workspace Core는 Task를 직접 실행하면 안 된다.")
 
-    def recommend_engine(self, task, required_capabilities=frozenset(), *, top_n=1):
+    def recommend_engine(
+        self, task, required_capabilities=frozenset(), *, top_n=1, goal=DecisionGoal.BALANCED
+    ):
         raise AssertionError("Workspace Core는 Task를 직접 실행하면 안 된다.")
 
-    def decide_engine(self, task, required_capabilities=frozenset()):
+    def decide_engine(self, task, required_capabilities=frozenset(), *, goal=DecisionGoal.BALANCED):
         raise AssertionError("Workspace Core는 Task를 직접 실행하면 안 된다.")
 
     def reflection_reports(self, engine_name: str | None = None):
