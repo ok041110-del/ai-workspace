@@ -35,6 +35,8 @@ AI Workspace는 또 하나의 코딩 AI가 아닙니다. 실제 코드 작성은
 > M1의 16종 Interface 설계가 구조적으로 안정적임이 반복 확인되었고, 이
 > 안정성을 근거로 v0.5.0을 아키텍처 기준선으로 선언했습니다 — 이후
 > Milestone은 기존 구조 위에 기능을 조립하는 것을 기본값으로 합니다.
+> 이 기본값은 계속 유지되어, 가장 최근에 완료된 Milestone은
+> **Milestone 84(Multi-Agent Negotiation)**입니다(`.ai/TASKS.md` 기준).
 > Multi-Agent First 구조를 Agent Runtime·Engine Runtime·Context
 > Manager·Event Store·Interaction Layer·Mission→Workflow→Task→Step
 > 계층까지 확정(ADR-0006~0024)했습니다. 프로젝트 관리 체계는
@@ -42,6 +44,7 @@ AI Workspace는 또 하나의 코딩 AI가 아닙니다. 실제 코드 작성은
 > 폐지, ADR-0021). Task는 아키텍처 책임 경계에 따라 분해합니다
 > (ADR-0022). 자세한 계획은 [`docs/ROADMAP.md`](docs/ROADMAP.md)와
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)를 참고하세요.
+> **최신 진행 상황은 [`.ai/TASKS.md`](.ai/TASKS.md) 참고.**
 
 ## 시작 방법
 

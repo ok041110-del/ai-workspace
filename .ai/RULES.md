@@ -2,14 +2,40 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v0.10.2 |
-| 작성일 | 2026-07-30 |
+| 문서 버전 | v0.10.5 |
+| 작성일 | 2026-08-02 |
 | 적용 대상 | 이 저장소에서 작업하는 모든 AI 구현 엔진(Claude Code, Codex, Gemini CLI 등) 및 기여자 |
 
 이 문서는 AI Workspace 프로젝트에서 **반드시 지켜야 하는 개발 규칙**을 정의한다.
 아래 규칙은 사용자가 제시한 개발 철학을 프로젝트 내부 규정으로 명문화한 것이며,
 모든 Task 수행 시 최우선으로 준수해야 한다.
 
+> **v0.10.5 변경 (Review Gate 확정, AI-04, 2026-08-02)**: 신규 §8.7
+> Review Gate 추가 — 2차 독립 재감사(`.ai/audit/ACTION_PLAN_2ND_AUDIT.md`
+> AI-04, Finding 1)가 지적한 "Branch Protection이 실질적 리뷰 게이트로
+> 작동하지 않음" 문제에 대한 최종 대응이다. (a) `main` Branch
+> Protection Rule에 등록된 `pytest`/`mypy`/`ruff` 필수 상태 검사(기술적
+> 게이트, 2026-08-02 등록 완료)와 (b) 구현 세션과 분리된 독립 AI 세션의
+> 병합 전 사전 리뷰(절차적 게이트, 1차·2차 독립 감사에서 이미 실제로
+> 수행된 방식의 정책화)를 결합했다. §8.6 Merge 조건의 pytest/ruff/mypy
+> 통과 항목은 변경 없이 그대로 유지되며, 이번 개정은 그 항목의 강제
+> 수단을 사람 확인에서 GitHub 기술적 차단으로 전환한 것이다(새 조건
+> 아님).
+>
+> **v0.10.4 변경 (EngineRuntime 관찰 지표·재판단 트리거, 2026-08-02)**:
+> §1.7 마지막 항목에 관찰 지표·재판단 트리거 조건(라인 수·메서드 수
+> 기준선과 순증가 조건)을 구체화했다(`.ai/audit/ACTION_PLAN_2ND_AUDIT.md`
+> AI-07-T01). 새 정책이 아니라 이미 §1.7이 언급한 "관찰 후 재판단"의
+> 판단 기준을 수치로 명시한 것이다.
+>
+> **v0.10.3 변경 (EngineRuntime Extension Policy, 2026-08-02)**: 신규
+> §1.7 EngineRuntime Extension Policy 추가 — 2차 독립 재감사
+> (`.ai/audit/ACTION_PLAN_2ND_AUDIT.md` AI-06, Finding 2)가 지적한
+> `EngineRuntime` 성장 궤적에 대응해, M54/M83/M84에서 실제로 반복
+> 관찰된 "옵트인 계층 확장" 패턴(생성자 주입 순수 오케스트레이션
+> 클래스로 확장, `WorkspaceCore`/`AgentManager` 자동 배선 없음)을
+> 명문화했다. 새 원칙이 아니라 이미 지켜지던 관행의 문서화다.
+>
 > **v0.10.2 변경 (Naming Technical Debt Ledger, 2026-07-30)**: §1.6에
 > Rename Candidate 표를 **공식 기술 부채(technical debt) 목록**으로
 > 유지한다는 원칙을 추가했다 — 항목이 해결되면 행을 지우지 않고
@@ -200,6 +226,33 @@
   "제안" 칸에 취소선(`~~이전 이름~~`)을 긋고, "상태" 칸에 해결 일자와
   처리한 PR/커밋을 남긴다 — 표 자체가 언제 무엇이 왜 바뀌었는지의
   변경 이력이 된다.
+
+### 1.7 EngineRuntime Extension Policy (EngineRuntime 확장 정책, 2026-08-02)
+- `EngineRuntime`(및 `InMemoryEngineRuntime` 등 구현체)에 새 메서드를
+  추가하기 전에, 기존 `EngineRuntime`/`WorkflowEngine`을 **생성자로
+  주입받는 순수 오케스트레이션 클래스** + 필요 시 신규 Domain 값
+  객체로 옵트인(opt-in) 확장이 가능한지 먼저 검토한다(§4.2 Simplicity
+  First의 "새 컴포넌트를 만들기 전 자문 질문"과 동일한 절차를
+  `EngineRuntime`에 구체적으로 적용한 것).
+- 옵트인 확장이 가능하면 그 방식을 택하고, `WorkspaceCore`/
+  `AgentManager` 등 상위 컴포넌트에 **자동으로 배선하지 않는다** —
+  호출자가 필요할 때 직접 조립해 사용한다.
+- 이 패턴은 `LearningRuntimeAnalyzer`(M54), `NegotiationCoordinator`
+  (M84)에서 이미 반복 적용되어 확인된 관행이며, 2차 독립 재감사
+  (`.ai/audit/ACTION_PLAN_2ND_AUDIT.md` AI-06, Finding 2 —
+  `EngineRuntime` 성장 궤적)에 대한 대응으로 명문화한다.
+- `EngineRuntime` 자체의 리팩터링(클래스 분리 등) 여부는 이 정책과
+  별개로 관찰 후 재판단한다(`.ai/audit/ACTION_PLAN_2ND_AUDIT.md`
+  AI-07 참고, 지금 단계에서 착수하지 않음).
+  - **관찰 지표 및 재판단 트리거(AI-07-T01, 기준선 2026-08-02 실측)**:
+    `src/ai_workspace/runtime/engine/engine_runtime.py`(현재 1,104줄/
+    메서드 39개)와 `src/ai_workspace/interfaces/engine_runtime.py`
+    (현재 490줄/메서드 16개)의 라인 수·메서드 수를 관찰 지표로 삼는다.
+    이 정책(§1.7) 적용 시점(M84) 이후 Milestone에서 두 파일 중 하나라도
+    라인 수 또는 메서드 수가 위 기준선보다 **순증가**하면(옵트인 확장이
+    아니라 `EngineRuntime`/구현체 자체에 메서드·로직이 추가된 경우)
+    재판단 트리거로 간주한다. 재확인 시점은 `.ai/TASKS.md`에서
+    `git show`로 실측한다(AI-07-T02, 조건부·미착수).
 
 ---
 
@@ -617,6 +670,51 @@ Later, Scheduler 등). 권한이 승인되면 중단된 작업부터 자동으�
 - 대규모 리팩토링
 - 프로젝트 구조 변경
 - ADR 추가가 아닌 Architecture 재구성
+
+### 8.7 Review Gate (AI-04, 2026-08-02)
+
+**배경**: 2차 독립 재감사(Finding 1, `.ai/audit/ACTION_PLAN_2ND_AUDIT.md`
+AI-04)는 `protected: true`로 설정되어 있던 기존 Branch Protection이
+실질적인 리뷰 게이트로 작동하지 않았음을 지적했다(PR #93: 리뷰 0건,
+10초 내 자기 병합). 이 저장소는 1인 개발 + AI 협업 구조이므로 GitHub의
+필수 Reviewer(제3자 인간 승인) 기능을 강제하지 않고, 다음 두 가지를
+병합 전 게이트로 확정한다.
+
+**(a) 기술적 게이트 — Branch Protection 필수 상태 검사**
+- `main` 브랜치는 PR을 통해서만 변경된다(§8.3, 기존 규칙 그대로).
+- `main` 브랜치 Branch Protection Rule에 GitHub Actions CI(AI-03,
+  `.github/workflows/ci.yml`)의 `pytest`/`mypy`/`ruff` 3개 Job이 필수
+  상태 검사(Required Status Checks)로 등록되어 있다(2026-08-02 등록
+  완료, PR #94에서 3개 체크가 실제로 노출·실행·통과됨을 확인). 셋 중
+  하나라도 실패하면 GitHub이 Merge를 차단한다.
+- §8.6 Merge 조건의 "pytest/ruff/mypy 통과" 항목은 이제 사람이 수동으로
+  확인하던 절차에서 GitHub이 기술적으로 강제하는 절차로 전환됐다 —
+  조건 자체는 §8.6에 이미 있던 것과 동일하며 새 조건이 아니다.
+- 이 설정(Branch Protection Rule 조회·변경)은 Repository Admin의
+  GitHub 웹 UI 작업 영역이다. Claude Code를 비롯한 AI 구현 엔진은 이
+  설정을 조회·변경할 수 있는 도구를 가지고 있지 않다 — 변경이 필요하면
+  사용자에게 요청하고, 사용자의 완료 확인을 근거로 삼는다.
+
+**(b) 절차적 게이트 — 독립 AI 세션의 사전 리뷰**
+- 1인 개발 체제에서 GitHub 필수 Reviewer(제3자 인간 승인)는 구조적으로
+  사용할 수 없다는 감사의 Counter Evidence를 그대로 인정한다.
+- 이를 대체하는 절차로, 구현을 수행한 세션과는 별도의 AI 세션이 병합
+  전에 저장소를 독립적으로 검토하는 것을 병합 전 필수 절차로 채택한다.
+  이 방식은 새로 고안한 것이 아니라, 이 저장소가 실제로 두 차례(1차
+  독립 감사, 2차 독립 재감사) 수행했고 그 결과가 실제 Action Item
+  (`.ai/audit/ACTION_PLAN_2ND_AUDIT.md`)으로 이어진 방식을 그대로
+  정책화한 것이다. 독립 세션이 따르는 감사 절차·근거 기준은
+  `.ai/audit/AWAS.md`에 별도로 정의되어 있다(이 문서를 복제하지
+  않는다).
+
+**(c) 역할 구분**
+
+| 구분 | 수행 주체 | 방법 |
+|---|---|---|
+| Branch Protection 설정(필수 상태 검사 등록/변경) | Repository Admin(사용자) | GitHub 웹 UI(Settings → Branches) |
+| pytest/mypy/ruff 실행 | GitHub Actions CI(AI-03) | `.github/workflows/ci.yml` |
+| 독립 사전 리뷰 | 별도 AI 세션 | `.ai/audit/AWAS.md` |
+| 최종 승인 | 사용자 | §1.4 Approval Required |
 
 ## 9. Obsidian Workspace Templates (Milestone 27, ADR-0038, 2026-07-27)
 
