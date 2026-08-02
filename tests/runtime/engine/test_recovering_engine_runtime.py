@@ -199,6 +199,12 @@ class ScriptedEngineRuntime(EngineRuntime):
     def status(self, task_id: str) -> EngineSessionStatus:
         return self._task_status[task_id]
 
+    def export_learning_state(self):
+        raise NotImplementedError
+
+    def import_learning_state(self, state) -> None:
+        raise NotImplementedError
+
 
 def make_task(task_id: str = "t1") -> Task:
     return Task(task_id=task_id, project_id="p1", title="demo")
@@ -429,3 +435,23 @@ def test_retry_policy_defaults_to_three_attempts() -> None:
 def test_retry_policy_rejects_non_positive_max_attempts() -> None:
     with pytest.raises(InvalidRetryPolicyError):
         RetryPolicy(max_attempts=0)
+
+
+def test_learning_state_methods_delegate_to_inner_runtime() -> None:
+    """M83(ADR-0101): 재시도와 무관한 read-only 조회/상태 복원이므로
+    내부 Runtime에 그대로 위임한다."""
+    managed = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime = RecoveringEngineRuntime(inner=managed, retry_policy=RetryPolicy())
+    caps = frozenset({"code"})
+
+    for _ in range(3):
+        managed.record_consensus_outcome(caps, ("claude",), ())
+
+    exported = runtime.export_learning_state()
+    assert exported == managed.export_learning_state()
+
+    fresh = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    fresh_wrapped = RecoveringEngineRuntime(inner=fresh, retry_policy=RetryPolicy())
+    fresh_wrapped.import_learning_state(exported)
+
+    assert fresh.consensus_weight(caps, "claude") == 1.0

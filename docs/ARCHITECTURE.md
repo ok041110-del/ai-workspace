@@ -395,6 +395,13 @@ Execution Platform (M36~M38) — 실행·상태 전이·스케줄링
   Task 실행은 Agent Runtime에 위임한다.
 - **의존 방향**: Interaction Layer로부터 호출받음 / Agent Runtime, Engine Runtime,
   Interfaces에 의존. 구체 클래스를 직접 참조하지 않는다.
+- **Persistent Learning Memory(Milestone 83, ADR-0101)**: 생성자의
+  `restore_learning_state`/`persist_learning_state`(둘 다 인자 없는
+  콜백, 기본값 `None`)를 각각 `__init__` 끝/`shutdown()` 시작에서
+  호출한다. Workspace Core는 이 콜백이 무엇을 하는지(어떤 구체
+  저장소를 쓰는지) 전혀 모른다 — "구체 클래스를 직접 참조하지 않는다"는
+  원칙을 유지하면서 Composition Root가 이미 조립된 `EngineRuntime`/
+  `WorkflowEngine`과 저장소를 클로저로 묶어 전달한다.
 
 ### 3.4 Agent Runtime
 Agent의 실행을 담당하는 계층.
@@ -939,6 +946,32 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   확립한 "항상 run()과 같은 엔진" 보장은 `goal=BALANCED`(기본값)일 때만
   유효함을 분명히 한다. 상태는 새로 추가하지 않는다(M65/M69/M77/M81이
   이미 관리하는 in-process 값만 읽음).
+- **Persistent Learning Memory(Milestone 83, ADR-0101)**: M65(신뢰도)/
+  M69(실행 메모리)/M70(Consensus)/M81(Reflection)이 in-process로만
+  누적하던 학습 데이터가 프로세스 종료와 함께 사라지던 것을 해소한다.
+  `export_learning_state() -> dict[str, Any]`/`import_learning_state
+  (state: dict[str, Any]) -> None`을 `EngineRuntime`(및 `WorkflowEngine`
+  의 M71 `_order_stats`에 동일한 방식)에 추가한다(M70/M77/M79~M82와
+  동일한 계약 확장 — 새 Core Domain Interface 아님, 새 Learning 데이터도
+  만들지 않고 기존 4가지 값 객체를 JSON 직렬화 가능한 형태로 인코딩할
+  뿐이다). `(required_capabilities, engine_name)` 튜플 키는 JSON dict
+  키가 될 수 없으므로 `capabilities`(정렬 리스트)/`engine_name` 필드를
+  가진 레코드 리스트로 표현한다. `import_learning_state()`는 기존 상태를
+  대체한다(병합 아님). 순수 I/O 계층인 `storage.FileLearningStateStore`
+  (새 Core Domain Interface 아님, `EngineRuntime`/`WorkflowEngine` 어느
+  쪽도 구현하지 않음)가 `FileMemoryEngine`(M50)과 동일한 패턴(단일 JSON
+  파일, `base_dir` 생성자 주입)으로 두 `export_learning_state()`를 하나의
+  `learning_state.json`에 저장하고, 시작 시 두 `import_learning_state()`
+  로 복원한다 — 파일이 없거나 손상됐거나 디렉터리를 만들 수 없어도 모든
+  I/O·파싱 예외를 조용히 무시해 "저장/복원 실패 시 기존 in-process
+  동작으로 즉시 fallback"한다. `WorkspaceCore`(§8 규칙 3, "Interfaces에만
+  의존")가 구체 저장소를 직접 알면 안 되므로, 선택적 생성자 콜백
+  `restore_learning_state`/`persist_learning_state`(둘 다 기본값 `None`)
+  를 `__init__` 끝/기존 `shutdown()` 시작에서 호출하고, Composition
+  Root(CLI `_build_workspace_core()`)가 이미 조립된 `EngineRuntime`/
+  `WorkflowEngine`과 저장소를 클로저로 묶어 전달한다. 두 콜백을
+  생략하면(기본값) 이 두 시점에 아무 일도 일어나지 않아 기존 동작과
+  100% 동일하다.
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -2830,7 +2863,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `EngineSelectionPolicy` | Task/Budget/Knowledge/후보를 종합해 최적 Engine 판단(Decision Only) | Milestone 17 (M17-T02 계약, `InMemoryEngineSelectionPolicy` 구현) | **완료(계약+구현)** |
 | `AuthenticationManager` | Engine별 실행 가능한 인증 상태 확인(`login`/`logout` 없음) | Milestone 18 (M18-T01 계약, `InMemoryAuthenticationManager` 구현) | **완료(계약+구현)** |
 | `ProjectRepository` | 프로젝트 조회/저장 | Milestone 1 (T1-15 계약, T1-23 `FileProjectRepository` 구현) | **완료(계약+구현)** |
-| `WorkflowEngine` | Mission→…→Step 협업 흐름, 의존관계 기반 실행 순서 계획(`plan()`) + 실행 순서 학습(M71) + 학습 순서의 dependency 정합성 검증(M72) + 동률 학습 순서의 비용 기반 tie-break(M73) | 이후(Milestone 2, T2-03 `plan()` 구현), M71(ADR-0089) `record_run_outcome()`/`recommended_order()` 확장, M72(ADR-0090) `plan()` 내부 검증 로직(계약 무변경), M73(ADR-0091) 생성자 선택적 비용 협력자 주입(계약 무변경) | **완료(계약+구현)** |
+| `WorkflowEngine` | Mission→…→Step 협업 흐름, 의존관계 기반 실행 순서 계획(`plan()`) + 실행 순서 학습(M71) + 학습 순서의 dependency 정합성 검증(M72) + 동률 학습 순서의 비용 기반 tie-break(M73) + 학습 상태 영속화 export/import(M83) | 이후(Milestone 2, T2-03 `plan()` 구현), M71(ADR-0089) `record_run_outcome()`/`recommended_order()` 확장, M72(ADR-0090) `plan()` 내부 검증 로직(계약 무변경), M73(ADR-0091) 생성자 선택적 비용 협력자 주입(계약 무변경), M83(ADR-0101) `export_learning_state()`/`import_learning_state()` 신규 public 메서드 추가(`plan()` 로직 무변경) | **완료(계약+구현)** |
 | `TaskEngine` | Task 생성/상태 전이 + Step 실행 이력(M5-T06) | 이후 | 기존 |
 | `MemoryEngine` | Memory 저장/검색 (Snapshot 제외) | Milestone 1 (T1-15, T1-20 재확인) | 기존(축소, 변경 없음) |
 | `ApprovalEngine` | 승인 대상 판별/차단 | 이후 | 기존 |
@@ -2843,7 +2876,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `InteractionEngine` | 입력 표면 정규화/응답 변환 (기존 ConversationEngine 대체) | Milestone 1 (T1-21) 계약, Milestone 3 구현 | **완료(계약)** |
 | `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료(계약)** |
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
-| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70)+Provider별 동시 실행 상한(M74)+동률 후보 다양성 라우팅(M75)+상대 부하율 기반 로드 밸런싱(M76)+Benchmark Profile 조회(M77)+Benchmark 기반 Routing tie-break(M78)+실행 없는 Engine 추천(M79)+추천 기반 최종 결정 통합(M80)+실행 후 예상-실제 비교 Reflection 기록/조회(M81)+Goal 기반 우선순위 재정렬(M82) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장, M74(ADR-0092) `register_engine()`에 선택적 `max_concurrency` 확장, M75(ADR-0093) `_build_candidates()` 내부 tie-break 추가(계약 무변경), M76(ADR-0094) tie-break 신호를 raw count→상대 부하율로 개선(계약 무변경), M77(ADR-0095) `benchmark_profile()` 신규 public 메서드 추가(Routing 무변경), M78(ADR-0096) `_build_candidates()` 내부에 Benchmark 기반 tie-break 추가(계약 무변경), M79(ADR-0097) `recommend_engine()` 신규 public 메서드 추가(Routing 무변경, 실행 강제 없음), M80(ADR-0098) `decide_engine()` 신규 public 메서드 추가(새 알고리즘 없음, `run()`과 항상 동일 엔진), M81(ADR-0099) `reflection_reports()` 신규 read-only 조회 메서드 추가(Routing 무변경, `run()` 실행 후 자동 기록만), M82(ADR-0100) `recommend_engine()`/`decide_engine()`에 선택적 `goal` 키워드 추가(`BALANCED` 기본값 시 100% 무변경, Routing 로직 자체는 무변경) | **완료(계약)** |
+| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70)+Provider별 동시 실행 상한(M74)+동률 후보 다양성 라우팅(M75)+상대 부하율 기반 로드 밸런싱(M76)+Benchmark Profile 조회(M77)+Benchmark 기반 Routing tie-break(M78)+실행 없는 Engine 추천(M79)+추천 기반 최종 결정 통합(M80)+실행 후 예상-실제 비교 Reflection 기록/조회(M81)+Goal 기반 우선순위 재정렬(M82)+학습 상태 영속화 export/import(M83) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장, M74(ADR-0092) `register_engine()`에 선택적 `max_concurrency` 확장, M75(ADR-0093) `_build_candidates()` 내부 tie-break 추가(계약 무변경), M76(ADR-0094) tie-break 신호를 raw count→상대 부하율로 개선(계약 무변경), M77(ADR-0095) `benchmark_profile()` 신규 public 메서드 추가(Routing 무변경), M78(ADR-0096) `_build_candidates()` 내부에 Benchmark 기반 tie-break 추가(계약 무변경), M79(ADR-0097) `recommend_engine()` 신규 public 메서드 추가(Routing 무변경, 실행 강제 없음), M80(ADR-0098) `decide_engine()` 신규 public 메서드 추가(새 알고리즘 없음, `run()`과 항상 동일 엔진), M81(ADR-0099) `reflection_reports()` 신규 read-only 조회 메서드 추가(Routing 무변경, `run()` 실행 후 자동 기록만), M82(ADR-0100) `recommend_engine()`/`decide_engine()`에 선택적 `goal` 키워드 추가(`BALANCED` 기본값 시 100% 무변경, Routing 로직 자체는 무변경), M83(ADR-0101) `export_learning_state()`/`import_learning_state()` 신규 public 메서드 추가(Routing 로직 무변경, 새 Learning 데이터 없음) | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 | `WorkflowRepository` | `Workflow` 조회/저장(`AutomationActionExecutor`의 RUN_WORKFLOW가 `workflow_id`로 실제 Workflow를 찾는 유일한 통로) | Milestone 59 (계약+`InMemoryWorkflowRepository` 구현) | **완료(계약+구현)** |

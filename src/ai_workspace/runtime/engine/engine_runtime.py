@@ -4,6 +4,7 @@ import math
 import threading
 import time
 from collections import deque
+from typing import Any
 
 from ai_workspace.domain.consensus_agreement import ConsensusAgreementStat
 from ai_workspace.domain.decision_goal import DecisionGoal
@@ -991,3 +992,113 @@ class InMemoryEngineRuntime(EngineRuntime):
         if task_id not in self._task_status:
             raise EngineTaskNotFoundError(task_id)
         return self._task_status[task_id]
+
+    def export_learning_state(self) -> dict[str, Any]:
+        """**Persistent Learning Memory(Milestone 83, ADR-0101)**: M65/M69/
+        M70/M81 학습 상태 4가지를 JSON 직렬화 가능한 dict로 내보낸다.
+        `(required_capabilities, engine_name)` 튜플 키는 JSON dict 키가
+        될 수 없으므로 `capabilities`(정렬된 리스트)/`engine_name` 필드를
+        가진 레코드 리스트로 표현한다. 세션·동시성 상태(`_engines`/
+        `_task_status`/`_max_concurrency`/`_in_flight`)는 포함하지 않는다."""
+
+        return {
+            "engine_reliability": {
+                name: {
+                    "total": stat.total,
+                    "success_count": stat.success_count,
+                    "failure_count": stat.failure_count,
+                    "skip_count": stat.skip_count,
+                }
+                for name, stat in self._engine_reliability.items()
+            },
+            "execution_memory": [
+                {
+                    "capabilities": sorted(capabilities),
+                    "engine_name": name,
+                    "total": stat.total,
+                    "success_count": stat.success_count,
+                    "failure_count": stat.failure_count,
+                    "total_latency_seconds": stat.total_latency_seconds,
+                }
+                for (capabilities, name), stat in self._execution_memory.items()
+            ],
+            "consensus_agreement": [
+                {
+                    "capabilities": sorted(capabilities),
+                    "engine_name": name,
+                    "total": stat.total,
+                    "agree_count": stat.agree_count,
+                    "disagree_count": stat.disagree_count,
+                }
+                for (capabilities, name), stat in self._consensus_agreement.items()
+            ],
+            "reflections": {
+                name: [
+                    {
+                        "expected_evidence": dict(report.expected_evidence),
+                        "expected_confident": report.expected_confident,
+                        "expected_success_rate": report.expected_success_rate,
+                        "expected_latency_seconds": report.expected_latency_seconds,
+                        "actual_success": report.actual_success,
+                        "actual_latency_seconds": report.actual_latency_seconds,
+                        "expectation_matched": report.expectation_matched,
+                        "latency_gap_seconds": report.latency_gap_seconds,
+                    }
+                    for report in history
+                ]
+                for name, history in self._reflections.items()
+            },
+        }
+
+    def import_learning_state(self, state: dict[str, Any]) -> None:
+        """**Persistent Learning Memory(Milestone 83, ADR-0101)**:
+        `export_learning_state()`의 역변환 — 기존 학습 상태를 대체한다
+        (병합이 아니다). 세션·동시성 상태나 Routing 로직은 건드리지
+        않는다."""
+
+        self._engine_reliability = {
+            name: EngineReliabilityStat(
+                total=record["total"],
+                success_count=record["success_count"],
+                failure_count=record["failure_count"],
+                skip_count=record["skip_count"],
+            )
+            for name, record in state.get("engine_reliability", {}).items()
+        }
+        self._execution_memory = {
+            (frozenset(record["capabilities"]), record["engine_name"]): EngineExecutionMemoryStat(
+                total=record["total"],
+                success_count=record["success_count"],
+                failure_count=record["failure_count"],
+                total_latency_seconds=record["total_latency_seconds"],
+            )
+            for record in state.get("execution_memory", [])
+        }
+        self._consensus_agreement = {
+            (frozenset(record["capabilities"]), record["engine_name"]): ConsensusAgreementStat(
+                total=record["total"],
+                agree_count=record["agree_count"],
+                disagree_count=record["disagree_count"],
+            )
+            for record in state.get("consensus_agreement", [])
+        }
+        self._reflections = {
+            name: deque(
+                (
+                    ReflectionReport(
+                        engine_name=name,
+                        expected_evidence=dict(record["expected_evidence"]),
+                        expected_confident=record["expected_confident"],
+                        expected_success_rate=record["expected_success_rate"],
+                        expected_latency_seconds=record["expected_latency_seconds"],
+                        actual_success=record["actual_success"],
+                        actual_latency_seconds=record["actual_latency_seconds"],
+                        expectation_matched=record["expectation_matched"],
+                        latency_gap_seconds=record["latency_gap_seconds"],
+                    )
+                    for record in records
+                ),
+                maxlen=_REFLECTION_HISTORY_LIMIT,
+            )
+            for name, records in state.get("reflections", {}).items()
+        }

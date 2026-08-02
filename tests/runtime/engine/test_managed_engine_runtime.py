@@ -1720,3 +1720,61 @@ def test_decide_engine_goal_may_differ_from_run_and_reason_notes_it() -> None:
 
     actual = runtime.run(make_task("actual"), frozenset({"cap"}))
     assert actual.success is False
+
+
+def test_export_learning_state_empty_when_no_activity() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+
+    assert runtime.export_learning_state() == {
+        "engine_reliability": {},
+        "execution_memory": [],
+        "consensus_agreement": [],
+        "reflections": {},
+    }
+
+
+def test_export_then_import_round_trips_all_learning_state() -> None:
+    """M83(ADR-0101): `InMemoryEngineRuntime`과 동일한 시나리오."""
+    original = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    engine = CostedSlowEngineAdapter(delay_seconds=0.0, estimated_cost_usd=0.0)
+    original.register_engine("engine-a", engine)
+
+    for i in range(3):
+        original.run(make_task(f"seed-{i}"))
+    for _ in range(3):
+        original.record_consensus_outcome(frozenset(), ("engine-a",), ())
+
+    state = original.export_learning_state()
+    assert state["engine_reliability"]["engine-a"]["total"] == 3
+    assert len(state["execution_memory"]) == 1
+    assert len(state["consensus_agreement"]) == 1
+    assert len(state["reflections"]["engine-a"]) == 3
+
+    restored = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    restored.import_learning_state(state)
+
+    assert restored.benchmark_profile("engine-a").execution_count == 3
+    assert restored.consensus_weight(frozenset(), "engine-a") == 1.0
+    assert len(restored.reflection_reports("engine-a")) == 3
+    assert restored.export_learning_state() == state
+
+
+def test_import_learning_state_replaces_not_merges_existing_state() -> None:
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    runtime.register_engine("engine-a", CostedSlowEngineAdapter(delay_seconds=0.0))
+    runtime.run(make_task("t1"))
+    assert runtime.benchmark_profile("engine-a").execution_count == 1
+
+    runtime.import_learning_state(
+        {
+            "engine_reliability": {},
+            "execution_memory": [],
+            "consensus_agreement": [],
+            "reflections": {},
+        }
+    )
+
+    assert runtime.benchmark_profile("engine-a").execution_count == 0
+    assert runtime.reflection_reports("engine-a") == []

@@ -104,6 +104,12 @@ class RecordingEngineRuntime(EngineRuntime):
     def status(self, task_id: str):
         raise NotImplementedError
 
+    def export_learning_state(self):
+        raise NotImplementedError
+
+    def import_learning_state(self, state) -> None:
+        raise NotImplementedError
+
 
 def build_coding_agent(
     engine_runtime: RecordingEngineRuntime,

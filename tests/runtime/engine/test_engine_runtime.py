@@ -1508,3 +1508,82 @@ def test_decide_engine_goal_may_differ_from_run_and_reason_notes_it() -> None:
     assert actual.success is False
     assert cheap_low_quality.run_count == 4
     assert expensive_reliable.run_count == 3
+
+
+def test_export_learning_state_empty_when_no_activity() -> None:
+    """M83(ADR-0101): 아무 실행도 없으면 4가지 학습 데이터 모두 빈
+    상태다."""
+    runtime = InMemoryEngineRuntime()
+
+    assert runtime.export_learning_state() == {
+        "engine_reliability": {},
+        "execution_memory": [],
+        "consensus_agreement": [],
+        "reflections": {},
+    }
+
+
+def test_export_then_import_round_trips_all_learning_state() -> None:
+    """M83(ADR-0101): `export_learning_state()`가 만든 스냅샷을 새
+    인스턴스에 `import_learning_state()`하면 M65(신뢰도)/M69(실행
+    메모리)/M70(Consensus)/M81(Reflection) 학습 상태가 모두 그대로
+    복원된다."""
+    original = InMemoryEngineRuntime(engine_selection_policy=InMemoryEngineSelectionPolicy())
+    engine = CostedEngineAdapter(estimated_cost_usd=0.0, capabilities=frozenset({"cap"}))
+    original.register_engine("engine-a", engine)
+
+    for i in range(3):
+        original.run(make_task(f"seed-{i}"), required_capabilities=frozenset({"cap"}))
+    for _ in range(3):
+        original.record_consensus_outcome(frozenset({"cap"}), ("engine-a",), ())
+
+    state = original.export_learning_state()
+    assert state["engine_reliability"]["engine-a"]["total"] == 3
+    assert len(state["execution_memory"]) == 1
+    assert len(state["consensus_agreement"]) == 1
+    assert len(state["reflections"]["engine-a"]) == 3
+
+    restored = InMemoryEngineRuntime()
+    restored.import_learning_state(state)
+
+    assert restored.benchmark_profile("engine-a").execution_count == 3
+    assert restored.consensus_weight(frozenset({"cap"}), "engine-a") == 1.0
+    assert len(restored.reflection_reports("engine-a")) == 3
+    assert restored.export_learning_state() == state
+
+
+def test_import_learning_state_replaces_not_merges_existing_state() -> None:
+    """M83(ADR-0101): `import_learning_state()`는 기존에 누적된 학습
+    상태를 대체한다 — 병합이 아니다."""
+    runtime = InMemoryEngineRuntime()
+    runtime.register_engine("engine-a", CostedEngineAdapter(estimated_cost_usd=0.0))
+    runtime.run(make_task("t1"))
+    assert runtime.benchmark_profile("engine-a").execution_count == 1
+
+    runtime.import_learning_state(
+        {
+            "engine_reliability": {},
+            "execution_memory": [],
+            "consensus_agreement": [],
+            "reflections": {},
+        }
+    )
+
+    assert runtime.benchmark_profile("engine-a").execution_count == 0
+    assert runtime.reflection_reports("engine-a") == []
+
+
+def test_import_learning_state_tolerates_missing_keys() -> None:
+    """M83(ADR-0101): 부분적인(키가 일부 빠진) state도 `.get(..., 기본값)`
+    으로 관대하게 처리한다 — 저장 파일 형식이 향후 확장되어도 이전 버전
+    데이터를 복원할 때 크래시하지 않는다."""
+    runtime = InMemoryEngineRuntime()
+
+    runtime.import_learning_state({})
+
+    assert runtime.export_learning_state() == {
+        "engine_reliability": {},
+        "execution_memory": [],
+        "consensus_agreement": [],
+        "reflections": {},
+    }

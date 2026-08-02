@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 from ai_workspace.domain.decision_goal import DecisionGoal
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
@@ -437,5 +438,53 @@ class EngineRuntime(ABC):
         예외: 해당 task_id가 run()/run_parallel()로 추적된 적이 없으면
               EngineTaskNotFoundError
         보장: side-effect 없음(read-only).
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def export_learning_state(self) -> dict[str, Any]:
+        """**Persistent Learning Memory(Milestone 83, ADR-0101)**: M65
+        (`EngineReliabilityStat`)/M69(`EngineExecutionMemoryStat`)/M70
+        (`ConsensusAgreementStat`)/M81(`ReflectionReport`)이 in-process로
+        누적한 학습 데이터를 JSON 직렬화 가능한 순수 값(dict/list/str/
+        float/bool/None)만으로 구성된 스냅샷으로 내보낸다 — 새 Learning
+        데이터를 만들지 않고 이미 존재하는 4가지 값 객체를 그대로
+        인코딩할 뿐이다. `_engines`(등록된 Adapter)/`_task_status`/
+        `_max_concurrency`/`_in_flight`(세션·동시성 런타임 상태)는
+        "학습 데이터"가 아니므로 포함하지 않는다.
+
+        입력: 없음
+        출력: 이 Runtime 구현체가 정의하는 JSON 직렬화 가능한 dict(정확한
+              키 구조는 구현체 책임 — 호출자는 이 값을 그대로 저장했다가
+              나중에 같은 구현체의 `import_learning_state()`에 그대로
+              전달하는 것 외의 용도로 내부 구조에 의존해서는 안 된다)
+        예외: 없음
+        보장: side-effect 없음(read-only). 반환값은 내부 상태의 독립된
+              복사본이다(호출자가 반환된 dict를 수정해도 내부 상태는
+              변하지 않는다).
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def import_learning_state(self, state: dict[str, Any]) -> None:
+        """**Persistent Learning Memory(Milestone 83, ADR-0101)**:
+        `export_learning_state()`가 만든 스냅샷으로 M65/M69/M70/M81의
+        in-process 학습 상태를 복원한다 — 보통 Workspace 시작 시(구성
+        요소 생성 직후) 한 번 호출된다.
+
+        입력: state (같은 구현체의 `export_learning_state()`가 반환한
+              값 — 다른 구현체가 만든 값이나 형식이 다른 dict를 전달하면
+              동작이 정의되지 않는다)
+        출력: 없음
+        예외: 없음(형식이 예상과 다르면 구현체는 예외를 던질 수 있다 —
+              호출자, 특히 파일 기반 영속화 계층은 이 메서드 호출을
+              항상 예외 처리로 감싸 "저장/복원 실패 시 기존 in-process
+              동작으로 즉시 fallback"해야 한다)
+        보장: `import_learning_state(state)` 이후 이 Runtime의 학습
+              상태는 `state`를 내보냈던 시점과 동일해진다 — 기존에
+              누적되어 있던 학습 상태는 대체된다(병합이 아니다).
+              Routing 로직(`_select()`/`_build_candidates()`)이나
+              세션·동시성 상태(`_engines`/`_task_status`/`_in_flight`)는
+              전혀 건드리지 않는다.
         """
         raise NotImplementedError

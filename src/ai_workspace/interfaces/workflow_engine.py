@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 from ai_workspace.domain.workflow import Workflow
 
@@ -94,5 +95,43 @@ class WorkflowEngine(ABC):
               구현체가 비용을 계산할 수 있는 경우 예상 비용이 더 낮은 순서를
               우선하고, 그래도 동률이거나 비용을 알 수 없으면 표본 수가
               더 많은 순서, 그마저 같으면 먼저 기록된 순서를 반환한다.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def export_learning_state(self) -> dict[str, Any]:
+        """**Persistent Learning Memory(Milestone 83, ADR-0101)**:
+        `record_run_outcome()`(M71)이 in-process로 누적한 `WorkflowOrderStat`
+        학습 데이터를 JSON 직렬화 가능한 순수 값으로 구성된 스냅샷으로
+        내보낸다 — 새 Learning 데이터를 만들지 않고 이미 존재하는 값
+        객체를 그대로 인코딩할 뿐이다.
+
+        입력: 없음
+        출력: 이 구현체가 정의하는 JSON 직렬화 가능한 dict(정확한 키
+              구조는 구현체 책임 — 호출자는 나중에 같은 구현체의
+              `import_learning_state()`에 그대로 전달하는 것 외의
+              용도로 내부 구조에 의존해서는 안 된다)
+        예외: 없음
+        보장: side-effect 없음(read-only). 반환값은 내부 상태의 독립된
+              복사본이다.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def import_learning_state(self, state: dict[str, Any]) -> None:
+        """**Persistent Learning Memory(Milestone 83, ADR-0101)**:
+        `export_learning_state()`가 만든 스냅샷으로 M71의 in-process
+        학습 상태를 복원한다 — 보통 Workspace 시작 시(구성 요소 생성
+        직후) 한 번 호출된다.
+
+        입력: state (같은 구현체의 `export_learning_state()`가 반환한 값)
+        출력: 없음
+        예외: 없음(형식이 예상과 다르면 구현체는 예외를 던질 수 있다 —
+              호출자는 이 메서드 호출을 항상 예외 처리로 감싸 "저장/복원
+              실패 시 기존 in-process 동작으로 즉시 fallback"해야 한다)
+        보장: `import_learning_state(state)` 이후 이 구현체의 학습
+              상태는 `state`를 내보냈던 시점과 동일해진다(기존 누적
+              상태는 대체된다, 병합이 아니다). `plan()`의 위상 정렬
+              로직은 전혀 건드리지 않는다.
         """
         raise NotImplementedError

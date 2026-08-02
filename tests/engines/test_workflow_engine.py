@@ -277,3 +277,46 @@ def test_recommended_order_falls_back_when_engine_registry_has_no_candidates() -
         engine.record_run_outcome(workflow, order_b, True)
 
     assert engine.recommended_order(workflow) == order_a
+
+
+def test_export_learning_state_empty_when_no_history() -> None:
+    """M83(ADR-0101): 기록이 없으면 `order_stats`가 빈 리스트다."""
+    engine = InMemoryWorkflowEngine()
+
+    assert engine.export_learning_state() == {"order_stats": []}
+
+
+def test_export_then_import_round_trips_recommended_order() -> None:
+    """M83(ADR-0101): `export_learning_state()`가 만든 스냅샷을 새
+    인스턴스에 `import_learning_state()`하면 학습 상태(추천 순서)가
+    그대로 복원된다."""
+    original = InMemoryWorkflowEngine()
+    workflow = _workflow(["t1", "t2"])
+    for _ in range(3):
+        original.record_run_outcome(workflow, ["t2", "t1"], False)
+    for _ in range(3):
+        original.record_run_outcome(workflow, ["t1", "t2"], True)
+
+    state = original.export_learning_state()
+
+    restored = InMemoryWorkflowEngine()
+    assert restored.recommended_order(workflow) is None
+
+    restored.import_learning_state(state)
+
+    assert restored.recommended_order(workflow) == ["t1", "t2"]
+    assert restored.export_learning_state() == state
+
+
+def test_import_learning_state_replaces_not_merges_existing_state() -> None:
+    """M83(ADR-0101): `import_learning_state()`는 기존에 누적된 학습
+    상태를 대체한다 — 병합이 아니다."""
+    engine = InMemoryWorkflowEngine()
+    workflow = _workflow(["t1", "t2"])
+    for _ in range(3):
+        engine.record_run_outcome(workflow, ["t1", "t2"], True)
+    assert engine.recommended_order(workflow) == ["t1", "t2"]
+
+    engine.import_learning_state({"order_stats": []})
+
+    assert engine.recommended_order(workflow) is None
