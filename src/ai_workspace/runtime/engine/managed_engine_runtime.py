@@ -9,8 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 from ai_workspace.domain.consensus_agreement import ConsensusAgreementStat
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
 from ai_workspace.domain.engine_execution_memory import EngineExecutionMemoryStat
+from ai_workspace.domain.engine_recommendation import EngineRecommendation
 from ai_workspace.domain.engine_reliability import EngineReliabilityStat
-from ai_workspace.domain.engine_selection import EngineCandidate
+from ai_workspace.domain.engine_selection import EngineCandidate, EngineSelectionDecision
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.budget_policy_engine import BudgetPolicyEngine
 from ai_workspace.interfaces.engine_adapter import (
@@ -156,7 +157,15 @@ class ManagedEngineRuntime(EngineRuntime):
     적용해 M77 `benchmark_profile()`로 한 번 더 tie-break한다. 최종
     우선순위는 cost > execution_memory > benchmark > diversity이며,
     표본이 `_MIN_BENCHMARK_SAMPLES`(3) 미만이면 중립값으로 즉시 기존
-    순서(diversity 결과)로 fallback한다."""
+    순서(diversity 결과)로 fallback한다.
+
+    **Adaptive Engine Recommendation(Milestone 79, ADR-0097)**:
+    `InMemoryEngineRuntime.recommend_engine()`과 완전히 동일한 설계 —
+    `_build_candidates()`/`EngineSelectionPolicy.select()`를 실행 없이
+    조회만 해 `EngineRecommendation` 목록을 반환한다. 근거(`evidence`)는
+    M65/M69(이번 capability 조합, "Workflow Learning" 근거로 재사용)/M77
+    을 조합하며, 표본 부족 시 `confident=False`로 표시해 호출자가 기존
+    Routing 결과를 그대로 쓸 수 있게 한다. Routing 로직 자체는 무변경."""
 
     def __init__(
         self,
@@ -459,6 +468,82 @@ class ManagedEngineRuntime(EngineRuntime):
             latency_sample_count=latency_sample_count,
             total_latency_seconds=total_latency_seconds,
         )
+
+    def _build_recommendation(
+        self, decision: EngineSelectionDecision, required_capabilities: frozenset[str]
+    ) -> EngineRecommendation:
+        """`InMemoryEngineRuntime._build_recommendation()`과 동일 — M65/
+        M69/M77 데이터로 근거(`evidence`)를 채우고, M69(이번 capability
+        조합)/M77(Provider 전체) 중 하나라도 표본이 충분하면
+        `confident=True`다."""
+
+        name = decision.engine_name
+        reliability = self._engine_reliability.get(name, EngineReliabilityStat())
+        memory = self._execution_memory.get((required_capabilities, name))
+        profile = self.benchmark_profile(name)
+        evidence: dict[str, float | None] = {
+            "reliability_success_rate": (
+                reliability.success_count / reliability.total if reliability.total > 0 else None
+            ),
+            "execution_memory_success_rate": memory.success_rate() if memory is not None else None,
+            "latency_seconds": memory.average_latency_seconds() if memory is not None else None,
+            "benchmark_success_rate": profile.success_rate(),
+            "benchmark_average_latency_seconds": profile.average_latency_seconds(),
+        }
+        confident = (
+            evidence["execution_memory_success_rate"] is not None
+            or profile.execution_count >= _MIN_BENCHMARK_SAMPLES
+        )
+        reason = (
+            f"{decision.reason} (Benchmark/Execution Memory 근거 반영)"
+            if confident
+            else f"{decision.reason} (표본 부족 — 기존 Routing 결과와 동일)"
+        )
+        return EngineRecommendation(
+            engine_name=name, reason=reason, evidence=evidence, confident=confident
+        )
+
+    def recommend_engine(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 1,
+    ) -> list[EngineRecommendation]:
+        """`InMemoryEngineRuntime.recommend_engine()`과 동일 —
+        `_build_candidates()`/`EngineSelectionPolicy.select()`를 실행 없이
+        조회만 해 추천 목록을 만든다."""
+
+        if top_n < 1:
+            return []
+        if self._engine_selection_policy is None:
+            recommendations: list[EngineRecommendation] = []
+            for name, adapter in self._engines.items():
+                if not required_capabilities.issubset(adapter.capabilities()):
+                    continue
+                recommendations.append(
+                    EngineRecommendation(
+                        engine_name=name,
+                        reason="engine_selection_policy 미주입(첫 매칭 경로) — 근거 데이터 없음",
+                        evidence={},
+                        confident=False,
+                    )
+                )
+                if len(recommendations) >= top_n:
+                    break
+            return recommendations
+
+        remaining = self._build_candidates(task, required_capabilities)
+        results: list[EngineRecommendation] = []
+        while remaining and len(results) < top_n:
+            decision = self._engine_selection_policy.select(
+                task, remaining, budget_policy_engine=self._budget_policy_engine
+            )
+            if decision is None:
+                break
+            results.append(self._build_recommendation(decision, required_capabilities))
+            remaining = [c for c in remaining if c.engine_name != decision.engine_name]
+        return results
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

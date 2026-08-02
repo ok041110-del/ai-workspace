@@ -13,6 +13,7 @@ from ai_workspace.domain.dashboard import (
     WorkspaceStatus,
 )
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
+from ai_workspace.domain.engine_recommendation import EngineRecommendation
 from ai_workspace.domain.knowledge import KnowledgeDocument
 from ai_workspace.domain.llm_policy import LLMPolicyDecision
 from ai_workspace.domain.project import Project
@@ -502,6 +503,18 @@ class FakeEngineRuntime(EngineRuntime):
             latency_sample_count=0,
             total_latency_seconds=0.0,
         )
+
+    def recommend_engine(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 1,
+    ) -> list[EngineRecommendation]:
+        """이 Fake는 M65/M69/M77 통계를 추적하지 않으므로(최소 테스트
+        대역) 항상 빈 목록을 반환한다 — "추천이 없으면 기존 Routing
+        결과를 그대로 사용한다"는 계약의 극단 케이스와 동일하다."""
+        return []
 
     def estimate_cost(
         self, task: Task, required_capabilities: frozenset[str] = frozenset()

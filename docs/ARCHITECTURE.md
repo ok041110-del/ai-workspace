@@ -850,6 +850,31 @@ Agent Runtime과 Engine Adapter 사이의 계층. 엔진 실행을 관리한다.
   미주입 시(첫 매칭 경로)에는 관여하지 않는다(100% 하위 호환). 새 Core
   Domain Interface·새 public 메서드·새 상태 없음(30종 유지, `EngineRuntime`
   계약 완전 무변경) — 내부 private 메서드 추가뿐이다.
+- **Adaptive Engine Recommendation(Milestone 79, ADR-0097)**: M65~M78이
+  축적한 정보는 모두 Routing 파이프라인 안에서만 쓰였고, 실행 없이
+  "이 Task에는 어떤 Provider가 좋을지" 조회할 수 있는 API가 없었다.
+  `recommend_engine(task, required_capabilities, top_n=1)`을
+  `EngineRuntime`에 추가해, `_build_candidates()`/`EngineSelectionPolicy.
+  select()`(M64 비용, M65 신뢰도 제외, M75/76 부하, M78 Benchmark
+  tie-break가 이미 반영된 후보 순서)를 실행 없이 반복 조회(`estimate_
+  cost()`와 동일한 read-only 경로)해 `EngineRecommendation`(domain,
+  `engine_name`/`reason`/`evidence`/`confident`) 목록을 반환한다.
+  `evidence`는 M65(`reliability_success_rate`)·M69(`execution_memory_
+  success_rate`/`latency_seconds`, 이번 `required_capabilities` 조합
+  전용 — "Workflow Learning" 근거로 재사용, `WorkflowEngine`을 직접
+  참조하지 않음으로써 ADR-0080/0081/M70의 결합 금지 원칙 유지)·M77
+  (`benchmark_success_rate`/`benchmark_average_latency_seconds`)을 새
+  상태 없이 조합한다. `execution_memory_success_rate`/`benchmark_
+  success_rate`가 모두 표본 부족(3건 미만)이면 `confident=False`로
+  표시해, 호출자가 "추천 근거 부족 → 기존 Routing 결과를 그대로 사용"
+  판단을 내릴 수 있게 한다(추천이 실행을 강제하지 않는다 — `run()`을
+  전혀 호출하지 않는다). `engine_selection_policy` 미주입 시(첫 매칭
+  경로)에는 `run()`이 고를 엔진과 같은 엔진을 `confident=False`로
+  반환한다. Routing 로직(`_select()`/`_build_candidates()`/재정렬
+  메서드들)은 전혀 수정하지 않는다 — 새 Core Domain Interface 없음
+  (기존 `EngineRuntime`에 read-only 조회 메서드 하나 추가, M70/M77과
+  동일한 방식), 새 상태 없음, `run_ensemble()`/`run_ensemble_auto()`
+  로의 확장은 이번 범위 밖(단일/`top_n` 조회만, YAGNI).
 - **의존 방향**: Agent로부터 호출받음 / `EngineAdapter`(구체 구현체)를 통해 실제
   엔진과 통신. Agent는 Engine Adapter를 직접 부르지 않고 Engine Runtime을 거친다.
 
@@ -2754,7 +2779,7 @@ Context Manager → Memory Engine 갱신 (Memory는 Agent가 아니라 서비스
 | `InteractionEngine` | 입력 표면 정규화/응답 변환 (기존 ConversationEngine 대체) | Milestone 1 (T1-21) 계약, Milestone 3 구현 | **완료(계약)** |
 | `EventBus` | 이벤트 발행/구독 | Milestone 1 (T1-18) | **완료(계약)** |
 | `EventStore` | 이벤트 기록(독립 구독자)/Replay/Audit | Milestone 1 (T1-18 계약, T1-23 `FileEventStore` 구현) | **완료(계약+구현)** |
-| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70)+Provider별 동시 실행 상한(M74)+동률 후보 다양성 라우팅(M75)+상대 부하율 기반 로드 밸런싱(M76)+Benchmark Profile 조회(M77)+Benchmark 기반 Routing tie-break(M78) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장, M74(ADR-0092) `register_engine()`에 선택적 `max_concurrency` 확장, M75(ADR-0093) `_build_candidates()` 내부 tie-break 추가(계약 무변경), M76(ADR-0094) tie-break 신호를 raw count→상대 부하율로 개선(계약 무변경), M77(ADR-0095) `benchmark_profile()` 신규 public 메서드 추가(Routing 무변경), M78(ADR-0096) `_build_candidates()` 내부에 Benchmark 기반 tie-break 추가(계약 무변경) | **완료(계약)** |
+| `EngineRuntime` | 엔진 선택/세션 풀/병렬 실행/비용 사전 조회(M15)/Ensemble 실행(M62)+동적 top-N 선택(M68)+Consensus 이력 기록/조회(M70)+Provider별 동시 실행 상한(M74)+동률 후보 다양성 라우팅(M75)+상대 부하율 기반 로드 밸런싱(M76)+Benchmark Profile 조회(M77)+Benchmark 기반 Routing tie-break(M78)+실행 없는 Engine 추천(M79) | Milestone 1 (T1-19), M68(ADR-0086) `run_ensemble_auto()` 확장, M70(ADR-0088) `record_consensus_outcome()`/`consensus_weight()` 확장, M74(ADR-0092) `register_engine()`에 선택적 `max_concurrency` 확장, M75(ADR-0093) `_build_candidates()` 내부 tie-break 추가(계약 무변경), M76(ADR-0094) tie-break 신호를 raw count→상대 부하율로 개선(계약 무변경), M77(ADR-0095) `benchmark_profile()` 신규 public 메서드 추가(Routing 무변경), M78(ADR-0096) `_build_candidates()` 내부에 Benchmark 기반 tie-break 추가(계약 무변경), M79(ADR-0097) `recommend_engine()` 신규 public 메서드 추가(Routing 무변경, 실행 강제 없음) | **완료(계약)** |
 | `ContextManager` | Context 조립 / Memory Snapshot 생명주기 | Milestone 1 (T1-20) | **완료(계약)** |
 | `ExecutionEnvironment` | `EngineAdapter` 하위(내부): 명령을 실제로 실행할 장소 추상화 (execute/cancel) | Milestone 11 (M11-T01 계약, M11-T02 `LocalExecutionEnvironment` 구현) | **완료(계약+구현)** |
 | `WorkflowRepository` | `Workflow` 조회/저장(`AutomationActionExecutor`의 RUN_WORKFLOW가 `workflow_id`로 실제 Workflow를 찾는 유일한 통로) | Milestone 59 (계약+`InMemoryWorkflowRepository` 구현) | **완료(계약+구현)** |

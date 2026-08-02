@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from ai_workspace.domain.engine_benchmark import EngineBenchmarkProfile
+from ai_workspace.domain.engine_recommendation import EngineRecommendation
 from ai_workspace.domain.task import Task
 from ai_workspace.interfaces.engine_adapter import (
     CostEstimate,
@@ -256,6 +257,48 @@ class EngineRuntime(ABC):
         예외: 없음
         보장: side-effect 없음(read-only), 상태를 in-process로만 유지하고
               영속화하지 않는다.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def recommend_engine(
+        self,
+        task: Task,
+        required_capabilities: frozenset[str] = frozenset(),
+        *,
+        top_n: int = 1,
+    ) -> list[EngineRecommendation]:
+        """**Adaptive Engine Recommendation(Milestone 79, ADR-0097)**:
+        M65(신뢰도)/M69(실행 메모리·latency)/M77(Benchmark Profile)/M78
+        (Benchmark 기반 tie-break)이 이미 만들어 둔 후보 순서(`_build_
+        candidates()`)를 그대로 재사용해, 실행하지 않고 "추천"만 반환한다
+        — `run()`/`run_ensemble_auto()`처럼 세션을 만들거나 엔진을 실제로
+        호출하지 않는다(`estimate_cost()`와 동일한 read-only 원칙).
+
+        입력: task (추천 대상 Task), required_capabilities (`run()`과 동일한
+              선택 기준), top_n (반환할 최대 추천 개수, 기본값 1 — 1
+              미만이면 빈 목록)
+        출력: `EngineRecommendation` 목록(최대 `top_n`개, 실제 우선순위
+              순서). `engine_selection_policy`가 주입되지 않았으면(첫
+              매칭 경로) `run()`이 고를 엔진과 동일한 엔진을
+              `confident=False`(근거 데이터 없음)로 담아 반환한다.
+              `engine_selection_policy`가 주입되어 있으면 `run()`이 실제로
+              선택할 엔진과 정확히 같은 1순위 후보를 반환하며(같은
+              `_build_candidates()`/`EngineSelectionPolicy.select()`
+              파이프라인 재사용), 각 추천에 `evidence`(비용·신뢰도·
+              latency·Benchmark)를 채운다. `evidence`의 `execution_memory_
+              success_rate`/`benchmark_success_rate`가 모두 표본 부족으로
+              `None`이면 `confident=False`다 — 호출자는 이 경우 이
+              추천을 참고하지 않고 기존 Routing 결과(`run()`이 실제로
+              선택하는 것)를 그대로 써도 된다는 뜻이다.
+        예외: 없음 — 후보가 하나도 없으면 빈 목록을 반환한다(`run()`처럼
+              NoSuitableEngineError를 던지지 않는다, "추천은 실행을
+              강제하지 않는다"는 요구를 그대로 반영).
+        보장: side-effect 없음에 준한다 — `_build_candidates()`를 통해서만
+              후보를 조회하며(`estimate_cost()`와 동일한 경로), Routing
+              로직 자체를 전혀 수정하지 않고 그 결과를 조회·설명만
+              한다. 상태는 M65/M69/M77이 이미 관리하는 in-process 값만
+              읽으며 새 상태를 추가하지 않는다.
         """
         raise NotImplementedError
 

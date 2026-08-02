@@ -1294,3 +1294,68 @@ def test_benchmark_falls_back_to_diversity_when_sample_insufficient() -> None:
 
     assert engine_a.run_count == 3
     assert engine_b.run_count == 1
+
+
+def test_recommend_engine_matches_run_selection_and_is_confident_with_sufficient_samples() -> None:
+    """M79(ADR-0097): `InMemoryEngineRuntime`과 동일한 시나리오 —
+    `engine_selection_policy`가 주입돼 있으면 `recommend_engine()`은
+    `run()`이 실제로 고를 엔진과 정확히 같은 1순위 후보를 반환하며, M69
+    실행 메모리 표본이 충분하면 `confident=True`다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    reliable = CapableCostedSlowEngineAdapter(delay_seconds=0.0, capabilities=frozenset({"cap"}))
+    other = CapableCostedSlowEngineAdapter(delay_seconds=0.0, capabilities=frozenset({"cap"}))
+    runtime.register_engine("reliable", reliable)
+    runtime.register_engine("other", other)
+
+    for i in range(3):
+        runtime.run(make_task(f"seed-{i}"), frozenset({"cap"}))
+    assert reliable.run_count == 3
+    assert other.run_count == 0
+
+    recommendations = runtime.recommend_engine(
+        make_task("recommend"), required_capabilities=frozenset({"cap"})
+    )
+
+    assert len(recommendations) == 1
+    recommendation = recommendations[0]
+    assert recommendation.engine_name == "reliable"
+    assert recommendation.confident is True
+    assert recommendation.evidence["execution_memory_success_rate"] == 1.0
+    assert reliable.run_count == 3
+    assert other.run_count == 0
+
+
+def test_recommend_engine_not_confident_when_sample_insufficient() -> None:
+    """M79(ADR-0097): 표본이 3건 미만이면 `confident=False`다."""
+    runtime = ManagedEngineRuntime(
+        event_bus=InMemoryEventBus(), engine_selection_policy=InMemoryEngineSelectionPolicy()
+    )
+    engine = CostedSlowEngineAdapter(delay_seconds=0.0)
+    runtime.register_engine("engine-a", engine)
+
+    recommendations = runtime.recommend_engine(make_task("recommend"))
+
+    assert len(recommendations) == 1
+    assert recommendations[0].engine_name == "engine-a"
+    assert recommendations[0].confident is False
+    assert engine.run_count == 0
+
+
+def test_recommend_engine_without_policy_matches_first_registered_and_not_confident() -> None:
+    """M79(ADR-0097): `engine_selection_policy` 미주입 시(첫 매칭 경로)
+    `run()`이 고를 엔진과 같은 엔진을 `confident=False`로 반환한다."""
+    runtime = ManagedEngineRuntime(event_bus=InMemoryEventBus())
+    engine_a = CostedSlowEngineAdapter(delay_seconds=0.0)
+    engine_b = CostedSlowEngineAdapter(delay_seconds=0.0)
+    runtime.register_engine("engine-a", engine_a)
+    runtime.register_engine("engine-b", engine_b)
+
+    recommendations = runtime.recommend_engine(make_task("recommend"))
+
+    assert len(recommendations) == 1
+    assert recommendations[0].engine_name == "engine-a"
+    assert recommendations[0].confident is False
+    assert recommendations[0].evidence == {}
+    assert engine_a.run_count == 0
